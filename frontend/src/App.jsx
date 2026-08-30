@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import UploadPage from './pages/UploadPage.jsx';
 import HistoryPage from './pages/HistoryPage.jsx';
 import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
+import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 
 export default function App() {
   return (
@@ -21,6 +22,8 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/history" element={<HistoryPage />} />
+          {/* No role restriction — any logged-in user, unlike meta-automation below. */}
+          <Route path="/report-generator" element={<ReportGeneratorPage />} />
         </Route>
 
         <Route element={<ProtectedRoute roles={['admin']} />}>

@@ -1,0 +1,567 @@
+/* Ported from the standalone report generator's src/index.css. Every rule
+   is scoped under .report-generator-app via native CSS nesting (Chrome
+   112+/Safari 16.5+/Firefox 117+ — fine for 2026) instead of living at
+   :root/body/# top level, because this CSS now shares a document with the
+   rest of ATLAS: unscoped `:root{--border:...}`, `body{...}`, `h1{...}`,
+   `:focus-visible{...}` etc. would silently change ATLAS's OWN look on
+   every other page (ATLAS's own index.css already defines --border, --text,
+   --bg, etc. with different values). Selectors, class names, and everything
+   DOM logic queries (exportImage.ts's .report-top/.sec-block/.sec-heading/
+   .sec-badge, KpiTable's cls-driven classNames) are unchanged; only the
+   scoping wrapper and the two exceptions noted below are new.
+*/
+.report-generator-app{
+  /* Was :root{...} — declared here instead so these custom properties (and
+     everything below that reads them via var(--x)) only apply inside this
+     subtree, never leaking into ATLAS's own :root. */
+  --bg:#f4f6fa;--surface:#ffffff;--s2:#eef1f7;--border:#dde2ee;
+
+  /* Meta blue — hue locked */
+  --acc:#1e3eb8;--acc2:#2f54d4;--acc-100:#eef1fc;--acc-300:#b8c5f5;--acc-700:#142c82;
+  --cyan:#00c2e0;--gold:#f5a623;
+
+  /* Shopee orange — hue locked */
+  --shopee:#ee4d2d;--shopee2:#ff6b4a;--shopee-100:#fff4f2;--shopee-300:#f5b5a7;--shopee-700:#a83417;
+
+  /* TikTok ink/cyan — hue locked */
+  --tiktok:#0a0a0a;--tiktok2:#69c9d0;--tiktok-100:#eafbfc;
+
+  /* Business teal / Summary violet — already established per-tab identity,
+     formalized into tokens here instead of living as scattered hex literals. */
+  --biz:#0d9488;--biz-100:#e6f7f5;
+  --sum:#7c3aed;--sum-100:#f2ecfe;
+
+  /* Semantic delta color — deliberately separate from the platform accents
+     above: this is a universal good/bad signal, not a brand. */
+  --good:#16a34a;--good-100:#eefcf2;
+  --bad:#dc2626;--bad-100:#fef1f0;
+
+  --text:#0f1a3a;--muted:#6b7a9e;--muted2:#a0aec0;
+  --f:'Inter',system-ui,sans-serif;
+  --shadow:0 1px 4px rgba(30,62,184,.07),0 4px 16px rgba(30,62,184,.06);
+  --shadow-sm:0 1px 3px rgba(30,62,184,.08);
+
+  /* Was body{...} + #app{...} — this div is now both (App.tsx renders
+     <div className="report-generator-app"> where it used to render
+     <div id="app">, itself sitting inside ATLAS's own <body>/.main-content). */
+  background:var(--bg);color:var(--text);font-family:var(--f);
+  max-width:1080px;margin:0 auto;padding:2rem 1.5rem;
+
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  /* One typeface only (Inter) — no second "mono" family anywhere, including
+     the browser's own default monospace on <code>. Numbers get their
+     distinctiveness from the `.num` utility below (tabular/lining digit
+     variants of Inter itself), not from switching font-family. */
+  code{font-family:inherit}
+  .num{font-variant-numeric:tabular-nums lining-nums;font-feature-settings:'tnum' 1,'lnum' 1}
+
+  h1{font-size:1.35rem;font-weight:700;letter-spacing:-.025em;color:var(--text)}
+
+  :focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+  }
+
+  /* ── Header ── */
+  .header{display:flex;align-items:center;gap:14px;margin-bottom:2rem;padding:1.1rem 1.4rem;background:var(--surface);border-radius:14px;box-shadow:var(--shadow);border:1px solid var(--border)}
+  .logo{width:42px;height:42px;background:linear-gradient(135deg,var(--acc),var(--cyan));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:700;color:#fff;flex-shrink:0;letter-spacing:.04em}
+  .header-sub{font-size:.75rem;color:var(--muted);margin-top:2px;font-weight:400}
+
+  /* ── Platform tabs ── */
+  .platform-tabs{display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap}
+  .ptab{display:flex;align-items:center;gap:8px;padding:.55rem 1.1rem;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);font-size:.8rem;font-weight:600;cursor:pointer;transition:all .18s;color:var(--muted);box-shadow:var(--shadow-sm)}
+  .ptab:hover{border-color:var(--acc);color:var(--acc);background:var(--s2)}
+  .ptab.active{border-color:var(--acc);background:var(--acc-100);color:var(--acc)}
+  .ptab.shopee-tab.active{border-color:var(--shopee);background:var(--shopee-100);color:var(--shopee)}
+  .ptab.tiktok-tab.active{border-color:var(--tiktok);background:var(--tiktok-100);color:var(--tiktok)}
+  .ptab.business-tab.active{border-color:var(--biz);background:var(--biz-100);color:var(--biz)}
+  .ptab.summary-tab.active{border-color:var(--sum);background:var(--sum-100);color:var(--sum)}
+  .ptab-dot{width:8px;height:8px;border-radius:50%;background:var(--muted2);flex-shrink:0;transition:background .18s}
+  .ptab.active .ptab-dot{background:var(--acc)}
+  .ptab.shopee-tab.active .ptab-dot{background:var(--shopee)}
+  .ptab.tiktok-tab.active .ptab-dot{background:var(--tiktok)}
+  .ptab.business-tab.active .ptab-dot{background:var(--biz)}
+  .ptab.summary-tab.active .ptab-dot{background:var(--sum)}
+  .ptab-badge{font-size:.6rem;font-weight:700;background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;color:var(--muted);font-variant-numeric:tabular-nums lining-nums}
+  .ptab.active .ptab-badge{background:#dde4fc;border-color:var(--acc-300);color:var(--acc)}
+  .ptab.shopee-tab.active .ptab-badge{background:#fde2db;border-color:var(--shopee-300);color:var(--shopee)}
+  .ptab.tiktok-tab.active .ptab-badge{background:#e0e0e0;border-color:#bbb;color:var(--tiktok)}
+  .ptab.business-tab.active .ptab-badge{background:#d7f4f0;border-color:#a9e6dd;color:var(--biz)}
+  .ptab.summary-tab.active .ptab-badge{background:#ece3fd;border-color:#cbb6f7;color:var(--sum)}
+
+  /* ── Panel ── */
+  .panel{display:none}
+  .panel.active{display:block}
+
+  /* ── Source blocks ── */
+  .source-block{margin-bottom:1.2rem}
+  .source-header{display:flex;align-items:center;gap:10px;margin-bottom:.6rem}
+  .source-label{font-size:.68rem;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:.1em;flex:1;display:flex;align-items:center;gap:8px}
+  .source-label.shopee-label{color:var(--shopee)}
+  .source-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+  /* ── Drop zones ── */
+  .dz{border:1.5px dashed var(--border);border-radius:12px;padding:1.4rem 1rem;text-align:center;cursor:pointer;transition:all .18s;position:relative;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:100px;box-shadow:var(--shadow-sm)}
+  .dz:hover,.dz.drag{border-color:var(--cyan);background:#f0fbfe}
+  .dz.loaded{border-color:var(--acc);border-style:solid;background:#f4f6fd}
+  .dz.shopee-dz.loaded{border-color:var(--shopee);background:#fff8f7}
+  .dz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .dz-tag{font-size:.65rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+  .dz-icon{font-size:1.5rem}
+  .dz-file{font-size:.72rem;color:var(--acc);background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:.2rem .7rem;margin-top:3px;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .dz.shopee-dz.loaded .dz-file{color:var(--shopee);background:#fde8e4;border-color:var(--shopee-300)}
+  .dz-rows{font-size:.65rem;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums lining-nums}
+  .dz-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+  .dz-grid-4{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+
+  /* ── Omzet inputs ── */
+  .omzet-row{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1.2rem}
+  .omzet-field{background:var(--surface);border-radius:12px;border:1.5px solid var(--border);padding:1rem 1.2rem;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:6px}
+  .omzet-field label{font-size:.68rem;color:var(--shopee);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+  .omzet-input-wrap{display:flex;align-items:center;gap:6px}
+  .omzet-prefix{font-size:.8rem;color:var(--muted);font-weight:600}
+  .omzet-input{flex:1;border:none;outline:none;font-size:1rem;font-weight:700;color:var(--text);background:transparent;min-width:0;font-variant-numeric:tabular-nums lining-nums}
+  .omzet-input::placeholder{color:var(--muted2);font-weight:400}
+  .omzet-field.filled{border-color:var(--shopee);background:#fff8f7}
+
+  /* ── Period labels ── */
+  .period-labels{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.5rem}
+  .period-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;text-align:center;font-weight:700}
+
+  /* ── Buttons ── */
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:.65rem 1.5rem;border-radius:9px;font-family:var(--f);font-size:.88rem;font-weight:700;cursor:pointer;border:none;transition:all .18s;letter-spacing:-.01em}
+  .btn-primary{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;box-shadow:0 2px 8px rgba(30,62,184,.3)}
+  .btn-primary:hover{background:linear-gradient(135deg,var(--acc2),#1a8fb0);transform:translateY(-1px);box-shadow:0 4px 14px rgba(30,62,184,.35)}
+  .btn-primary:disabled{opacity:.5;cursor:default;transform:none}
+  .btn-ghost{background:var(--surface);color:var(--muted);border:1.5px solid var(--border)}
+  .btn-ghost:hover{color:var(--acc);border-color:var(--acc);background:var(--s2)}
+  .action-row{display:flex;gap:10px;flex-wrap:wrap}
+
+  /* ── Report area ── */
+  #report{margin-top:2.5rem}
+  .report-top{padding:1.5rem 1.8rem;margin-top:1.5rem;margin-bottom:2rem;background:linear-gradient(120deg,var(--acc) 0%,#2f54d4 60%,#0099bb 100%);border-radius:14px;color:#fff;position:relative;overflow:hidden}
+  .report-top::before{content:'';position:absolute;right:-40px;top:-40px;width:200px;height:200px;background:rgba(255,255,255,.05);border-radius:50%}
+  .report-top::after{content:'';position:absolute;right:60px;bottom:-60px;width:150px;height:150px;background:rgba(0,229,200,.07);border-radius:50%}
+  .report-title{font-size:1.35rem;font-weight:800;letter-spacing:-.02em;color:#fff;position:relative}
+  .report-period{font-size:.95rem;font-weight:700;color:var(--gold);margin-top:.4rem;position:relative;font-variant-numeric:tabular-nums lining-nums}
+  .report-meta{font-size:.72rem;color:rgba(255,255,255,.65);margin-top:.3rem;position:relative;font-variant-numeric:tabular-nums lining-nums}
+
+  /* ── Sections ── */
+  .sec-block{margin-bottom:1.8rem;background:var(--surface);border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+  .sec-inner{padding:1rem 1.4rem 1.4rem}
+  .sec-heading{font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:10px;padding:.9rem 1.4rem;border-bottom:1px solid var(--border);background:var(--s2);color:var(--acc)}
+  .sec-heading.shopee-heading{color:var(--shopee)}
+  .sec-heading.tiktok-heading{color:var(--tiktok)}
+  .sec-heading.business-heading{color:var(--biz)}
+  .sec-heading.summary-heading{color:var(--sum)}
+  .sec-heading::before{content:'';width:3px;height:1em;background:linear-gradient(180deg,var(--acc),var(--cyan));border-radius:2px;flex-shrink:0}
+  .sec-heading.shopee-heading::before{background:linear-gradient(180deg,var(--shopee),var(--shopee2))}
+  .sec-heading.tiktok-heading::before{background:linear-gradient(180deg,var(--tiktok),var(--tiktok2))}
+  .sec-heading.business-heading::before{background:linear-gradient(180deg,var(--biz),var(--cyan))}
+  .sec-heading.summary-heading::before{background:linear-gradient(180deg,var(--sum),var(--cyan))}
+  .sec-badge{font-size:.62rem;background:#fff;border:1px solid var(--border);border-radius:5px;padding:.15rem .55rem;color:var(--muted);font-weight:600;letter-spacing:.03em}
+  .sec-download-btn{margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;gap:4px;font-size:.62rem;background:#fff;border:1px solid var(--border);border-radius:5px;padding:.2rem .55rem;color:var(--muted);font-weight:700;letter-spacing:.02em;cursor:pointer;transition:all .15s}
+  /* When a section has more than one download button (e.g. Excel + PNG), only
+     the first pushes off the auto-margin so the rest sit right next to it
+     (the .sec-heading flex `gap` spaces them) instead of splitting the row. */
+  .sec-download-btn~.sec-download-btn{margin-left:0}
+  .sec-download-btn:hover{color:var(--acc);border-color:var(--acc)}
+  .sec-download-btn:disabled{opacity:.6;cursor:default}
+
+  /* ── KPI Table ── */
+  .kpi-table{width:100%;border-collapse:collapse}
+  .kpi-table thead tr{background:var(--s2)}
+  .kpi-table th{padding:.6rem 1.2rem;font-size:.67rem;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);text-align:right;letter-spacing:.05em;text-transform:uppercase}
+  .kpi-table th:first-child{text-align:left;width:44%}
+  .kpi-table td{padding:.65rem 1.2rem;text-align:right;font-size:.85rem;border-bottom:1px solid var(--border);color:var(--text);font-variant-numeric:tabular-nums lining-nums}
+  .kpi-table td:first-child{text-align:left;font-weight:600;font-variant-numeric:normal}
+  .kpi-table tr:last-child td{border-bottom:none}
+  .kpi-table tr:hover td{background:#f6f8fe}
+  /* Bare sentiment classes (no pill) — used where a value itself is colored,
+     not wrapped in a DeltaPill (e.g. Summary's platform-status table). */
+  .delta-good{color:var(--good);font-weight:700}
+  .delta-bad{color:var(--bad);font-weight:700}
+  .delta-neutral{color:var(--muted);font-weight:600}
+  .kpi-table tr.group-divider td{border-top:2px solid var(--border);background:var(--s2);font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:.4rem 1.2rem;font-weight:700}
+
+  /* Delta pill — the scannable direction+color chip used for actual %Change
+     values (KpiTable's Changes column, deep-dive pivots, Summary's per-metric
+     deltas and highlight numbers). A wrapper, not a replacement for the bare
+     sentiment classes above: it composes with the exact same delta-good/
+     delta-bad/delta-neutral className the data already carries. */
+  .delta-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .55rem;border-radius:999px;font-weight:700;font-variant-numeric:tabular-nums lining-nums;white-space:nowrap}
+  .delta-pill.delta-good{color:var(--good);background:var(--good-100)}
+  .delta-pill.delta-bad{color:var(--bad);background:var(--bad-100)}
+  .delta-pill.delta-neutral{color:var(--muted);background:var(--s2)}
+  .delta-pill-sm{padding:.1rem .45rem;font-size:.72rem;border-radius:7px}
+  .delta-arrow{font-size:.75em;line-height:1}
+  @media print{.delta-pill{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+
+  /* ── Demo Table ──
+     A wide "add metric columns to the side" table: every header and every
+     value is left-aligned so a column that's scrolled partway into view still
+     reads cleanly and lines up with its header (numeric right-align only
+     helped when whole columns were visible at once). */
+  .demo-table{width:100%;border-collapse:collapse}
+  .demo-table thead tr{background:var(--s2)}
+  .demo-table th{padding:.55rem 1rem;font-size:.67rem;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;text-transform:uppercase;letter-spacing:.05em}
+  .demo-table td{padding:.55rem 1rem;text-align:left;font-size:.85rem;border-bottom:1px solid var(--border);color:var(--text)}
+  .demo-table td:first-child{font-weight:600}
+  .demo-table td.num{font-variant-numeric:tabular-nums lining-nums;font-weight:600}
+  .demo-table tr:last-child td{border-bottom:none}
+  .demo-table tr:hover td{background:#f6f8fe}
+  .tbl-scroll{overflow-x:auto}
+  .empty-note{font-size:.8rem;color:var(--muted);padding:.5rem 0;font-style:italic}
+
+  /* ── Pie chart ── */
+  .pie-wrap{display:flex;align-items:flex-start;gap:1.8rem;margin-bottom:1.2rem;flex-wrap:wrap}
+  .pie-canvas-wrap{flex-shrink:0;width:340px;height:300px;position:relative}
+  .pie-legend{display:flex;flex-direction:column;gap:6px;justify-content:center;flex:1;min-width:160px}
+  .pie-legend-item{display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--text)}
+  .pie-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .pie-legend-label{flex:1;color:var(--muted)}
+  .pie-legend-val{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums lining-nums}
+  .pie-legend-pct{color:var(--muted);font-size:.7rem;font-variant-numeric:tabular-nums lining-nums}
+  .pie-caption{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;font-weight:700}
+
+  /* ── Metric picker (now just the "+ Tambah metrik" add-back trigger — rename/
+     reorder/remove all happen inline on the table itself, see below) ── */
+  .metric-picker{display:flex;flex-wrap:wrap;gap:5px;padding:1rem 1.4rem .8rem}
+  .metric-picker-fixed{flex-wrap:nowrap;align-items:flex-start}
+  .metric-picker-dense{padding:0 0 .6rem}
+
+  /* ── Inline in-table metric editing (row-form: KpiTable; column-form: demo/
+     multi-metric tables) — click a metric's name to rename it inline, drag
+     the ☰ handle to reorder. The ☰ handle is the ONLY drag trigger — the
+     name/value never start a drag. The × remove button sits alongside. No
+     separate pill/list control. ── */
+  .kpi-row-editable{cursor:default}
+  .kpi-row-editable.dragging{opacity:.4}
+  .kpi-row-editable.drag-over td{box-shadow:inset 0 2px 0 var(--acc)}
+  .kpi-row-label-wrap{display:inline-flex;align-items:center;gap:5px}
+  .kpi-row-label{cursor:text}
+  .kpi-row-label:hover{color:var(--acc)}
+  .kpi-row-input{font:inherit;font-weight:600;color:inherit;border:1.5px solid var(--acc);border-radius:4px;padding:.05rem .3rem;width:auto;min-width:80px;background:var(--surface)}
+
+  .demo-th-editable.dragging,.metric-th-editable.dragging{opacity:.4}
+  .demo-th-editable.drag-over,.metric-th-editable.drag-over{box-shadow:inset 0 2px 0 var(--acc)}
+  .demo-th-label-wrap,.metric-th-label-wrap{display:inline-flex;align-items:center;gap:5px;justify-content:flex-start}
+  .demo-th-label{cursor:text}
+  .demo-th-label:hover{color:var(--acc)}
+  .demo-th-input,.metric-th-input{font:inherit;font-weight:600;color:inherit;border:1.5px solid var(--acc);border-radius:4px;padding:.05rem .3rem;width:auto;min-width:70px;background:var(--surface);text-transform:none}
+
+  /* Multi-metric wide table (Analisis Per Item, Tren Harian) — shares the
+     .kpi-table skin but, like .demo-table, left-aligns every header and value
+     so off-screen columns still line up under their headers. */
+  .kpi-table.metric-wide-table th,
+  .kpi-table.metric-wide-table td{text-align:left}
+
+  /* ☰ drag handle — the sole reorder trigger, shared by every editable table.
+     Visible but quiet by default, firmer on hover. grab / grabbing cursors. */
+  .metric-drag-handle{
+    display:inline-flex;align-items:center;justify-content:center;flex:none;
+    width:1.05em;height:1.15em;padding:2px;margin:-2px 1px -2px -3px;
+    cursor:grab;color:var(--muted2);opacity:.5;font-size:.9em;line-height:1;
+    text-transform:none;font-weight:400;letter-spacing:normal;
+    transition:opacity .12s,color .12s;-webkit-user-select:none;user-select:none;
+    touch-action:none;
+  }
+  .kpi-row-editable:hover .metric-drag-handle,th:hover .metric-drag-handle{opacity:.75}
+  .metric-drag-handle:hover{opacity:1;color:var(--acc)}
+  .metric-drag-handle:active,.dragging .metric-drag-handle{cursor:grabbing}
+
+  /* × remove button — enlarged icon AND hit area (negative margin keeps the
+     larger target from shifting the row/header layout). Reveal-on-hover to
+     stay unobtrusive on a report full of metric rows. */
+  .metric-remove-btn{
+    appearance:none;background:none;border:0;
+    display:inline-flex;align-items:center;justify-content:center;flex:none;
+    font:inherit;font-size:1.15rem;font-weight:400;line-height:1;
+    text-transform:none;letter-spacing:normal;
+    min-width:1.5rem;min-height:1.5rem;padding:0 .3rem;
+    margin:-.5rem 0;
+    color:var(--muted2);cursor:pointer;opacity:0;
+    transition:opacity .12s,color .12s;border-radius:5px;
+  }
+  .kpi-row-editable:hover .metric-remove-btn,th:hover .metric-remove-btn{opacity:.65}
+  .metric-remove-btn:hover{opacity:1;color:var(--bad);background:var(--bad-100)}
+  .metric-remove-btn:focus-visible{opacity:1;outline:2px solid var(--acc);outline-offset:1px}
+  @media(hover:none){
+    /* No hover on touch devices — keep the ☰/× affordances reachable. */
+    .metric-remove-btn{opacity:.55}
+    .metric-drag-handle{opacity:.7}
+  }
+
+  .mpill{display:inline-flex;align-items:center;gap:4px;background:var(--s2);border:1.5px solid var(--border);border-radius:6px;padding:.22rem .6rem;font-size:.67rem;font-weight:600;cursor:pointer;transition:all .15s;user-select:none;color:var(--muted)}
+  .mpill.on{background:var(--acc-100);border-color:var(--acc);color:var(--acc)}
+  .mpill input{display:none}
+  .mpill-x{font-size:.85em;line-height:1;opacity:.7;margin-left:1px;color:var(--bad)}
+  .mpill:hover .mpill-x{opacity:1}
+  .mpill-add{background:transparent;border:1.5px dashed var(--border);color:var(--muted2)}
+  .mpill-add:hover{border-color:var(--cyan);color:var(--acc)}
+  .mpill-clear{background:transparent;border:1.5px dashed var(--border);color:var(--muted2);flex-shrink:0}
+  .mpill-clear:hover{border-color:var(--bad);color:var(--bad)}
+  .add-metric-wrap{position:relative;display:inline-block}
+  .add-metric-select{position:absolute;top:100%;left:0;z-index:100;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;min-width:260px;max-height:220px;overflow-y:auto;display:none;box-shadow:0 8px 30px rgba(30,62,184,.12);margin-top:5px}
+  .add-metric-select.open{display:block}
+  .add-metric-opt{padding:.5rem .9rem;font-size:.78rem;cursor:pointer;color:var(--text);transition:background .12s}
+  .add-metric-opt:hover{background:var(--s2);color:var(--acc)}
+  .add-metric-opt-check{display:flex;align-items:center;gap:8px}
+  .add-metric-opt-check input{cursor:pointer;flex-shrink:0}
+  .add-metric-opt-all{font-weight:700;color:var(--acc)}
+  .add-metric-divider{height:1px;background:var(--border);margin:.2rem 0}
+
+  .howto-step-num.tiktok-num{background:var(--tiktok)}
+
+  @media print{
+    .source-block,#cta,.action-row,.metric-picker,.add-metric-wrap,.platform-tabs,.omzet-row,.period-labels,.period-input-row,
+    .metric-drag-handle,.metric-remove-btn{display:none!important}
+    /* Was body{background:#fff;color:#111} in the original — dropped: a
+       nested rule can't reach the real <body> (an ancestor of this wrapper,
+       not a descendant), and this app no longer owns the whole document to
+       whiten on print anyway. Minor cosmetic-only omission. */
+    #report{margin-top:0}
+    .report-top{background:#1e3eb8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .sec-block{box-shadow:none}
+  }
+
+  /* Was `.pdf-export-mode .x` with the original toggling the class on
+     document.body. Now toggled on THIS element instead (exportImage.ts),
+     since body is shared with the rest of ATLAS — so these are compound
+     (&.pdf-export-mode, "self AND has the class"), not descendant, selectors. */
+  &.pdf-export-mode .metric-picker{display:none!important}
+  &.pdf-export-mode .sec-download-btn{display:none!important}
+  &.pdf-export-mode .metric-drag-handle,
+  &.pdf-export-mode .metric-remove-btn{display:none!important}
+
+  /* ── Period input ── */
+  .period-input-row{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem}
+  .period-input-field{background:var(--surface);border-radius:10px;border:1.5px solid var(--border);padding:.7rem 1rem;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:4px}
+  .period-input-field label{font-size:.63rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+  .period-input-field.shopee-period label{color:var(--shopee)}
+  .period-input-field.tiktok-period label{color:var(--tiktok)}
+  .period-text-input{border:none;outline:none;font-size:.88rem;font-weight:700;color:var(--text);background:transparent;width:100%}
+  .period-text-input::placeholder{color:var(--muted2);font-weight:400;font-size:.82rem}
+  .period-input-field.filled{border-color:var(--shopee)}
+  .period-input-field.tiktok-period.filled{border-color:var(--tiktok)}
+
+  /* ── Industry selector ── */
+  .industry-selector{display:none;margin-bottom:1.2rem;background:var(--surface);border:1.5px solid var(--acc);border-radius:12px;padding:1rem 1.4rem;box-shadow:var(--shadow-sm)}
+  .industry-selector.visible{display:block}
+  .industry-label{font-size:.68rem;color:var(--acc);text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:.6rem}
+  .industry-pills{display:flex;flex-wrap:wrap;gap:6px}
+  .ind-pill{display:inline-flex;align-items:center;gap:5px;padding:.3rem .8rem;border-radius:7px;font-size:.75rem;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--s2);color:var(--muted);transition:all .15s;user-select:none}
+  .ind-pill:hover{border-color:var(--acc);color:var(--acc)}
+  .ind-pill.selected{background:var(--acc-100);border-color:var(--acc);color:var(--acc)}
+  .ind-pill-dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.5}
+  .ind-pill.selected .ind-pill-dot{opacity:1}
+
+  /* Custom conversion col picker */
+  .custom-col-picker{display:none;margin-top:.8rem;padding:.8rem 1rem;background:var(--s2);border-radius:8px;border:1px solid var(--border)}
+  .custom-col-picker.visible{display:block}
+  .custom-col-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.5rem}
+  .custom-col-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:.3rem}
+  .custom-col-select{width:100%;padding:.4rem .6rem;border:1.5px solid var(--border);border-radius:7px;font-family:var(--f);font-size:.78rem;background:var(--surface);color:var(--text);outline:none;cursor:pointer}
+  .custom-col-select:focus{border-color:var(--acc)}
+
+  /* ── How-to section ── */
+  .howto{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:1.5rem}
+  .howto-header{display:flex;align-items:center;justify-content:space-between;padding:.85rem 1.4rem;background:var(--s2);border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+  .howto-title{font-size:.8rem;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:8px;letter-spacing:.01em}
+  .howto-title::before{content:'';width:3px;height:1em;background:linear-gradient(180deg,var(--muted2),var(--border));border-radius:2px;flex-shrink:0}
+  .howto-chevron{font-size:.7rem;color:var(--muted2);transition:transform .2s}
+  .howto-chevron.open{transform:rotate(180deg)}
+  .howto-body{display:none;padding:1.2rem 1.4rem}
+  .howto-body.open{display:block}
+  .howto-steps{display:flex;flex-direction:column;gap:1rem}
+  .howto-step{display:flex;gap:12px;align-items:flex-start}
+  .howto-step-num{width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;font-size:.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .howto-step-num.shopee-num{background:var(--shopee)}
+  .howto-step-content{flex:1}
+  .howto-step-title{font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.3rem}
+  .howto-step-desc{font-size:.78rem;color:var(--muted);line-height:1.5}
+  .howto-cols{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-top:.6rem}
+  .howto-col-block{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:.8rem 1rem}
+  .howto-col-title{font-size:.68rem;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem}
+  .howto-col-title.shopee-col{color:var(--shopee)}
+  .howto-col-list{list-style:none;display:flex;flex-direction:column;gap:3px}
+  .howto-col-list li{font-size:.72rem;color:var(--muted);display:flex;align-items:baseline;gap:6px;line-height:1.4}
+  .howto-col-list li::before{content:'·';color:var(--muted2);flex-shrink:0}
+
+  .summary-platform-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;padding:1rem 1.4rem 1.4rem}
+  .summary-plat-card{border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem;background:var(--surface)}
+  .summary-plat-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.15rem}
+  .summary-plat-period{font-size:.68rem;color:var(--muted);margin-bottom:.7rem;font-weight:600}
+  .summary-plat-kpi{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-size:.78rem;padding:.35rem 0;border-top:1px solid var(--border)}
+  .summary-plat-kpi span:first-child{color:var(--muted)}
+  .summary-plat-kpi-val{display:flex;flex-direction:column;align-items:flex-end;text-align:right;flex-shrink:0;gap:.2rem}
+  .summary-plat-kpi-delta{font-size:.68rem}
+
+  .insight-list{list-style:none;display:flex;flex-direction:column;gap:9px;padding:1rem 1.4rem 1.4rem;margin:0}
+  .insight-item{display:flex;gap:10px;align-items:flex-start;font-size:.82rem;color:var(--text);line-height:1.5}
+  .insight-dot{width:6px;height:6px;border-radius:50%;background:var(--sum);margin-top:7px;flex-shrink:0}
+
+  .summary-highlight-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;padding:1rem 1.4rem 1.4rem}
+  .summary-highlight-card{border-radius:12px;padding:1rem 1.2rem;border:1.5px solid var(--border)}
+  .summary-highlight-card.best{background:var(--good-100);border-color:#bfe8cb}
+  .summary-highlight-card.worst{background:var(--bad-100);border-color:#f3c6c6}
+  .summary-highlight-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.5rem;font-weight:700}
+  .summary-highlight-metric{font-size:.9rem;font-weight:700;margin-bottom:.2rem}
+  .summary-highlight-plat{font-size:.7rem;color:var(--muted);margin-bottom:.5rem;font-weight:600}
+
+  .reco-list{display:flex;flex-direction:column;gap:8px;padding:1rem 1.4rem 1.4rem}
+  .reco-item{display:flex;align-items:center;gap:10px;padding:.7rem .9rem;border:1px solid var(--border);border-radius:10px;background:var(--s2)}
+  .reco-priority{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:.22rem .55rem;border-radius:5px;flex-shrink:0}
+  .reco-priority.high{background:#fde2e2;color:var(--bad)}
+  .reco-priority.medium{background:#fdf1d8;color:#b7791f}
+  .reco-priority.low{background:#e6f4ea;color:var(--good)}
+  .reco-text{font-size:.8rem;color:var(--text);flex:1}
+
+  /* ── Business Overview Metrics ── */
+  .biz-subheading{font-size:.68rem;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem}
+  .biz-calc-block{margin-bottom:1.2rem}
+  .biz-calc-block:last-child{margin-bottom:0}
+  .biz-table-block{margin-bottom:1.3rem}
+  .biz-input-table td{padding:.45rem .55rem}
+  .biz-input-table input.biz-input{width:100%;min-width:82px;border:1.5px solid var(--border);background:var(--surface);font:inherit;font-weight:600;color:var(--text);text-align:right;outline:none;padding:.42rem .6rem;border-radius:7px;transition:border-color .15s,box-shadow .15s;font-variant-numeric:tabular-nums lining-nums}
+  .biz-input-table input.biz-input::placeholder{color:var(--muted2);font-weight:400}
+  .biz-input-table input.biz-input:hover{border-color:var(--muted2)}
+  .biz-input-table input.biz-input:focus{border-color:var(--acc);background:#fff;box-shadow:0 0 0 3px rgba(30,62,184,.12)}
+  .biz-input-table input.biz-row-name{text-align:left;font-weight:600;font-variant-numeric:normal}
+  .biz-input-table th{white-space:nowrap}
+  .biz-input-table thead tr.biz-group-row th{font-size:.64rem;text-transform:uppercase;letter-spacing:.06em;text-align:center;border-bottom:1px solid var(--border)}
+  .biz-input-table thead tr.biz-sub-row th{font-size:.64rem;text-align:center;font-weight:600;color:var(--muted)}
+  .biz-input-table .biz-col-revenue{background:rgba(13,148,136,.055)}
+  .biz-input-table thead th.biz-col-revenue{color:var(--biz)}
+  .biz-input-table .biz-col-tx{background:rgba(245,166,35,.09)}
+  .biz-input-table thead th.biz-col-tx{color:#b7791f}
+  .biz-input-table .biz-col-qty{background:rgba(30,62,184,.05)}
+  .biz-input-table thead th.biz-col-qty{color:var(--acc)}
+  .biz-row-remove{cursor:pointer;color:var(--muted2);font-size:.85em;line-height:1;margin-left:6px;flex-shrink:0}
+  .biz-row-remove:hover{color:var(--bad)}
+  .biz-row-name-cell{display:flex;align-items:center;gap:4px}
+  .biz-add-row{margin-top:.6rem}
+  .biz-subgroup{margin-bottom:1rem}
+  .biz-subgroup-label{font-size:.72rem;font-weight:700;color:var(--text);margin-bottom:.5rem;display:flex;align-items:center;gap:6px}
+  .biz-subgroup-label::before{content:'';width:3px;height:1em;background:linear-gradient(180deg,var(--biz),var(--cyan));border-radius:2px;flex-shrink:0}
+
+  /* ── Placeholder (tabs not yet migrated) ── */
+  .coming-soon{padding:2rem 1.4rem;text-align:center;color:var(--muted);font-size:.85rem}
+
+  /* ── Period length mismatch warning (Fase 1) ── */
+  .period-warning{display:flex;align-items:center;gap:8px;margin-bottom:1.2rem;padding:.7rem 1rem;background:#fff8e6;border:1.5px solid #f0c04d;border-radius:10px;font-size:.8rem;color:#8a6100;line-height:1.4}
+  .period-warning::before{content:'⚠';flex-shrink:0;font-size:.95rem}
+
+  /* ── Fase 2: persistence (client picker / save-to-DB / report history) ── */
+  .client-bar{display:flex;align-items:center;gap:.8rem;margin-bottom:1.5rem;padding:.9rem 1.2rem;background:var(--surface);border-radius:12px;border:1.5px solid var(--border);box-shadow:var(--shadow-sm);flex-wrap:wrap}
+  .client-bar-label{font-size:.68rem;color:var(--acc);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+  .client-bar select{min-width:220px;font-family:var(--f);font-size:.82rem;color:var(--text);background:var(--surface);border:1.5px solid var(--border);border-radius:8px;padding:.4rem .6rem;outline:none;cursor:pointer}
+  .client-bar select:focus{border-color:var(--acc)}
+  .client-bar-error{font-size:.7rem;color:var(--bad)}
+  .save-report-row{display:flex;align-items:center;gap:.7rem;margin-top:.8rem}
+  .save-report-status{font-size:.72rem;font-weight:600}
+  .save-report-status.ok{color:#1a8a4a}
+  .save-report-status.err{color:#c0392b}
+  .reports-list{display:flex;flex-direction:column;gap:.6rem;margin-top:1rem}
+  .report-list-item{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.8rem 1.1rem;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;box-shadow:var(--shadow-sm);cursor:pointer;transition:border-color .15s}
+  .report-list-item:hover{border-color:var(--acc)}
+  .report-list-main{display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-width:0}
+  .report-list-title{font-size:.85rem;font-weight:700;font-variant-numeric:tabular-nums lining-nums}
+  .report-list-meta{font-size:.68rem;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums lining-nums}
+  .report-list-badge{flex-shrink:0;width:108px;text-align:center;font-size:.62rem;background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:.15rem .45rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+  .report-list-delete{flex-shrink:0;font-size:.9rem;line-height:1;padding:.3rem;border-radius:6px;cursor:pointer;opacity:.55;transition:all .15s}
+  .report-list-delete:hover{opacity:1;background:#fde2e2}
+
+  /* ── Step Rail — the page's signature element: a vertical progress track
+     (done / current / todo) that makes the upload→label→generate→report flow
+     read as steps instead of a form. Accent color follows whichever platform
+     tab it's rendered in, via --rail-accent set inline by the caller. ── */
+  .step-rail{--rail-accent:var(--acc);display:flex;gap:1.1rem;margin-bottom:1.4rem}
+  .step-rail-track{display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:.15rem}
+  .step-rail-node{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:800;flex-shrink:0;z-index:1;transition:background .18s,border-color .18s,color .18s}
+  .step-rail-node.done{background:var(--rail-accent);color:#fff}
+  .step-rail-node.current{background:var(--surface);border:2px solid var(--rail-accent);color:var(--rail-accent);box-shadow:0 0 0 4px color-mix(in srgb, var(--rail-accent) 12%, transparent)}
+  .step-rail-node.todo{background:var(--s2);border:2px solid var(--border);color:var(--muted2)}
+  .step-rail-line{width:2px;flex:1;min-height:18px;background:var(--border);margin:2px 0}
+  .step-rail-line.done{background:var(--rail-accent)}
+  .step-rail-steps{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between}
+  .step-rail-item{padding-bottom:1.15rem}
+  .step-rail-item:last-child{padding-bottom:0}
+  .step-rail-label{font-size:.85rem;font-weight:700;color:var(--text)}
+  .step-rail-label.todo{color:var(--muted2);font-weight:600}
+  .step-rail-sub{font-size:.74rem;color:var(--muted);margin-top:.15rem;line-height:1.4}
+  @media(max-width:600px){.step-rail{gap:.7rem}.step-rail-label{font-size:.8rem}}
+
+  /* ── Compare Chip — the signature motif's second application: the
+     old-period → current-period badge used in report headers wherever p1/p2
+     used to render as plain text. ── */
+  .compare-chip{--chip-accent:var(--acc);display:inline-flex;align-items:center;gap:.5rem;font-size:.85rem;font-variant-numeric:tabular-nums lining-nums}
+  .compare-chip .cc-old{color:var(--muted);font-weight:500}
+  .compare-chip .cc-arrow{color:var(--muted2)}
+  .compare-chip .cc-cur{color:var(--chip-accent);font-weight:800;font-size:1.02em}
+  .compare-chip.on-brand .cc-old{color:rgba(255,255,255,.7)}
+  .compare-chip.on-brand .cc-arrow{color:rgba(255,255,255,.45)}
+  .compare-chip.on-brand .cc-cur{color:var(--gold)}
+
+  /* ── Inline notice — replaces window.alert() for validation/empty/error
+     feedback: explains what's wrong and what to do next, inline in context. ── */
+  .inline-notice{display:flex;gap:.6rem;align-items:flex-start;padding:.75rem .9rem;border-radius:10px;font-size:.8rem;line-height:1.5;margin-top:.6rem}
+  .inline-notice-icon{flex-shrink:0;font-size:.95rem;line-height:1.3}
+  .inline-notice-title{font-weight:700;margin-bottom:.15rem}
+  .inline-notice.error{background:var(--bad-100);border:1px solid #f3c6c6;color:#8a1f1f}
+  .inline-notice.error .inline-notice-title{color:var(--bad)}
+  .inline-notice.info{background:var(--acc-100);border:1px solid var(--acc-300);color:var(--acc-700)}
+  .inline-notice.info .inline-notice-title{color:var(--acc)}
+
+  /* ── "Pilih dari data tersimpan" — per-slot source toggle, the picked-period
+     card that stands in for the dropzone, and the picker modal itself. ── */
+  .slot-src-tabs{display:inline-flex;gap:.25rem;padding:.2rem;background:var(--s2);border:1px solid var(--border);border-radius:9px;margin-bottom:.55rem}
+  .slot-src-tab{font:inherit;font-size:.68rem;font-weight:700;letter-spacing:.01em;padding:.32rem .7rem;border:none;border-radius:7px;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+  .slot-src-tab:hover:not(:disabled){color:var(--acc)}
+  .slot-src-tab.active{background:var(--surface);color:var(--acc);box-shadow:var(--shadow-sm)}
+  .slot-src-tab:disabled{opacity:.45;cursor:not-allowed}
+
+  .saved-slot-card{width:100%;text-align:left;font:inherit;border:1.5px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:var(--shadow-sm);padding:1rem;display:flex;gap:.9rem;align-items:center}
+  .saved-slot-card.empty{flex-direction:column;justify-content:center;align-items:center;gap:5px;min-height:100px;border-style:dashed;cursor:pointer;transition:all .18s;text-align:center}
+  .saved-slot-card.empty:hover{border-color:var(--acc);background:var(--s2)}
+  .saved-slot-icon{font-size:1.5rem}
+  .saved-slot-choose{font-size:.72rem;font-weight:700;color:var(--acc)}
+  .saved-slot-hint{font-size:.65rem;color:var(--muted);font-weight:600}
+  .saved-slot-card.filled{border-color:var(--acc);background:#f4f6fd}
+  .saved-slot-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .saved-slot-title{font-size:.82rem;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums lining-nums}
+  .saved-slot-summary{font-size:.68rem;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums lining-nums}
+  .saved-slot-meta{font-size:.64rem;color:var(--muted);font-weight:600}
+  .saved-slot-actions{display:flex;align-items:center;gap:.4rem;flex-shrink:0}
+  .saved-slot-change{padding:.35rem .8rem;font-size:.72rem}
+  .saved-slot-clear{font:inherit;font-size:.8rem;line-height:1;padding:.35rem .5rem;border:none;border-radius:7px;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+  .saved-slot-clear:hover{background:#fde2e2;color:var(--bad)}
+
+  .saved-modal-backdrop{position:fixed;inset:0;z-index:2000;background:rgba(15,26,58,.42);display:flex;align-items:flex-start;justify-content:center;padding:6vh 1rem 1rem;overflow-y:auto}
+  .saved-modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 70px rgba(15,26,58,.35);width:min(560px,100%);max-height:82vh;display:flex;flex-direction:column;overflow:hidden}
+  .saved-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.1rem 1.3rem .9rem}
+  .saved-modal-title{font-size:.95rem;font-weight:800;color:var(--text)}
+  .saved-modal-sub{font-size:.68rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+  .saved-modal-close{font:inherit;font-size:.9rem;line-height:1;border:none;background:var(--s2);color:var(--muted);width:28px;height:28px;border-radius:8px;cursor:pointer;flex-shrink:0;transition:all .15s}
+  .saved-modal-close:hover{background:#fde2e2;color:var(--bad)}
+  .saved-modal-search{margin:0 1.3rem .7rem;padding:.55rem .8rem;font:inherit;font-size:.82rem;border:1.5px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text)}
+  .saved-modal-search:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(30,62,184,.12)}
+  .saved-modal-body{padding:0 1.3rem 1.3rem;overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
+  .saved-card{width:100%;text-align:left;font:inherit;border:1.5px solid var(--border);border-radius:11px;background:var(--surface);box-shadow:var(--shadow-sm);padding:.8rem .95rem;cursor:pointer;transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:3px}
+  .saved-card:hover{border-color:var(--acc);background:var(--s2)}
+  .saved-card-title{font-size:.85rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums lining-nums}
+  .saved-card-sub{font-size:.7rem;color:var(--muted);font-weight:600}
+  .saved-card-coverage{font-size:.7rem;color:var(--acc);font-weight:700;font-variant-numeric:tabular-nums lining-nums}
+  .saved-card-meta{font-size:.64rem;color:var(--muted);font-weight:600}
+
+  /* ── Small-screen pass: collapse two-column grids to one column ── */
+  @media(max-width:640px){
+    & {padding:1.2rem .9rem}
+    .dz-grid,.dz-grid-4,.omzet-row,.period-labels,.period-input-row,.howto-cols,.custom-col-row,
+    .summary-platform-grid,.summary-highlight-grid{grid-template-columns:1fr}
+    .report-top{padding:1.2rem 1.3rem}
+    .kpi-table th,.kpi-table td{padding:.55rem .8rem}
+    .saved-slot-card.filled{flex-direction:column;align-items:stretch}
+  }
+}
