@@ -111,6 +111,18 @@ export const downloadUpload = asyncHandler(async (req, res) => {
   const upload = await uploadService.getUploadFileById(req.params.uploadId);
   if (!upload) throw new AppError('Upload tidak ditemukan', 404);
 
+  // Report Generator rows have no stored_path -- their file lives as BYTEA
+  // in ads_reports.raw_uploads (raw_upload_id), never written to disk.
+  if (upload.source === 'report_generator') {
+    if (!upload.raw_upload_id) throw new AppError('File tidak ditemukan di server', 404);
+    const file = await uploadService.getReportGeneratorFile(upload.raw_upload_id);
+    if (!file?.raw_file) throw new AppError('File tidak ditemukan di server', 404);
+    res.setHeader('Content-Disposition', `attachment; filename="${(file.original_filename || upload.original_filename).replace(/"/g, '')}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.send(file.raw_file);
+    return;
+  }
+
   try {
     await fs.access(upload.stored_path);
   } catch {

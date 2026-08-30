@@ -143,6 +143,34 @@ function tiktokRowValues(runId, r) {
   return [runId, r.periodRole, r.campaignName, r.cost, r.skuOrders, r.grossRevenue, toJsonb(r.extra)];
 }
 
+const PLATFORM_LABEL = { meta: 'Meta Ads', shopee: 'Shopee Ads', tiktok: 'TikTok GMV Max' };
+
+// Human label for the new History Upload "Sumber" column (public.uploads.
+// report_channel) — e.g. "Meta Ads · boost", "Shopee Ads · produk". TikTok
+// rows have no channel of their own (campaign-level only), so just the
+// platform name.
+function reportChannelLabel(platform, channel) {
+  const label = PLATFORM_LABEL[platform] ?? platform;
+  return channel && platform !== 'tiktok' ? `${label} · ${channel}` : label;
+}
+
+// Best-effort count of parsed rows this specific uploaded file contributed,
+// for public.uploads.rows_inserted — matched by platform + channel +
+// period_role, the same scope raw_uploads itself is keyed by. TikTok rows
+// have no `channel` field (campaign-level only), and Shopee's Product
+// Overview sheet isn't part of payload.rows.shopee at all (its own
+// payload.rows.shopeeOverview, with neither channel nor periodRole).
+function countRowsForFile(payload, meta) {
+  if (payload.platform === 'shopee' && meta.channel === 'overview') {
+    return (payload.rows.shopeeOverview ?? []).length;
+  }
+  const rows = payload.rows[payload.platform] ?? [];
+  if (payload.platform === 'tiktok') {
+    return rows.filter((r) => r.periodRole === meta.periodRole).length;
+  }
+  return rows.filter((r) => r.channel === meta.channel && r.periodRole === meta.periodRole).length;
+}
+
 function isValidPayload(body) {
   if (!body || typeof body !== 'object') return false;
   if (typeof body.brandId !== 'number') return false;
@@ -182,8 +210,8 @@ reportsRouter.post('/', upload.array('files'), async (req, res) => {
 
     const upsert = await client.query(
       `INSERT INTO ads_reports.report_runs
-         (brand_id, platform, period_old_start, period_old_end, period_cur_start, period_cur_end, period_old_label, period_cur_label, report_config)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (brand_id, platform, period_old_start, period_old_end, period_cur_start, period_cur_end, period_old_label, period_cur_label, report_config, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT ON CONSTRAINT ux_report_runs_scope
        DO UPDATE SET
          period_old_label = EXCLUDED.period_old_label,
@@ -201,6 +229,7 @@ reportsRouter.post('/', upload.array('files'), async (req, res) => {
         payload.period.oldLabel,
         payload.period.curLabel,
         toJsonb(payload.reportConfig),
+        req.user.userId,
       ],
     );
     const runId = upsert.rows[0].id;
@@ -234,14 +263,44 @@ reportsRouter.post('/', upload.array('files'), async (req, res) => {
       if (insert) await client.query(insert.text, insert.values);
     }
 
+    // Deleting these cascades (ON DELETE CASCADE) into any public.uploads
+    // rows a previous save of this same report already created — see
+    // 007_uploads_report_generator_source.sql — so re-saving never leaves
+    // stale/duplicate History Upload entries behind.
     await client.query('DELETE FROM ads_reports.raw_uploads WHERE report_run_id = $1', [runId]);
     for (let i = 0; i < files.length; i++) {
       const meta = fileMeta[i];
       if (!meta) continue;
-      await client.query(
+      const rawUpload = await client.query(
         `INSERT INTO ads_reports.raw_uploads (report_run_id, channel, period_role, original_filename, raw_file)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id`,
         [runId, meta.channel, meta.periodRole, meta.originalFilename, files[i].buffer],
+      );
+
+      // Mirror into public.uploads so this file also shows up in History
+      // Upload, tagged source='report_generator' and linked back to the
+      // BYTEA row above via raw_upload_id (Download/Delete read through
+      // that link — see uploadService.js).
+      const periodStart = meta.periodRole === 'old' ? payload.period.oldStart : payload.period.curStart;
+      const periodEnd = meta.periodRole === 'old' ? payload.period.oldEnd : payload.period.curEnd;
+      await client.query(
+        `INSERT INTO public.uploads
+           (user_id, brand_id, source, report_channel, original_filename, period_start, period_end, status, rows_inserted, completed_at, raw_upload_id)
+         VALUES ($1, $2, 'report_generator', $3, $4, $5, $6, 'success', $7, now(), $8)`,
+        [
+          req.user.userId,
+          payload.brandId,
+          reportChannelLabel(payload.platform, meta.channel),
+          // original_filename is NOT NULL on public.uploads — RawFileMeta
+          // types this optimistically as `string | null`, so fall back
+          // rather than let a stray null abort the whole report save.
+          meta.originalFilename || 'File tanpa nama',
+          periodStart,
+          periodEnd,
+          countRowsForFile(payload, meta),
+          rawUpload.rows[0].id,
+        ],
       );
     }
 

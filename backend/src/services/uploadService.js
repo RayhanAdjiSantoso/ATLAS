@@ -7,8 +7,17 @@ const UPLOAD_LIST_QUERY = `
     b.brand_name,
     u.original_filename,
     u.file_type,
-    u.period_start,
-    u.period_end,
+    u.source,
+    u.report_channel,
+    -- Cast to ::text: DATE columns otherwise come back as JS Date objects
+    -- parsed at LOCAL midnight, which then serialize to JSON as a UTC ISO
+    -- string shifted by the timezone offset (e.g. "2026-07-01" ->
+    -- "2026-06-30T17:00:00Z" in UTC+7) -- a pre-existing bug here (not
+    -- introduced by Report Generator's rows, just surfaced by testing
+    -- them), same class as the one already fixed in
+    -- routes/reportGenerator/reports.js.
+    u.period_start::text AS period_start,
+    u.period_end::text AS period_end,
     u.uploaded_at,
     u.completed_at,
     u.status,
@@ -78,12 +87,25 @@ export async function getUploadById(uploadId) {
 // Separate from getUploadById/UPLOAD_LIST_QUERY on purpose -- stored_path is
 // a server filesystem path and must never be exposed through the regular
 // upload-list/detail responses, only used server-side to stream the file.
+// Dashboard rows have a real stored_path (multer diskStorage); Report
+// Generator rows don't (raw_upload_id points at the BYTEA row instead --
+// see getReportGeneratorFile below), so stored_path is null for those.
 export async function getUploadFileById(uploadId) {
   const result = await pool.query(
-    `SELECT upload_id, user_id, original_filename, stored_path
+    `SELECT upload_id, user_id, original_filename, stored_path, source, raw_upload_id
      FROM uploads
      WHERE upload_id = $1`,
     [uploadId],
+  );
+  return result.rows[0] ?? null;
+}
+
+// Report Generator's own file bytes, archived in ads_reports.raw_uploads
+// (BYTEA, not on disk) -- fetched via the uploads row's raw_upload_id link.
+export async function getReportGeneratorFile(rawUploadId) {
+  const result = await pool.query(
+    'SELECT original_filename, raw_file FROM ads_reports.raw_uploads WHERE id = $1',
+    [rawUploadId],
   );
   return result.rows[0] ?? null;
 }
@@ -113,7 +135,7 @@ export async function deleteUpload(uploadId) {
     await client.query('BEGIN');
 
     const existing = await client.query(
-      'SELECT stored_path FROM uploads WHERE upload_id = $1',
+      'SELECT stored_path, source, raw_upload_id FROM uploads WHERE upload_id = $1',
       [uploadId],
     );
     if (existing.rows.length === 0) {
@@ -121,11 +143,24 @@ export async function deleteUpload(uploadId) {
       return null;
     }
 
-    for (const table of FACT_TABLES_WITH_UPLOAD_ID) {
-      await client.query(`DELETE FROM ${table} WHERE upload_id = $1`, [uploadId]);
+    if (existing.rows[0].source === 'report_generator') {
+      // Delete just this one file's archive (ads_reports.raw_uploads), not
+      // the whole saved report -- "Riwayat Laporan" inside Report
+      // Generator is the place to delete an entire comparison. The
+      // uploads row itself is then gone too via ON DELETE CASCADE (see
+      // 007_uploads_report_generator_source.sql); no separate DELETE FROM
+      // uploads needed or possible here.
+      if (existing.rows[0].raw_upload_id) {
+        await client.query('DELETE FROM ads_reports.raw_uploads WHERE id = $1', [existing.rows[0].raw_upload_id]);
+      } else {
+        await client.query('DELETE FROM uploads WHERE upload_id = $1', [uploadId]);
+      }
+    } else {
+      for (const table of FACT_TABLES_WITH_UPLOAD_ID) {
+        await client.query(`DELETE FROM ${table} WHERE upload_id = $1`, [uploadId]);
+      }
+      await client.query('DELETE FROM uploads WHERE upload_id = $1', [uploadId]);
     }
-
-    await client.query('DELETE FROM uploads WHERE upload_id = $1', [uploadId]);
 
     await client.query('COMMIT');
     return existing.rows[0];

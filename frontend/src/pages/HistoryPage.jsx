@@ -10,6 +10,11 @@ const FILE_TYPE_LABELS = {
   product_performance: 'Product Performance',
 };
 
+const SOURCE_LABELS = {
+  dashboard: { label: 'Dashboard', className: 'badge-info' },
+  report_generator: { label: 'Report Generator', className: 'badge-warning' },
+};
+
 const STATUS_LABELS = {
   success: { label: 'Berhasil', className: 'badge-success' },
   failed: { label: 'Gagal', className: 'badge-danger' },
@@ -153,6 +158,7 @@ export default function HistoryPage() {
               <tr>
                 <th>Brand</th>
                 <th>File</th>
+                <th>Sumber</th>
                 <th>Jenis</th>
                 <th>Periode</th>
                 <th>Waktu Upload</th>
@@ -165,11 +171,17 @@ export default function HistoryPage() {
               {uploads.map((u) => {
                 const st = STATUS_LABELS[u.status] || STATUS_LABELS.pending;
                 const canDelete = isAdmin || u.user_id === user?.userId;
+                const src = SOURCE_LABELS[u.source] || SOURCE_LABELS.dashboard;
+                // Report Generator rows have no file_type (that enum is
+                // Dashboard-specific) — report_channel carries their own
+                // "Meta Ads · boost"-style label instead.
+                const jenis = u.source === 'report_generator' ? u.report_channel : (FILE_TYPE_LABELS[u.file_type] || u.file_type);
                 return (
                   <tr key={u.upload_id}>
                     <td>{u.brand_name}</td>
                     <td>{u.original_filename}</td>
-                    <td>{FILE_TYPE_LABELS[u.file_type] || u.file_type}</td>
+                    <td><span className={`badge ${src.className}`}>{src.label}</span></td>
+                    <td>{jenis}</td>
                     <td>{formatPeriod(u.period_start?.slice?.(0, 10) || u.period_start, u.period_end?.slice?.(0, 10) || u.period_end)}</td>
                     <td>{formatDate(u.uploaded_at)}</td>
                     {isAdmin && <td>{u.uploaded_by}</td>}
