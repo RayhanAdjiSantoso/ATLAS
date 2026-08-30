@@ -1,0 +1,25 @@
+{
+  "name": "atlas-backend",
+  "version": "1.0.0",
+  "description": "ATLAS Shopee Analytics API",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "express-validator": "^7.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.1",
+    "pg": "^8.16.0",
+    "uuid": "^11.1.0",
+    "xlsx": "^0.18.5"
+  }
+}

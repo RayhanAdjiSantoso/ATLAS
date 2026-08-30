@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Meta Automation — Standalone Test</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 24px 20px 60px; color: #1c1e21; background: #f7f8fa; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .warn-banner { background: #fff3cd; border: 1px solid #ffe69c; color: #664d03; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 24px; }
+  section { background: #fff; border: 1px solid #e4e6eb; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; }
+  section h2 { font-size: 15px; margin: 0 0 4px; }
+  section .desc { font-size: 12px; color: #65676b; margin-bottom: 12px; }
+  .read-tag, .write-tag { display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+  .read-tag { background: #dcfce7; color: #166534; }
+  .write-tag { background: #fee2e2; color: #991b1b; }
+  button { font-size: 12px; padding: 7px 12px; margin: 3px 6px 3px 0; cursor: pointer; border-radius: 5px; border: 1px solid #ccd0d5; background: #fff; }
+  button:hover { background: #f0f2f5; }
+  button.write { border-color: #f5c6c6; color: #c0392b; }
+  button.write:hover { background: #fdecea; }
+  input, select { font-size: 12px; padding: 6px 8px; border: 1px solid #ccd0d5; border-radius: 4px; margin: 3px 6px 3px 0; }
+  label { display: block; font-size: 11px; color: #444; margin-top: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; }
+  .field input, .field select { margin: 0; min-width: 160px; }
+  .checkbox-field { flex-direction: row; align-items: center; gap: 6px; }
+  .checkbox-field input { width: auto; margin: 0; }
+  #status { position: sticky; top: 0; background: #f7f8fa; padding: 8px 0; font-size: 12px; color: #65676b; z-index: 10; }
+  #out { background: #0f172a; color: #d1fae5; font-size: 12px; padding: 14px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow: auto; }
+  #out.err { color: #fecaca; }
+  .list-item { border: 1px solid #e4e6eb; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; }
+  .list-item .label { font-weight: bold; }
+  .list-item .meta { color: #65676b; font-size: 11px; margin: 2px 0 6px; }
+</style>
+</head>
+<body>
+
+<h1>Meta Automation — Standalone Test</h1>
+<div class="warn-banner">
+  Server ini <strong>tanpa login, tanpa Postgres, tanpa masuk ATLAS</strong> — cuma untuk memastikan
+  round-trip ke Apps Script Web App jalan. Mulai dari tombol hijau (baca) dulu, baru tombol merah (nulis)
+  kalau sudah yakin koneksinya benar. Tombol merah beneran menulis sheet / kirim email.
+</div>
+
+<div id="status">Belum ada request.</div>
+
+<section>
+  <h2>Shared <span class="read-tag">BACA</span></h2>
+  <div class="desc">accounts &amp; log — aman dipanggil kapan saja.</div>
+  <button onclick="call('GET', '/api/meta-automation/accounts')">Accounts</button>
+  <button onclick="call('GET', '/api/meta-automation/log?limit=20')">Log (20 terbaru)</button>
+</section>
+
+<section>
+  <h2>Weekly</h2>
+  <div class="desc">Weekly Campaign Review.</div>
+  <button onclick="call('POST', '/api/meta-automation/weekly/check-tokens')">Check Tokens <span class="read-tag">BACA</span></button>
+  <br>
+  <button class="write" onclick="confirmCall('POST', '/api/meta-automation/weekly/run', null, 'Jalankan Weekly Campaign Review sekarang? Ini menulis sheet & kirim email sungguhan.')">
+    Run Now <span class="write-tag">TULIS</span>
+  </button>
+</section>
+
+<section>
+  <h2>Daily</h2>
+  <div class="desc">Daily Urgent Check.</div>
+  <button class="write" onclick="confirmCall('POST', '/api/meta-automation/daily/reset-cooldown', null, 'Reset cooldown alert? Temuan yang sama akan dikirim ulang di run berikutnya.')">
+    Reset Cooldown <span class="write-tag">TULIS</span>
+  </button>
+  <br>
+  <button class="write" onclick="confirmCall('POST', '/api/meta-automation/daily/run', null, 'Jalankan Daily Urgent Check sekarang? Email cuma terkirim kalau ada temuan, tapi ini beneran menjalankan pengecekan.')">
+    Run Now <span class="write-tag">TULIS</span>
+  </button>
+</section>
+
+<section>
+  <h2>Daily Tracking</h2>
+  <div class="desc">
+    Pilih Brand + Tipe Ad Account dulu — form di bawah otomatis terisi untuk edit kalau brand+tipe itu
+    sudah punya config, atau otomatis kosong (siap diisi) kalau belum. Tidak perlu ID manual.
+  </div>
+
+  <button onclick="loadTrackingList()">List Config <span class="read-tag">BACA</span></button>
+  <button onclick="loadAccounts()">Muat Ulang Daftar Akun</button>
+  <div id="trackingList"></div>
+
+  <div class="row" style="margin-top: 10px;">
+    <div class="field">
+      <label>Brand</label>
+      <select id="selBrand" onchange="onSelectionChange()"><option value="">Memuat...</option></select>
+    </div>
+    <div class="field">
+      <label>Tipe Ad Account</label>
+      <select id="selAccountType" onchange="onSelectionChange()"><option value="">Pilih brand dulu</option></select>
+    </div>
+  </div>
+  <div id="selConfigInfo" style="font-size: 12px; color: #65676b; margin: 4px 0 8px;"></div>
+  <div class="row">
+    <button onclick="previewSelected()">Test (Preview) <span class="read-tag">BACA</span></button>
+    <button class="write" onclick="deleteSelected()">Hapus <span class="write-tag">TULIS</span></button>
+  </div>
+
+  <h3 style="font-size: 13px; margin: 16px 0 6px;">Tambah / Edit Brand</h3>
+  <input type="hidden" id="f_id">
+  <div class="row">
+    <div class="field"><label>Nama Brand</label><input id="f_label" placeholder="mis. Petite Fleur - Daily Tracking"></div>
+  </div>
+  <div class="row">
+    <div class="field" style="flex: 1;"><label>Link Google Sheets</label><input id="f_sheetUrl" style="width: 100%;" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
+  </div>
+  <div class="row">
+    <div class="field"><label>Nama Tab</label><input id="f_tabName" placeholder="mis. Daily Tracking 2026"></div>
+    <div class="field"><label>Baris Header</label><input id="f_headerRow" type="number" value="3" min="1" style="width: 80px;"></div>
+    <div class="field"><label>Header Kolom Tanggal</label><input id="f_dateHeader" value="Date"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label>Header Boost Post</label><input id="f_boostHeader" value="Boost Post"></div>
+    <div class="field"><label>Header Non-Boost</label><input id="f_nonBoostHeader" placeholder="mis. FB Ads"></div>
+  </div>
+  <div class="desc" style="margin-bottom: 8px;">
+    Akun Meta Ads (accountClient) diambil otomatis dari Brand + Tipe Ad Account yang dipilih di atas.
+  </div>
+  <input type="hidden" id="f_accountClient">
+  <div class="row">
+    <div class="field"><label>Kata Kunci Boost Post</label><input id="f_boostMatch" value="profile visit"></div>
+    <div class="field checkbox-field"><input type="checkbox" id="f_emailOnFailure" checked><label for="f_emailOnFailure" style="margin: 0;">Email kalau gagal narik data</label></div>
+  </div>
+  <button class="write" onclick="saveTracking()">Simpan &amp; Validasi <span class="write-tag">TULIS</span></button>
+
+  <div style="margin-top: 16px;">
+    <button class="write" onclick="confirmCall('POST', '/api/meta-automation/tracking/run-all', null, 'Jalankan H-1 untuk SEMUA brand sekarang? Ini menulis Boost Post & kolom non-boost ke sheet tiap brand.')">
+      Jalankan Sekarang (Semua Brand) <span class="write-tag">TULIS</span>
+    </button>
+  </div>
+</section>
+
+<h2 style="font-size: 14px;">Response Terakhir</h2>
+<div id="out">(belum ada)</div>
+
+<script>
+  function val(id) { return document.getElementById(id).value.trim(); }
+
+  function setStatus(text) {
+    document.getElementById('status').textContent = text;
+  }
+
+  function showOut(data, isErr) {
+    const el = document.getElementById('out');
+    el.textContent = JSON.stringify(data, null, 2);
+    el.className = isErr ? 'err' : '';
+  }
+
+  async function call(method, url, body) {
+    setStatus(method + ' ' + url + ' — menunggu...');
+    try {
+      const opts = { method, headers: {} };
+      if (body !== undefined && body !== null) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(url, opts);
+      const data = await res.json().catch(() => ({ message: 'Respons bukan JSON' }));
+      setStatus(method + ' ' + url + ' — HTTP ' + res.status);
+      showOut(data, !res.ok);
+      return { ok: res.ok, data };
+    } catch (err) {
+      setStatus(method + ' ' + url + ' — gagal fetch');
+      showOut({ error: String(err) }, true);
+      return { ok: false, data: null };
+    }
+  }
+
+  function confirmCall(method, url, body, question) {
+    if (!window.confirm(question)) return;
+    return call(method, url, body);
+  }
+
+  // accountsData: [{client, id, portfolio, type}] from GET /accounts.
+  // "Brand" groups accounts by portfolio (falls back to client if a
+  // portfolio is missing) so picking Brand + Tipe (MAIN/CPAS) resolves to
+  // one specific account -- needed because one brand can own more than
+  // one ad account (e.g. a MAIN account and a CPAS account).
+  //
+  // Brand + Tipe is the single source of truth for the whole Daily
+  // Tracking section: picking a combination resolves the Meta Ads account,
+  // looks up whether it already has a config, and either loads that config
+  // into the form below (edit) or clears the form (ready to create new).
+  // Test/Hapus act on whatever that lookup resolved to.
+  let accountsData = [];
+  let trackingData = [];
+  let selectedConfig = null;
+
+  function brandKey(a) { return a.portfolio || a.client; }
+
+  async function loadAccounts() {
+    const res = await call('GET', '/api/meta-automation/accounts');
+    accountsData = (res.data && res.data.accounts) || [];
+    fillBrandOptions();
+    onSelectionChange();
+  }
+
+  function fillBrandOptions() {
+    const sel = document.getElementById('selBrand');
+    const current = sel.value;
+    const brands = Array.from(new Set(accountsData.map(brandKey))).sort();
+    sel.innerHTML = '<option value="">Pilih brand...</option>' +
+      brands.map(function (b) { return '<option value="' + escAttr(b) + '">' + esc(b) + '</option>'; }).join('');
+    if (brands.indexOf(current) > -1) sel.value = current;
+  }
+
+  function resolveAccount(brand, type) {
+    return accountsData.find(function (a) { return brandKey(a) === brand && (a.type || 'MAIN') === type; }) || null;
+  }
+
+  function onSelectionChange() {
+    const brandSel = document.getElementById('selBrand');
+    const typeSel = document.getElementById('selAccountType');
+    const brand = brandSel.value;
+    const currentType = typeSel.value;
+    const types = Array.from(new Set(
+      accountsData.filter(function (a) { return brandKey(a) === brand; }).map(function (a) { return a.type || 'MAIN'; }),
+    )).sort();
+    typeSel.innerHTML = (brand ? '<option value="">Pilih tipe...</option>' : '<option value="">Pilih brand dulu</option>') +
+      types.map(function (t) { return '<option value="' + escAttr(t) + '">' + esc(t) + '</option>'; }).join('');
+    if (types.indexOf(currentType) > -1) typeSel.value = currentType;
+
+    const type = typeSel.value;
+    const info = document.getElementById('selConfigInfo');
+    selectedConfig = null;
+    document.getElementById('f_accountClient').value = '';
+
+    if (!brand || !type) { info.textContent = ''; return; }
+
+    const acct = resolveAccount(brand, type);
+    if (!acct) { info.textContent = 'Akun tidak ditemukan untuk kombinasi ini.'; clearFormFields(); return; }
+    document.getElementById('f_accountClient').value = acct.client;
+
+    const cfg = trackingData.find(function (c) { return c.accountClient === acct.client; });
+    if (cfg) {
+      selectedConfig = cfg;
+      info.textContent = 'Config aktif: "' + cfg.label + '" — form di bawah otomatis terisi untuk edit.';
+      fillFormFields(cfg);
+    } else {
+      info.textContent = 'Belum ada config Daily Tracking untuk ' + brand + ' (' + type + '). Isi form di bawah untuk membuat baru.';
+      clearFormFields();
+    }
+  }
+
+  // Used by the "Pilih" button on each row in the List Config results --
+  // points the Brand/Tipe selector at that row's account so the rest of
+  // the flow (info text, form fill) runs through the same single path.
+  function selectFromConfig(json) {
+    const c = JSON.parse(json);
+    const acct = accountsData.find(function (a) { return a.client === c.accountClient; });
+    if (!acct) { alert('Akun "' + c.accountClient + '" untuk config ini tidak ada di daftar Accounts.'); return; }
+    document.getElementById('selBrand').value = brandKey(acct);
+    onSelectionChange();
+    document.getElementById('selAccountType').value = acct.type || 'MAIN';
+    onSelectionChange();
+  }
+
+  function fillFormFields(c) {
+    document.getElementById('f_id').value = c.id || '';
+    document.getElementById('f_label').value = c.label || '';
+    document.getElementById('f_sheetUrl').value = c.sheetUrl || (c.sheetId ? 'https://docs.google.com/spreadsheets/d/' + c.sheetId : '');
+    document.getElementById('f_tabName').value = c.tabName || '';
+    document.getElementById('f_headerRow').value = c.headerRow || 3;
+    document.getElementById('f_dateHeader').value = c.dateHeader || 'Date';
+    document.getElementById('f_boostHeader').value = c.boostHeader || 'Boost Post';
+    document.getElementById('f_nonBoostHeader').value = c.nonBoostHeader || '';
+    document.getElementById('f_boostMatch').value = c.boostMatch || 'profile visit';
+    document.getElementById('f_emailOnFailure').checked = !!c.emailOnFailure;
+  }
+
+  function clearFormFields() {
+    fillFormFields({ id: '', label: '', sheetUrl: '', tabName: '', headerRow: 3, dateHeader: 'Date', boostHeader: 'Boost Post', nonBoostHeader: '', boostMatch: 'profile visit', emailOnFailure: true });
+  }
+
+  function previewSelected() {
+    if (!selectedConfig) { alert('Pilih Brand & Tipe Ad Account yang sudah punya config Daily Tracking dulu.'); return; }
+    call('POST', '/api/meta-automation/tracking/' + encodeURIComponent(selectedConfig.id) + '/preview');
+  }
+
+  async function deleteSelected() {
+    if (!selectedConfig) { alert('Pilih Brand & Tipe Ad Account yang sudah punya config Daily Tracking dulu.'); return; }
+    const ok = window.confirm('Hapus konfigurasi "' + selectedConfig.label + '"? Data di sheet brand-nya tidak berubah, cuma pendaftarannya yang dihapus.');
+    if (!ok) return;
+    const res = await call('DELETE', '/api/meta-automation/tracking/' + encodeURIComponent(selectedConfig.id));
+    if (res.ok) loadTrackingList();
+  }
+
+  async function loadTrackingList() {
+    const res = await call('GET', '/api/meta-automation/tracking');
+    const el = document.getElementById('trackingList');
+    const configs = res.data && res.data.configs;
+    if (!res.ok || !configs) { el.innerHTML = ''; return; }
+    trackingData = configs;
+    onSelectionChange();
+    if (!configs.length) {
+      el.innerHTML = '<p style="font-size:12px;color:#65676b;">Belum ada brand yang dikonfigurasi.</p>';
+      return;
+    }
+    el.innerHTML = configs.map(function (c) {
+      return '<div class="list-item">' +
+        '<div class="label">' + esc(c.label) + '</div>' +
+        '<div class="meta">tab: ' + esc(c.tabName) + ' &middot; akun: ' + esc(c.accountClient) + '</div>' +
+        '<button onclick="selectFromConfig(' + JSON.stringify(JSON.stringify(c)) + ')">Pilih</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function escAttr(s) { return esc(s).replace(/'/g, '&#39;'); }
+
+  async function saveTracking() {
+    const id = val('f_id');
+    const accountClient = val('f_accountClient');
+    if (!accountClient) {
+      alert('Pilih Brand & Tipe Ad Account dulu (field "Akun Meta Ads").');
+      return;
+    }
+    const payload = {
+      label: val('f_label'),
+      sheetUrl: val('f_sheetUrl'),
+      tabName: val('f_tabName'),
+      headerRow: Number(val('f_headerRow')) || 3,
+      dateHeader: val('f_dateHeader'),
+      boostHeader: val('f_boostHeader'),
+      nonBoostHeader: val('f_nonBoostHeader'),
+      accountClient: accountClient,
+      boostMatch: val('f_boostMatch'),
+      emailOnFailure: document.getElementById('f_emailOnFailure').checked,
+    };
+    const question = id
+      ? 'Simpan perubahan ke config "' + payload.label + '"? Ini memvalidasi ke sheet asli.'
+      : 'Buat config baru "' + payload.label + '"? Ini memvalidasi ke sheet asli.';
+    if (!window.confirm(question)) return;
+
+    const res = id
+      ? await call('PUT', '/api/meta-automation/tracking/' + encodeURIComponent(id), payload)
+      : await call('POST', '/api/meta-automation/tracking', payload);
+
+    if (res.ok) loadTrackingList();
+  }
+
+  // Both are read-only GETs, safe to run automatically on page load so the
+  // Brand/Tipe dropdowns are usable right away.
+  loadAccounts();
+  loadTrackingList();
+</script>
+</body>
+</html>

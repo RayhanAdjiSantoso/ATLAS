@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Environment secrets (backend/.env, backend/standalone/.env — never commit)
+.env
+
+# Build output
+dist/
+
+# Runtime data — user-uploaded Excel files, generated at runtime, not source
+/backend/uploads/
+
+# OS/editor cruft
+.DS_Store
