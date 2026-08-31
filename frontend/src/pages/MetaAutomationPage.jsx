@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import WeeklyDailyTab from '../components/metaAutomation/WeeklyDailyTab.jsx';
 import DailyTrackingTab from '../components/metaAutomation/DailyTrackingTab.jsx';
+import BrandsAndSubscriptionsTab from '../components/metaAutomation/BrandsAndSubscriptionsTab.jsx';
 
-const TABS = ['Weekly & Daily', 'Daily Tracking'];
+const TABS = ['Weekly & Daily', 'Daily Tracking', 'Brand & Langganan'];
 
 const TAB_COMPONENTS = {
   'Weekly & Daily': WeeklyDailyTab,
   'Daily Tracking': DailyTrackingTab,
+  'Brand & Langganan': BrandsAndSubscriptionsTab,
 };
 
 export default function MetaAutomationPage() {

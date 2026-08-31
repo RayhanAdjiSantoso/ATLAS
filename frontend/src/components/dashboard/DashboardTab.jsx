@@ -1299,7 +1299,7 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
             sections. Every possible segment appears even at 0 customers
             (valid data, not hidden) -- see RFM_SEGMENTS. */}
         <div className="card" style={{ padding: '1.25rem', overflowX: 'auto' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--text)' }}>Segmen Pelanggan &amp; Rekomendasi Aksi</h3>
+          <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--text)' }}>Segmen Pelanggan &amp; Deskripsi</h3>
           <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
             Persentase dihitung dari {formatNumber(totalCustomers)} pelanggan pada periode ini.
             {comparePeriod && ` Perubahan dibandingkan ${formatNumber(comparePeriod.totalCustomers)} pelanggan pada periode pembanding (${formatDateLabel(comparePeriod.range.startDate)} - ${formatDateLabel(comparePeriod.range.endDate)}).`}
@@ -1317,7 +1317,7 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
                 >
                   % Perubahan ⓘ
                 </th>
-                <th style={{ padding: '0.5rem' }}>Rekomendasi Aksi</th>
+                <th style={{ padding: '0.5rem' }}>Deskripsi</th>
               </tr>
             </thead>
             <tbody>
@@ -1347,14 +1347,8 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
                     </td>
                     <td
                       style={{ padding: '0.6rem 0.5rem', fontSize: '0.78rem', color: 'var(--text-muted)', minWidth: '260px' }}
-                      title={seg.action ? `Tujuan: ${seg.action.goal}. Rekomendasi: ${seg.action.recommendations.join(', ')}.` : ''}
                     >
-                      {seg.action ? (
-                        <>
-                          <div style={{ color: 'var(--text)', fontWeight: '600' }}>{seg.action.goal}</div>
-                          <div>{seg.action.recommendations.join(' · ')}</div>
-                        </>
-                      ) : '-'}
+                      {seg.action?.description || '-'}
                     </td>
                   </tr>
                 );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../api/client.js';
+import api from '../../api/client.js';
 
 const FILE_TYPES = [
   {
@@ -90,7 +90,11 @@ function UploadZone({ fileType, title, description, brandId, disabled }) {
   );
 }
 
-export default function UploadPage() {
+// Upload Data as a Dashboard tab -- was previously its own standalone page
+// (/upload). Deliberately bypasses DashboardTab's date-range/data-fetch
+// pipeline: uploading isn't scoped to the global date filter, only to a
+// brand, so it manages its own brand selector independent of FilterPanel.
+export default function UploadDataTab() {
   const [brands, setBrands] = useState([]);
   const [loadingBrands, setLoadingBrands] = useState(true);
   const [brandId, setBrandId] = useState('');
@@ -142,19 +146,18 @@ export default function UploadPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Upload Data</h1>
-        <p>Unggah file Excel Shopee per jenis. Periode data akan dibaca otomatis dari isi file.</p>
+      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '1rem' }}>
+        Unggah file Excel Shopee per jenis. Periode data akan dibaca otomatis dari isi file.
       </div>
 
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label htmlFor="brandSelect">Nama Brand</label>
+          <label htmlFor="uploadBrandSelect">Nama Brand</label>
 
           {!showNewBrand ? (
             <>
               <select
-                id="brandSelect"
+                id="uploadBrandSelect"
                 value={brandId}
                 onChange={(e) => setBrandId(e.target.value)}
                 disabled={loadingBrands}

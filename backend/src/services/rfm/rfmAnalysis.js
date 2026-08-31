@@ -30,48 +30,64 @@ export const RFM_SEGMENTS = [
 // Kept separate from assignSegment()/computeRfmAnalysis() on purpose: this
 // is presentation/recommendation content, not scoring logic, and must never
 // influence which segment a customer is assigned to.
+//
+// `description` explains what the segment *means* (its R/F/M profile, per
+// assignSegment() above) -- shown in the dashboard's segment table so the
+// column reads as "what is this segment" rather than "what to do about it".
+// `goal`/`recommendations` are kept for other consumers (e.g. tooltips).
 export const SEGMENT_ACTIONS = {
   'Champions': {
+    description: 'Pelanggan terbaik: baru saja bertransaksi, paling sering membeli, dan nilai transaksinya paling tinggi.',
     goal: 'Retention dan advocacy',
     recommendations: ['Loyalty program', 'Early access produk baru', 'Personal offer', 'Program referral'],
   },
   'Loyal Customers': {
+    description: 'Sering bertransaksi dengan nilai tinggi dan cukup baru aktif, meski belum sekonsisten Champions.',
     goal: 'Retention dan advocacy',
     recommendations: ['Loyalty program', 'Early access produk baru', 'Personal offer', 'Program referral'],
   },
   'Potential Loyalist': {
+    description: 'Baru-baru ini bertransaksi dengan frekuensi dan nilai transaksi menengah -- berpotensi menjadi pelanggan loyal.',
     goal: 'Mendorong customer menjadi loyal customer',
     recommendations: ['Reminder repeat purchase', 'Voucher pembelian berikutnya', 'Rekomendasi produk personal', 'Cross-sell'],
   },
   'Promising': {
+    description: 'Cukup baru bertransaksi, tapi frekuensi dan nilai transaksinya masih rendah.',
     goal: 'Mendorong customer menjadi loyal customer',
     recommendations: ['Reminder repeat purchase', 'Voucher pembelian berikutnya', 'Rekomendasi produk personal'],
   },
   'New Customers': {
+    description: 'Baru pertama kali bertransaksi, dengan frekuensi dan nilai transaksi yang masih rendah.',
     goal: 'Mengubah first-time customer menjadi repeat customer',
     recommendations: ['Onboarding', 'Cross-selling', 'Follow-up setelah transaksi pertama', 'Insentif pembelian kedua'],
   },
   'Need Attention': {
+    description: 'Recency, frekuensi, dan nilai transaksi berada di level rata-rata -- berisiko menurun jika dibiarkan.',
     goal: 'Mencegah penurunan lebih lanjut menuju churn',
     recommendations: ['Reminder aktivasi', 'Penawaran bernilai sedang', 'Rekomendasi produk relevan'],
   },
   'At Risk': {
+    description: 'Dulu sering bertransaksi dengan nilai tinggi, tapi sudah cukup lama tidak kembali bertransaksi.',
     goal: 'Mengurangi customer churn',
     recommendations: ['Win-back campaign', 'Penawaran khusus', 'Komunikasi personal', 'Rekomendasi berdasarkan histori pembelian'],
   },
   "Can't Lose Them": {
+    description: 'Pelanggan bernilai dan frekuensi transaksi tertinggi, namun sudah paling lama tidak bertransaksi lagi.',
     goal: 'Mengurangi churn pada pelanggan bernilai tinggi',
     recommendations: ['Win-back campaign prioritas', 'Penawaran eksklusif', 'Komunikasi personal langsung', 'Survei alasan tidak aktif'],
   },
   'Hibernating': {
+    description: 'Sudah lama tidak bertransaksi, dengan frekuensi dan nilai transaksi yang rendah.',
     goal: 'Reaktivasi pelanggan tidak aktif',
     recommendations: ['Kampanye reaktivasi', 'Penawaran diskon signifikan', 'Survei alasan berhenti membeli'],
   },
   'Lost': {
+    description: 'Paling lama tidak bertransaksi, dengan frekuensi dan nilai transaksi paling rendah.',
     goal: 'Reaktivasi pelanggan yang sudah lama tidak aktif',
     recommendations: ['Kampanye reaktivasi skala besar', 'Penawaran terbaik', 'Evaluasi ulang worth reaktivasi'],
   },
   'Others': {
+    description: 'Kombinasi skor Recency, Frequency, dan Monetary yang tidak sesuai pola segmen standar lainnya.',
     goal: 'Butuh analisis lanjutan',
     recommendations: ['Tinjau profil RFM individual sebelum menentukan strategi'],
   },

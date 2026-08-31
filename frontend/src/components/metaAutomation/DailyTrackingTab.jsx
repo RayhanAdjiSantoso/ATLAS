@@ -17,12 +17,6 @@ const EMPTY_FORM = {
   emailOnFailure: true,
 };
 
-// Groups a Meta Ads account under its Business Manager portfolio -- falls
-// back to the account's own client name if it has no portfolio. Used to
-// drive the Brand -> Tipe Ad Account (MAIN/CPAS) cascade below, since one
-// brand can own more than one ad account.
-const brandKey = (a) => a.portfolio || a.client;
-
 export default function DailyTrackingTab() {
   const [configs, setConfigs] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -42,9 +36,9 @@ export default function DailyTrackingTab() {
   const [runAllMessage, setRunAllMessage] = useState(null);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
 
-  const brands = Array.from(new Set(accounts.map(brandKey))).sort();
+  const brands = Array.from(new Set(accounts.map((a) => a.client))).sort();
   const typesForBrand = Array.from(
-    new Set(accounts.filter((a) => brandKey(a) === accountSelection.brand).map((a) => a.type || 'MAIN')),
+    new Set(accounts.filter((a) => a.client === accountSelection.brand).map((a) => a.type || 'MAIN')),
   ).sort();
 
   const loadAll = () => {
@@ -73,7 +67,7 @@ export default function DailyTrackingTab() {
   const handleEdit = (cfg) => {
     setForm({ ...EMPTY_FORM, ...cfg, id: cfg.id });
     const acct = accounts.find((a) => a.client === cfg.accountClient);
-    setAccountSelection(acct ? { brand: brandKey(acct), type: acct.type || 'MAIN' } : { brand: '', type: '' });
+    setAccountSelection(acct ? { brand: acct.client, type: acct.type || 'MAIN' } : { brand: '', type: '' });
     setFormMessage(null);
     setPreview(null);
   };
@@ -289,7 +283,7 @@ export default function DailyTrackingTab() {
               disabled={!accountSelection.brand}
               onChange={(e) => {
                 const type = e.target.value;
-                const acct = accounts.find((a) => brandKey(a) === accountSelection.brand && (a.type || 'MAIN') === type);
+                const acct = accounts.find((a) => a.client === accountSelection.brand && (a.type || 'MAIN') === type);
                 setAccountSelection((s) => ({ ...s, type }));
                 setForm((f) => ({ ...f, accountClient: acct ? acct.client : '' }));
               }}

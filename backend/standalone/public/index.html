@@ -174,11 +174,11 @@
     return call(method, url, body);
   }
 
-  // accountsData: [{client, id, portfolio, type}] from GET /accounts.
-  // "Brand" groups accounts by portfolio (falls back to client if a
-  // portfolio is missing) so picking Brand + Tipe (MAIN/CPAS) resolves to
-  // one specific account -- needed because one brand can own more than
-  // one ad account (e.g. a MAIN account and a CPAS account).
+  // accountsData: [{client, id, type}] from GET /accounts.
+  // "Brand" groups accounts by client name, so picking Brand + Tipe
+  // (MAIN/CPAS) resolves to one specific account -- needed because one
+  // brand can own more than one ad account (e.g. a MAIN account and a
+  // CPAS account).
   //
   // Brand + Tipe is the single source of truth for the whole Daily
   // Tracking section: picking a combination resolves the Meta Ads account,
@@ -189,7 +189,7 @@
   let trackingData = [];
   let selectedConfig = null;
 
-  function brandKey(a) { return a.portfolio || a.client; }
+  function brandKey(a) { return a.client; }
 
   async function loadAccounts() {
     const res = await call('GET', '/api/meta-automation/accounts');

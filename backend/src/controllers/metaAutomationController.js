@@ -62,27 +62,46 @@ export const trackingRunAll = asyncHandler(async (req, res) => {
   res.json({ result });
 });
 
-export const brandAccountList = asyncHandler(async (req, res) => {
-  const accounts = await metaAutomationService.callAppsScript('accountList');
-  res.json({ accounts });
+// --- Alur 1: Brand (kredensial ad account, tanpa setelan notifikasi) ---
+
+export const brandList = asyncHandler(async (req, res) => {
+  const brands = await metaAutomationService.callAppsScript('brandList');
+  res.json({ brands });
 });
 
-export const brandAccountCreate = asyncHandler(async (req, res) => {
-  const account = await metaAutomationService.callAppsScript('accountSave', req.body);
-  res.status(201).json({ account });
+export const brandCreate = asyncHandler(async (req, res) => {
+  const brand = await metaAutomationService.callAppsScript('brandSave', req.body);
+  res.status(201).json({ brand });
 });
 
-export const brandAccountUpdate = asyncHandler(async (req, res) => {
-  const account = await metaAutomationService.callAppsScript('accountSave', { ...req.body, id: req.params.id });
-  res.json({ account });
+export const brandUpdate = asyncHandler(async (req, res) => {
+  const brand = await metaAutomationService.callAppsScript('brandSave', { ...req.body, id: req.params.id });
+  res.json({ brand });
 });
 
-export const brandAccountDelete = asyncHandler(async (req, res) => {
-  const accounts = await metaAutomationService.callAppsScript('accountDelete', { id: req.params.id });
-  res.json({ accounts });
+export const brandDelete = asyncHandler(async (req, res) => {
+  const result = await metaAutomationService.callAppsScript('brandDelete', { id: req.params.id });
+  res.json(result);
 });
 
-export const brandAccountCampaigns = asyncHandler(async (req, res) => {
-  const campaigns = await metaAutomationService.callAppsScript('accountCampaigns', { id: req.params.id });
-  res.json({ campaigns });
+// --- Alur 2: Langganan (siapa dinotifikasi, metrik & threshold) ---
+
+export const subscriptionList = asyncHandler(async (req, res) => {
+  const subscriptions = await metaAutomationService.callAppsScript('subscriptionList');
+  res.json({ subscriptions });
+});
+
+export const subscriptionCreate = asyncHandler(async (req, res) => {
+  const subscription = await metaAutomationService.callAppsScript('subscriptionSave', req.body);
+  res.status(201).json({ subscription });
+});
+
+export const subscriptionUpdate = asyncHandler(async (req, res) => {
+  const subscription = await metaAutomationService.callAppsScript('subscriptionSave', { ...req.body, id: req.params.id });
+  res.json({ subscription });
+});
+
+export const subscriptionDelete = asyncHandler(async (req, res) => {
+  const subscriptions = await metaAutomationService.callAppsScript('subscriptionDelete', { id: req.params.id });
+  res.json({ subscriptions });
 });

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import FilterPanel from '../components/dashboard/FilterPanel.jsx';
 import DashboardTab from '../components/dashboard/DashboardTab.jsx';
+import UploadDataTab from '../components/dashboard/UploadDataTab.jsx';
 
 const TABS = [
+  'Upload Data',
   'Executive Snapshot',
   'Business Growth',
   'Traffic & Funnel',
@@ -13,7 +15,10 @@ const TABS = [
 ];
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState(TABS[0]);
+  // Default landing tab -- kept as Executive Snapshot regardless of tab
+  // order, since TABS[0] is now Upload Data (leftmost by request, not the
+  // intended first thing a user sees on opening the dashboard).
+  const [activeTab, setActiveTab] = useState('Executive Snapshot');
   const [filters, setFilters] = useState({
     brandId: '',
     startDate: '2026-06-01',
@@ -29,13 +34,14 @@ export default function DashboardPage() {
       {/* Page Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1>Dashboard Analitik</h1>
+          <h1>Dashboard Business Overview</h1>
           <p>Insight dan analisis metrik penjualan Shopee Anda secara realtime.</p>
         </div>
       </div>
 
-      {/* Dynamic Global Filter Panel */}
-      <FilterPanel filters={filters} onChange={setFilters} />
+      {/* Dynamic Global Filter Panel -- irrelevant for Upload Data (not
+          scoped to a date range), so hidden on that tab. */}
+      {activeTab !== 'Upload Data' && <FilterPanel filters={filters} onChange={setFilters} />}
 
       {/* Dynamic Tab Navigation */}
       <div 
@@ -66,8 +72,14 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Dynamic Rendered Tab Content Area */}
-      <DashboardTab activeTab={activeTab} filters={filters} onNavigateTab={setActiveTab} />
+      {/* Dynamic Rendered Tab Content Area -- Upload Data bypasses
+          DashboardTab entirely, since it isn't scoped to the date filters
+          DashboardTab fetches data against. */}
+      {activeTab === 'Upload Data' ? (
+        <UploadDataTab />
+      ) : (
+        <DashboardTab activeTab={activeTab} filters={filters} onNavigateTab={setActiveTab} />
+      )}
 
     </div>
   );

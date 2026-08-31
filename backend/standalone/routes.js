@@ -22,10 +22,14 @@ router.delete('/tracking/:id', metaAutomationController.trackingDelete);
 router.post('/tracking/:id/preview', metaAutomationController.trackingPreview);
 router.post('/tracking/run-all', metaAutomationController.trackingRunAll);
 
-router.get('/brand-accounts', metaAutomationController.brandAccountList);
-router.post('/brand-accounts', metaAutomationController.brandAccountCreate);
-router.put('/brand-accounts/:id', metaAutomationController.brandAccountUpdate);
-router.delete('/brand-accounts/:id', metaAutomationController.brandAccountDelete);
-router.get('/brand-accounts/:id/campaigns', metaAutomationController.brandAccountCampaigns);
+router.get('/brands', metaAutomationController.brandList);
+router.post('/brands', metaAutomationController.brandCreate);
+router.put('/brands/:id', metaAutomationController.brandUpdate);
+router.delete('/brands/:id', metaAutomationController.brandDelete);
+
+router.get('/subscriptions', metaAutomationController.subscriptionList);
+router.post('/subscriptions', metaAutomationController.subscriptionCreate);
+router.put('/subscriptions/:id', metaAutomationController.subscriptionUpdate);
+router.delete('/subscriptions/:id', metaAutomationController.subscriptionDelete);
 
 export default router;

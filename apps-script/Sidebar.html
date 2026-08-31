@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #1c1e21; padding: 10px 14px 24px; background: #f7f8fa; }
+  .wrap { max-width: 480px; margin: 0 auto; background: #fff; padding: 16px 20px 22px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  h2 { font-size: 15px; margin: 4px 0 12px; }
+  h3 { font-size: 13px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e4e6eb; }
+  p.empty { color: #65676b; font-size: 12px; }
+  .card { border: 1px solid #e4e6eb; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; background: #fafbfc; }
+  .card .label { font-weight: bold; font-size: 13px; }
+  .card .meta { color: #65676b; font-size: 11px; margin: 2px 0 8px; }
+  .card button { font-size: 11px; padding: 4px 9px; margin-right: 5px; cursor: pointer; border-radius: 4px; border: 1px solid #ccd0d5; background: #fff; }
+  .card button:hover { background: #f0f2f5; }
+  .card button.danger { color: #c0392b; border-color: #f5c6c6; }
+  label { display: block; margin-top: 9px; font-size: 12px; color: #444; }
+  input, select { width: 100%; box-sizing: border-box; padding: 6px; margin-top: 3px; font-size: 12px; border: 1px solid #ccd0d5; border-radius: 4px; }
+  .row2 { display: flex; gap: 8px; }
+  .row2 > div { flex: 1; }
+  .primary { background: #1877f2; color: #fff; border: none; border-radius: 4px; padding: 8px 12px; cursor: pointer; margin-top: 12px; width: 100%; font-size: 13px; font-weight: bold; }
+  .primary:disabled { background: #a9c7f5; cursor: default; }
+  .secondary { background: #e4e6eb; border: none; border-radius: 4px; padding: 7px 10px; cursor: pointer; width: 100%; margin-top: 6px; font-size: 12px; }
+  #msg { font-size: 12px; margin-top: 10px; white-space: pre-wrap; padding: 8px; border-radius: 4px; display: none; }
+  #msg.ok { color: #1e7e34; background: #eaf7ec; display: block; }
+  #msg.err { color: #c0392b; background: #fdecea; display: block; }
+  #msg.pending { color: #65676b; background: #f0f2f5; display: block; }
+  small.hint { display: block; color: #8a8d91; font-size: 10.5px; margin-top: 2px; }
+  .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+  .checkbox-row input { width: auto; margin: 0; }
+  .checkbox-row label { margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Daily Tracking — Konfigurasi Brand</h2>
+
+  <div id="list"><p class="empty">Memuat...</p></div>
+
+  <h3 id="formTitle">Tambah Brand Baru</h3>
+  <form id="cfgForm" onsubmit="return false;">
+    <input type="hidden" id="id">
+
+    <label>Nama Brand (label bebas, buat kamu sendiri)
+      <input id="label" placeholder="mis. Petite Fleur - Daily Tracking">
+    </label>
+
+    <label>Link Google Sheets
+      <input id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/....">
+      <small class="hint">Tempel link lengkapnya, tidak perlu potong-potong ID sendiri.</small>
+    </label>
+
+    <label>Nama Tab
+      <input id="tabName" placeholder="mis. Daily Tracking 2026">
+      <small class="hint">Harus persis sama (besar/kecil huruf tidak masalah, tapi ejaan harus sama).</small>
+    </label>
+
+    <div class="row2">
+      <div>
+        <label>Baris Header
+          <input id="headerRow" type="number" value="3" min="1">
+        </label>
+      </div>
+      <div>
+        <label>Header Kolom Tanggal
+          <input id="dateHeader" value="Date">
+        </label>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div>
+        <label>Header Kolom Boost Post
+          <input id="boostHeader" value="Boost Post">
+        </label>
+      </div>
+      <div>
+        <label>Header Kolom Non-Boost
+          <input id="nonBoostHeader" placeholder="mis. FB Ads">
+        </label>
+      </div>
+    </div>
+
+    <label>Akun Meta Ads
+      <select id="accountClient"><option>Memuat...</option></select>
+      <small class="hint">Cuma akun yang sudah punya token API yang muncul. Akun baru harus disetup dulu oleh yang pegang kode Apps Script.</small>
+    </label>
+
+    <label>Kata Kunci Boost Post
+      <input id="boostMatch" value="profile visit">
+      <small class="hint">Campaign yang namanya mengandung kata ini (di posisi mana pun, tidak peduli besar/kecil huruf) dihitung sebagai Boost Post. Sisanya masuk kolom non-boost.</small>
+    </label>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="emailOnFailure" checked>
+      <label for="emailOnFailure">Kirim email kalau gagal narik data</label>
+    </div>
+
+    <button class="primary" id="saveBtn" onclick="saveConfig()">Simpan &amp; Validasi</button>
+    <button class="secondary" onclick="resetForm()">Batal / Form Kosong</button>
+  </form>
+
+  <div id="msg"></div>
+</div>
+<script>
+  var currentConfigs = [];
+
+  function loadAll() {
+    google.script.run.withSuccessHandler(renderList).withFailureHandler(showLoadError).uiListConfigs();
+    google.script.run.withSuccessHandler(renderAccounts).withFailureHandler(showLoadError).uiListAccountClients();
+  }
+
+  function showLoadError(err) {
+    setMsg('Gagal memuat data: ' + err.message, 'err');
+  }
+
+  function renderAccounts(clients) {
+    var sel = document.getElementById('accountClient');
+    if (!clients.length) {
+      sel.innerHTML = '<option value="">(tidak ada akun di CONFIG.ACCOUNTS)</option>';
+      return;
+    }
+    sel.innerHTML = clients.map(function (c) {
+      return '<option value="' + escAttr(c) + '">' + esc(c) + '</option>';
+    }).join('');
+  }
+
+  function renderList(configs) {
+    currentConfigs = configs;
+    var el = document.getElementById('list');
+    if (!configs.length) {
+      el.innerHTML = '<p class="empty">Belum ada brand yang dikonfigurasi. Isi form di bawah untuk menambahkan.</p>';
+      return;
+    }
+    el.innerHTML = configs.map(function (c) {
+      return '<div class="card">' +
+        '<div class="label">' + esc(c.label) + '</div>' +
+        '<div class="meta">Tab: ' + esc(c.tabName) + ' &middot; Akun: ' + esc(c.accountClient) +
+        ' &middot; Kolom: ' + esc(c.boostHeader) + ' / ' + esc(c.nonBoostHeader) + '</div>' +
+        '<button onclick="editConfig(\'' + c.id + '\')">Edit</button>' +
+        '<button onclick="previewConfig(\'' + c.id + '\')">Test</button>' +
+        '<button class="danger" onclick="deleteConfig(\'' + c.id + '\')">Hapus</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function escAttr(s) { return esc(s).replace(/'/g, '&#39;'); }
+
+  function editConfig(id) {
+    var c = currentConfigs.filter(function (x) { return x.id === id; })[0];
+    if (!c) return;
+    document.getElementById('formTitle').textContent = 'Edit: ' + c.label;
+    document.getElementById('id').value = c.id;
+    document.getElementById('label').value = c.label;
+    document.getElementById('sheetUrl').value = 'https://docs.google.com/spreadsheets/d/' + c.sheetId;
+    document.getElementById('tabName').value = c.tabName;
+    document.getElementById('headerRow').value = c.headerRow;
+    document.getElementById('dateHeader').value = c.dateHeader;
+    document.getElementById('boostHeader').value = c.boostHeader;
+    document.getElementById('nonBoostHeader').value = c.nonBoostHeader;
+    document.getElementById('accountClient').value = c.accountClient;
+    document.getElementById('boostMatch').value = c.boostMatch;
+    document.getElementById('emailOnFailure').checked = !!c.emailOnFailure;
+    hideMsg();
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  function resetForm() {
+    document.getElementById('formTitle').textContent = 'Tambah Brand Baru';
+    document.getElementById('cfgForm').reset();
+    document.getElementById('id').value = '';
+    document.getElementById('headerRow').value = 3;
+    document.getElementById('dateHeader').value = 'Date';
+    document.getElementById('boostHeader').value = 'Boost Post';
+    document.getElementById('boostMatch').value = 'profile visit';
+    document.getElementById('emailOnFailure').checked = true;
+    hideMsg();
+  }
+
+  function saveConfig() {
+    var cfg = {
+      id: document.getElementById('id').value,
+      label: document.getElementById('label').value,
+      sheetUrl: document.getElementById('sheetUrl').value,
+      tabName: document.getElementById('tabName').value,
+      headerRow: document.getElementById('headerRow').value,
+      dateHeader: document.getElementById('dateHeader').value,
+      boostHeader: document.getElementById('boostHeader').value,
+      nonBoostHeader: document.getElementById('nonBoostHeader').value,
+      accountClient: document.getElementById('accountClient').value,
+      boostMatch: document.getElementById('boostMatch').value,
+      emailOnFailure: document.getElementById('emailOnFailure').checked
+    };
+    setMsg('Menyimpan & memvalidasi ke sheet asli (mengecek sheet, tab, dan nama kolom)...', 'pending');
+    setSaving(true);
+    google.script.run
+      .withSuccessHandler(function (saved) {
+        setSaving(false);
+        setMsg('Tersimpan: "' + saved.label + '". Sheet, tab, dan header sudah ketemu & tervalidasi.', 'ok');
+        resetForm();
+        loadAll();
+      })
+      .withFailureHandler(function (err) {
+        setSaving(false);
+        setMsg('Gagal menyimpan — ' + err.message, 'err');
+      })
+      .uiSaveConfig(cfg);
+  }
+
+  function deleteConfig(id) {
+    if (!confirm('Hapus konfigurasi ini? Data di sheet brand-nya tidak akan berubah, ini cuma menghapus pendaftarannya di sini.')) return;
+    google.script.run
+      .withSuccessHandler(function () { setMsg('Konfigurasi dihapus.', 'ok'); loadAll(); })
+      .withFailureHandler(function (err) { setMsg('Gagal menghapus — ' + err.message, 'err'); })
+      .uiDeleteConfig(id);
+  }
+
+  function previewConfig(id) {
+    setMsg('Menjalankan test (dry run, tidak menulis apa pun)...', 'pending');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        if (r.status === 'FAILED') {
+          setMsg('Test GAGAL untuk "' + r.label + '" — ' + r.error, 'err');
+          return;
+        }
+        setMsg(
+          'Test OK — ' + r.label + ' (tanggal ' + r.date + ', baris ' + r.row + ')\n' +
+          'Boost Post: ' + r.boostSpend + '\n' +
+          'Non-Boost: ' + r.nonBoostSpend + '\n' +
+          r.campaigns + ' campaign ditemukan\n' +
+          'Nilai existing di sheet sekarang: ' + r.existingBoost + ' / ' + r.existingNonBoost + '\n' +
+          '(Ini cuma preview — belum ditulis ke sheet)',
+          'ok'
+        );
+      })
+      .withFailureHandler(function (err) { setMsg('Test GAGAL — ' + err.message, 'err'); })
+      .uiPreviewConfig(id);
+  }
+
+  function setSaving(v) {
+    document.getElementById('saveBtn').disabled = v;
+    document.getElementById('saveBtn').textContent = v ? 'Memvalidasi...' : 'Simpan & Validasi';
+  }
+
+  function setMsg(text, cls) {
+    var el = document.getElementById('msg');
+    el.textContent = text;
+    el.className = cls;
+  }
+  function hideMsg() { document.getElementById('msg').className = ''; }
+
+  loadAll();
+</script>
+</body>
+</html>
