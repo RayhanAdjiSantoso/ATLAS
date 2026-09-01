@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import HistoryPage from './pages/HistoryPage.jsx';
 import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
 import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
+import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route element={<ProtectedRoute roles={['admin']} />}>
           <Route element={<AppLayout />}>
             <Route path="/meta-automation" element={<MetaAutomationPage />} />
+            <Route path="/internal-dashboard" element={<InternalDashboardPage />} />
           </Route>
         </Route>
       </Route>
