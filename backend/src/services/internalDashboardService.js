@@ -658,3 +658,175 @@ export async function getIndustries(params) {
     ungrouped: { client_count: ungrouped.length, brand_names: ungrouped.map((b) => b.brand_name) },
   };
 }
+
+// =====================================================================
+// S6 — Channel & Platform
+// =====================================================================
+// Sales side: client_channel_sales_monthly (4 sales channels).
+// Ad side:    client_platform_spend_monthly (6 ad platforms).
+// Efficiency ratios are ALWAYS recomputed from summed raw columns here —
+// the stored ratio columns are never read. Platform-level "ROAS" is
+// purchase_value / spend and is deliberately called
+// `platform_attributed_roas`, NOT "ROAS" (that headline term is reserved
+// for the revenue/spend blended figure in S1).
+
+const SALES_CHANNELS = ['shopee', 'tiktok_shop', 'website', 'offline'];
+const AD_PLATFORMS = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads'];
+
+export async function getChannels(params) {
+  const period = params.period;
+  const compare = params.compare === 'yoy' ? 'yoy' : 'mom';
+  const status = params.status || 'active';
+  const category = params.category || 'all';
+  const kategoriBesar = category === 'all' ? null : (CATEGORY_MAP[category] ?? null);
+
+  const brands = await repo.listBrandsForOverview({ status, kategoriBesar });
+  const brandIds = brands.map((b) => b.brand_id);
+  const brandById = new Map(brands.map((b) => [b.brand_id, b]));
+
+  const comparePeriod = compare === 'yoy' ? shiftMonth(period, -12) : shiftMonth(period, -1);
+  const trendStart = shiftMonth(period, -(S1_CONFIG.trendWindowMonths - 1));
+  const windowStart = comparePeriod < trendStart ? comparePeriod : trendStart;
+
+  const [chanRows, platRows] = await Promise.all([
+    repo.channelSalesGrid(brandIds, windowStart, period),
+    repo.platformMetricsGrid(brandIds, windowStart, period),
+  ]);
+
+  const months = [];
+  for (let i = -(S1_CONFIG.trendWindowMonths - 1); i <= 0; i += 1) months.push(shiftMonth(period, i));
+
+  // --- sales channels ---------------------------------------------
+  // chanSales[`${period}|${channel}`] = { total, brands:Set }
+  const chanAgg = new Map();
+  for (const r of chanRows) {
+    if (r.sales == null) continue;
+    const k = `${r.period}|${r.channel}`;
+    if (!chanAgg.has(k)) chanAgg.set(k, { total: 0, brands: new Set() });
+    const e = chanAgg.get(k);
+    e.total += Number(r.sales);
+    e.brands.add(r.brand_id);
+  }
+  const chanTotalAt = (p) => SALES_CHANNELS.reduce((sum, ch) => sum + (chanAgg.get(`${p}|${ch}`)?.total || 0), 0);
+  const totalNow = chanTotalAt(period);
+  const totalCmp = chanTotalAt(comparePeriod);
+
+  const sales_channels = SALES_CHANNELS.map((ch) => {
+    const now = chanAgg.get(`${period}|${ch}`);
+    const cmp = chanAgg.get(`${comparePeriod}|${ch}`);
+    const sales = now?.total ?? null;
+    const cmpSales = cmp?.total ?? null;
+    return {
+      channel: ch,
+      sales,
+      share_pct: sales != null && totalNow > 0 ? sales / totalNow : null,
+      delta_pct: sales != null && cmpSales != null && cmpSales > 0 ? sales / cmpSales - 1 : null,
+      client_count: now?.brands.size ?? 0,
+    };
+  });
+
+  // --- ad platforms ----------------------------------------------
+  // platAgg[`${period}|${platform}`] = summed raw + brand set
+  const platAgg = new Map();
+  for (const r of platRows) {
+    const k = `${r.period}|${r.platform}`;
+    if (!platAgg.has(k)) {
+      platAgg.set(k, { spend: 0, impressions: 0, link_clicks: 0, purchase: 0, purchase_value: 0, ig_profile_visit: 0, igpvHas: false, brands: new Set() });
+    }
+    const e = platAgg.get(k);
+    e.spend += Number(r.amount_spent || 0);
+    e.impressions += Number(r.impressions || 0);
+    e.link_clicks += Number(r.link_clicks || 0);
+    e.purchase += Number(r.purchase || 0);
+    e.purchase_value += Number(r.purchase_value || 0);
+    if (r.ig_profile_visit != null) { e.ig_profile_visit += Number(r.ig_profile_visit); e.igpvHas = true; }
+    e.brands.add(r.brand_id);
+  }
+  const spendTotalAt = (p) => AD_PLATFORMS.reduce((s, pl) => s + (platAgg.get(`${p}|${pl}`)?.spend || 0), 0);
+  const spendNow = spendTotalAt(period);
+
+  const EMPTY_PLATFORM = {
+    spend: null, spend_share_pct: null, purchases: null, purchase_value: null,
+    platform_attributed_roas: null, cost_per_purchase: null, cpm: null, ctr: null, cpc: null,
+    cost_per_profile_visit_proxy: null, cost_per_profile_visit_is_proxy: null,
+    delta_spend_pct: null, client_count: 0,
+  };
+  const ad_platforms = AD_PLATFORMS.map((pl) => {
+    const e = platAgg.get(`${period}|${pl}`);
+    const cmp = platAgg.get(`${comparePeriod}|${pl}`);
+    if (!e) return { platform: pl, ...EMPTY_PLATFORM };
+    const ratio = (num, den) => (den > 0 ? num / den : null);
+    return {
+      platform: pl,
+      spend: e.spend,
+      spend_share_pct: spendNow > 0 ? e.spend / spendNow : null,
+      purchases: e.purchase,
+      purchase_value: e.purchase_value,
+      // purchase_value / spend — NOT "ROAS" (see header note)
+      platform_attributed_roas: ratio(e.purchase_value, e.spend),
+      cost_per_purchase: ratio(e.spend, e.purchase),
+      cpm: e.impressions > 0 ? (e.spend / e.impressions) * 1000 : null,
+      ctr: ratio(e.link_clicks, e.impressions),
+      cpc: ratio(e.spend, e.link_clicks),
+      // link_clicks is the proxy for IG profile visits (breakdown §4) — flag it
+      cost_per_profile_visit_proxy: e.igpvHas && e.ig_profile_visit > 0 ? e.spend / e.ig_profile_visit : ratio(e.spend, e.link_clicks),
+      cost_per_profile_visit_is_proxy: !e.igpvHas || e.ig_profile_visit === 0,
+      delta_spend_pct: cmp && cmp.spend > 0 ? e.spend / cmp.spend - 1 : null,
+      client_count: e.brands.size,
+    };
+  });
+
+  // --- trends (13 months) --------------------------------------
+  const channel_trend = months.map((mo) => {
+    const row = { period: mo };
+    for (const ch of SALES_CHANNELS) row[ch] = chanAgg.get(`${mo}|${ch}`)?.total ?? null;
+    return row;
+  });
+  const spend_trend = months.map((mo) => {
+    const row = { period: mo };
+    for (const pl of AD_PLATFORMS) row[pl] = platAgg.get(`${mo}|${pl}`)?.spend ?? null;
+    return row;
+  });
+
+  // --- client coverage (has ≥1 month of data in the window) -----
+  const covChan = new Map(); // brandId -> Set(channel)
+  for (const r of chanRows) {
+    if (r.sales == null) continue;
+    if (!covChan.has(r.brand_id)) covChan.set(r.brand_id, new Set());
+    covChan.get(r.brand_id).add(r.channel);
+  }
+  const covPlat = new Map();
+  for (const r of platRows) {
+    if (!covPlat.has(r.brand_id)) covPlat.set(r.brand_id, new Set());
+    covPlat.get(r.brand_id).add(r.platform);
+  }
+  const client_coverage = brands
+    .map((b) => ({
+      brand_id: b.brand_id,
+      brand_name: b.brand_name,
+      kategori_besar: b.kategori_besar || null,
+      channels: Object.fromEntries(SALES_CHANNELS.map((ch) => [ch, covChan.get(b.brand_id)?.has(ch) || false])),
+      platforms: Object.fromEntries(AD_PLATFORMS.map((pl) => [pl, covPlat.get(b.brand_id)?.has(pl) || false])),
+    }))
+    .filter((c) => Object.values(c.channels).some(Boolean) || Object.values(c.platforms).some(Boolean))
+    .sort((a, b) => a.brand_name.localeCompare(b.brand_name));
+
+  // portfolio sales from client_monthly_metrics, for reconciliation context
+  const portfolioRev = await repo.monthlyRevenueByBrand(brandIds, period, period);
+  const portfolio_sales = portfolioRev.reduce((s, r) => s + (r.revenue != null ? Number(r.revenue) : 0), 0) || null;
+
+  return {
+    period,
+    compare_period: comparePeriod,
+    filters: { compare, status, category },
+    note: 'Efisiensi platform dihitung ulang dari kolom raw (spend/impressions/clicks/purchase). "platform_attributed_roas" = purchase_value / spend, bukan ROAS bisnis (revenue/spend ada di Executive Overview). Cakupan = client punya ≥1 bulan data channel/platform tsb dalam 13 bulan terakhir; client_sales_channels (§2.2) belum ada, jadi "tidak dipakai" vs "belum diinput" belum bisa dibedakan.',
+    sales_channels,
+    total_channel_sales: totalNow || null,
+    portfolio_sales,
+    ad_platforms,
+    total_platform_spend: spendNow || null,
+    channel_trend,
+    spend_trend,
+    client_coverage,
+  };
+}

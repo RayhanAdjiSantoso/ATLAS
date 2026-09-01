@@ -53,6 +53,14 @@ export const industriesQueryValidation = [
   query('level').optional().isIn(['industry', 'sub_industry']),
 ];
 
+// --- S6 Channel & Platform ---------------------------------------
+export const channelsQueryValidation = [
+  query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),
+  query('compare').optional().isIn(['mom', 'yoy']),
+  query('status').optional().isIn(['active', 'all']),
+  query('category').optional().isIn(['retail', 'b2b_service', 'fnb', 'all']),
+];
+
 // --- §2.3 client_monthly_metrics -------------------------------------
 export const monthlyMetricsBodyValidation = [
   body('brand_id').isInt({ min: 1 }).withMessage('Client wajib dipilih'),

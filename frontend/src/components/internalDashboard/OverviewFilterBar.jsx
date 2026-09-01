@@ -30,9 +30,13 @@ const FIELDS = [
   },
 ];
 
-export default function OverviewFilterBar({ value, onChange, hide = [], extra = null }) {
+export default function OverviewFilterBar({ value, onChange, hide = [], extra = null, compareOptions = null }) {
   const set = (k, v) => onChange({ ...value, [k]: v });
-  const fields = FIELDS.filter((f) => !hide.includes(f.key));
+  const fields = FIELDS
+    .filter((f) => !hide.includes(f.key))
+    .map((f) => (f.key === 'compare' && compareOptions
+      ? { ...f, options: f.options.filter(([v]) => compareOptions.includes(v)) }
+      : f));
 
   return (
     <div className="card">

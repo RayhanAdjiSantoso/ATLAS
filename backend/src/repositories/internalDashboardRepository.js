@@ -234,4 +234,28 @@ export async function monthlySpendByBrand(brandIds, startPeriod, endPeriod, db =
   return rows;
 }
 
+// S6 — per-channel sales grid (one row per brand/month/channel).
+export async function channelSalesGrid(brandIds, startPeriod, endPeriod, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, channel::text AS channel, sales
+     FROM client_channel_sales_monthly
+     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
+    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
+// S6 — per-platform ad metrics grid (RAW summable columns only; ratios are
+// recomputed in the service from these sums, never read from storage).
+export async function platformMetricsGrid(brandIds, startPeriod, endPeriod, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, platform::text AS platform,
+            amount_spent, impressions, link_clicks, purchase, purchase_value, ig_profile_visit
+     FROM client_platform_spend_monthly
+     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
+    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
 export const CPS_COLUMNS = CPS_COLS;

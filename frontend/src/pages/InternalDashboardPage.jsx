@@ -3,16 +3,18 @@ import InputDataTab from '../components/internalDashboard/InputDataTab.jsx';
 import ExecutiveOverviewTab from '../components/internalDashboard/ExecutiveOverviewTab.jsx';
 import CategoryComparisonTab from '../components/internalDashboard/CategoryComparisonTab.jsx';
 import IndustryTab from '../components/internalDashboard/IndustryTab.jsx';
+import ChannelPlatformTab from '../components/internalDashboard/ChannelPlatformTab.jsx';
 
 // Internal Dashboard MIL Digital — admin-only, all-clients performance.
-// S1/S3/S4 + Input Data exist; the remaining view sections (S2 Business
-// Checkup, S5 Benchmark, S6 Channel, S7 Client Detail, S8 Data Quality)
-// become sibling tabs later.
-const TABS = ['Executive Overview', 'Kategori Besar', 'Industry', 'Input Data'];
+// S1/S3/S4/S6 + Input Data exist; the remaining view sections (S2 Business
+// Checkup, S5 Benchmark, S7 Client Detail, S8 Data Quality) become sibling
+// tabs later.
+const TABS = ['Executive Overview', 'Kategori Besar', 'Industry', 'Channel & Platform', 'Input Data'];
 const TAB_COMPONENTS = {
   'Executive Overview': ExecutiveOverviewTab,
   'Kategori Besar': CategoryComparisonTab,
   Industry: IndustryTab,
+  'Channel & Platform': ChannelPlatformTab,
   'Input Data': InputDataTab,
 };
 

@@ -137,6 +137,17 @@ export const getIndustries = asyncHandler(async (req, res) => {
   }));
 });
 
+// --- S6 Channel & Platform -----------------------------------
+export const getChannels = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getChannels({
+    period: req.query.period,
+    compare: req.query.compare,
+    status: req.query.status,
+    category: req.query.category,
+  }));
+});
+
 // --- §2.7 data_ingestion_log ------------------------------------
 export const listIngestionLog = asyncHandler(async (req, res) => {
   validate(req);

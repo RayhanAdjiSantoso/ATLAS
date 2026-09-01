@@ -11,6 +11,7 @@ import {
   overviewQueryValidation,
   categoriesQueryValidation,
   industriesQueryValidation,
+  channelsQueryValidation,
 } from '../validators/internalDashboardValidators.js';
 
 // Internal Dashboard — admin-only, all-clients performance capture.
@@ -29,6 +30,8 @@ router.get('/overview', overviewQueryValidation, ctrl.getOverview);
 router.get('/categories', categoriesQueryValidation, ctrl.getCategories);
 // S4 — Industry / Sub-industry
 router.get('/industries', industriesQueryValidation, ctrl.getIndustries);
+// S6 — Channel & Platform
+router.get('/channels', channelsQueryValidation, ctrl.getChannels);
 
 // §2.3 — client_monthly_metrics
 router.get('/monthly-metrics', brandQueryValidation, ctrl.listMonthlyMetrics);
