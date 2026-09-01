@@ -1,6 +1,6 @@
 import { isBoostRow } from '../meta/metaReport';
 import { findCol } from '../../lib/columns';
-import { parseNum, splitByDayRange, splitMonths } from '../../lib/meta';
+import { parseNum, splitByDayRange, splitMonths, stripCampaignSubtotals } from '../../lib/meta';
 import { parseShopeeNum } from '../../lib/shopeeAds';
 import { tiktokNum } from '../../lib/tiktok';
 import type { SheetRow } from '../../lib/types';
@@ -184,10 +184,14 @@ function tagMetaRows(rows: SheetRow[], channel: string, periodRole: PeriodRole, 
 // to mapMetaRows for the old/cur split + column extraction.
 export function mapMetaMainRows(rows: SheetRow[], dayRanges?: MetaDayRangePair | null): MetaAdRowInput[] {
   if (!rows.length) return [];
-  const campCol = findCol(rows, ['campaign']);
+  // Drop pivot SUBTOTAL rows (Campaign name "All"/blank) first — same as
+  // buildMetaReport, so the saved rows match the generated report exactly
+  // and Non-Boost isn't inflated by a summed-in grand-total copy.
+  const leafRows = stripCampaignSubtotals(rows);
+  const campCol = findCol(leafRows, ['campaign']);
   const isBoost = isBoostRow(campCol);
-  const boostRows = rows.filter(isBoost);
-  const nonBoostRows = rows.filter((r) => !isBoost(r));
+  const boostRows = leafRows.filter(isBoost);
+  const nonBoostRows = leafRows.filter((r) => !isBoost(r));
   return [...mapMetaRows(boostRows, 'boost', dayRanges), ...mapMetaRows(nonBoostRows, 'nonboost', dayRanges)];
 }
 
@@ -196,7 +200,10 @@ export function mapMetaMainRows(rows: SheetRow[], dayRanges?: MetaDayRangePair |
 // function of campaign_name, so it's recomputed at reopen time instead of
 // being persisted as separate channel values.
 export function mapMetaCpasRows(rows: SheetRow[], dayRanges?: MetaDayRangePair | null): MetaAdRowInput[] {
-  return mapMetaRows(rows, 'cpas_overall', dayRanges);
+  // Drop pivot subtotal rows here too — the reopened report recomputes the
+  // Overall tab by summing every saved cpas_overall row, so a persisted
+  // "All" subtotal would double-count it exactly as buildMetaReport did.
+  return mapMetaRows(stripCampaignSubtotals(rows), 'cpas_overall', dayRanges);
 }
 
 // ── TikTok ──────────────────────────────────────────────

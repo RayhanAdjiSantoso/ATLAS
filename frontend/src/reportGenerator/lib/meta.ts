@@ -133,6 +133,12 @@ export const COST_PER_MAP: { cost: string; denom: string }[] = [
   { cost: 'cost per checkout initiated', denom: 'checkouts initiated' },
   { cost: 'cost per profile visit', denom: 'profile visit' },
   { cost: 'cost per instagram profile', denom: 'instagram profile visit' },
+  // Meta's pivot "Boost Post" export names this "Cost Per IG Visit (IDR)" —
+  // same figure as "Cost per Profile Visit" (Spend ÷ Instagram profile
+  // visits), just a different header. Without this it falls through to the
+  // generic path, which strips the prefix to "ig visit (idr)", finds no
+  // matching count column, and shows "—".
+  { cost: 'cost per ig visit', denom: 'instagram profile visit' },
   { cost: 'cost per follow', denom: 'instagram follow' },
   { cost: 'cost per messaging conversation', denom: 'messaging conversation' },
   { cost: 'cost per total message', denom: 'total message' },
@@ -179,9 +185,16 @@ export const CTR_MAP: { ctr: string; click: string }[] = [
 // ahead of "Purchases conversion value" — computing spend ÷ a summed
 // percentage column instead of failing safely to the concept-derived
 // fallback in agg().
+//
+// '(%)' and 'roas' are noise too: Meta's pivot "CPAS" export ships a
+// "Purchase (%)" ratio column AND a "Purchase ROAS for shared items only"
+// column, both of which contain "purchase" and sort BEFORE the real
+// "Purchases with shared items" count — without excluding them, "Cost Per
+// Purchase" divided Spend by a summed percentage/ROAS column (verified: the
+// displayed value matched Spend ÷ Purchase(%), not Spend ÷ Purchases).
 export function findDenomCol(rows: SheetRow[], keyword: string, excludeCol?: string): string | null {
   const hs = Object.keys(rows[0] || {});
-  const noiseWords = ['ratio', 'rate', 'value', 'cost per'].filter((w) => !keyword.includes(w));
+  const noiseWords = ['ratio', 'rate', 'value', 'cost per', '(%)', 'roas'].filter((w) => !keyword.includes(w));
   return (
     hs.find((h) => {
       if (h === excludeCol) return false;
@@ -223,6 +236,38 @@ export function isAllValue(v: unknown): boolean {
   if (v === null || v === undefined) return true;
   const s = String(v).trim();
   return s === '' || s.toLowerCase() === 'all';
+}
+
+// Meta's pivot-style exports (breakdown hierarchy Month > Age > Gender >
+// Campaign name) carry a SUBTOTAL row at every level that isn't fully
+// broken out, marked by Campaign name = "All" (and, in exports that repeat
+// the header, a blank cell in the *second* "Campaign name" column). Only
+// leaf rows — a specific campaign — may be classified/aggregated: summing
+// the subtotals in double-counts an entire copy of every campaign's spend
+// (see buildMetaReport). This returns the header to test for "is this a
+// leaf row": the last "Campaign name"-ish column (the one that's blank, not
+// "All", on a subtotal in a repeated-header export), or the only one.
+// Returns null when the file has no campaign column at all.
+//
+// A per-campaign Age=All/Gender=All rollup row (the plain "Formatted data
+// table" export shape, which computeGroupedSum deliberately prefers) still
+// has a real campaign name here, so `!isAllValue(row[col])` keeps it.
+export function findLeafCampaignCol(rows: SheetRow[]): string | null {
+  const hs = Object.keys(rows[0] || {});
+  const camps = hs.filter((h) => h.toLowerCase().includes('campaign'));
+  return camps.length ? camps[camps.length - 1] : null;
+}
+
+// THE fix for the pivot double-count bug — call it once, right after
+// splitMonths / splitByDayRange, in every Meta breakdown entry point
+// (buildMetaReport's Boost/Non-Boost path, its CPAS path, rowMapping's save
+// path, …). Drops every subtotal row so only leaf (specific-campaign) rows
+// reach classification and aggregation. Same root cause surfaced separately
+// in the Boost Post and CPAS modules; keeping the rule in one shared helper
+// means a module that forgets to call it is the only way to reintroduce it.
+export function stripCampaignSubtotals(rows: SheetRow[]): SheetRow[] {
+  const leafCol = findLeafCampaignCol(rows);
+  return leafCol ? rows.filter((r) => !isAllValue(r[leafCol])) : rows;
 }
 
 // Splits rows into per-campaign+period groups — one group per campaign,
@@ -362,6 +407,11 @@ function computeGroupedWeightedAvg(rows: SheetRow[], col: string, weightCol: str
 const COST_PER_CONCEPT_COL: Record<string, string> = {
   'adds to cart': 'cost per add to cart',
   purchase: 'cost per purchase',
+  // Meta's pivot "Boost Post" export has no raw Clicks column at all, only a
+  // per-row "CPC (cost per link click)" — Link Clicks = Spend/CPC recovers it
+  // exactly per row. Lets agg()'s CPC branch combine campaigns as
+  // SUM(Spend)/SUM(implied clicks) instead of showing "—".
+  'link click': 'cpc (cost per link',
 };
 
 // Same idea, mirrored: a count derivable from a percentage-point-scaled
@@ -373,9 +423,16 @@ const RATIO_DERIVED_CONCEPT_COL: Record<string, { ratioKeyword: string; countKey
   clicks: { ratioKeyword: 'ctr (all)', countKeyword: 'impression' },
 };
 
-// Sums Spend_row/CostPerX_row per row across `rows` — the shared engine
-// behind resolveConceptCount's "Cost per X" derivation.
-function sumImpliedFromCostPer(rows: SheetRow[], spentCol: string, costPerCol: string): number | null {
+// Sums `value(row)` across `rows` the same grouped, prefer-the-campaign's-
+// own-Age=All/Gender=All-row way computeGroupedSum sums a raw metric column —
+// the shared engine behind every "derive a count/total per row, then add
+// them up" helper below (implied Clicks from Spend/CPC, implied Impressions
+// from Clicks/(CTR/100), implied Adds-to-Cart from Spend/CostPerATC, …).
+// Deriving PER ROW and only then summing is what keeps these exact once
+// there's no "All" row to read directly and a group has many breakdown rows
+// (see resolveConceptCount's docs). A `value` of null skips that row; a
+// non-finite result (e.g. divide-by-zero) is skipped too.
+function sumPerRow(rows: SheetRow[], value: (r: SheetRow) => number | null): number | null {
   const { groups, ageCol, genderCol } = groupRowsByCampaignPeriod(rows);
   let total = 0;
   let found = false;
@@ -383,10 +440,9 @@ function sumImpliedFromCostPer(rows: SheetRow[], spentCol: string, costPerCol: s
     const allRow = findAllRow(groupRows, ageCol, genderCol);
     const rowsToSum = allRow ? [allRow] : granularRows(groupRows, ageCol, genderCol);
     rowsToSum.forEach((r) => {
-      const spent = parseNum(r[spentCol]);
-      const costPer = parseNum(r[costPerCol]);
-      if (spent !== null && costPer !== null && costPer !== 0) {
-        total += spent / costPer;
+      const v = value(r);
+      if (v !== null && Number.isFinite(v)) {
+        total += v;
         found = true;
       }
     });
@@ -394,25 +450,24 @@ function sumImpliedFromCostPer(rows: SheetRow[], spentCol: string, costPerCol: s
   return found ? total : null;
 }
 
+// Sums Spend_row/CostPerX_row per row across `rows` — the shared engine
+// behind resolveConceptCount's "Cost per X" derivation.
+function sumImpliedFromCostPer(rows: SheetRow[], spentCol: string, costPerCol: string): number | null {
+  return sumPerRow(rows, (r) => {
+    const spent = parseNum(r[spentCol]);
+    const costPer = parseNum(r[costPerCol]);
+    return spent !== null && costPer !== null && costPer !== 0 ? spent / costPer : null;
+  });
+}
+
 // Sums (Ratio_row/100)·Count_row per row across `rows` — the shared engine
 // behind resolveConceptCount's ratio-derived count (e.g. Clicks via CTR).
 function sumImpliedFromRatio(rows: SheetRow[], ratioCol: string, countCol: string): number | null {
-  const { groups, ageCol, genderCol } = groupRowsByCampaignPeriod(rows);
-  let total = 0;
-  let found = false;
-  for (const groupRows of groups) {
-    const allRow = findAllRow(groupRows, ageCol, genderCol);
-    const rowsToSum = allRow ? [allRow] : granularRows(groupRows, ageCol, genderCol);
-    rowsToSum.forEach((r) => {
-      const ratio = parseNum(r[ratioCol]);
-      const count = parseNum(r[countCol]);
-      if (ratio !== null && count !== null) {
-        total += (ratio / 100) * count;
-        found = true;
-      }
-    });
-  }
-  return found ? total : null;
+  return sumPerRow(rows, (r) => {
+    const ratio = parseNum(r[ratioCol]);
+    const count = parseNum(r[countCol]);
+    return ratio !== null && count !== null ? (ratio / 100) * count : null;
+  });
 }
 
 // Resolves a concept's total count across `rows`: a literal raw count
@@ -505,6 +560,25 @@ function computeRatioFromConcepts(rows: SheetRow[], numerConcept: string, denomC
 
 export function aggSum(rows: SheetRow[], col: string): number | null {
   return computeGroupedSum(rows, col).total;
+}
+
+// Base counts for Meta's pivot-export "ATC (%)" / "Purchase (%)" columns
+// (per-row ratios that can't be summed or averaged across breakdown rows).
+// ATC (%)      = Adds to Cart ÷ Link Clicks × 100
+// Purchase (%) = Purchases    ÷ Adds to Cart × 100
+// where Link Clicks is derived per row as Spend ÷ CPC (this export has no
+// raw Clicks column). Combine campaigns from the SUMMED base counts, then
+// take the ratio once — never average the raw ATC%/Purchase% cells.
+function atcCountCol(rows: SheetRow[]): string | null {
+  return findDenomCol(rows, 'adds to cart with shared') || findDenomCol(rows, 'adds to cart') || findDenomCol(rows, 'add to cart');
+}
+function purchaseCountCol(rows: SheetRow[]): string | null {
+  return findDenomCol(rows, 'purchases with shared') || findDenomCol(rows, 'purchases') || findDenomCol(rows, 'purchase');
+}
+function linkClicksTotal(rows: SheetRow[]): number | null {
+  const spentCol = findSpentCol(rows);
+  const cpcCol = Object.keys(rows[0] || {}).find((h) => h.toLowerCase().includes('cpc') && h.toLowerCase().includes('link click'));
+  return spentCol && cpcCol ? sumImpliedFromCostPer(rows, spentCol, cpcCol) : null;
 }
 
 // Used by buildMetaReport to decide whether reachApproxNote should surface —
@@ -609,6 +683,28 @@ export function agg(rows: SheetRow[], col: string): number | null {
     // /SUM(Impressions)). For a single campaign this is exactly that
     // campaign's own figure — verified against a real export.
     const readOwnValue = () => (imprCol ? computeGroupedWeightedAvg(rows, col, imprCol) : null);
+    // Last-ditch fallback for Meta's pivot "Boost Post" export, which has
+    // neither a raw Clicks nor an Impressions column — only per-row "CPC
+    // (cost per link click)" and this CTR ratio. Derive both per leaf row
+    // (Clicks = Spend/CPC, Impressions = Clicks/(CTR/100)), then combine
+    // campaigns as SUM(Clicks)/SUM(Impressions)×100. Weight-averaging this
+    // CTR column has no Impressions weight to use here, and a plain average
+    // over the many near-zero granular breakdown rows badly understates it.
+    const derivedFromCostPerLinkClick = () => {
+      const spentCol = findSpentCol(rows);
+      const cpcCol = hs.find((h) => h.toLowerCase().includes('cpc') && h.toLowerCase().includes('link click'));
+      if (!spentCol || !cpcCol) return null;
+      const clicks = sumImpliedFromCostPer(rows, spentCol, cpcCol);
+      const impressions = sumPerRow(rows, (r) => {
+        const s = parseNum(r[spentCol]);
+        const cpc = parseNum(r[cpcCol]);
+        const ctr = parseNum(r[col]);
+        if (s === null || cpc === null || cpc === 0 || ctr === null || ctr === 0) return null;
+        return s / cpc / (ctr / 100);
+      });
+      if (clicks === null || impressions === null || impressions === 0) return null;
+      return (clicks / impressions) * 100;
+    };
     for (const map of CTR_MAP) {
       if (lc.includes(map.ctr)) {
         const clickCol = findDenomCol(rows, map.click);
@@ -617,10 +713,10 @@ export function agg(rows: SheetRow[], col: string): number | null {
           const tc = aggSum(rows, clickCol);
           if (ti !== null && tc !== null && ti !== 0) return (tc / ti) * 100;
         }
-        return readOwnValue();
+        return readOwnValue() ?? derivedFromCostPerLinkClick();
       }
     }
-    return readOwnValue(); // unmapped CTR variant — don't guess the numerator, just read it
+    return readOwnValue() ?? derivedFromCostPerLinkClick(); // unmapped CTR variant — don't guess the numerator
   }
   // Bare Reach column falls straight through to aggSum below — it's already
   // the per-campaign/period "prefer the All row" logic described there, no
@@ -685,6 +781,28 @@ export function agg(rows: SheetRow[], col: string): number | null {
       }
     });
     return c ? s / c : null;
+  }
+  // "ATC (%)" / "Purchase (%)" — Meta's pivot exports store these as a
+  // per-row fraction (0.27 = 27%). Summing or averaging them across
+  // breakdown rows is meaningless; recompute from summed base counts.
+  if (lc.includes('atc') && lc.includes('(%)')) {
+    const atcCol = atcCountCol(rows);
+    const clicks = linkClicksTotal(rows);
+    if (atcCol && clicks && clicks !== 0) {
+      const totalAtc = aggSum(rows, atcCol);
+      if (totalAtc !== null) return (totalAtc / clicks) * 100;
+    }
+    return null;
+  }
+  if (lc.includes('purchase') && lc.includes('(%)')) {
+    const atcCol = atcCountCol(rows);
+    const purCol = purchaseCountCol(rows);
+    if (atcCol && purCol) {
+      const totalAtc = aggSum(rows, atcCol);
+      const totalPur = aggSum(rows, purCol);
+      if (totalAtc && totalAtc !== 0 && totalPur !== null) return (totalPur / totalAtc) * 100;
+    }
+    return null;
   }
   if (lc.includes('average order value') || lc.includes('aov')) {
     const hs = Object.keys(rows[0] || {});
