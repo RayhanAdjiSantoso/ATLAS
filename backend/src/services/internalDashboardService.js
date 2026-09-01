@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { AppError } from '../utils/errors.js';
+import { S1 as S1_CONFIG, CATEGORY_MAP } from '../config/internalDashboard.js';
 import * as brandService from './brandService.js';
 import * as repo from '../repositories/internalDashboardRepository.js';
 
@@ -200,24 +201,9 @@ export async function listIngestionLog(params) {
 // =====================================================================
 // S1 — Executive Overview
 // =====================================================================
+// All tunable analysis constants live in config/internalDashboard.js.
 
-const CATEGORY_MAP = { retail: 'Retail', b2b_service: 'B2B/Service', fnb: 'F&B' };
-
-// PROVISIONAL — to be calibrated once real cross-client data exists.
-// A client is flagged "Perlu Perhatian" when its revenue growth is at least
-// this many points below the AVERAGE growth of its sub-industry peers.
-// - average (not median): matches breakdown §2.8 / §4 (median is S3 only)
-// - sub_industry granularity: matches the S5 peer-group level (confirmed)
-// - no minimum-n gate (breakdown §4); peer_n is surfaced instead
-const PERLU_PERHATIAN_GROWTH_GAP = 0.15;
-
-const GROWTH_BUCKETS = [
-  { label: '< -20%', min: -Infinity, max: -0.20 },
-  { label: '-20% s/d -5%', min: -0.20, max: -0.05 },
-  { label: '-5% s/d +5%', min: -0.05, max: 0.05 },
-  { label: '+5% s/d +20%', min: 0.05, max: 0.20 },
-  { label: '> +20%', min: 0.20, max: Infinity },
-];
+const GROWTH_BUCKETS = S1_CONFIG.growthBuckets;
 
 // "YYYY-MM" +/- n months, staying in UTC so DST never shifts the month.
 export function shiftMonth(periodYm, deltaMonths) {
@@ -247,24 +233,27 @@ export function buildCohort(brandIds, valueAt, currentKey, priorKey) {
 
 const growth = (cur, prior) => (prior != null && prior > 0 ? cur / prior - 1 : null);
 const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+const median = (xs) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+};
 const bucketOf = (g) => (GROWTH_BUCKETS.find((b) => g >= b.min && g < b.max) ?? GROWTH_BUCKETS[GROWTH_BUCKETS.length - 1]).label;
 
-export async function getOverview(params) {
-  const period = params.period;
-  const compare = params.compare || 'mom';
-  const category = params.category || 'all';
-  const status = params.status || 'active';
-  const basis = params.basis || 'like_for_like';
-
-  const kategoriBesar = category === 'all' ? null : (CATEGORY_MAP[category] ?? null);
+// Shared loader — the per-brand / per-month revenue + spend + target grid
+// for one filter set, plus accessor closures. S1/S3/S4 (and S2 later) all
+// read the same numbers the same way through this.
+async function loadMonthlyGrid({ status, kategoriBesar, period, compare }) {
   const brands = await repo.listBrandsForOverview({ status, kategoriBesar });
   const brandIds = brands.map((b) => b.brand_id);
   const brandById = new Map(brands.map((b) => [b.brand_id, b]));
 
-  const windowStart = shiftMonth(period, -12);
   const comparePeriod = compare === 'yoy' ? shiftMonth(period, -12)
     : compare === 'mom' ? shiftMonth(period, -1)
       : null; // 'target' compares to target_sales, not a period
+  const trendStart = shiftMonth(period, -(S1_CONFIG.trendWindowMonths - 1));
+  const windowStart = comparePeriod && comparePeriod < trendStart ? comparePeriod : trendStart;
 
   const [revRows, spendRows] = await Promise.all([
     repo.monthlyRevenueByBrand(brandIds, windowStart, period),
@@ -284,19 +273,36 @@ export async function getOverview(params) {
   const spendAt = (id, p) => (spendByBP.has(`${id}|${p}`) ? spendByBP.get(`${id}|${p}`) : null);
   const targetAt = (id, p) => (targetByBP.has(`${id}|${p}`) ? targetByBP.get(`${id}|${p}`) : null);
 
-  const sumAt = (p, at) => {
+  const months = [];
+  for (let i = -(S1_CONFIG.trendWindowMonths - 1); i <= 0; i += 1) months.push(shiftMonth(period, i));
+
+  const sumFor = (ids, p, at) => {
     let total = 0;
     let has = false;
-    for (const id of brandIds) {
+    for (const id of ids) {
       const v = at(id, p);
       if (v != null) { total += v; has = true; }
     }
     return has ? total : null;
   };
 
+  return { brands, brandIds, brandById, comparePeriod, months, revAt, spendAt, targetAt, sumFor };
+}
+
+export async function getOverview(params) {
+  const period = params.period;
+  const compare = params.compare || 'mom';
+  const category = params.category || 'all';
+  const status = params.status || 'active';
+  const basis = params.basis || 'like_for_like';
+
+  const kategoriBesar = category === 'all' ? null : (CATEGORY_MAP[category] ?? null);
+
+  const grid = await loadMonthlyGrid({ status, kategoriBesar, period, compare });
+  const { brands, brandIds, brandById, comparePeriod, months, revAt, spendAt, targetAt } = grid;
+  const sumAt = (p, at) => grid.sumFor(brandIds, p, at);
+
   // ---- trend: 13 months ending at `period` (null, never 0, for gaps) ----
-  const months = [];
-  for (let i = -12; i <= 0; i += 1) months.push(shiftMonth(period, i));
   const trend = months.map((mo) => {
     const sales = sumAt(mo, revAt);
     const spend = sumAt(mo, spendAt);
@@ -438,7 +444,7 @@ export async function getOverview(params) {
     const subAvg = avg(members.map((m) => m.g));
     for (const m of members) {
       const gap = m.g - subAvg;
-      if (gap <= -PERLU_PERHATIAN_GROWTH_GAP) {
+      if (gap <= -S1_CONFIG.perluPerhatianGrowthGap) {
         perlu_perhatian.push({
           brand_id: m.brandId,
           brand_name: brandById.get(m.brandId).brand_name,
@@ -457,12 +463,198 @@ export async function getOverview(params) {
     period,
     compare_period: comparePeriod,
     filters: { compare, category, status, basis },
-    thresholds: { perlu_perhatian_growth_gap: PERLU_PERHATIAN_GROWTH_GAP, provisional: true },
+    thresholds: { perlu_perhatian_growth_gap: S1_CONFIG.perluPerhatianGrowthGap, provisional: true },
     kpi,
     trend,
     category_composition,
     client_contribution,
     growth_distribution,
     perlu_perhatian,
+  };
+}
+
+// =====================================================================
+// S3 — Kategori Besar  &  S4 — Industry / Sub-industry
+// =====================================================================
+// Same data model as S1. The key difference (breakdown §4): cross-GROUP
+// comparison uses the MEDIAN client, not the mean, so one large client
+// can't drag a group's headline number. Aggregate (sum/sum) figures are
+// still returned alongside, clearly labelled.
+
+// Per-client figures for one period + its compare, within a set of brands.
+function clientFigures(ids, grid, period, comparePeriod, compare) {
+  const { revAt, spendAt, targetAt } = grid;
+  return ids.map((id) => {
+    const rev = revAt(id, period);
+    const spend = spendAt(id, period);
+    const prior = compare === 'target' ? targetAt(id, period) : revAt(id, comparePeriod);
+    return {
+      brandId: id,
+      revenue: rev,
+      spend,
+      roas: rev != null && spend != null && spend > 0 ? rev / spend : null,
+      growth: rev != null ? growth(rev, prior) : null,
+    };
+  });
+}
+
+function groupBlock(ids, grid, period, comparePeriod, compare, basis) {
+  const figs = clientFigures(ids, grid, period, comparePeriod, compare);
+  const withRev = figs.filter((f) => f.revenue != null);
+  const sales = withRev.reduce((a, f) => a + f.revenue, 0);
+  const spendVals = figs.filter((f) => f.spend != null);
+  const spend = spendVals.reduce((a, f) => a + f.spend, 0);
+
+  // aggregate (like-for-like) growth for the group
+  const lfl = figs.filter((f) => f.revenue != null && (
+    compare === 'target' ? grid.targetAt(f.brandId, period) != null : grid.revAt(f.brandId, comparePeriod) != null
+  ));
+  let aggGrowth = null;
+  if (lfl.length) {
+    const now = lfl.reduce((a, f) => a + f.revenue, 0);
+    const base = lfl.reduce((a, f) => a + (compare === 'target' ? grid.targetAt(f.brandId, period) : grid.revAt(f.brandId, comparePeriod)), 0);
+    aggGrowth = base > 0 ? now / base - 1 : null;
+  }
+  const growthPool = basis === 'all_clients'
+    ? withRev.map((f) => f.growth).filter((g) => g != null)
+    : lfl.map((f) => f.growth).filter((g) => g != null);
+
+  return {
+    n_clients: ids.length,
+    n_with_data: withRev.length,
+    sales,
+    spend: spendVals.length ? spend : null,
+    blended_roas: spendVals.length && spend > 0 ? sales / spend : null,
+    aggregate_growth: aggGrowth,
+    median_client_sales: median(withRev.map((f) => f.revenue)),
+    median_client_growth: median(growthPool),
+    median_client_roas: median(figs.map((f) => f.roas).filter((r) => r != null)),
+  };
+}
+
+export async function getCategories(params) {
+  const period = params.period;
+  const compare = params.compare || 'mom';
+  const status = params.status || 'active';
+  const basis = params.basis || 'like_for_like';
+
+  const grid = await loadMonthlyGrid({ status, kategoriBesar: null, period, compare });
+  const { brands, brandById, comparePeriod, months } = grid;
+
+  // bucket brand ids by kategori_besar
+  const byKat = new Map();
+  for (const b of brands) {
+    const k = b.kategori_besar || null;
+    if (!byKat.has(k)) byKat.set(k, []);
+    byKat.get(k).push(b.brand_id);
+  }
+
+  const KATS = ['Retail', 'B2B/Service', 'F&B'];
+  const totalNow = grid.sumFor(brands.map((b) => b.brand_id), period, grid.revAt) ?? 0;
+  const totalCmp = compare === 'target'
+    ? grid.sumFor(brands.map((b) => b.brand_id), period, grid.targetAt)
+    : grid.sumFor(brands.map((b) => b.brand_id), comparePeriod, grid.revAt);
+
+  const categories = KATS.map((kat) => {
+    const ids = byKat.get(kat) || [];
+    const block = groupBlock(ids, grid, period, comparePeriod, compare, basis);
+    const shareNow = totalNow > 0 ? block.sales / totalNow : null;
+    const katCmp = compare === 'target'
+      ? grid.sumFor(ids, period, grid.targetAt)
+      : grid.sumFor(ids, comparePeriod, grid.revAt);
+    const shareCmp = totalCmp && totalCmp > 0 && katCmp != null ? katCmp / totalCmp : null;
+    return {
+      kategori_besar: kat,
+      aggregate: {
+        sales: block.sales,
+        spend: block.spend,
+        blended_roas: block.blended_roas,
+        client_count: block.n_with_data,
+        delta_pct: block.aggregate_growth,
+      },
+      median: {
+        client_sales: block.median_client_sales,
+        client_growth: block.median_client_growth,
+        client_roas: block.median_client_roas,
+      },
+      composition: {
+        share_now: shareNow,
+        share_compare: shareCmp,
+        share_delta: shareNow != null && shareCmp != null ? shareNow - shareCmp : null,
+      },
+    };
+  });
+
+  const uncatIds = byKat.get(null) || [];
+  const uncategorized = {
+    client_count: uncatIds.length,
+    client_with_data: uncatIds.filter((id) => grid.revAt(id, period) != null).length,
+    sales: grid.sumFor(uncatIds, period, grid.revAt) ?? 0,
+  };
+
+  const trend = months.map((mo) => {
+    const row = { period: mo };
+    for (const kat of KATS) row[kat] = grid.sumFor(byKat.get(kat) || [], mo, grid.revAt);
+    return row;
+  });
+
+  return {
+    period,
+    compare_period: comparePeriod,
+    filters: { compare, status, basis },
+    note: 'Perbandingan antar-kategori pakai median client; angka agregat (sum/sum) ditampilkan terpisah.',
+    categories,
+    uncategorized,
+    trend,
+  };
+}
+
+export async function getIndustries(params) {
+  const period = params.period;
+  const compare = params.compare || 'mom';
+  const status = params.status || 'active';
+  const basis = params.basis || 'like_for_like';
+  const level = params.level === 'industry' ? 'industry' : 'sub_industry'; // default sub_industry (= S5 peer level)
+
+  const grid = await loadMonthlyGrid({ status, kategoriBesar: null, period, compare });
+  const { brands, comparePeriod } = grid;
+
+  const byKey = new Map();
+  for (const b of brands) {
+    const key = b[level];
+    if (!key) continue; // no industry / sub-industry set -> can't group
+    if (!byKey.has(key)) byKey.set(key, { ids: [], sample: b });
+    byKey.get(key).ids.push(b.brand_id);
+  }
+
+  const groups = [...byKey.entries()].map(([key, { ids, sample }]) => {
+    const block = groupBlock(ids, grid, period, comparePeriod, compare, basis);
+    return {
+      key,
+      level,
+      industry: sample.industry || null,
+      sub_industry: sample.sub_industry || null,
+      kategori_besar: sample.kategori_besar || null,
+      n_clients: block.n_clients,        // transparent N (breakdown §4: no min-n gate)
+      n_with_data: block.n_with_data,
+      sales: block.sales,
+      spend: block.spend,
+      blended_roas: block.blended_roas,
+      aggregate_growth: block.aggregate_growth,
+      median_client_sales: block.median_client_sales,
+      median_client_growth: block.median_client_growth,
+      median_client_roas: block.median_client_roas,
+    };
+  }).sort((a, b) => b.sales - a.sales);
+
+  const ungrouped = brands.filter((b) => !b[level]);
+
+  return {
+    period,
+    compare_period: comparePeriod,
+    filters: { compare, status, basis, level },
+    note: 'N per grup ditampilkan apa adanya — tidak ada ambang minimum (breakdown §4). Median untuk perbandingan; treemap: size = sales, warna = aggregate_growth.',
+    groups,
+    ungrouped: { client_count: ungrouped.length, brand_names: ungrouped.map((b) => b.brand_name) },
   };
 }

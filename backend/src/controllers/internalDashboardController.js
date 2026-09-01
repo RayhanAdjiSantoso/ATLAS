@@ -114,6 +114,29 @@ export const getOverview = asyncHandler(async (req, res) => {
   res.json(overview);
 });
 
+// --- S3 Kategori Besar ----------------------------------------
+export const getCategories = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getCategories({
+    period: req.query.period,
+    compare: req.query.compare,
+    status: req.query.status,
+    basis: req.query.basis,
+  }));
+});
+
+// --- S4 Industry / Sub-industry -------------------------------
+export const getIndustries = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getIndustries({
+    period: req.query.period,
+    compare: req.query.compare,
+    status: req.query.status,
+    basis: req.query.basis,
+    level: req.query.level,
+  }));
+});
+
 // --- §2.7 data_ingestion_log ------------------------------------
 export const listIngestionLog = asyncHandler(async (req, res) => {
   validate(req);

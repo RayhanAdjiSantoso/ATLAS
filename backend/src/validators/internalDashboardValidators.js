@@ -40,6 +40,19 @@ export const overviewQueryValidation = [
   query('basis').optional().isIn(['like_for_like', 'all_clients']),
 ];
 
+// --- S3 Kategori Besar / S4 Industry ------------------------------
+export const categoriesQueryValidation = [
+  query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),
+  query('compare').optional().isIn(['mom', 'yoy', 'target']),
+  query('status').optional().isIn(['active', 'all']),
+  query('basis').optional().isIn(['like_for_like', 'all_clients']),
+];
+
+export const industriesQueryValidation = [
+  ...categoriesQueryValidation,
+  query('level').optional().isIn(['industry', 'sub_industry']),
+];
+
 // --- §2.3 client_monthly_metrics -------------------------------------
 export const monthlyMetricsBodyValidation = [
   body('brand_id').isInt({ min: 1 }).withMessage('Client wajib dipilih'),

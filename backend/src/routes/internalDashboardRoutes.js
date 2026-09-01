@@ -9,6 +9,8 @@ import {
   channelSalesBodyValidation,
   platformSpendBodyValidation,
   overviewQueryValidation,
+  categoriesQueryValidation,
+  industriesQueryValidation,
 } from '../validators/internalDashboardValidators.js';
 
 // Internal Dashboard — admin-only, all-clients performance capture.
@@ -23,6 +25,10 @@ router.get('/clients', ctrl.listClients);
 
 // S1 — Executive Overview
 router.get('/overview', overviewQueryValidation, ctrl.getOverview);
+// S3 — Kategori Besar
+router.get('/categories', categoriesQueryValidation, ctrl.getCategories);
+// S4 — Industry / Sub-industry
+router.get('/industries', industriesQueryValidation, ctrl.getIndustries);
 
 // §2.3 — client_monthly_metrics
 router.get('/monthly-metrics', brandQueryValidation, ctrl.listMonthlyMetrics);

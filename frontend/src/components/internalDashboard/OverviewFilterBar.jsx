@@ -30,8 +30,9 @@ const FIELDS = [
   },
 ];
 
-export default function OverviewFilterBar({ value, onChange }) {
+export default function OverviewFilterBar({ value, onChange, hide = [], extra = null }) {
   const set = (k, v) => onChange({ ...value, [k]: v });
+  const fields = FIELDS.filter((f) => !hide.includes(f.key));
 
   return (
     <div className="card">
@@ -40,7 +41,7 @@ export default function OverviewFilterBar({ value, onChange }) {
           <label>Periode</label>
           <input type="month" value={value.period || thisMonth()} onChange={(e) => set('period', e.target.value)} />
         </div>
-        {FIELDS.map((f) => (
+        {fields.map((f) => (
           <div className="form-group" style={{ marginBottom: 0 }} key={f.key}>
             <label>{f.label}</label>
             <select value={value[f.key]} onChange={(e) => set(f.key, e.target.value)}>
@@ -48,6 +49,7 @@ export default function OverviewFilterBar({ value, onChange }) {
             </select>
           </div>
         ))}
+        {extra}
       </div>
       {value.basis === 'like_for_like' && (
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.75rem 0 0' }}>
