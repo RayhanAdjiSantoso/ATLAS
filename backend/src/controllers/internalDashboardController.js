@@ -101,6 +101,19 @@ export const deletePlatformSpend = asyncHandler(async (req, res) => {
   res.json({ message: 'Data platform spend dihapus' });
 });
 
+// --- S1 Executive Overview -------------------------------------
+export const getOverview = asyncHandler(async (req, res) => {
+  validate(req);
+  const overview = await service.getOverview({
+    period: req.query.period,
+    compare: req.query.compare,
+    category: req.query.category,
+    status: req.query.status,
+    basis: req.query.basis,
+  });
+  res.json(overview);
+});
+
 // --- §2.7 data_ingestion_log ------------------------------------
 export const listIngestionLog = asyncHandler(async (req, res) => {
   validate(req);

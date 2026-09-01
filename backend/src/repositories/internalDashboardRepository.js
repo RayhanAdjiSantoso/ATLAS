@@ -190,4 +190,48 @@ export async function listIngestionLog({ brandId, target, limit = 50 }, db = poo
   return rows;
 }
 
+// ---------------------------------------------------------------------
+// S1 Executive Overview
+// ---------------------------------------------------------------------
+// The overview endpoint pulls a compact per-brand / per-month grid for a
+// 13-month window and does the shaping in JS (max ~141 brands x 13 months
+// ~= 1.8k rows). Rollup ratios (ROAS) are recomputed in the service from
+// these raw sums — the stored ratio columns are never read here.
+
+export async function listBrandsForOverview({ status, kategoriBesar }, db = pool) {
+  // status IS NOT NULL excludes the handful of pre-migration report-generator
+  // brand rows that never went through the "Client info" import.
+  const { rows } = await db.query(
+    `SELECT brand_id, brand_name, industry, sub_industry, kategori_besar, status::text AS status
+     FROM brands_with_category
+     WHERE status IS NOT NULL
+       AND ($1::text = 'all' OR status = 'active')
+       AND ($2::text IS NULL OR kategori_besar = $2)
+     ORDER BY brand_name`,
+    [status, kategoriBesar],
+  );
+  return rows;
+}
+
+export async function monthlyRevenueByBrand(brandIds, startPeriod, endPeriod, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, revenue, target_sales
+     FROM client_monthly_metrics
+     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
+    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
+export async function monthlySpendByBrand(brandIds, startPeriod, endPeriod, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, SUM(amount_spent) AS spend
+     FROM client_platform_spend_monthly
+     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date
+     GROUP BY brand_id, period`,
+    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
 export const CPS_COLUMNS = CPS_COLS;

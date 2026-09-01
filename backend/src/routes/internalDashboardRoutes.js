@@ -8,6 +8,7 @@ import {
   monthlyMetricsBodyValidation,
   channelSalesBodyValidation,
   platformSpendBodyValidation,
+  overviewQueryValidation,
 } from '../validators/internalDashboardValidators.js';
 
 // Internal Dashboard — admin-only, all-clients performance capture.
@@ -19,6 +20,9 @@ const router = Router();
 router.use(authenticate, authorize('admin'));
 
 router.get('/clients', ctrl.listClients);
+
+// S1 — Executive Overview
+router.get('/overview', overviewQueryValidation, ctrl.getOverview);
 
 // §2.3 — client_monthly_metrics
 router.get('/monthly-metrics', brandQueryValidation, ctrl.listMonthlyMetrics);

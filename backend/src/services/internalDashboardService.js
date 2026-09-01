@@ -196,3 +196,273 @@ export async function deletePlatformSpend(id, userId) {
 export async function listIngestionLog(params) {
   return repo.listIngestionLog(params);
 }
+
+// =====================================================================
+// S1 — Executive Overview
+// =====================================================================
+
+const CATEGORY_MAP = { retail: 'Retail', b2b_service: 'B2B/Service', fnb: 'F&B' };
+
+// PROVISIONAL — to be calibrated once real cross-client data exists.
+// A client is flagged "Perlu Perhatian" when its revenue growth is at least
+// this many points below the AVERAGE growth of its sub-industry peers.
+// - average (not median): matches breakdown §2.8 / §4 (median is S3 only)
+// - sub_industry granularity: matches the S5 peer-group level (confirmed)
+// - no minimum-n gate (breakdown §4); peer_n is surfaced instead
+const PERLU_PERHATIAN_GROWTH_GAP = 0.15;
+
+const GROWTH_BUCKETS = [
+  { label: '< -20%', min: -Infinity, max: -0.20 },
+  { label: '-20% s/d -5%', min: -0.20, max: -0.05 },
+  { label: '-5% s/d +5%', min: -0.05, max: 0.05 },
+  { label: '+5% s/d +20%', min: 0.05, max: 0.20 },
+  { label: '> +20%', min: 0.20, max: Infinity },
+];
+
+// "YYYY-MM" +/- n months, staying in UTC so DST never shifts the month.
+export function shiftMonth(periodYm, deltaMonths) {
+  const [y, m] = periodYm.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + deltaMonths, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+// Reusable like-for-like split — also the basis for the S2 waterfall.
+// `valueAt(brandId, periodKey)` returns a number or null.
+//   both    : present in BOTH periods  -> {brandId, current, prior}
+//   entered : present in current only  -> {brandId, current}   ("new" / not-yet-input)
+//   left    : present in prior only    -> {brandId, prior}     ("churned" / no data now)
+export function buildCohort(brandIds, valueAt, currentKey, priorKey) {
+  const both = [];
+  const entered = [];
+  const left = [];
+  for (const id of brandIds) {
+    const cur = valueAt(id, currentKey);
+    const pri = valueAt(id, priorKey);
+    if (cur != null && pri != null) both.push({ brandId: id, current: cur, prior: pri });
+    else if (cur != null) entered.push({ brandId: id, current: cur });
+    else if (pri != null) left.push({ brandId: id, prior: pri });
+  }
+  return { both, entered, left };
+}
+
+const growth = (cur, prior) => (prior != null && prior > 0 ? cur / prior - 1 : null);
+const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+const bucketOf = (g) => (GROWTH_BUCKETS.find((b) => g >= b.min && g < b.max) ?? GROWTH_BUCKETS[GROWTH_BUCKETS.length - 1]).label;
+
+export async function getOverview(params) {
+  const period = params.period;
+  const compare = params.compare || 'mom';
+  const category = params.category || 'all';
+  const status = params.status || 'active';
+  const basis = params.basis || 'like_for_like';
+
+  const kategoriBesar = category === 'all' ? null : (CATEGORY_MAP[category] ?? null);
+  const brands = await repo.listBrandsForOverview({ status, kategoriBesar });
+  const brandIds = brands.map((b) => b.brand_id);
+  const brandById = new Map(brands.map((b) => [b.brand_id, b]));
+
+  const windowStart = shiftMonth(period, -12);
+  const comparePeriod = compare === 'yoy' ? shiftMonth(period, -12)
+    : compare === 'mom' ? shiftMonth(period, -1)
+      : null; // 'target' compares to target_sales, not a period
+
+  const [revRows, spendRows] = await Promise.all([
+    repo.monthlyRevenueByBrand(brandIds, windowStart, period),
+    repo.monthlySpendByBrand(brandIds, windowStart, period),
+  ]);
+
+  const revByBP = new Map();
+  const targetByBP = new Map();
+  for (const r of revRows) {
+    if (r.revenue != null) revByBP.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
+    if (r.target_sales != null) targetByBP.set(`${r.brand_id}|${r.period}`, Number(r.target_sales));
+  }
+  const spendByBP = new Map();
+  for (const s of spendRows) if (s.spend != null) spendByBP.set(`${s.brand_id}|${s.period}`, Number(s.spend));
+
+  const revAt = (id, p) => (revByBP.has(`${id}|${p}`) ? revByBP.get(`${id}|${p}`) : null);
+  const spendAt = (id, p) => (spendByBP.has(`${id}|${p}`) ? spendByBP.get(`${id}|${p}`) : null);
+  const targetAt = (id, p) => (targetByBP.has(`${id}|${p}`) ? targetByBP.get(`${id}|${p}`) : null);
+
+  const sumAt = (p, at) => {
+    let total = 0;
+    let has = false;
+    for (const id of brandIds) {
+      const v = at(id, p);
+      if (v != null) { total += v; has = true; }
+    }
+    return has ? total : null;
+  };
+
+  // ---- trend: 13 months ending at `period` (null, never 0, for gaps) ----
+  const months = [];
+  for (let i = -12; i <= 0; i += 1) months.push(shiftMonth(period, i));
+  const trend = months.map((mo) => {
+    const sales = sumAt(mo, revAt);
+    const spend = sumAt(mo, spendAt);
+    return {
+      period: mo,
+      sales,
+      spend,
+      roas: sales != null && spend != null && spend > 0 ? sales / spend : null,
+    };
+  });
+
+  // ---- KPI cards ----
+  const salesNow = sumAt(period, revAt) ?? 0;
+  const spendNow = sumAt(period, spendAt) ?? 0;
+  const roasNow = spendNow > 0 ? salesNow / spendNow : null;
+
+  // delta respects `basis`: like_for_like restricts both sides of the ratio
+  // to brands present in both periods (revenue-defined cohort).
+  const revCohort = compare === 'target' ? null : buildCohort(brandIds, revAt, period, comparePeriod);
+  const deltaPct = (at) => {
+    if (compare === 'target') {
+      let now = 0;
+      let tgt = 0;
+      let has = false;
+      for (const id of brandIds) {
+        const r = revAt(id, period);
+        const t = targetAt(id, period);
+        if (r != null && t != null) { now += r; tgt += t; has = true; }
+      }
+      return has && tgt > 0 ? now / tgt - 1 : null;
+    }
+    const ids = basis === 'all_clients' ? brandIds : revCohort.both.map((c) => c.brandId);
+    let now = 0;
+    let cmp = 0;
+    let has = false;
+    for (const id of ids) {
+      const a = at(id, period);
+      const b = at(id, comparePeriod);
+      if (a != null && b != null) { now += a; cmp += b; has = true; }
+    }
+    return has && cmp !== 0 ? now / cmp - 1 : null;
+  };
+
+  const salesCmp = compare === 'target' ? sumAt(period, targetAt) : sumAt(comparePeriod, revAt);
+  const spendCmp = compare === 'target' ? null : sumAt(comparePeriod, spendAt);
+  const roasCmp = compare !== 'target' && salesCmp != null && spendCmp != null && spendCmp > 0
+    ? salesCmp / spendCmp : null;
+
+  const kpi = {
+    total_sales: { value: salesNow, compare: salesCmp, delta_pct: deltaPct(revAt) },
+    total_spend: { value: spendNow, compare: spendCmp, delta_pct: compare === 'target' ? null : deltaPct(spendAt) },
+    blended_roas: {
+      value: roasNow,
+      compare: roasCmp,
+      delta_pct: roasNow != null && roasCmp != null && roasCmp !== 0 ? roasNow / roasCmp - 1 : null,
+    },
+    active_clients: { value: brands.filter((b) => b.status === 'active').length },
+    clients_with_data: { value: brandIds.filter((id) => revAt(id, period) != null).length, of: brandIds.length },
+  };
+
+  // ---- category composition (period revenue by kategori_besar) ----
+  const catAgg = new Map();
+  for (const id of brandIds) {
+    const rv = revAt(id, period);
+    if (rv == null) continue;
+    const key = brandById.get(id).kategori_besar || 'Belum terkategori';
+    const cur = catAgg.get(key) || { kategori_besar: key, sales: 0, client_count: 0 };
+    cur.sales += rv;
+    cur.client_count += 1;
+    catAgg.set(key, cur);
+  }
+  const category_composition = [...catAgg.values()]
+    .map((c) => ({ ...c, share_pct: salesNow > 0 ? c.sales / salesNow : null }))
+    .sort((a, b) => b.sales - a.sales);
+
+  // ---- client contribution (Pareto) ----
+  const contribRows = brandIds
+    .map((id) => ({ id, sales: revAt(id, period) }))
+    .filter((r) => r.sales != null)
+    .sort((a, b) => b.sales - a.sales);
+  let cumulative = 0;
+  const client_contribution = contribRows.map((r) => {
+    cumulative += r.sales;
+    return {
+      brand_id: r.id,
+      brand_name: brandById.get(r.id).brand_name,
+      sales: r.sales,
+      share_pct: salesNow > 0 ? r.sales / salesNow : null,
+      cumulative_pct: salesNow > 0 ? cumulative / salesNow : null,
+    };
+  });
+
+  // ---- growth distribution ----
+  const growthOf = (row) => (compare === 'target'
+    ? growth(row.current, targetAt(row.brandId, period))
+    : growth(row.current, row.prior));
+
+  const cohort = compare === 'target'
+    ? {
+      both: brandIds
+        .filter((id) => revAt(id, period) != null && targetAt(id, period) != null)
+        .map((id) => ({ brandId: id, current: revAt(id, period), prior: targetAt(id, period) })),
+      entered: [],
+      left: [],
+    }
+    : revCohort;
+
+  const perBrandGrowth = cohort.both
+    .map((row) => ({ brandId: row.brandId, g: growthOf(row) }))
+    .filter((x) => x.g != null);
+
+  const bucketCounts = Object.fromEntries(GROWTH_BUCKETS.map((b) => [b.label, 0]));
+  for (const x of perBrandGrowth) bucketCounts[bucketOf(x.g)] += 1;
+
+  const withName = (r, extra) => ({
+    brand_id: r.brandId, brand_name: brandById.get(r.brandId).brand_name, ...extra,
+  });
+
+  const growth_distribution = {
+    basis,
+    compare,
+    buckets: GROWTH_BUCKETS.map((b) => ({ label: b.label, count: bucketCounts[b.label] })),
+    // Until join_date exists, "entered" mixes genuinely-new clients with
+    // ones whose prior month simply hasn't been input yet (see plan flag).
+    entered: cohort.entered.map((r) => withName(r, { current: r.current })),
+    left: cohort.left.map((r) => withName(r, { prior: r.prior })),
+  };
+
+  // ---- perlu perhatian (vs sub-industry peer average) ----
+  const bySub = new Map();
+  for (const x of perBrandGrowth) {
+    const sub = brandById.get(x.brandId).sub_industry;
+    if (!sub) continue; // no sub-industry -> can't peer-compare
+    if (!bySub.has(sub)) bySub.set(sub, []);
+    bySub.get(sub).push(x);
+  }
+  const perlu_perhatian = [];
+  for (const [sub, members] of bySub) {
+    const subAvg = avg(members.map((m) => m.g));
+    for (const m of members) {
+      const gap = m.g - subAvg;
+      if (gap <= -PERLU_PERHATIAN_GROWTH_GAP) {
+        perlu_perhatian.push({
+          brand_id: m.brandId,
+          brand_name: brandById.get(m.brandId).brand_name,
+          sub_industry: sub,
+          growth: m.g,
+          sub_industry_avg_growth: subAvg,
+          gap,
+          peer_n: members.length,
+        });
+      }
+    }
+  }
+  perlu_perhatian.sort((a, b) => a.gap - b.gap);
+
+  return {
+    period,
+    compare_period: comparePeriod,
+    filters: { compare, category, status, basis },
+    thresholds: { perlu_perhatian_growth_gap: PERLU_PERHATIAN_GROWTH_GAP, provisional: true },
+    kpi,
+    trend,
+    category_composition,
+    client_contribution,
+    growth_distribution,
+    perlu_perhatian,
+  };
+}

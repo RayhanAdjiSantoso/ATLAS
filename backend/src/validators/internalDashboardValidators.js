@@ -31,6 +31,15 @@ export const idParamValidation = [
   param('id').isInt({ min: 1 }).withMessage('id tidak valid'),
 ];
 
+// --- S1 Executive Overview -----------------------------------------
+export const overviewQueryValidation = [
+  query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),
+  query('compare').optional().isIn(['mom', 'yoy', 'target']),
+  query('category').optional().isIn(['retail', 'b2b_service', 'fnb', 'all']),
+  query('status').optional().isIn(['active', 'all']),
+  query('basis').optional().isIn(['like_for_like', 'all_clients']),
+];
+
 // --- §2.3 client_monthly_metrics -------------------------------------
 export const monthlyMetricsBodyValidation = [
   body('brand_id').isInt({ min: 1 }).withMessage('Client wajib dipilih'),

@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import InputDataTab from '../components/internalDashboard/InputDataTab.jsx';
+import ExecutiveOverviewTab from '../components/internalDashboard/ExecutiveOverviewTab.jsx';
 
 // Internal Dashboard MIL Digital — admin-only, all-clients performance.
-// Only the "Input Data" tab exists for now; the S1–S8 view sections
-// (Executive Overview, Business Checkup, Kategori, Industry, Benchmark,
-// Channel, Client Detail, Data Quality) become sibling tabs later.
-const TABS = ['Input Data'];
-const TAB_COMPONENTS = { 'Input Data': InputDataTab };
+// S1 (Executive Overview) + Input Data exist; the remaining view sections
+// (S2 Business Checkup, S3 Kategori, S4 Industry, S5 Benchmark, S6 Channel,
+// S7 Client Detail, S8 Data Quality) become sibling tabs later.
+const TABS = ['Executive Overview', 'Input Data'];
+const TAB_COMPONENTS = {
+  'Executive Overview': ExecutiveOverviewTab,
+  'Input Data': InputDataTab,
+};
 
 export default function InternalDashboardPage() {
   const [activeTab, setActiveTab] = useState(TABS[0]);
