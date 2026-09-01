@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, History, LogOut, Megaphone, FileBarChart } from 'lucide-react';
+import { LayoutDashboard, History, LogOut, Megaphone, FileBarChart, Building2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
 export default function AppLayout() {
@@ -25,6 +25,11 @@ export default function AppLayout() {
           {isAdmin && (
             <NavLink to="/meta-automation" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
               <Megaphone size={18} /> Meta Ads Automation
+            </NavLink>
+          )}
+          {isAdmin && (
+            <NavLink to="/internal-dashboard" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+              <Building2 size={18} /> Internal Dashboard
             </NavLink>
           )}
           <NavLink to="/history" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>

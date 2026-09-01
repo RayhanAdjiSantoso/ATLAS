@@ -15,6 +15,7 @@ import {
   reachIsApproximated,
   splitByDayRange,
   splitMonths,
+  stripCampaignSubtotals,
   type CprRow,
   type MetaIndustry,
   type MetaKpiRow,
@@ -174,6 +175,14 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     oldPeriod = parseMetaMonthValue(months[0]);
     curPeriod = parseMetaMonthValue(months[months.length - 1]);
   }
+  // Keep only leaf rows (a specific campaign) — drop every pivot SUBTOTAL
+  // row (Campaign name "All"/blank) before classification and aggregation.
+  // A subtotal's "All" name matches no Boost-Post pattern, so it would
+  // default into Non-Boost and add a full extra copy of the account's spend
+  // there (verified against a real "Report Otomatis – Boost Post" export:
+  // Non-Boost Amount Spent came out as leaf-total + one grand-total row).
+  mOld = stripCampaignSubtotals(mOld);
+  mCur = stripCampaignSubtotals(mCur);
   const p1 = oldPeriod.label;
   const p2 = curPeriod.label;
   const periodWarning = comparePeriodDays(oldPeriod.days, curPeriod.days);
@@ -278,7 +287,11 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const cAgeCol = findCol(cpasRows, ['age']);
     const cGenderCol = findCol(cpasRows, ['gender']);
     const cDimCols = [cMonthCol, cCampCol, cAgeCol, cGenderCol].filter((c): c is string => Boolean(c));
-    const { old: cOld, cur: cCur } = splitMonths(cpasRows, cMonthCol);
+    // Same pivot-subtotal drop as the Boost/Non-Boost path above — without
+    // it the "Overall" tab double-counts every absolute metric (the NV/RM
+    // tabs happen to escape it only because groupByCamp's "NV"/"RM" regex
+    // never matches a subtotal's "All" campaign name).
+    const { old: cOld, cur: cCur } = splitMonths(stripCampaignSubtotals(cpasRows), cMonthCol);
     const cAllCols = cpasHeaders.filter((h) => isNumericCol(h, cpasRows) && !cDimCols.includes(h));
     const defCpasOverall = matchDef(DEFS.cpasOverall, cAllCols);
     const defCpasDemo = matchDef(DEFS.cpasDemo, cAllCols);

@@ -10,5 +10,8 @@ dist/
 # Runtime data — user-uploaded Excel files, generated at runtime, not source
 /backend/uploads/
 
+# migrateClientInfo.js review-artifact CSVs — regenerable, not source
+/backend/scripts/out/
+
 # OS/editor cruft
 .DS_Store
