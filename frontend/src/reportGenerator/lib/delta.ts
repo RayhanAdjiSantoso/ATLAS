@@ -34,6 +34,16 @@ export function formatDeltaID(deltaNum: number | null, fallback: string): string
   return sign + deltaNum.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
 }
 
+// Division that returns null (rendered as "—"/"N/A" by callers) instead of
+// Infinity/NaN when the denominator is 0 or either side is missing — shared
+// by Business Overview's AOV/AUR/Basket calcs and any other derived ratio
+// metric (e.g. Shopee's ATC-to-Order/Conversion Rate/AOV/AUR).
+export function safeDiv(num: number | null | undefined, den: number | null | undefined): number | null {
+  if (num == null || den == null || isNaN(num) || isNaN(den) || den === 0) return null;
+  const r = num / den;
+  return isFinite(r) ? r : null;
+}
+
 // Generic sentiment-aware delta class, used by Shopee/TikTok/Overview/Business
 // Overview/Cost-per-X rows (originally `shopeeDeltaClass` despite being
 // platform-agnostic).

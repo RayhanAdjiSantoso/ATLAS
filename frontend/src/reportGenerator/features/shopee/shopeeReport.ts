@@ -2,7 +2,7 @@ import type { KpiRowDisplay } from '../../components/KpiTable';
 import type { DetailedRow } from '../../components/OverviewDetailedCard';
 import { comparePeriodDays } from '../../lib/periodLabel';
 import { SHOPEE_METRIC_DEFS, buildShopeeKPIRows, calcShopeeMetrics } from '../../lib/shopeeAds';
-import { buildOverviewKPIRows, calcOverviewMetrics, type OverviewKpiRow } from '../../lib/shopeeOverview';
+import { buildOverviewCalcRows, buildOverviewKPIRows, calcOverviewMetrics, type OverviewKpiRow } from '../../lib/shopeeOverview';
 import { toSummaryKpi, type SpendEntry, type SummaryKpi } from '../../lib/summary';
 import type { SheetRow } from '../../lib/types';
 
@@ -55,7 +55,11 @@ export function buildShopeeReport({ p1, p2, periodOldDays, periodCurDays, tokoOl
   const detailedRows: DetailedRow[] = allRows.map((r) => ({ col: r.col, label: r.label, old: r.old, cur: r.cur, delta: r.delta, cls: r.cls }));
   const allCols = SHOPEE_METRIC_DEFS.map((d) => d.key);
 
-  const productOverviewRows = overviewOldRows && overviewCurRows ? buildOverviewKPIRows(calcOverviewMetrics(overviewOldRows), calcOverviewMetrics(overviewCurRows)) : null;
+  const overviewMOld = overviewOldRows ? calcOverviewMetrics(overviewOldRows) : null;
+  const overviewMCur = overviewCurRows ? calcOverviewMetrics(overviewCurRows) : null;
+  // Base 7 metrics + the 4 derived Conversion/Ratio metrics in one table.
+  const productOverviewRows =
+    overviewMOld && overviewMCur ? [...buildOverviewKPIRows(overviewMOld, overviewMCur), ...buildOverviewCalcRows(overviewMOld, overviewMCur)] : null;
   const periodWarning = comparePeriodDays(periodOldDays, periodCurDays);
 
   // Feeds the Summary Overview tab — unlike Meta (which only surfaces its
