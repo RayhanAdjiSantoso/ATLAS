@@ -7,6 +7,8 @@
 // component (and the Shopee omzet value passed in from the Shopee tab).
 // ══════════════════════════════════════════════════════
 
+import { safeDiv } from './delta';
+
 export type BizMetricKey = 'revenue' | 'transactions' | 'qty';
 export type BizPeriod = 'old' | 'cur';
 
@@ -72,11 +74,7 @@ export function bizTotalMetric(state: BizState, metric: BizMetricKey, period: Bi
   return sumMaybe(BIZ_ALL_CHANNELS.map((ch) => bizChannelValue(state, ch.key, metric, period)));
 }
 
-export function safeDiv(num: number | null | undefined, den: number | null | undefined): number | null {
-  if (num == null || den == null || isNaN(num) || isNaN(den) || den === 0) return null;
-  const r = num / den;
-  return isFinite(r) ? r : null;
-}
+export { safeDiv };
 
 // chKey === '__total__' computes the metric across all channels combined.
 export function bizAOV(state: BizState, period: BizPeriod, chKey: string): number | null {
