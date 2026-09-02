@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DemoBreakdownCard } from '../../components/DemoBreakdownCard';
+import { SectionNav } from '../../components/SectionNav';
 import { InlineNotice } from '../../components/InlineNotice';
 import { KpiTable } from '../../components/KpiTable';
 import { OverviewDetailedCard } from '../../components/OverviewDetailedCard';
@@ -170,6 +171,7 @@ function ShopeeDetailView({ detail }: { detail: ReportDetail }) {
   const hasTokoData = detail.rows.some((r) => r.channel === 'toko');
   const hasLiveData = detail.rows.some((r) => r.channel === 'live');
   const hasTokoKeywordData = detail.rows.some((r) => r.channel === 'toko_keyword');
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   async function handleSaveCategory(name: string, category: string, series: string) {
     await saveProductMasterEntry(detail.report.brandId, { namaProdukClean: name, category, series });
@@ -184,7 +186,8 @@ function ShopeeDetailView({ detail }: { detail: ReportDetail }) {
           <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
         </div>
       </div>
-      <div data-role="r-body">
+      <SectionNav bodyRef={bodyRef} scanKey={detail} accent="var(--shopee)" />
+      <div data-role="r-body" ref={bodyRef}>
         <ShopeeReportSections
           report={report}
           deepDive={deepDive}
@@ -211,6 +214,7 @@ function ShopeeDetailView({ detail }: { detail: ReportDetail }) {
 
 function MetaDetailView({ detail }: { detail: ReportDetail }) {
   const report = reconstructMetaReport(detail);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const hasAnySection = Boolean(
     report.boost || report.nonBoost || report.boostAgeDemo || report.boostGenderDemo || report.ageDemo || report.genderDemo || (report.cpas && Object.keys(report.cpas).length),
   );
@@ -222,7 +226,8 @@ function MetaDetailView({ detail }: { detail: ReportDetail }) {
           <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
         </div>
       </div>
-      <div data-role="r-body">
+      <SectionNav bodyRef={bodyRef} scanKey={detail} accent="var(--acc)" />
+      <div data-role="r-body" ref={bodyRef}>
         <PeriodWarningBanner message={report.periodWarning} />
         <PeriodWarningBanner message={report.reachWarning} />
         <PeriodWarningBanner message={report.reachApproxNote} />

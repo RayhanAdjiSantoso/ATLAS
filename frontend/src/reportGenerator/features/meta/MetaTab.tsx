@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Dropzone } from '../../components/Dropzone';
+import { SectionNav } from '../../components/SectionNav';
 import { DemoBreakdownCard } from '../../components/DemoBreakdownCard';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -78,6 +79,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const [curRange, setCurRange] = useState<{ start: Date; end: Date } | null>(null);
 
   const [report, setReport] = useState<MetaReport | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [generatedAt, setGeneratedAt] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -581,7 +583,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             </div>
             <div className="report-meta num">Generated {generatedAt}</div>
           </div>
-          <div data-role="r-body">
+          <SectionNav bodyRef={bodyRef} scanKey={report} accent="var(--acc)" />
+          <div data-role="r-body" ref={bodyRef}>
             <PeriodWarningBanner message={report.periodWarning} />
             <PeriodWarningBanner message={report.reachWarning} />
             <PeriodWarningBanner message={report.reachApproxNote} />

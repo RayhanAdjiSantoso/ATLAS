@@ -6,7 +6,7 @@ import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
 import { reorderIds, useInlineMetricEditor } from '../../hooks/useInlineMetricEditor';
 import { validateFormula } from '../../lib/formula';
-import { DAILY_TREND_BUILTIN_METRICS, dailyTrendSelectionId, dailyTrendSelectionLabel, type DailyTrendMetricSelection, type DailyTrendPivotRow, type VariantPerformanceRow } from '../../lib/shopeeDeepDiveInsights';
+import { DAILY_TREND_BUILTIN_METRICS, dailyTrendSelectionId, dailyTrendSelectionLabel, type DailyTrendMetricSelection, type DailyTrendPivotRow, type ProductPerformanceRow } from '../../lib/shopeeDeepDiveInsights';
 import { ITEM_BUILTIN_METRICS, metricSelectionId, metricSelectionLabel, type KeywordPivotRow, type MetricSelection, type ProdukPivotRow } from '../../lib/shopeeDeepDiveItemPivot';
 import { fmtPivotVal, type PivotFmt, type PivotRow } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
@@ -611,20 +611,21 @@ function UncategorizedRow({ name, onSave }: { name: string; onSave: (name: strin
 // empty `rows` array is ambiguous between "no file" and "file uploaded, but
 // everything that sells is already advertised", so the caller passes
 // `hasFile` explicitly instead of inferring it from rows.length.
-export function UnadvertisedVariantsTable({ rows, hasFile }: { rows: VariantPerformanceRow[]; hasFile: boolean }) {
-  const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>(null);
+export function UnadvertisedProductsTable({ rows, hasFile }: { rows: ProductPerformanceRow[]; hasFile: boolean }) {
   if (!hasFile) return null;
-  const displayRows = sortDir ? [...rows].sort((a, b) => (sortDir === 'asc' ? a.penjualanSiapDikirim - b.penjualanSiapDikirim : b.penjualanSiapDikirim - a.penjualanSiapDikirim)) : rows;
+  // `rows` already arrives sorted by Penjualan (Siap Dikirim) descending;
+  // spec: show only the top 10.
+  const displayRows = rows.slice(0, 10);
   return (
     <div className="sec-block">
       <div className="sec-heading shopee-heading">
-        Laku tapi Belum Pernah Diiklankan <span className="sec-badge">Product Performance</span>
+        Laku tapi Belum Pernah Diiklankan <span className="sec-badge">Product Performance · top 10</span>
         <SectionExcelButton />
         <SectionDownloadButton />
       </div>
       <div style={{ padding: '.6rem 1.4rem 1.4rem' }}>
         {!rows.length ? (
-          <div className="empty-note">Tidak ada — semua produk/varian yang laku sudah pernah diiklankan di salah satu channel.</div>
+          <div className="empty-note">Tidak ada — semua produk yang laku sudah pernah diiklankan di salah satu channel.</div>
         ) : (
           <div style={{ maxHeight: TABLE_MAX_HEIGHT, overflow: 'auto' }}>
             <table className="kpi-table">
@@ -632,23 +633,40 @@ export function UnadvertisedVariantsTable({ rows, hasFile }: { rows: VariantPerf
                 <tr style={{ position: 'sticky', top: 0, background: 'var(--s2)', zIndex: 1 }}>
                   <th style={{ textAlign: 'left' }}>Produk</th>
                   <th style={{ textAlign: 'left' }}>Varian</th>
-                  <th>Kode Produk</th>
-                  <th
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
-                    onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
-                  >
-                    Penjualan (Siap Dikirim){sortDir ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </th>
+                  <th>Kode</th>
+                  <th>Jumlah Produk Dilihat</th>
+                  <th>Persentase Klik</th>
+                  <th>Tingkat Konversi (Pesanan Siap Dikirim)</th>
+                  <th>Penjualan (Siap Dikirim)</th>
                 </tr>
               </thead>
               <tbody>
                 {displayRows.map((r, i) => (
-                  <tr key={r.kodeProduk + '|' + r.kodeVariasi + i}>
-                    <td>{r.produk}</td>
-                    <td style={{ textAlign: 'left' }}>{r.namaVariasi}</td>
-                    <td>{r.kodeProduk}</td>
-                    <td>{fmtPivotVal(r.penjualanSiapDikirim, 'rp')}</td>
-                  </tr>
+                  <Fragment key={r.kodeProduk + '|' + i}>
+                    {/* Product-level row: traffic/conversion columns only exist here. */}
+                    <tr style={{ fontWeight: 600, background: 'var(--s2)' }}>
+                      <td>{r.produk}</td>
+                      <td style={{ textAlign: 'left', color: 'var(--muted)' }}>Semua varian</td>
+                      <td>{r.kodeProduk}</td>
+                      <td>{fmtPivotVal(r.jumlahProdukDilihat, 'num')}</td>
+                      <td>{fmtPivotVal(r.persentaseKlik, 'pct')}</td>
+                      <td>{fmtPivotVal(r.tingkatKonversiSiapDikirim, 'pct')}</td>
+                      <td>{fmtPivotVal(r.penjualanSiapDikirim, 'rp')}</td>
+                    </tr>
+                    {/* Variasi-level breakdown: Shopee reports Dilihat / %Klik /
+                        Konversi only per product, so those cells stay blank here. */}
+                    {r.variants.map((v, j) => (
+                      <tr key={r.kodeProduk + '|v|' + v.kodeVariasi + j}>
+                        <td />
+                        <td style={{ textAlign: 'left', paddingLeft: '1.4rem' }}>{v.namaVariasi || v.kodeVariasi}</td>
+                        <td>{v.kodeVariasi}</td>
+                        <td style={{ color: 'var(--muted)' }}>–</td>
+                        <td style={{ color: 'var(--muted)' }}>–</td>
+                        <td style={{ color: 'var(--muted)' }}>–</td>
+                        <td>{fmtPivotVal(v.penjualanSiapDikirim, 'rp')}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
