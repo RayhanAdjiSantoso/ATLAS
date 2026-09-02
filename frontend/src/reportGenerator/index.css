@@ -160,8 +160,24 @@
   .report-period{font-size:.95rem;font-weight:700;color:var(--gold);margin-top:.4rem;position:relative;font-variant-numeric:tabular-nums lining-nums}
   .report-meta{font-size:.72rem;color:rgba(255,255,255,.65);margin-top:.3rem;position:relative;font-variant-numeric:tabular-nums lining-nums}
 
+  /* ── Section shortcut nav ── */
+  /* Sticky bar of shortcuts to a report's primary sections. Sits between
+     .report-top and the exported [data-role="r-body"], so it never appears in
+     PNG/PDF output. */
+  .section-nav{position:sticky;top:0;z-index:20;display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;
+    margin:-1.4rem 0 1.6rem;padding:.6rem 0;background:var(--bg);border-bottom:1px solid var(--border);
+    scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+  .section-nav::-webkit-scrollbar{height:5px}
+  .section-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  .section-nav-pill{flex:0 0 auto;white-space:nowrap;padding:.42rem .85rem;border-radius:999px;
+    border:1.5px solid var(--border);background:var(--surface);color:var(--muted);
+    font-size:.72rem;font-weight:600;cursor:pointer;transition:all .15s;box-shadow:var(--shadow-sm)}
+  .section-nav-pill:hover{border-color:var(--acc);color:var(--acc);background:var(--s2)}
+  .section-nav-pill.active{background:var(--acc-100);font-weight:700}
+  &.pdf-export-mode .section-nav{display:none!important}
+
   /* ── Sections ── */
-  .sec-block{margin-bottom:1.8rem;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+  .sec-block{margin-bottom:1.8rem;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden;scroll-margin-top:64px}
   .sec-inner{padding:1rem 1.4rem 1.4rem}
   .sec-heading{font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:10px;padding:.9rem 1.4rem;border-bottom:1px solid var(--border);background:var(--s2);color:var(--acc)}
   .sec-heading.shopee-heading{color:var(--shopee)}
@@ -329,7 +345,7 @@
 
   @media print{
     .source-block,#cta,.action-row,.metric-picker,.add-metric-wrap,.platform-tabs,.omzet-row,.period-labels,.period-input-row,
-    .metric-drag-handle,.metric-remove-btn{display:none!important}
+    .metric-drag-handle,.metric-remove-btn,.section-nav{display:none!important}
     /* Was body{background:#fff;color:#111} in the original — dropped: a
        nested rule can't reach the real <body> (an ancestor of this wrapper,
        not a descendant), and this app no longer owns the whole document to
@@ -347,6 +363,12 @@
   &.pdf-export-mode .sec-download-btn{display:none!important}
   &.pdf-export-mode .metric-drag-handle,
   &.pdf-export-mode .metric-remove-btn{display:none!important}
+  /* html2canvas 1.4.1 drops text that sits inside an inline-flex box, so the
+     Changes column's delta pills export as empty coloured lozenges. Fall back
+     to inline-block (with a plain margin standing in for the flex `gap`) only
+     during export — the on-screen pill keeps its flex layout. */
+  &.pdf-export-mode .delta-pill{display:inline-block}
+  &.pdf-export-mode .delta-pill .delta-arrow{margin-right:.3rem}
 
   /* ── Section PNG export ("⬇ PNG" on a section card) — size every column to
      its content. On screen the tables stretch to fill the card (width:100%)
@@ -594,3 +616,20 @@
     .saved-slot-card.filled{flex-direction:column;align-items:stretch}
   }
 }
+
+/* ATLAS's global `.main-content{overflow-x:auto}` turns that element into a
+   scroll container, which would neutralize the section nav's position:sticky
+   (it'd scroll away with the page instead of pinning to the top). Only while
+   the report generator is the mounted page (this selector can never match any
+   other ATLAS route), swap that for `overflow-x:clip; overflow-y:visible`:
+   `clip` does NOT create a scroll container, so the sticky nav keeps pinning
+   to the viewport, yet it still clips horizontal overflow so the page width
+   stays identical before and after a report is generated (no widening from a
+   wide table/nowrap row that escapes its .tbl-scroll wrapper). The
+   `clip`/`visible` pair is the one combination that stays as authored instead
+   of both axes computing to `auto`. `min-width:0` is the crucial half: without
+   it this flex item (`.main-content` is `flex:1` inside `.layout`) keeps its
+   `auto` content-based minimum width, so a wide section (a table/nowrap row
+   that escapes its .tbl-scroll wrapper) still stretches the item — and the
+   whole page — no matter what `overflow` says. */
+.main-content:has(> .report-generator-app){overflow-x:clip;overflow-y:visible;min-width:0}

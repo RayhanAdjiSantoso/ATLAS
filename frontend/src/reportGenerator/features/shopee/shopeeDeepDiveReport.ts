@@ -1,5 +1,5 @@
 import { categorizeProdukRows, mergeProdukOtomatis, type ProductMasterEntry } from '../../lib/shopeeDeepDive';
-import { buildDailyTrendPivot, collectAdvertisedProductCodes, DEFAULT_DAILY_TREND_SELECTIONS, findUnadvertisedVariants, rankVariantsBySiapDikirim, type DailyTrendMetricSelection, type DailyTrendPivotRow, type VariantPerformanceRow } from '../../lib/shopeeDeepDiveInsights';
+import { buildDailyTrendPivot, collectAdvertisedProductCodes, DEFAULT_DAILY_TREND_SELECTIONS, findUnadvertisedProducts, rankProductsBySiapDikirim, type DailyTrendMetricSelection, type DailyTrendPivotRow, type ProductPerformanceRow } from '../../lib/shopeeDeepDiveInsights';
 import { buildKeywordPivot, buildProdukPivot, DEFAULT_KEYWORD_SELECTIONS, pickDominantProdukMetric, type KeywordPivotRow, type MetricSelection, type ProdukPivotRow } from '../../lib/shopeeDeepDiveItemPivot';
 import { buildPivotRows, calcLiveChannelMetrics, calcStandardChannelMetrics, CHANNEL_METRIC_DEFS, combineOverallMetrics, detectDominantChannel, LIVE_METRIC_DEFS, OVERALL_METRIC_DEFS, withChannelShare, type DominantChannel, type PivotRow } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
@@ -54,7 +54,7 @@ export interface ShopeeDeepDiveReport {
   keywordSelections: readonly MetricSelection[];
   uncategorized: string[];
   hasProductPerformanceData: boolean;
-  unadvertisedVariants: VariantPerformanceRow[];
+  unadvertisedProducts: ProductPerformanceRow[];
   tingkatkanDenganIklanRows: SheetRow[];
   dailyTrendPivot: DailyTrendPivotRow[];
   dailyTrendSelections: readonly DailyTrendMetricSelection[];
@@ -94,7 +94,7 @@ export function buildShopeeDeepDiveReport(input: BuildShopeeDeepDiveReportInput)
   const dailyTrendSelections = input.dailyTrendSelections && input.dailyTrendSelections.length ? input.dailyTrendSelections : DEFAULT_DAILY_TREND_SELECTIONS;
 
   const advertisedCodes = collectAdvertisedProductCodes(produkMergedOld, produkMergedCur, input.tokoOld, input.tokoCur, input.liveOld, input.liveCur, input.tokoKeywordOld, input.tokoKeywordCur);
-  const rankedVariants = input.productPerformanceRows ? rankVariantsBySiapDikirim(input.productPerformanceRows) : [];
+  const rankedProducts = input.productPerformanceRows ? rankProductsBySiapDikirim(input.productPerformanceRows) : [];
 
   return {
     overall: buildPivotRows(overallMOld, overallMCur, OVERALL_METRIC_DEFS),
@@ -108,7 +108,7 @@ export function buildShopeeDeepDiveReport(input: BuildShopeeDeepDiveReportInput)
     keywordSelections,
     uncategorized: [...new Set([...catOld.uncategorized, ...catCur.uncategorized])],
     hasProductPerformanceData: Boolean(input.productPerformanceRows),
-    unadvertisedVariants: findUnadvertisedVariants(rankedVariants, advertisedCodes),
+    unadvertisedProducts: findUnadvertisedProducts(rankedProducts, advertisedCodes),
     tingkatkanDenganIklanRows: input.tingkatkanDenganIklanRows ?? [],
     dailyTrendPivot: input.overviewOldRows || input.overviewCurRows ? buildDailyTrendPivot(input.overviewOldRows ?? [], input.overviewCurRows ?? [], dailyTrendSelections) : [],
     dailyTrendSelections,

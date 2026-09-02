@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/client.js';
 import DateRangePicker from './DateRangePicker.jsx';
+import SearchableSelect from '../common/SearchableSelect.jsx';
 
 const COMPARE_TYPES = [
   { value: 'previous_period', label: 'Periode sebelumnya' },
@@ -111,16 +112,13 @@ export default function FilterPanel({ filters, onChange }) {
 
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label htmlFor="brand-select">Brand</label>
-          <select
+          <SearchableSelect
             id="brand-select"
+            placeholder="Pilih Brand..."
             value={filters.brandId}
-            onChange={(e) => handleChange('brandId', e.target.value)}
-          >
-            <option value="">Pilih Brand...</option>
-            {brands.map((b) => (
-              <option key={b.brand_id} value={b.brand_id}>{b.brand_name}</option>
-            ))}
-          </select>
+            options={brands.map((b) => ({ value: b.brand_id, label: b.brand_name }))}
+            onChange={(val) => handleChange('brandId', val)}
+          />
         </div>
 
         <div className="form-group" style={{ marginBottom: 0 }}>

@@ -12,32 +12,56 @@ import type { DeltaClassName, Sentiment, SheetRow } from './types';
 
 // ── Product Performance: "Produk dengan Performa Terbaik" ────────────────
 
-export interface VariantPerformanceRow {
-  kodeProduk: string;
-  produk: string;
+export interface ProductVariantRow {
   kodeVariasi: string;
   namaVariasi: string;
   penjualanSiapDikirim: number;
 }
 
-// The sheet mixes product-level aggregate rows (Kode Variasi === "-") with
-// one row per real variant — only the variant rows are meaningful for a
-// per-variant "what's selling" ranking, so the aggregate rows are dropped
-// here rather than double-counting a product alongside its own variants.
-export function rankVariantsBySiapDikirim(rows: SheetRow[]): VariantPerformanceRow[] {
-  return rows
-    .filter((r) => {
-      const kv = String(r['Kode Variasi'] ?? '').trim();
-      return kv !== '' && kv !== '-';
-    })
-    .map((r) => ({
-      kodeProduk: String(r['Kode Produk'] ?? '').trim(),
-      produk: String(r['Produk'] ?? ''),
-      kodeVariasi: String(r['Kode Variasi'] ?? '').trim(),
-      namaVariasi: String(r['Nama Variasi'] ?? ''),
-      penjualanSiapDikirim: parseOverviewNum(r['Penjualan (Pesanan Siap Dikirim) (IDR)']),
-    }))
-    .sort((a, b) => b.penjualanSiapDikirim - a.penjualanSiapDikirim);
+export interface ProductPerformanceRow {
+  kodeProduk: string;
+  produk: string;
+  penjualanSiapDikirim: number;
+  jumlahProdukDilihat: number;
+  persentaseKlik: number; // percentage points (e.g. 3.48), taken straight from the export
+  tingkatKonversiSiapDikirim: number; // percentage points, straight from the export
+  variants: ProductVariantRow[]; // this product's variant rows, revenue-sorted
+}
+
+// The sheet mixes product-level aggregate rows (Kode Variasi === "-") with one
+// row per real variant. The "sold but never advertised" cross-check keys on
+// Kode Produk — the only granularity Shopee's ad exports carry — and the
+// traffic/conversion columns (Jumlah Produk Dilihat, Persentase Klik, Tingkat
+// Konversi) only exist on the product-level rows. So this builds one record per
+// product from the aggregate row, and hangs that product's own variant rows off
+// it (revenue-sorted) for the variasi-level breakdown.
+export function rankProductsBySiapDikirim(rows: SheetRow[]): ProductPerformanceRow[] {
+  const byCode = new Map<string, ProductPerformanceRow>();
+  const orphanVariants: (ProductVariantRow & { kodeProduk: string })[] = [];
+  for (const r of rows) {
+    const kodeProduk = String(r['Kode Produk'] ?? '').trim();
+    const kodeVariasi = String(r['Kode Variasi'] ?? '').trim();
+    const penjualanSiapDikirim = parseOverviewNum(r['Penjualan (Pesanan Siap Dikirim) (IDR)']);
+    if (kodeVariasi === '-') {
+      byCode.set(kodeProduk, {
+        kodeProduk,
+        produk: String(r['Produk'] ?? ''),
+        penjualanSiapDikirim,
+        jumlahProdukDilihat: parseOverviewNum(r['Jumlah Produk Dilihat']),
+        persentaseKlik: parseOverviewNum(r['Persentase Klik']),
+        tingkatKonversiSiapDikirim: parseOverviewNum(r['Tingkat Konversi (Pesanan Siap Dikirim)']),
+        variants: [],
+      });
+    } else if (kodeVariasi !== '') {
+      orphanVariants.push({ kodeProduk, kodeVariasi, namaVariasi: String(r['Nama Variasi'] ?? ''), penjualanSiapDikirim });
+    }
+  }
+  for (const v of orphanVariants) {
+    byCode.get(v.kodeProduk)?.variants.push({ kodeVariasi: v.kodeVariasi, namaVariasi: v.namaVariasi, penjualanSiapDikirim: v.penjualanSiapDikirim });
+  }
+  const out = [...byCode.values()];
+  for (const p of out) p.variants.sort((a, b) => b.penjualanSiapDikirim - a.penjualanSiapDikirim);
+  return out.sort((a, b) => b.penjualanSiapDikirim - a.penjualanSiapDikirim);
 }
 
 // Collects every "Kode Produk" value seen across whichever channel row-sets
@@ -64,13 +88,13 @@ export function collectAdvertisedProductCodes(...rowSets: SheetRow[][]): Set<str
   return codes;
 }
 
-// The headline insight: variants that are genuinely selling (present in
-// Product Performance) but never appear in any advertised Kode Produk —
-// i.e. selling on its own / via organic search, with zero ad spend behind
-// it. Kept in the same "highest Penjualan Siap Dikirim first" order as the
+// The headline insight: products that are genuinely selling ("laku" —
+// Penjualan Siap Dikirim > 0) but never appear in any advertised Kode Produk,
+// i.e. selling on their own / via organic search with zero ad spend behind
+// them. Kept in the same "highest Penjualan Siap Dikirim first" order as the
 // input ranking.
-export function findUnadvertisedVariants(rankedVariants: VariantPerformanceRow[], advertisedCodes: Set<string>): VariantPerformanceRow[] {
-  return rankedVariants.filter((v) => v.kodeProduk && !advertisedCodes.has(v.kodeProduk));
+export function findUnadvertisedProducts(rankedProducts: ProductPerformanceRow[], advertisedCodes: Set<string>): ProductPerformanceRow[] {
+  return rankedProducts.filter((p) => p.kodeProduk && p.penjualanSiapDikirim > 0 && !advertisedCodes.has(p.kodeProduk));
 }
 
 // ── Product Overview: tren harian ─────────────────────────────────────────

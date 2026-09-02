@@ -3,7 +3,7 @@ import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
-import { ChannelPivotSection, DailyTrendSection, ItemPivotSection, TingkatkanDenganIklanTable, UnadvertisedVariantsTable, UncategorizedPanel } from './DeepDiveSections';
+import { ChannelPivotSection, DailyTrendSection, ItemPivotSection, TingkatkanDenganIklanTable, UnadvertisedProductsTable, UncategorizedPanel } from './DeepDiveSections';
 import { FundamentalAnalysisSection, ParetoAnalysisSection, ProductRankingSection } from './AnalysisSections';
 import type { ShopeeDeepDiveReport } from './shopeeDeepDiveReport';
 import type { ShopeeFunnelReport } from './shopeeFunnelReport';
@@ -108,7 +108,7 @@ export function ShopeeReportSections({
         p2={report.p2}
       />
       <UncategorizedPanel names={deepDive.uncategorized} onSave={onSaveCategory} />
-      <UnadvertisedVariantsTable rows={deepDive.unadvertisedVariants} hasFile={deepDive.hasProductPerformanceData} />
+      <UnadvertisedProductsTable rows={deepDive.unadvertisedProducts} hasFile={deepDive.hasProductPerformanceData} />
       <TingkatkanDenganIklanTable rows={deepDive.tingkatkanDenganIklanRows} />
       <DailyTrendSection rows={deepDive.dailyTrendPivot} selections={deepDive.dailyTrendSelections} onSelectionsChange={onDailyTrendSelectionsChange} p1={report.p1} p2={report.p2} />
     </>

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../../api/client.js';
+import ClientPicker from './ClientPicker.jsx';
 import MonthlyMetricsForm from './MonthlyMetricsForm.jsx';
 import ChannelSalesForm from './ChannelSalesForm.jsx';
 import PlatformSpendForm from './PlatformSpendForm.jsx';
@@ -34,32 +35,13 @@ export default function InputDataTab() {
   const ActiveForm = active.Form;
   const numericClientId = clientId ? Number(clientId) : null;
 
-  const grouped = useMemo(() => {
-    const g = { active: [], other: [] };
-    for (const c of clients) (c.status === 'active' ? g.active : g.other).push(c);
-    return g;
-  }, [clients]);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {clientsError && <div className="alert alert-error">{clientsError}</div>}
 
       <div className="card">
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Client</label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-              <option value="">Pilih client...</option>
-              <optgroup label={`Aktif (${grouped.active.length})`}>
-                {grouped.active.map((c) => <option key={c.brand_id} value={c.brand_id}>{c.brand_name}</option>)}
-              </optgroup>
-              <optgroup label={`Non-aktif / lainnya (${grouped.other.length})`}>
-                {grouped.other.map((c) => (
-                  <option key={c.brand_id} value={c.brand_id}>{c.brand_name}{c.status ? ` (${c.status})` : ''}</option>
-                ))}
-              </optgroup>
-            </select>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', alignItems: 'start' }}>
+          <ClientPicker clients={clients} value={clientId} onChange={setClientId} />
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Periode</label>
             <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
