@@ -348,6 +348,22 @@
   &.pdf-export-mode .metric-drag-handle,
   &.pdf-export-mode .metric-remove-btn{display:none!important}
 
+  /* ── Section PNG export ("⬇ PNG" on a section card) — size every column to
+     its content. On screen the tables stretch to fill the card (width:100%)
+     and the label column is pinned to a fixed 44%, and the wide tables sit in
+     horizontal-scroll wrappers — so a plain snapshot clips or squeezes
+     columns. For the duration of the capture only, let each table shrink-wrap
+     to its content and each wrapper widen to fit. Vertical row caps (the
+     Analisis Per Item / Tren Harian max-height scroll areas) are left as is. */
+  &.png-fit-content .sec-block{overflow:visible!important;width:max-content!important;max-width:none!important}
+  &.png-fit-content .tbl-scroll,
+  &.png-fit-content .sec-block [style*="overflow"]{width:max-content!important;max-width:none!important;overflow-x:visible!important}
+  &.png-fit-content .sec-block table{width:auto!important}
+  &.png-fit-content .sec-block .kpi-table th:first-child,
+  &.png-fit-content .sec-block .kpi-table td:first-child{width:auto!important}
+  &.png-fit-content .sec-block th,
+  &.png-fit-content .sec-block td{white-space:nowrap!important}
+
   /* ── Period input ── */
   .period-input-row{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem}
   .period-input-field{background:var(--surface);border-radius:var(--radius);border:1.5px solid var(--border);padding:.7rem 1rem;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:4px}

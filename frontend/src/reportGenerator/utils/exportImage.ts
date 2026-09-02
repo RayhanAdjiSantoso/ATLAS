@@ -129,10 +129,23 @@ export async function downloadSectionPNG(block: HTMLElement): Promise<void> {
 
   // See exportElementToPDF's comment above on why this isn't document.body.
   const scopeEl = block.closest<HTMLElement>('.report-generator-app') ?? document.body;
+  // `png-fit-content` (see index.css) is added only for the section-PNG path:
+  // it lets every table shrink-wrap to its content and each horizontal-scroll
+  // wrapper widen to fit, so the exported image sizes each column to its
+  // content instead of clipping/squeezing the on-screen scroll view. Vertical
+  // row caps are deliberately left untouched.
   scopeEl.classList.add('pdf-export-mode');
+  scopeEl.classList.add('png-fit-content');
   try {
     const { default: html2canvas } = await import('html2canvas');
-    const canvas = await html2canvas(block, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    // Let the fit-content relayout settle before html2canvas measures the node.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    const canvas = await html2canvas(block, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      windowWidth: Math.max(document.documentElement.clientWidth, Math.ceil(block.scrollWidth)),
+    });
     const link = document.createElement('a');
     link.download = filename;
     link.href = canvas.toDataURL('image/png');
@@ -142,5 +155,6 @@ export async function downloadSectionPNG(block: HTMLElement): Promise<void> {
     alert('Gagal membuat gambar: ' + (err as Error).message);
   } finally {
     scopeEl.classList.remove('pdf-export-mode');
+    scopeEl.classList.remove('png-fit-content');
   }
 }
