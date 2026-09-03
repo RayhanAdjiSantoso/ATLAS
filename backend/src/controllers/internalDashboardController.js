@@ -168,6 +168,12 @@ export const getClientDetail = asyncHandler(async (req, res) => {
   }));
 });
 
+// --- S8 Data Quality ---------------------------------------
+export const getDataQuality = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getDataQuality({ period: req.query.period }));
+});
+
 // --- S2 Business Checkup -------------------------------------
 export const getBusinessCheckup = asyncHandler(async (req, res) => {
   validate(req);

@@ -1534,3 +1534,131 @@ export async function getClientRanking(params) {
     no_data: noVal.map((r) => ({ brand_id: r.brand_id, brand_name: r.brand_name, sub_industry: r.sub_industry })),
   };
 }
+
+// =====================================================================
+// S8 — Data Quality
+// =====================================================================
+
+const SALES_CHANNEL_ALL = ['shopee', 'tiktok_shop', 'website', 'offline'];
+// A channel-sales total within this fraction of revenue counts as reconciled.
+const RECON_TOLERANCE = 0.005;
+
+export async function getDataQuality(params) {
+  const period = params.period;
+
+  const [snapshot, csc, unmappedAcc, recon, log] = await Promise.all([
+    repo.dataQualitySnapshot(period),
+    repo.allClientSalesChannels(),
+    repo.metaSpendWithoutAdAccounts(),
+    repo.channelReconciliation(period),
+    repo.listIngestionLog({ limit: 40 }),
+  ]);
+
+  // csc lookup: brandId -> { channel -> {is_used, source} }
+  const cscByBrand = new Map();
+  for (const r of csc) {
+    if (!cscByBrand.has(r.brand_id)) cscByBrand.set(r.brand_id, new Map());
+    cscByBrand.get(r.brand_id).set(r.channel, { is_used: r.is_used, source: r.source });
+  }
+
+  // --- 1. Matriks Kelengkapan Data --------------------------------
+  const clients = snapshot.map((s) => {
+    const cscMap = cscByBrand.get(s.brand_id) || new Map();
+    const channels = SALES_CHANNEL_ALL.map((ch) => {
+      const flag = cscMap.get(ch);
+      // has channel-level data this period? (only client_channel_sales_monthly
+      // carries canonical channels; "other" is separate)
+      return {
+        channel: ch,
+        is_used: flag ? flag.is_used : null, // true / false / null(=belum dinilai)
+        source: flag ? flag.source : null,
+      };
+    });
+    return {
+      brand_id: s.brand_id,
+      brand_name: s.brand_name,
+      status: s.status,
+      kategori_besar: s.kategori_besar,
+      join_date: s.join_date,
+      has_monthly_metrics: s.has_monthly_metrics,
+      has_channel_sales: s.has_channel_sales,
+      has_platform_spend: s.has_platform_spend,
+      revenue: s.revenue == null ? null : Number(s.revenue),
+      channel_sales_total: Number(s.channel_sales_total),
+      platform_spend_total: Number(s.platform_spend_total),
+      channels,
+    };
+  });
+
+  const active = clients.filter((c) => c.status === 'active');
+  const completeness_matrix = {
+    clients,
+    summary: {
+      total_migrated: clients.length,
+      active: active.length,
+      active_with_monthly_metrics: active.filter((c) => c.has_monthly_metrics).length,
+      active_with_channel_sales: active.filter((c) => c.has_channel_sales).length,
+      active_with_platform_spend: active.filter((c) => c.has_platform_spend).length,
+      active_with_all_three: active.filter((c) => c.has_monthly_metrics && c.has_channel_sales && c.has_platform_spend).length,
+      channels_assessed: csc.length, // client_sales_channels rows
+    },
+    note: 'is_used null = channel belum dinilai (belum ada di client_sales_channels), bukan "tidak dipakai".',
+  };
+
+  // --- 2. Ad account belum ter-mapping ---------------------------
+  const ad_accounts_unmapped = {
+    clients: unmappedAcc.map((r) => ({
+      brand_id: r.brand_id, brand_name: r.brand_name, bm_id: r.bm_id,
+      meta_spend_total: Number(r.meta_spend_total), months: Number(r.months),
+    })),
+    note: 'Client punya spend Meta (meta_*) tapi 0 baris di brand_ad_accounts — spend-nya tidak bisa ditelusuri ke akun iklan tertentu. brand_ad_accounts belum diisi (sheet cuma punya angka "# Ad account", bukan daftar ID).',
+  };
+
+  // --- 3. Campaign belum terklasifikasi -------------------------
+  const campaign_classification = {
+    available: false,
+    note: 'Belum ada data campaign-level di skema. client_platform_spend_monthly menyimpan agregat per-platform yang sudah diklasifikasi manual saat input (Boost/Non-boost/CPAS). Komponen ini baru relevan setelah ada import campaign export / integrasi Meta API.',
+  };
+
+  // --- 4. Selisih rekonsiliasi ---------------------------------
+  const channel_sales_vs_revenue = recon
+    .map((r) => {
+      const revenue = r.revenue == null ? null : Number(r.revenue);
+      const channelTotal = Number(r.channel_total);
+      const channelRows = Number(r.channel_rows);
+      if (channelRows === 0) return { brand_id: r.brand_id, brand_name: r.brand_name, revenue, channel_total: null, diff: null, diff_pct: null, status: 'no_channel_data' };
+      const diff = channelTotal - (revenue ?? 0);
+      const diffPct = revenue && revenue > 0 ? diff / revenue : null;
+      const ok = revenue != null && Math.abs(diffPct ?? 1) <= RECON_TOLERANCE;
+      return {
+        brand_id: r.brand_id, brand_name: r.brand_name,
+        revenue, channel_total: channelTotal, diff, diff_pct: diffPct,
+        status: ok ? 'reconciled' : 'mismatch',
+      };
+    })
+    .sort((a, b) => Math.abs(b.diff_pct ?? 0) - Math.abs(a.diff_pct ?? 0));
+
+  const reconciliation = {
+    channel_sales_vs_revenue,
+    spend: {
+      available: false,
+      note: 'Rekonsiliasi spend butuh total spend referensi independen (mis. dari sheet daily tracking) yang belum ada di ATLAS. Untuk sekarang hanya cek: baris platform spend ada tapi jumlah 0, atau spend > revenue.',
+      anomalies: clients
+        .filter((c) => c.has_platform_spend && (c.platform_spend_total === 0 || (c.revenue != null && c.platform_spend_total > c.revenue)))
+        .map((c) => ({
+          brand_id: c.brand_id, brand_name: c.brand_name,
+          platform_spend_total: c.platform_spend_total, revenue: c.revenue,
+          issue: c.platform_spend_total === 0 ? 'spend rows exist but sum to 0' : 'spend exceeds revenue (ROAS < 1)',
+        })),
+    },
+  };
+
+  return {
+    period,
+    completeness_matrix,
+    ad_accounts_unmapped,
+    campaign_classification,
+    reconciliation,
+    ingestion_log: log,
+  };
+}

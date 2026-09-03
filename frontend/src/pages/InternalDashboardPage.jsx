@@ -7,11 +7,11 @@ import ChannelPlatformTab from '../components/internalDashboard/ChannelPlatformT
 import BusinessCheckupTab from '../components/internalDashboard/BusinessCheckupTab.jsx';
 import BenchmarkTab from '../components/internalDashboard/BenchmarkTab.jsx';
 import ClientDetailTab from '../components/internalDashboard/ClientDetailTab.jsx';
+import DataQualityTab from '../components/internalDashboard/DataQualityTab.jsx';
 
 // Internal Dashboard MIL Digital — admin-only, all-clients performance.
-// S1–S7 + Input Data exist; S8 Data Quality comes later (needs
-// client_sales_channels §2.2 first).
-const TABS = ['Executive Overview', 'Business Checkup', 'Kategori Besar', 'Industry', 'Benchmarking', 'Channel & Platform', 'Client Detail', 'Input Data'];
+// All 8 view sections (S1–S8) + Input Data.
+const TABS = ['Executive Overview', 'Business Checkup', 'Kategori Besar', 'Industry', 'Benchmarking', 'Channel & Platform', 'Client Detail', 'Data Quality', 'Input Data'];
 const TAB_COMPONENTS = {
   'Executive Overview': ExecutiveOverviewTab,
   'Business Checkup': BusinessCheckupTab,
@@ -20,6 +20,7 @@ const TAB_COMPONENTS = {
   Benchmarking: BenchmarkTab,
   'Channel & Platform': ChannelPlatformTab,
   'Client Detail': ClientDetailTab,
+  'Data Quality': DataQualityTab,
   'Input Data': InputDataTab,
 };
 

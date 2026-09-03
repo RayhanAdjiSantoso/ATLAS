@@ -16,6 +16,7 @@ import {
   benchmarkQueryValidation,
   clientDetailValidation,
   clientRankingQueryValidation,
+  dataQualityQueryValidation,
 } from '../validators/internalDashboardValidators.js';
 
 // Internal Dashboard — admin-only, all-clients performance capture.
@@ -43,6 +44,8 @@ router.get('/channels', channelsQueryValidation, ctrl.getChannels);
 // S7 — Client Detail + Ranking ( /clients/ranking BEFORE /clients/:id )
 router.get('/clients/ranking', clientRankingQueryValidation, ctrl.getClientRanking);
 router.get('/clients/:id', clientDetailValidation, ctrl.getClientDetail);
+// S8 — Data Quality
+router.get('/data-quality', dataQualityQueryValidation, ctrl.getDataQuality);
 
 // §2.3 — client_monthly_metrics
 router.get('/monthly-metrics', brandQueryValidation, ctrl.listMonthlyMetrics);

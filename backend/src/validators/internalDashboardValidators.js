@@ -75,6 +75,11 @@ export const clientRankingQueryValidation = [
   query('category').optional().isIn(['retail', 'b2b_service', 'fnb', 'all']),
 ];
 
+// --- S8 Data Quality -------------------------------------------
+export const dataQualityQueryValidation = [
+  query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),
+];
+
 // --- S2 Business Checkup ----------------------------------------
 export const businessCheckupQueryValidation = [
   query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),
