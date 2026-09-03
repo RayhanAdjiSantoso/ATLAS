@@ -180,6 +180,14 @@ CREATE TABLE IF NOT EXISTS client_platform_spend_monthly (
         (ig_profile_visit IS NULL OR ig_profile_visit >= 0)
     )
 );
+-- `is_partial_month`: this row covers fewer than a full calendar month
+-- (e.g. a client that started mid-month, or an export cut short). Set by
+-- the input form. S5 Benchmarking's "exclude <25 days of history"
+-- safeguard keys off this flag; until the form captures it, it stays
+-- FALSE and the safeguard is inert.
+ALTER TABLE client_platform_spend_monthly
+  ADD COLUMN IF NOT EXISTS is_partial_month BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE INDEX IF NOT EXISTS ix_cps_brand_period ON client_platform_spend_monthly (brand_id, period);
 CREATE INDEX IF NOT EXISTS ix_cps_period       ON client_platform_spend_monthly (period);
 CREATE INDEX IF NOT EXISTS ix_cps_platform     ON client_platform_spend_monthly (platform);
