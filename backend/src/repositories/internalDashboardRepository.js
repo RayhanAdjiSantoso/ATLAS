@@ -29,7 +29,7 @@ export async function listClients(db = pool) {
 const CMM_SELECT = `
   SELECT client_monthly_metric_id AS id, brand_id,
          to_char(period, 'YYYY-MM') AS period,
-         revenue, transaksi, qty_sold, target_sales,
+         revenue, transaksi, qty_sold, target_sales, is_partial_month,
          created_by, created_at, updated_at
   FROM client_monthly_metrics
 `;
@@ -42,15 +42,16 @@ export async function listMonthlyMetrics(brandId, db = pool) {
 export async function upsertMonthlyMetric(v, db = pool) {
   const { rows } = await db.query(
     `INSERT INTO client_monthly_metrics
-       (brand_id, period, revenue, transaksi, qty_sold, target_sales, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (brand_id, period, revenue, transaksi, qty_sold, target_sales, is_partial_month, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (brand_id, period) DO UPDATE SET
-       revenue      = EXCLUDED.revenue,
-       transaksi    = EXCLUDED.transaksi,
-       qty_sold     = EXCLUDED.qty_sold,
-       target_sales = EXCLUDED.target_sales
+       revenue          = EXCLUDED.revenue,
+       transaksi        = EXCLUDED.transaksi,
+       qty_sold         = EXCLUDED.qty_sold,
+       target_sales     = EXCLUDED.target_sales,
+       is_partial_month = EXCLUDED.is_partial_month
      RETURNING client_monthly_metric_id AS id, (xmax::text = '0') AS was_insert`,
-    [v.brandId, v.period, v.revenue, v.transaksi, v.qtySold, v.targetSales, v.userId],
+    [v.brandId, v.period, v.revenue, v.transaksi, v.qtySold, v.targetSales, v.isPartialMonth ?? false, v.userId],
   );
   return rows[0];
 }
@@ -216,7 +217,7 @@ export async function listBrandsForOverview({ status, kategoriBesar }, db = pool
 
 export async function monthlyRevenueByBrand(brandIds, startPeriod, endPeriod, db = pool) {
   const { rows } = await db.query(
-    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, revenue, target_sales
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, revenue, target_sales, is_partial_month
      FROM client_monthly_metrics
      WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
     [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
@@ -266,7 +267,8 @@ export async function monthlyAdTotalsByBrand(brandIds, startPeriod, endPeriod, d
             SUM(amount_spent) AS spend, SUM(impressions) AS impressions,
             SUM(link_clicks) AS link_clicks, SUM(purchase) AS purchase,
             SUM(purchase_value) AS purchase_value,
-            SUM(view_content) AS view_content, SUM(atc) AS atc
+            SUM(view_content) AS view_content, SUM(atc) AS atc,
+            bool_or(is_partial_month) AS any_partial_spend
      FROM client_platform_spend_monthly
      WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date
      GROUP BY brand_id, period`,
@@ -343,19 +345,23 @@ export async function allClientSalesChannels(db = pool) {
   return rows;
 }
 
-// Brands whose Meta spend can't be traced to an ad account: they have
-// meta_* platform spend somewhere but zero brand_ad_accounts rows.
-export async function metaSpendWithoutAdAccounts(db = pool) {
+// Brands with Meta spend but incomplete ad-account mapping. Two tiers:
+//   hard — no bm_id at all: spend not tied to any Business Manager.
+//   soft — has a bm_id, but no brand_ad_accounts rows yet (everyone, for
+//          now — brand_ad_accounts is unpopulated; the sheet has only an
+//          ad-account COUNT, never the act_ IDs).
+export async function metaSpendAdAccountGaps(db = pool) {
   const { rows } = await db.query(
     `SELECT b.brand_id, b.brand_name, b.bm_id,
             SUM(cps.amount_spent) AS meta_spend_total,
-            count(DISTINCT cps.period) AS months
+            count(DISTINCT cps.period) AS months,
+            (b.bm_id IS NULL) AS hard
      FROM client_platform_spend_monthly cps
      JOIN brands b ON b.brand_id = cps.brand_id
      WHERE cps.platform::text LIKE 'meta\\_%'
        AND NOT EXISTS (SELECT 1 FROM brand_ad_accounts a WHERE a.brand_id = b.brand_id)
      GROUP BY b.brand_id, b.brand_name, b.bm_id
-     ORDER BY meta_spend_total DESC`,
+     ORDER BY (b.bm_id IS NULL) DESC, meta_spend_total DESC`,
   );
   return rows;
 }

@@ -70,10 +70,17 @@ export default function BenchmarkTab() {
             </p>
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.5rem', display: 'flex', gap: '0.4rem', alignItems: 'flex-start' }}>
               <Info size={13} style={{ marginTop: 2, flexShrink: 0 }} />
-              Tanpa ambang minimum peer (N ditampilkan apa adanya). Pengaman <em>exclude tenure &lt;2 bulan</em> dan <em>exclude histori &lt;25 hari</em> BELUM aktif —
-              butuh join_date dan jumlah-hari-per-bulan yang belum tersedia. Trim P1–P99 dorman untuk cohort kecil.
+              Tanpa ambang minimum peer (N ditampilkan apa adanya). Baris client-bulan yang ditandai <em>parsial</em> dikecualikan penuh dari agregat &amp; scorecard.
+              Pengaman <em>exclude tenure &lt;2 bulan</em> belum aktif (join_date baru 40/139). Trim P1–P99 dorman untuk cohort kecil.
             </p>
           </div>
+
+          {data.client.client_period_partial && (
+            <div className="alert alert-error">
+              <strong>{data.client.brand_name} — {data.period} ditandai bulan parsial.</strong> Scorecard vs peer & Efficiency Index untuk bulan ini
+              tidak ditampilkan (perbandingan dengan bulan penuh menyesatkan). Data mentahnya tetap ada di Client Detail.
+            </div>
+          )}
 
           <div className="card">
             <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Market Movement Indicator</h3>
@@ -89,10 +96,12 @@ export default function BenchmarkTab() {
             <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Posisi pada Sebaran Peer</h3>
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
               Blended ROAS = revenue ÷ ad spend (definisi sama dengan Executive Overview, bukan atribusi platform).
+              {data.client.client_period_partial && ' Marker client disembunyikan — bulan parsial.'}
             </p>
             {data.distribution.map((d) => <PeerDistributionRow key={d.metric} d={d} />)}
           </div>
 
+          {!data.client.client_period_partial && (
           <div className="card">
             <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Efficiency Index</h3>
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>{data.efficiency_index.note}</p>
@@ -123,6 +132,7 @@ export default function BenchmarkTab() {
               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}> (100 = setara median peer)</span>
             </p>
           </div>
+          )}
 
           <PeerBandChart data={data.cpm_trend} title="Tren CPM & Sebaran CPM Peer — 13 bulan" clientName={data.client.brand_name} />
         </>

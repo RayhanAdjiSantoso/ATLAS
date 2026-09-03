@@ -53,6 +53,7 @@ export async function saveMonthlyMetric(input) {
       transaksi: input.transaksi ?? null,
       qtySold: input.qtySold ?? null,
       targetSales: input.targetSales ?? null,
+      isPartialMonth: input.isPartialMonth ?? false,
       userId: input.userId,
     }, db);
 
@@ -936,6 +937,13 @@ export async function getChannels(params) {
 // set. (Same as S1, that "no data now" bucket also catches a client whose
 // current month simply hasn't been input yet — no join_date to tell them
 // apart.)
+//
+// KNOWN GAP (revisit when real partial-month data triggers it): S2 does
+// NOT exclude is_partial_month rows the way S5 does. A partial month
+// compared to a full month can mis-classify a client as "declining" in
+// the waterfall / movement matrix. S1 is safe (portfolio totals only);
+// S2 is per-client so it can bite. Left as-is until a real case appears
+// — same "revisit on a concrete case" policy as the S6 coverage notes.
 
 export async function getBusinessCheckup(params) {
   const period = params.period;
@@ -1213,14 +1221,27 @@ export async function getBenchmark(params) {
   ]);
 
   const revBy = new Map();
-  for (const r of revRows) if (r.revenue != null) revBy.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
+  const partialBy = new Set(); // `${brandId}|${YYYY-MM}` flagged partial
+  for (const r of revRows) {
+    if (r.revenue != null) revBy.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
+    if (r.is_partial_month) partialBy.add(`${r.brand_id}|${r.period}`);
+  }
   const adBy = new Map();
-  for (const r of adRows) adBy.set(`${r.brand_id}|${r.period}`, adRowObj(r));
-  const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
-  const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
+  for (const r of adRows) {
+    adBy.set(`${r.brand_id}|${r.period}`, adRowObj(r));
+    if (r.any_partial_spend) partialBy.add(`${r.brand_id}|${r.period}`);
+  }
+  const isPartial = (id, p) => partialBy.has(`${id}|${p}`);
+  const revRaw = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
+  const adRaw = (id, p) => adBy.get(`${id}|${p}`) || null;
+  // benchmark accessors: a partial client-month contributes NOTHING to S5
+  // (breakdown §4 + user direction) — no peer average/median, no scorecard.
+  const revAt = (id, p) => (isPartial(id, p) ? null : revRaw(id, p));
+  const adAt = (id, p) => (isPartial(id, p) ? null : adRaw(id, p));
 
   const metricsFor = (id, p) => adMetrics(revAt(id, p), adAt(id, p));
 
+  const clientPeriodPartial = isPartial(clientId, period);
   const clientMetrics = metricsFor(clientId, period);
   const peerIds = cohortIds.filter((id) => id !== clientId);
 
@@ -1281,6 +1302,9 @@ export async function getBenchmark(params) {
       kategori_besar: clientMeta.kategori_besar || null,
       metrics: clientMetrics,
       growth: clientGrowth,
+      // period flagged partial (business-data or platform-spend row) —
+      // scorecard/comparison suppressed; raw data still shows in S7.
+      client_period_partial: clientPeriodPartial,
     },
     peer_group: {
       sub_industry: subIndustry,
@@ -1292,8 +1316,8 @@ export async function getBenchmark(params) {
     },
     safeguards: {
       p1_p99_trim: { applied: true, note: `dormant di cohort < ${OUTLIER_TRIM_MIN_N} nilai — untuk data bulanan sub-industry praktis tidak pernah aktif` },
-      exclude_history_lt_25_days: { applied: false, reason: 'form input bulanan tidak mencatat jumlah hari data per bulan' },
-      exclude_tenure_lt_2_months: { applied: false, reason: 'join_date belum ada — pending, tanpa proxy' },
+      exclude_history_lt_25_days: { applied: true, via: 'is_partial_month', note: 'baris client-month yang ditandai parsial (business-data atau platform-spend) di-exclude penuh dari agregat peer & scorecard' },
+      exclude_tenure_lt_2_months: { applied: false, reason: 'join_date baru terisi 40/139 — belum diaktifkan (flag layer S1/S2 dulu)' },
       min_n_gate: { applied: false, note: 'sengaja tidak ada; N ditampilkan transparan' },
     },
     market_movement: {
@@ -1352,14 +1376,24 @@ export async function getClientDetail(params) {
 
   const revBy = new Map();
   const targetBy = new Map();
+  const partialBy = new Set();
   for (const r of revRows) {
     if (r.revenue != null) revBy.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
     if (r.target_sales != null) targetBy.set(`${r.brand_id}|${r.period}`, Number(r.target_sales));
+    if (r.is_partial_month) partialBy.add(`${r.brand_id}|${r.period}`);
   }
   const adBy = new Map();
-  for (const r of adRows) adBy.set(`${r.brand_id}|${r.period}`, adRowObj(r));
+  for (const r of adRows) {
+    adBy.set(`${r.brand_id}|${r.period}`, adRowObj(r));
+    if (r.any_partial_spend) partialBy.add(`${r.brand_id}|${r.period}`);
+  }
+  const isPartial = (id, p) => partialBy.has(`${id}|${p}`);
+  // Raw accessors — trend / headline / funnel show partial data normally
+  // (user: "Data mentahnya sendiri tetap tampil normal di S7").
   const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
   const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
+  // Scorecard-only: exclude partial client-months from the peer comparison.
+  const metricsForScorecard = (id, p) => (isPartial(id, p) ? null : adMetrics(revAt(id, p), adAt(id, p)));
 
   // --- 13-month trend for this client ---
   const trend = months.map((mo) => {
@@ -1371,6 +1405,7 @@ export async function getClientDetail(params) {
       revenue: rev,
       spend,
       roas: rev != null && spend != null && spend > 0 ? rev / spend : null,
+      is_partial_month: isPartial(clientId, mo),
     };
   });
 
@@ -1379,8 +1414,9 @@ export async function getClientDetail(params) {
     ? {
       sub_industry: subIndustry,
       peer_n_total: cohortIds.length,
-      peer_n_with_data: cohortIds.filter((id) => adAt(id, period)).length,
-      ...peerDistribution(cohortIds, clientId, (id) => adMetrics(revAt(id, period), adAt(id, period))),
+      peer_n_with_data: cohortIds.filter((id) => metricsForScorecard(id, period)).length,
+      client_period_partial: isPartial(clientId, period),
+      ...peerDistribution(cohortIds, clientId, (id) => metricsForScorecard(id, period)),
     }
     : { sub_industry: null, note: 'Client belum punya sub-industry — scorecard vs peer tidak tersedia.' };
 
@@ -1549,7 +1585,7 @@ export async function getDataQuality(params) {
   const [snapshot, csc, unmappedAcc, recon, log] = await Promise.all([
     repo.dataQualitySnapshot(period),
     repo.allClientSalesChannels(),
-    repo.metaSpendWithoutAdAccounts(),
+    repo.metaSpendAdAccountGaps(),
     repo.channelReconciliation(period),
     repo.listIngestionLog({ limit: 40 }),
   ]);
@@ -1605,13 +1641,15 @@ export async function getDataQuality(params) {
     note: 'is_used null = channel belum dinilai (belum ada di client_sales_channels), bukan "tidak dipakai".',
   };
 
-  // --- 2. Ad account belum ter-mapping ---------------------------
+  // --- 2. Ad account belum ter-mapping (2 tier) ------------------
+  const accRow = (r) => ({
+    brand_id: r.brand_id, brand_name: r.brand_name, bm_id: r.bm_id,
+    meta_spend_total: Number(r.meta_spend_total), months: Number(r.months),
+  });
   const ad_accounts_unmapped = {
-    clients: unmappedAcc.map((r) => ({
-      brand_id: r.brand_id, brand_name: r.brand_name, bm_id: r.bm_id,
-      meta_spend_total: Number(r.meta_spend_total), months: Number(r.months),
-    })),
-    note: 'Client punya spend Meta (meta_*) tapi 0 baris di brand_ad_accounts — spend-nya tidak bisa ditelusuri ke akun iklan tertentu. brand_ad_accounts belum diisi (sheet cuma punya angka "# Ad account", bukan daftar ID).',
+    hard: unmappedAcc.filter((r) => r.hard).map(accRow),
+    soft: unmappedAcc.filter((r) => !r.hard).map(accRow),
+    note: 'HARD = punya spend Meta tapi bm_id kosong → spend tidak terikat ke Business Manager mana pun. SOFT = bm_id ada tapi 0 baris brand_ad_accounts → daftar akun iklan belum diisi (semua client sekarang; sheet cuma punya angka "# Ad account", bukan act_ ID). brand_ad_accounts akan diisi dari input manual / CONFIG.ACCOUNTS proyek automation.',
   };
 
   // --- 3. Campaign belum terklasifikasi -------------------------

@@ -34,6 +34,7 @@ export const saveMonthlyMetric = asyncHandler(async (req, res) => {
     transaksi: num(b.transaksi),
     qtySold: num(b.qty_sold),
     targetSales: num(b.target_sales),
+    isPartialMonth: b.is_partial_month === true || b.is_partial_month === 'true',
     pic: b.pic?.trim() || null,
     userId: req.user.userId,
   });
