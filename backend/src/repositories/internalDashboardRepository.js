@@ -245,6 +245,23 @@ export async function channelSalesGrid(brandIds, startPeriod, endPeriod, db = po
   return rows;
 }
 
+// S5 — per-brand / per-month ad totals (summed across all platforms). Raw
+// columns only; every ratio (CPM/CPC/CTR/ROAS/CPP/ad-cost-ratio) is
+// recomputed in the service from these sums.
+export async function monthlyAdTotalsByBrand(brandIds, startPeriod, endPeriod, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period,
+            SUM(amount_spent) AS spend, SUM(impressions) AS impressions,
+            SUM(link_clicks) AS link_clicks, SUM(purchase) AS purchase,
+            SUM(purchase_value) AS purchase_value
+     FROM client_platform_spend_monthly
+     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date
+     GROUP BY brand_id, period`,
+    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
 // S6 — per-platform ad metrics grid (RAW summable columns only; ratios are
 // recomputed in the service from these sums, never read from storage).
 export async function platformMetricsGrid(brandIds, startPeriod, endPeriod, db = pool) {

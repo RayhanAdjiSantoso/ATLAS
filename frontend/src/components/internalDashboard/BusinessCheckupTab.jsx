@@ -100,7 +100,11 @@ export default function BusinessCheckupTab() {
           </p>
 
           <MultiLineTrend data={indexData} series={['Sales (index)', 'Ad Spend (index)']} title="Index Portfolio (base 100)" />
-          <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '-0.75rem 0 0' }}>{data.portfolio_index.base_note}</p>
+          <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '-0.75rem 0 0' }}>
+            Index mencakup seluruh client aktif per bulan, termasuk yang baru bergabung — bukan cohort tetap.
+            Untuk melihat bentuk musiman portfolio, bukan angka pertumbuhan like-for-like.
+            <br />{data.portfolio_index.base_note}
+          </p>
 
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <h3 style={{ fontSize: '1rem', padding: '1rem 1.5rem 0' }}>Actual vs Target per Kategori</h3>

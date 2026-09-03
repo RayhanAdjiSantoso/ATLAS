@@ -137,6 +137,16 @@ export const getIndustries = asyncHandler(async (req, res) => {
   }));
 });
 
+// --- S5 Benchmarking ----------------------------------------
+export const getBenchmark = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getBenchmark({
+    client_id: req.query.client_id,
+    period: req.query.period,
+    compare: req.query.compare,
+  }));
+});
+
 // --- S2 Business Checkup -------------------------------------
 export const getBusinessCheckup = asyncHandler(async (req, res) => {
   validate(req);

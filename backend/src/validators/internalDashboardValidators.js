@@ -53,6 +53,13 @@ export const industriesQueryValidation = [
   query('level').optional().isIn(['industry', 'sub_industry']),
 ];
 
+// --- S5 Benchmarking -------------------------------------------
+export const benchmarkQueryValidation = [
+  query('client_id').isInt({ min: 1 }).withMessage('client_id wajib disertakan'),
+  query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),
+  query('compare').optional().isIn(['mom', 'yoy']),
+];
+
 // --- S2 Business Checkup ----------------------------------------
 export const businessCheckupQueryValidation = [
   query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),

@@ -233,12 +233,31 @@ export function buildCohort(brandIds, valueAt, currentKey, priorKey) {
 
 const growth = (cur, prior) => (prior != null && prior > 0 ? cur / prior - 1 : null);
 const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-const median = (xs) => {
+const median = (xs) => percentile(xs, 50);
+// Linear-interpolated percentile (p in 0..100). Returns null for empty input.
+function percentile(xs, p) {
   if (!xs.length) return null;
   const s = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-};
+  if (s.length === 1) return s[0];
+  const idx = (p / 100) * (s.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (idx - lo);
+}
+// % of `xs` at or below `x` (0..1).
+const percentileRank = (xs, x) => (xs.length ? xs.filter((v) => v <= x).length / xs.length : null);
+// Drop values outside [P1, P99] of the sample. DORMANT below 20 points:
+// with a handful of values, interpolated P1/P99 land between the extremes
+// and the true min/max, so trimming would wrongly discard legitimate
+// endpoints. Sub-industry MONTHLY cohorts are always small, so in practice
+// this only bites once the same routine is pointed at daily-level data.
+const OUTLIER_TRIM_MIN_N = 20;
+function trimP1P99(xs) {
+  if (xs.length < OUTLIER_TRIM_MIN_N) return [...xs];
+  const lo = percentile(xs, 1);
+  const hi = percentile(xs, 99);
+  return xs.filter((v) => v >= lo && v <= hi);
+}
 const bucketOf = (g) => (GROWTH_BUCKETS.find((b) => g >= b.min && g < b.max) ?? GROWTH_BUCKETS[GROWTH_BUCKETS.length - 1]).label;
 
 // Shared loader — the per-brand / per-month revenue + spend + target grid
@@ -988,5 +1007,205 @@ export async function getBusinessCheckup(params) {
     top_movers,
     portfolio_index,
     actual_vs_target,
+  };
+}
+
+// =====================================================================
+// S5 — Benchmarking
+// =====================================================================
+// Peer group = every client (any status) sharing the selected client's
+// sub_industry — the S5 peer level (breakdown §4). No minimum-n gate; N
+// is surfaced. Every metric is recomputed per-client from raw monthly
+// sums. "Blended ROAS" here is revenue / spend (SAME definition as S1),
+// NOT the platform-attributed purchase_value/spend used in S6.
+//
+// SAFEGUARDS (breakdown §4):
+//   - P1–P99 outlier trim on cohort metric values ......... APPLIED
+//   - exclude data with < 25 days of history .............. NOT APPLIED
+//       (the monthly input form records no per-month day count)
+//   - exclude clients with < 2 months of tenure ........... NOT APPLIED
+//       (join_date does not exist yet — pending, no proxy)
+
+const BENCHMARK_METRICS = [
+  { key: 'cpm', label: 'CPM', lowerBetter: true },
+  { key: 'cpc', label: 'CPC', lowerBetter: true },
+  { key: 'ctr', label: 'CTR', lowerBetter: false },
+  { key: 'blended_roas', label: 'Blended ROAS', lowerBetter: false },
+  { key: 'cpp', label: 'Cost per Purchase', lowerBetter: true },
+  { key: 'ad_cost_ratio', label: 'Ad Cost Ratio', lowerBetter: true },
+];
+
+export async function getBenchmark(params) {
+  const clientId = Number(params.client_id);
+  const period = params.period;
+  const compare = params.compare === 'yoy' ? 'yoy' : 'mom';
+
+  const client = await brandService.getBrandById(clientId);
+  if (!client) throw new AppError('Client tidak ditemukan', 404);
+
+  const allBrands = await repo.listBrandsForOverview({ status: 'all', kategoriBesar: null });
+  const clientMeta = allBrands.find((b) => b.brand_id === clientId);
+  const subIndustry = clientMeta?.sub_industry || null;
+  if (!subIndustry) {
+    throw new AppError('Client belum punya sub-industry di master — tidak bisa di-benchmark.', 422);
+  }
+
+  const cohort = allBrands.filter((b) => b.sub_industry === subIndustry);
+  const cohortIds = cohort.map((b) => b.brand_id);
+  const brandById = new Map(cohort.map((b) => [b.brand_id, b]));
+
+  const comparePeriod = shiftMonth(period, compare === 'yoy' ? -12 : -1);
+  const trendStart = shiftMonth(period, -(S1_CONFIG.trendWindowMonths - 1));
+  const windowStart = comparePeriod < trendStart ? comparePeriod : trendStart;
+
+  const [revRows, adRows] = await Promise.all([
+    repo.monthlyRevenueByBrand(cohortIds, windowStart, period),
+    repo.monthlyAdTotalsByBrand(cohortIds, windowStart, period),
+  ]);
+
+  const revBy = new Map();
+  for (const r of revRows) if (r.revenue != null) revBy.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
+  const adBy = new Map();
+  for (const r of adRows) {
+    adBy.set(`${r.brand_id}|${r.period}`, {
+      spend: Number(r.spend || 0),
+      impressions: Number(r.impressions || 0),
+      link_clicks: Number(r.link_clicks || 0),
+      purchase: Number(r.purchase || 0),
+      purchase_value: Number(r.purchase_value || 0),
+    });
+  }
+  const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
+  const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
+
+  const metricsFor = (id, p) => {
+    const ad = adAt(id, p);
+    if (!ad) return null;
+    const rev = revAt(id, p);
+    const s = ad.spend;
+    return {
+      cpm: ad.impressions > 0 ? (s / ad.impressions) * 1000 : null,
+      cpc: ad.link_clicks > 0 ? s / ad.link_clicks : null,
+      ctr: ad.impressions > 0 ? ad.link_clicks / ad.impressions : null,
+      blended_roas: rev != null && s > 0 ? rev / s : null, // revenue / spend — same as S1
+      cpp: ad.purchase > 0 ? s / ad.purchase : null,
+      ad_cost_ratio: rev != null && rev > 0 ? s / rev : null,
+    };
+  };
+
+  const clientMetrics = metricsFor(clientId, period);
+  const peerIds = cohortIds.filter((id) => id !== clientId);
+
+  // --- distribution per metric (P1–P99 trim, then P25/median/P75) ---
+  const distribution = BENCHMARK_METRICS.map((m) => {
+    const raw = cohortIds.map((id) => metricsFor(id, period)?.[m.key]).filter((v) => v != null);
+    const vals = trimP1P99(raw);
+    const med = median(vals);
+    const cv = clientMetrics?.[m.key] ?? null;
+    let effIndex = null;
+    if (cv != null && med != null && med > 0 && cv > 0) {
+      effIndex = (m.lowerBetter ? med / cv : cv / med) * 100; // >100 always = better than peer median
+    }
+    return {
+      metric: m.key,
+      label: m.label,
+      lower_better: m.lowerBetter,
+      n: vals.length,
+      p25: percentile(vals, 25),
+      median: med,
+      p75: percentile(vals, 75),
+      client_value: cv,
+      client_percentile: cv != null && vals.length ? percentileRank(vals, cv) : null,
+      efficiency_index: effIndex,
+    };
+  });
+  const idxVals = distribution.map((d) => d.efficiency_index).filter((v) => v != null && v > 0);
+  const compositeIndex = idxVals.length
+    ? idxVals.reduce((a, b) => a * b, 1) ** (1 / idxVals.length)
+    : null;
+
+  // --- market movement (like-for-like peer growth, client excluded) ---
+  const peerCohort = buildCohort(peerIds, revAt, period, comparePeriod);
+  const peerGrowths = peerCohort.both
+    .map((c) => (c.prior > 0 ? c.current / c.prior - 1 : null))
+    .filter((v) => v != null);
+  const cCur = revAt(clientId, period);
+  const cPri = revAt(clientId, comparePeriod);
+  const clientGrowth = cCur != null && cPri != null && cPri > 0 ? cCur / cPri - 1 : null;
+
+  const peerMed = median(peerGrowths);
+  const peersUp = peerGrowths.filter((g) => g > 0).length;
+  const peersDown = peerGrowths.filter((g) => g < 0).length;
+  let verdict;
+  if (!peerGrowths.length) {
+    verdict = 'Belum cukup data peer untuk menilai pergerakan pasar sub-industry ini.';
+  } else {
+    const dir = peerMed > 0.02 ? `tumbuh (median ${(peerMed * 100).toFixed(1)}%)`
+      : peerMed < -0.02 ? `turun (median ${(peerMed * 100).toFixed(1)}%)`
+        : 'relatif flat';
+    const share = `${peersUp} dari ${peerGrowths.length} peer naik, ${peersDown} turun`;
+    const rel = clientGrowth == null ? ''
+      : clientGrowth > peerMed ? ` Growth client (${(clientGrowth * 100).toFixed(1)}%) di ATAS median peer.`
+        : clientGrowth < peerMed ? ` Growth client (${(clientGrowth * 100).toFixed(1)}%) di BAWAH median peer.`
+          : ` Growth client setara median peer.`;
+    verdict = `Peer group sub-industry "${subIndustry}" secara umum ${dir}. ${share}.${rel}`;
+  }
+
+  // --- CPM trend + peer CPM band (13 months, client excluded from band) ---
+  const months = [];
+  for (let i = -(S1_CONFIG.trendWindowMonths - 1); i <= 0; i += 1) months.push(shiftMonth(period, i));
+  const cpm_trend = months.map((mo) => {
+    const peerCpms = trimP1P99(peerIds.map((id) => metricsFor(id, mo)?.cpm).filter((v) => v != null));
+    return {
+      period: mo,
+      client_cpm: metricsFor(clientId, mo)?.cpm ?? null,
+      peer_p25: percentile(peerCpms, 25),
+      peer_median: median(peerCpms),
+      peer_p75: percentile(peerCpms, 75),
+      peer_n: peerCpms.length,
+    };
+  });
+
+  return {
+    period,
+    compare_period: comparePeriod,
+    client: {
+      brand_id: clientId,
+      brand_name: client.brand_name,
+      sub_industry: subIndustry,
+      industry: clientMeta.industry || null,
+      kategori_besar: clientMeta.kategori_besar || null,
+      metrics: clientMetrics,
+      growth: clientGrowth,
+    },
+    peer_group: {
+      sub_industry: subIndustry,
+      n_total: cohortIds.length,
+      n_with_ad_data: cohortIds.filter((id) => adAt(id, period)).length,
+      peers: cohort
+        .filter((b) => b.brand_id !== clientId)
+        .map((b) => ({ brand_id: b.brand_id, brand_name: b.brand_name, status: b.status })),
+    },
+    safeguards: {
+      p1_p99_trim: { applied: true, note: `dormant di cohort < ${OUTLIER_TRIM_MIN_N} nilai — untuk data bulanan sub-industry praktis tidak pernah aktif` },
+      exclude_history_lt_25_days: { applied: false, reason: 'form input bulanan tidak mencatat jumlah hari data per bulan' },
+      exclude_tenure_lt_2_months: { applied: false, reason: 'join_date belum ada — pending, tanpa proxy' },
+      min_n_gate: { applied: false, note: 'sengaja tidak ada; N ditampilkan transparan' },
+    },
+    market_movement: {
+      peer_median_growth: peerMed,
+      peers_up: peersUp,
+      peers_down: peersDown,
+      peers_measured: peerGrowths.length,
+      client_growth: clientGrowth,
+      verdict,
+    },
+    distribution,
+    efficiency_index: {
+      per_metric: distribution.map((d) => ({ metric: d.metric, label: d.label, index: d.efficiency_index })),
+      composite: compositeIndex,
+      note: 'Index 100 = setara median peer. Untuk metrik "lower is better" (CPM/CPC/CPP/Ad Cost Ratio) arah dibalik supaya >100 selalu berarti lebih efisien. Composite = rata-rata geometrik index antar-metrik yang tersedia.',
+    },
+    cpm_trend,
   };
 }
