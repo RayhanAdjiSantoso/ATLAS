@@ -43,7 +43,10 @@ export default function CategoryComparisonTab() {
             {data.categories.map((c) => (
               <KpiCard key={c.kategori_besar} title={c.kategori_besar} value={c.aggregate.sales} type="currency"
                 growth={c.aggregate.delta_pct}
-                note={`${c.aggregate.client_count} client · ROAS ${c.aggregate.blended_roas?.toFixed(2) ?? '-'} · share ${pct(c.composition.share_now)} (${cmpLabel} ${c.composition.share_delta >= 0 ? '+' : ''}${pct(c.composition.share_delta)})`} />
+                note={`${c.aggregate.client_count} client · ROAS ${c.aggregate.blended_roas?.toFixed(2) ?? '-'}`
+                  + `${c.aggregate.spend_coverage.of > 0 && c.aggregate.spend_coverage.value < c.aggregate.spend_coverage.of
+                    ? ` (spend ${c.aggregate.spend_coverage.value}/${c.aggregate.spend_coverage.of})` : ''}`
+                  + ` · share ${pct(c.composition.share_now)} (${cmpLabel} ${c.composition.share_delta >= 0 ? '+' : ''}${pct(c.composition.share_delta)})`} />
             ))}
           </div>
 

@@ -393,6 +393,13 @@ export async function getOverview(params) {
   const roasCmp = compare !== 'target' && salesCmp != null && spendCmp != null && spendCmp > 0
     ? salesCmp / spendCmp : null;
 
+  // Spend coverage: of the clients with sales this period, how many also
+  // have ad-spend entered. blended_roas / total_spend are only
+  // representative when this is close to "of". Data lands gradually across
+  // 33+ clients, so this stays useful indefinitely.
+  const withSales = brandIds.filter((id) => revAt(id, period) != null);
+  const withSalesAndSpend = withSales.filter((id) => spendAt(id, period) != null);
+
   const kpi = {
     total_sales: { value: salesNow, compare: salesCmp, delta_pct: deltaPct(revAt) },
     total_spend: { value: spendNow, compare: spendCmp, delta_pct: compare === 'target' ? null : deltaPct(spendAt) },
@@ -402,7 +409,8 @@ export async function getOverview(params) {
       delta_pct: roasNow != null && roasCmp != null && roasCmp !== 0 ? roasNow / roasCmp - 1 : null,
     },
     active_clients: { value: brands.filter((b) => b.status === 'active').length },
-    clients_with_data: { value: brandIds.filter((id) => revAt(id, period) != null).length, of: brandIds.length },
+    clients_with_data: { value: withSales.length, of: brandIds.length },
+    spend_coverage: { value: withSalesAndSpend.length, of: withSales.length },
   };
 
   // ---- category composition (period revenue by kategori_besar) ----
@@ -570,9 +578,15 @@ function groupBlock(ids, grid, period, comparePeriod, compare, basis) {
     ? withRev.map((f) => f.growth).filter((g) => g != null)
     : lfl.map((f) => f.growth).filter((g) => g != null);
 
+  // spend coverage — same pattern as S1's spend_coverage: of the clients
+  // with revenue here, how many also have spend. blended_roas (sales/spend)
+  // is only representative when these are close.
+  const withRevAndSpend = withRev.filter((f) => f.spend != null);
+
   return {
     n_clients: ids.length,
     n_with_data: withRev.length,
+    n_with_spend: withRevAndSpend.length,
     sales,
     spend: spendVals.length ? spend : null,
     blended_roas: spendVals.length && spend > 0 ? sales / spend : null,
@@ -621,6 +635,7 @@ export async function getCategories(params) {
         spend: block.spend,
         blended_roas: block.blended_roas,
         client_count: block.n_with_data,
+        spend_coverage: { value: block.n_with_spend, of: block.n_with_data },
         delta_pct: block.aggregate_growth,
       },
       median: {
@@ -688,6 +703,7 @@ export async function getIndustries(params) {
       kategori_besar: sample.kategori_besar || null,
       n_clients: block.n_clients,        // transparent N (breakdown §4: no min-n gate)
       n_with_data: block.n_with_data,
+      n_with_spend: block.n_with_spend,  // spend coverage for blended_roas
       sales: block.sales,
       spend: block.spend,
       blended_roas: block.blended_roas,
