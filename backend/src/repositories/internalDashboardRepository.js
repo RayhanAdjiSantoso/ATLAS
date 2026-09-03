@@ -246,6 +246,17 @@ export async function channelSalesGrid(brandIds, startPeriod, endPeriod, db = po
   return rows;
 }
 
+// S6 — free-text ("other") channels not in the sales_channel enum (§ migration 010).
+export async function channelSalesOtherGrid(brandIds, startPeriod, endPeriod, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, channel_label, sales_amount AS sales
+     FROM client_channel_sales_other
+     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
+    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
 // S5 — per-brand / per-month ad totals (summed across all platforms). Raw
 // columns only; every ratio (CPM/CPC/CTR/ROAS/CPP/ad-cost-ratio) is
 // recomputed in the service from these sums.

@@ -739,42 +739,59 @@ export async function getChannels(params) {
   const trendStart = shiftMonth(period, -(S1_CONFIG.trendWindowMonths - 1));
   const windowStart = comparePeriod < trendStart ? comparePeriod : trendStart;
 
-  const [chanRows, platRows] = await Promise.all([
+  const [chanRows, chanOtherRows, platRows] = await Promise.all([
     repo.channelSalesGrid(brandIds, windowStart, period),
+    repo.channelSalesOtherGrid(brandIds, windowStart, period),
     repo.platformMetricsGrid(brandIds, windowStart, period),
   ]);
 
   const months = [];
   for (let i = -(S1_CONFIG.trendWindowMonths - 1); i <= 0; i += 1) months.push(shiftMonth(period, i));
 
-  // --- sales channels ---------------------------------------------
-  // chanSales[`${period}|${channel}`] = { total, brands:Set }
+  // --- sales channels (4 canonical + free-text "other", one flat list) ---
+  // chanAgg[`${period}|${key}`] = { total, brands:Set, label, isOther }
   const chanAgg = new Map();
-  for (const r of chanRows) {
-    if (r.sales == null) continue;
-    const k = `${r.period}|${r.channel}`;
-    if (!chanAgg.has(k)) chanAgg.set(k, { total: 0, brands: new Set() });
+  const otherLabels = new Set();
+  const addChan = (period_, key, label, isOther, sales, brandId) => {
+    if (sales == null) return;
+    const k = `${period_}|${key}`;
+    if (!chanAgg.has(k)) chanAgg.set(k, { total: 0, brands: new Set(), label, isOther });
     const e = chanAgg.get(k);
-    e.total += Number(r.sales);
-    e.brands.add(r.brand_id);
+    e.total += Number(sales);
+    e.brands.add(brandId);
+  };
+  for (const r of chanRows) addChan(r.period, r.channel, r.channel, false, r.sales, r.brand_id);
+  for (const r of chanOtherRows) {
+    addChan(r.period, `other:${r.channel_label}`, r.channel_label, true, r.sales, r.brand_id);
+    otherLabels.add(r.channel_label);
   }
-  const chanTotalAt = (p) => SALES_CHANNELS.reduce((sum, ch) => sum + (chanAgg.get(`${p}|${ch}`)?.total || 0), 0);
-  const totalNow = chanTotalAt(period);
-  const totalCmp = chanTotalAt(comparePeriod);
 
-  const sales_channels = SALES_CHANNELS.map((ch) => {
-    const now = chanAgg.get(`${period}|${ch}`);
-    const cmp = chanAgg.get(`${comparePeriod}|${ch}`);
-    const sales = now?.total ?? null;
-    const cmpSales = cmp?.total ?? null;
-    return {
-      channel: ch,
-      sales,
-      share_pct: sales != null && totalNow > 0 ? sales / totalNow : null,
-      delta_pct: sales != null && cmpSales != null && cmpSales > 0 ? sales / cmpSales - 1 : null,
-      client_count: now?.brands.size ?? 0,
-    };
-  });
+  const channelKeys = [
+    ...SALES_CHANNELS,
+    ...[...otherLabels].map((l) => `other:${l}`),
+  ];
+  const chanTotalAt = (p) => channelKeys.reduce((sum, ch) => sum + (chanAgg.get(`${p}|${ch}`)?.total || 0), 0);
+  const totalNow = chanTotalAt(period);
+
+  const sales_channels = channelKeys
+    .map((ch) => {
+      const now = chanAgg.get(`${period}|${ch}`);
+      const cmp = chanAgg.get(`${comparePeriod}|${ch}`);
+      const sales = now?.total ?? null;
+      const cmpSales = cmp?.total ?? null;
+      const isOther = ch.startsWith('other:');
+      return {
+        channel: ch,
+        channel_label: isOther ? ch.slice('other:'.length) : ch,
+        is_other: isOther,
+        sales,
+        share_pct: sales != null && totalNow > 0 ? sales / totalNow : null,
+        delta_pct: sales != null && cmpSales != null && cmpSales > 0 ? sales / cmpSales - 1 : null,
+        client_count: now?.brands.size ?? 0,
+      };
+    })
+    .filter((c) => c.sales != null) // drop channels with no data this period
+    .sort((a, b) => b.sales - a.sales); // canonical + other, ranked by value together
 
   // --- ad platforms ----------------------------------------------
   // platAgg[`${period}|${platform}`] = summed raw + brand set
@@ -782,14 +799,20 @@ export async function getChannels(params) {
   for (const r of platRows) {
     const k = `${r.period}|${r.platform}`;
     if (!platAgg.has(k)) {
-      platAgg.set(k, { spend: 0, impressions: 0, link_clicks: 0, purchase: 0, purchase_value: 0, ig_profile_visit: 0, igpvHas: false, brands: new Set() });
+      platAgg.set(k, {
+        spend: 0, impressions: 0, link_clicks: 0, purchase: 0, purchase_value: 0, ig_profile_visit: 0,
+        hasImpr: false, hasClicks: false, hasPurch: false, hasPv: false, igpvHas: false, brands: new Set(),
+      });
     }
     const e = platAgg.get(k);
     e.spend += Number(r.amount_spent || 0);
-    e.impressions += Number(r.impressions || 0);
-    e.link_clicks += Number(r.link_clicks || 0);
-    e.purchase += Number(r.purchase || 0);
-    e.purchase_value += Number(r.purchase_value || 0);
+    // nullable raw: only sum + mark "has" when a real value is present, so a
+    // spend-only row (impressions/purchase_value NULL) yields null ratios,
+    // not a misleading 0.
+    if (r.impressions != null) { e.impressions += Number(r.impressions); e.hasImpr = true; }
+    if (r.link_clicks != null) { e.link_clicks += Number(r.link_clicks); e.hasClicks = true; }
+    if (r.purchase != null) { e.purchase += Number(r.purchase); e.hasPurch = true; }
+    if (r.purchase_value != null) { e.purchase_value += Number(r.purchase_value); e.hasPv = true; }
     if (r.ig_profile_visit != null) { e.ig_profile_visit += Number(r.ig_profile_visit); e.igpvHas = true; }
     e.brands.add(r.brand_id);
   }
@@ -811,14 +834,14 @@ export async function getChannels(params) {
       platform: pl,
       spend: e.spend,
       spend_share_pct: spendNow > 0 ? e.spend / spendNow : null,
-      purchases: e.purchase,
-      purchase_value: e.purchase_value,
+      purchases: e.hasPurch ? e.purchase : null,
+      purchase_value: e.hasPv ? e.purchase_value : null,
       // purchase_value / spend — NOT "ROAS" (see header note)
-      platform_attributed_roas: ratio(e.purchase_value, e.spend),
-      cost_per_purchase: ratio(e.spend, e.purchase),
-      cpm: e.impressions > 0 ? (e.spend / e.impressions) * 1000 : null,
-      ctr: ratio(e.link_clicks, e.impressions),
-      cpc: ratio(e.spend, e.link_clicks),
+      platform_attributed_roas: e.hasPv ? ratio(e.purchase_value, e.spend) : null,
+      cost_per_purchase: e.hasPurch ? ratio(e.spend, e.purchase) : null,
+      cpm: e.hasImpr && e.impressions > 0 ? (e.spend / e.impressions) * 1000 : null,
+      ctr: e.hasImpr && e.hasClicks ? ratio(e.link_clicks, e.impressions) : null,
+      cpc: e.hasClicks ? ratio(e.spend, e.link_clicks) : null,
       // link_clicks is the proxy for IG profile visits (breakdown §4) — flag it
       cost_per_profile_visit_proxy: e.igpvHas && e.ig_profile_visit > 0 ? e.spend / e.ig_profile_visit : ratio(e.spend, e.link_clicks),
       cost_per_profile_visit_is_proxy: !e.igpvHas || e.ig_profile_visit === 0,
@@ -830,7 +853,10 @@ export async function getChannels(params) {
   // --- trends (13 months) --------------------------------------
   const channel_trend = months.map((mo) => {
     const row = { period: mo };
-    for (const ch of SALES_CHANNELS) row[ch] = chanAgg.get(`${mo}|${ch}`)?.total ?? null;
+    for (const ch of channelKeys) {
+      const label = ch.startsWith('other:') ? ch.slice('other:'.length) : ch;
+      row[label] = chanAgg.get(`${mo}|${ch}`)?.total ?? null;
+    }
     return row;
   });
   const spend_trend = months.map((mo) => {
@@ -870,8 +896,9 @@ export async function getChannels(params) {
     period,
     compare_period: comparePeriod,
     filters: { compare, status, category },
-    note: 'Efisiensi platform dihitung ulang dari kolom raw (spend/impressions/clicks/purchase). "platform_attributed_roas" = purchase_value / spend, bukan ROAS bisnis (revenue/spend ada di Executive Overview). Cakupan = client punya ≥1 bulan data channel/platform tsb dalam 13 bulan terakhir; client_sales_channels (§2.2) belum ada, jadi "tidak dipakai" vs "belum diinput" belum bisa dibedakan.',
+    note: 'Efisiensi platform dihitung ulang dari kolom raw (spend/impressions/clicks/purchase). "platform_attributed_roas" = purchase_value / spend, bukan ROAS bisnis (revenue/spend ada di Executive Overview). Channel di luar 4 utama (chat/tokopedia/dst.) disimpan sebagai free-text di client_channel_sales_other dan ikut dijumlahkan ke total_channel_sales + tampil di "Sales per Channel" dengan label aslinya. Cakupan = client punya ≥1 bulan data channel/platform tsb dalam 13 bulan terakhir; client_sales_channels (§2.2) belum ada, jadi "tidak dipakai" vs "belum diinput" belum bisa dibedakan.',
     sales_channels,
+    channel_trend_keys: channelKeys.map((ch) => (ch.startsWith('other:') ? ch.slice('other:'.length) : ch)),
     total_channel_sales: totalNow || null,
     portfolio_sales,
     ad_platforms,
@@ -1078,6 +1105,22 @@ const BENCHMARK_METRICS = [
   { key: 'ad_cost_ratio', label: 'Ad Cost Ratio', lowerBetter: true },
 ];
 
+// A monthlyAdTotalsByBrand row -> summed-shape object. Nullable columns
+// stay null (never coalesced to 0) so funnels render "no data" and
+// adMetrics()'s `> 0` guards behave. (view_content/atc are undefined when
+// the caller's query didn't select them -> also null.)
+function adRowObj(r) {
+  return {
+    spend: Number(r.spend || 0), // SUM(amount_spent), never null
+    impressions: r.impressions == null ? null : Number(r.impressions),
+    link_clicks: r.link_clicks == null ? null : Number(r.link_clicks),
+    purchase: r.purchase == null ? null : Number(r.purchase),
+    purchase_value: r.purchase_value == null ? null : Number(r.purchase_value),
+    view_content: r.view_content == null ? null : Number(r.view_content),
+    atc: r.atc == null ? null : Number(r.atc),
+  };
+}
+
 // Per-client ad metrics from raw monthly sums. blended_roas = revenue/spend
 // (S1 definition — NOT S6's platform-attributed purchase_value/spend).
 function adMetrics(rev, ad) {
@@ -1156,17 +1199,7 @@ export async function getBenchmark(params) {
   const revBy = new Map();
   for (const r of revRows) if (r.revenue != null) revBy.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
   const adBy = new Map();
-  for (const r of adRows) {
-    adBy.set(`${r.brand_id}|${r.period}`, {
-      spend: Number(r.spend || 0),
-      impressions: Number(r.impressions || 0),
-      link_clicks: Number(r.link_clicks || 0),
-      purchase: Number(r.purchase || 0),
-      purchase_value: Number(r.purchase_value || 0),
-      view_content: r.view_content == null ? null : Number(r.view_content),
-      atc: r.atc == null ? null : Number(r.atc),
-    });
-  }
+  for (const r of adRows) adBy.set(`${r.brand_id}|${r.period}`, adRowObj(r));
   const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
   const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
 
@@ -1308,17 +1341,7 @@ export async function getClientDetail(params) {
     if (r.target_sales != null) targetBy.set(`${r.brand_id}|${r.period}`, Number(r.target_sales));
   }
   const adBy = new Map();
-  for (const r of adRows) {
-    adBy.set(`${r.brand_id}|${r.period}`, {
-      spend: Number(r.spend || 0),
-      impressions: Number(r.impressions || 0),
-      link_clicks: Number(r.link_clicks || 0),
-      purchase: Number(r.purchase || 0),
-      purchase_value: Number(r.purchase_value || 0),
-      view_content: r.view_content == null ? null : Number(r.view_content),
-      atc: r.atc == null ? null : Number(r.atc),
-    });
-  }
+  for (const r of adRows) adBy.set(`${r.brand_id}|${r.period}`, adRowObj(r));
   const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
   const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
 
@@ -1374,12 +1397,13 @@ export async function getClientDetail(params) {
       const r = platByName.get(pl);
       if (!r) return null;
       const spend = Number(r.amount_spent || 0);
+      const pv = r.purchase_value == null ? null : Number(r.purchase_value);
       return {
         platform: pl,
         spend,
         share_pct: totalSpend > 0 ? spend / totalSpend : null,
-        purchase_value: Number(r.purchase_value || 0),
-        platform_attributed_roas: spend > 0 ? Number(r.purchase_value || 0) / spend : null,
+        purchase_value: pv,
+        platform_attributed_roas: pv != null && spend > 0 ? pv / spend : null,
       };
     })
     .filter(Boolean);
@@ -1453,15 +1477,7 @@ export async function getClientRanking(params) {
   const revBy = new Map();
   for (const r of revRows) if (r.revenue != null) revBy.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
   const adBy = new Map();
-  for (const r of adRows) {
-    adBy.set(`${r.brand_id}|${r.period}`, {
-      spend: Number(r.spend || 0),
-      impressions: Number(r.impressions || 0),
-      link_clicks: Number(r.link_clicks || 0),
-      purchase: Number(r.purchase || 0),
-      purchase_value: Number(r.purchase_value || 0),
-    });
-  }
+  for (const r of adRows) adBy.set(`${r.brand_id}|${r.period}`, adRowObj(r));
   const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
   const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
 
