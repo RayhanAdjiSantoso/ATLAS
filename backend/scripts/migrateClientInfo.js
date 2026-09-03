@@ -130,6 +130,27 @@ const PLATFORM_HINTS = [
 // Post" maps to meta_boost but is really a TikTok placement).
 const NO_ENUM_WORDS = ['tokopedia', 'tokped', 'topads', 'ttam', 'tiktok', 'website', 'lazada', 'leads'];
 
+// City / branch abbreviations — presence means the free-text encodes a
+// per-branch setup (e.g. Healthy Wagyu's "CPAS Shopee Bdg, Tgr, Jaksel"),
+// a detail level closer to brand_ad_accounts than to a plain channel flag.
+const CITY_HINTS = [
+  'bandung', 'bdg', 'jakarta', 'jkt', 'jaksel', 'jakbar', 'jakpus', 'jaktim', 'jakut',
+  'tangerang', 'tgr', 'tangsel', 'bekasi', 'bogor', 'depok', 'cikarang',
+  'surabaya', 'sby', 'sidoarjo', 'malang', 'semarang', 'smg', 'solo', 'surakarta',
+  'yogya', 'yogyakarta', 'jogja', 'klaten', 'tegal', 'cirebon',
+  'medan', 'palembang', 'makassar', 'denpasar', 'bali', 'lampung', 'batam',
+];
+
+// Derived channel flags for client_sales_channels (§2.2). Kept SEPARATE
+// from the raw text and from the §2.5 platform-enum guesses — a "yes/no"
+// convenience only, never a replacement for the original wording.
+const CHANNEL_FLAG_HINTS = {
+  shopee: ['shopee', 'cpas shopee', 'shopee iklanku', 'shopee ads', 'iklanku'],
+  tiktok_shop: ['tiktok', 'ttam', 'gmv max', 'gmv'],
+  website: ['website', 'web '],
+  offline: ['offline', 'toko fisik', 'store fisik'],
+};
+
 // --- helpers -------------------------------------------------------------
 const clean = (v) => {
   if (v === null || v === undefined) return null;
@@ -199,7 +220,14 @@ function classifyIndustry(industryRaw, subRaw) {
 
 function parsePlatforms(displayAds, marketplaceAds) {
   const raw = [clean(displayAds), clean(marketplaceAds)].filter(Boolean).join(' ; ');
-  if (!raw) return { raw_display_ads: clean(displayAds), raw_marketplace_ads: clean(marketplaceAds), mapped: [], unmapped: [], needs_review: false };
+  if (!raw) {
+    return {
+      raw_display_ads: clean(displayAds), raw_marketplace_ads: clean(marketplaceAds),
+      raw_tokens: [], mapped: [], unmapped: [],
+      channel_flags: { shopee: false, tiktok_shop: false, website: false, offline: false },
+      branch_hint: [], needs_review: false,
+    };
+  }
 
   const hay = raw.toLowerCase();
   const mapped = new Set();
@@ -222,12 +250,26 @@ function parsePlatforms(displayAds, marketplaceAds) {
     unmapped.add(`${tok} (unrecognised)`);
   }
 
+  // verbatim tokens — split only on separators, NO case-folding / rewriting.
+  // "CPAS Shopee Bdg" stays "CPAS Shopee Bdg", not "shopee".
+  const rawTokens = raw.split(/[;,\n]/).map((t) => t.trim()).filter(Boolean);
+
+  const cityHits = CITY_HINTS.filter((c) => new RegExp(`(?<![a-z])${c}(?![a-z])`).test(hay));
+
+  const channelFlags = {};
+  for (const [ch, needles] of Object.entries(CHANNEL_FLAG_HINTS)) {
+    channelFlags[ch] = needles.some((nd) => hay.includes(nd));
+  }
+
   return {
     raw_display_ads: clean(displayAds),
     raw_marketplace_ads: clean(marketplaceAds),
+    raw_tokens: rawTokens,
     mapped: [...mapped],
     unmapped: [...unmapped],
-    needs_review: unmapped.size > 0 || mapped.size === 0,
+    channel_flags: channelFlags,
+    branch_hint: cityHits,
+    needs_review: unmapped.size > 0 || mapped.size === 0 || cityHits.length > 0,
   };
 }
 
@@ -332,8 +374,14 @@ async function main() {
       brand_name: brandName,
       raw_display_ads: p.raw_display_ads ?? '',
       raw_marketplace_ads: p.raw_marketplace_ads ?? '',
-      mapped_platforms: p.mapped.join(' | '),
+      raw_tokens: p.raw_tokens.join(' | '), // verbatim, not normalised
+      channel_shopee: p.channel_flags.shopee ? 'y' : '',
+      channel_tiktok_shop: p.channel_flags.tiktok_shop ? 'y' : '',
+      channel_website: p.channel_flags.website ? 'y' : '',
+      channel_offline: p.channel_flags.offline ? 'y' : '',
+      platform_enum_guess: p.mapped.join(' | '),
       unmapped_tokens: p.unmapped.join(' | '),
+      branch_hint: p.branch_hint.join(' | '),
       needs_review: p.needs_review ? 'yes' : '',
     });
   }
@@ -349,8 +397,13 @@ async function main() {
     [...hierarchyPairs.values()].sort((a, b) =>
       (a.kategori_besar + a.industry + a.sub_industry).localeCompare(b.kategori_besar + b.industry + b.sub_industry)));
 
+  // Raw text (raw_display_ads / raw_marketplace_ads / raw_tokens) is the
+  // authoritative record — the channel_* flags and platform_enum_guess are
+  // derived conveniences and must never overwrite or replace it.
   writeCsv('display_ads_parse_preview.csv',
-    ['brand_name', 'raw_display_ads', 'raw_marketplace_ads', 'mapped_platforms', 'unmapped_tokens', 'needs_review'],
+    ['brand_name', 'raw_display_ads', 'raw_marketplace_ads', 'raw_tokens',
+      'channel_shopee', 'channel_tiktok_shop', 'channel_website', 'channel_offline',
+      'platform_enum_guess', 'unmapped_tokens', 'branch_hint', 'needs_review'],
     displayAdsPreview);
 
   writeCsv('unresolved_industry_pairs.csv',
@@ -373,6 +426,8 @@ async function main() {
   console.log(`industry_hierarchy pairs (clean): ${hierarchyPairs.size}`);
   console.log(`Unresolved industry/sub pairs  : ${unresolvedPairs.length}`);
   console.log(`Display/Marketplace Ads rows needing review: ${displayAdsPreview.filter((r) => r.needs_review).length}`);
+  console.log(`  filled (any Display/Marketplace Ads text): ${displayAdsPreview.filter((r) => r.raw_display_ads || r.raw_marketplace_ads).length}`);
+  console.log(`  with branch/city hint (per-branch setup) : ${displayAdsPreview.filter((r) => r.branch_hint).length}  -> ${displayAdsPreview.filter((r) => r.branch_hint).map((r) => r.brand_name).join(', ') || '(none)'}`);
   console.log(`Excluded (internal / non-client): ${excluded.length}  -> ${excluded.map((e) => e.brand_name).join(', ') || '(none)'}`);
   if (ACTIVE_ONLY) console.log(`Skipped (not ACTIVE/FREEZE)    : ${skipped.length}`);
   console.log('-'.repeat(72));
@@ -423,7 +478,9 @@ async function main() {
   if (!COMMIT) {
     console.log('\nDry run only. Review the CSVs, then re-run with --commit to write.');
     console.log('NOTE: Display/Marketplace Ads parsing is NOT written to the DB by this');
-    console.log('script (no target table yet) — it is exported for review only.');
+    console.log('script (no target table yet) — it is exported for review only. The raw');
+    console.log('text (raw_display_ads / raw_marketplace_ads / raw_tokens) is authoritative;');
+    console.log('channel_* flags + platform_enum_guess are derived, never a replacement.');
     return;
   }
 
