@@ -12,7 +12,10 @@ const thisMonth = () => new Date().toISOString().slice(0, 7);
 const DEFAULTS = { period: thisMonth(), compare: 'mom', status: 'active', category: 'all' };
 const money = (v) => (v == null ? '-' : `Rp${new Intl.NumberFormat('id-ID').format(Math.round(v))}`);
 const pct = (v) => (v == null ? '-' : formatPercent(v * 100, 1));
-const chanLabel = (v) => SALES_CHANNELS.find((c) => c.value === v)?.label || v;
+// canonical enum values get a nice label; free-text ("other") channels
+// pass through as their original wording.
+const CANON_LABEL = Object.fromEntries(SALES_CHANNELS.map((c) => [c.value, c.label]));
+const chanLabel = (row) => (row.is_other ? row.channel_label : (CANON_LABEL[row.channel] || row.channel_label || row.channel));
 const platLabel = (v) => AD_PLATFORMS.find((p) => p.value === v)?.label || v;
 
 // S6 — Channel & Platform.
@@ -36,7 +39,7 @@ export default function ChannelPlatformTab() {
 
   const channelDonut = (data?.sales_channels || [])
     .filter((c) => c.sales != null)
-    .map((c) => ({ name: chanLabel(c.channel), value: c.sales }));
+    .map((c) => ({ name: chanLabel(c), value: c.sales }));
   const spendDonut = (data?.ad_platforms || [])
     .filter((p) => p.spend != null)
     .map((p) => ({ name: platLabel(p.platform), value: p.spend }));
@@ -55,8 +58,8 @@ export default function ChannelPlatformTab() {
             <KpiCard title="Total Sales per Channel" value={data.total_channel_sales} type="currency"
               note={coveragePct != null ? `${pct(coveragePct)} dari portfolio sales (${money(data.portfolio_sales)})` : null} />
             <KpiCard title="Total Ad Spend" value={data.total_platform_spend} type="currency" invert />
-            <KpiCard title="Channel Terpakai" value={data.sales_channels.filter((c) => c.sales != null).length} type="number"
-              note={`dari ${data.sales_channels.length} channel`} />
+            <KpiCard title="Channel Terpakai" value={data.sales_channels.length} type="number"
+              note={`termasuk ${data.sales_channels.filter((c) => c.is_other).length} channel non-standar`} />
             <KpiCard title="Platform Terpakai" value={activePlatforms.length} type="number"
               note={`dari ${data.ad_platforms.length} platform`} />
           </div>
@@ -64,6 +67,37 @@ export default function ChannelPlatformTab() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>
             <DonutChart data={channelDonut} title="Sales per Channel" centerLabel="Total" valueFormatter={money} />
             <DonutChart data={spendDonut} title="Alokasi Spend per Platform" centerLabel="Total" valueFormatter={money} />
+          </div>
+
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '1rem 1.5rem 0' }}>
+              <h3 style={{ fontSize: '1rem' }}>Sales per Channel</h3>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0.3rem 0 0' }}>
+                4 channel utama + channel free-text (chat, tokopedia, dst.) diurutkan bersama berdasar nilai.
+                Total ({money(data.total_channel_sales)}) sudah termasuk channel free-text.
+              </p>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ marginTop: '1rem' }}>
+                <thead>
+                  <tr><th>Channel</th><th>Sales</th><th>Share</th><th>Δ ({filters.compare.toUpperCase()})</th><th>N client</th></tr>
+                </thead>
+                <tbody>
+                  {data.sales_channels.map((c) => (
+                    <tr key={c.channel}>
+                      <td>
+                        {chanLabel(c)}
+                        {c.is_other && <span className="badge badge-info" style={{ marginLeft: 4, fontSize: '0.6rem' }}>free-text</span>}
+                      </td>
+                      <td>{money(c.sales)}</td>
+                      <td>{pct(c.share_pct)}</td>
+                      <td>{pct(c.delta_pct)}</td>
+                      <td>{c.client_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -110,7 +144,7 @@ export default function ChannelPlatformTab() {
             </div>
           </div>
 
-          <MultiLineTrend data={data.channel_trend} series={SALES_CHANNELS.map((c) => c.value)} title="Tren Sales per Channel — 13 bulan" />
+          <MultiLineTrend data={data.channel_trend} series={data.channel_trend_keys || SALES_CHANNELS.map((c) => c.value)} title="Tren Sales per Channel — 13 bulan" />
           <MultiLineTrend data={data.spend_trend} series={AD_PLATFORMS.map((p) => p.value)} title="Tren Spend per Platform — 13 bulan" />
 
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

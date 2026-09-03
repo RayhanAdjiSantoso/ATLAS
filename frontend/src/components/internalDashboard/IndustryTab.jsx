@@ -87,7 +87,7 @@ export default function IndustryTab() {
                 <thead>
                   <tr>
                     <th>{data.filters.level === 'industry' ? 'Industry' : 'Sub-industry'}</th>
-                    <th>Kategori</th><th>N</th><th>Ada data</th>
+                    <th>Kategori</th><th>N</th><th>Ada data</th><th>Ada spend</th>
                     <th>Sales</th><th>Median sales/client</th>
                     <th>Growth agregat</th><th>Median growth/client</th><th>Median ROAS/client</th>
                   </tr>
@@ -99,6 +99,7 @@ export default function IndustryTab() {
                       <td>{g.kategori_besar || '-'}</td>
                       <td>{g.n_clients}</td>
                       <td>{g.n_with_data}</td>
+                      <td>{g.n_with_spend}</td>
                       <td>{money(g.sales)}</td>
                       <td>{money(g.median_client_sales)}</td>
                       <td>{pct(g.aggregate_growth)}</td>

@@ -56,7 +56,8 @@ export default function ExecutiveOverviewTab() {
             <KpiCard title="Total Ad Spend" value={kpi.total_spend.value} type="currency" growth={kpi.total_spend.delta_pct} invert
               note={kpi.total_spend.compare != null ? `${compareLabel}: Rp${money(kpi.total_spend.compare)}` : null} />
             <KpiCard title="Blended ROAS" value={kpi.blended_roas.value} type="number" growth={kpi.blended_roas.delta_pct}
-              note="Revenue portfolio ÷ ad spend. Bukan ROAS atribusi platform." />
+              note={`Revenue ÷ ad spend. Data spend: ${kpi.spend_coverage.value} dari ${kpi.spend_coverage.of} client${
+                kpi.spend_coverage.of > 0 && kpi.spend_coverage.value < kpi.spend_coverage.of ? ' — angka belum representatif' : ''}`} />
             <KpiCard title="Client Aktif" value={kpi.active_clients.value} type="number"
               note="Snapshot saat ini — belum ada histori join/churn sampai join_date terkumpul." />
             <KpiCard title="Client Ada Data" value={kpi.clients_with_data.value} type="number"

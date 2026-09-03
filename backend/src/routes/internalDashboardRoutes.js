@@ -12,6 +12,11 @@ import {
   categoriesQueryValidation,
   industriesQueryValidation,
   channelsQueryValidation,
+  businessCheckupQueryValidation,
+  benchmarkQueryValidation,
+  clientDetailValidation,
+  clientRankingQueryValidation,
+  dataQualityQueryValidation,
 } from '../validators/internalDashboardValidators.js';
 
 // Internal Dashboard — admin-only, all-clients performance capture.
@@ -30,8 +35,17 @@ router.get('/overview', overviewQueryValidation, ctrl.getOverview);
 router.get('/categories', categoriesQueryValidation, ctrl.getCategories);
 // S4 — Industry / Sub-industry
 router.get('/industries', industriesQueryValidation, ctrl.getIndustries);
+// S2 — Business Checkup
+router.get('/business-checkup', businessCheckupQueryValidation, ctrl.getBusinessCheckup);
+// S5 — Benchmarking
+router.get('/benchmark', benchmarkQueryValidation, ctrl.getBenchmark);
 // S6 — Channel & Platform
 router.get('/channels', channelsQueryValidation, ctrl.getChannels);
+// S7 — Client Detail + Ranking ( /clients/ranking BEFORE /clients/:id )
+router.get('/clients/ranking', clientRankingQueryValidation, ctrl.getClientRanking);
+router.get('/clients/:id', clientDetailValidation, ctrl.getClientDetail);
+// S8 — Data Quality
+router.get('/data-quality', dataQualityQueryValidation, ctrl.getDataQuality);
 
 // §2.3 — client_monthly_metrics
 router.get('/monthly-metrics', brandQueryValidation, ctrl.listMonthlyMetrics);

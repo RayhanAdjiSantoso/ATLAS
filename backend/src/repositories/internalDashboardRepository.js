@@ -202,7 +202,8 @@ export async function listBrandsForOverview({ status, kategoriBesar }, db = pool
   // status IS NOT NULL excludes the handful of pre-migration report-generator
   // brand rows that never went through the "Client info" import.
   const { rows } = await db.query(
-    `SELECT brand_id, brand_name, industry, sub_industry, kategori_besar, status::text AS status
+    `SELECT brand_id, brand_name, industry, sub_industry, kategori_besar,
+            status::text AS status, join_date::text AS join_date
      FROM brands_with_category
      WHERE status IS NOT NULL
        AND ($1::text = 'all' OR status = 'active')
@@ -245,6 +246,35 @@ export async function channelSalesGrid(brandIds, startPeriod, endPeriod, db = po
   return rows;
 }
 
+// S6 — free-text ("other") channels not in the sales_channel enum (§ migration 010).
+export async function channelSalesOtherGrid(brandIds, startPeriod, endPeriod, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, channel_label, sales_amount AS sales
+     FROM client_channel_sales_other
+     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
+    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
+// S5 — per-brand / per-month ad totals (summed across all platforms). Raw
+// columns only; every ratio (CPM/CPC/CTR/ROAS/CPP/ad-cost-ratio) is
+// recomputed in the service from these sums.
+export async function monthlyAdTotalsByBrand(brandIds, startPeriod, endPeriod, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period,
+            SUM(amount_spent) AS spend, SUM(impressions) AS impressions,
+            SUM(link_clicks) AS link_clicks, SUM(purchase) AS purchase,
+            SUM(purchase_value) AS purchase_value,
+            SUM(view_content) AS view_content, SUM(atc) AS atc
+     FROM client_platform_spend_monthly
+     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date
+     GROUP BY brand_id, period`,
+    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
 // S6 — per-platform ad metrics grid (RAW summable columns only; ratios are
 // recomputed in the service from these sums, never read from storage).
 export async function platformMetricsGrid(brandIds, startPeriod, endPeriod, db = pool) {
@@ -254,6 +284,96 @@ export async function platformMetricsGrid(brandIds, startPeriod, endPeriod, db =
      FROM client_platform_spend_monthly
      WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
     [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
+  );
+  return rows;
+}
+
+// S7 — profile bits.
+export async function getBrandProfile(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT b.brand_id, b.brand_name, b.status::text AS status, b.industry, b.sub_industry,
+            b.bm_id, b.pic, b.migration_review_note, bwc.kategori_besar,
+            (SELECT count(*)::int FROM brand_ad_accounts a WHERE a.brand_id = b.brand_id) AS ad_account_count
+     FROM brands b
+     LEFT JOIN brands_with_category bwc ON bwc.brand_id = b.brand_id
+     WHERE b.brand_id = $1`,
+    [brandId],
+  );
+  return rows[0] ?? null;
+}
+
+// ---------------------------------------------------------------------
+// S8 — Data Quality
+// ---------------------------------------------------------------------
+
+// Per migrated brand: does it have a row in each fact table for `period`,
+// plus its channel-sales total (canonical + other) and platform-spend
+// total. One query, LEFT JOINs on the period.
+export async function dataQualitySnapshot(period, db = pool) {
+  const p = `${period}-01`;
+  const { rows } = await db.query(
+    `SELECT b.brand_id, b.brand_name, b.status::text AS status,
+            bwc.kategori_besar, b.bm_id, b.join_date::text AS join_date,
+            (cmm.brand_id IS NOT NULL)                       AS has_monthly_metrics,
+            cmm.revenue,
+            COALESCE(ccs.total, 0) + COALESCE(cco.total, 0)  AS channel_sales_total,
+            (ccs.brand_id IS NOT NULL OR cco.brand_id IS NOT NULL) AS has_channel_sales,
+            COALESCE(cps.spend, 0)                           AS platform_spend_total,
+            (cps.brand_id IS NOT NULL)                       AS has_platform_spend,
+            cps.meta_platforms
+     FROM brands b
+     LEFT JOIN brands_with_category bwc ON bwc.brand_id = b.brand_id
+     LEFT JOIN client_monthly_metrics cmm ON cmm.brand_id = b.brand_id AND cmm.period = $1::date
+     LEFT JOIN (SELECT brand_id, SUM(sales) total FROM client_channel_sales_monthly WHERE period = $1::date GROUP BY brand_id) ccs ON ccs.brand_id = b.brand_id
+     LEFT JOIN (SELECT brand_id, SUM(sales_amount) total FROM client_channel_sales_other WHERE period = $1::date GROUP BY brand_id) cco ON cco.brand_id = b.brand_id
+     LEFT JOIN (SELECT brand_id, SUM(amount_spent) spend,
+                       bool_or(platform::text LIKE 'meta\\_%') AS meta_platforms
+                FROM client_platform_spend_monthly WHERE period = $1::date GROUP BY brand_id) cps ON cps.brand_id = b.brand_id
+     WHERE b.status IS NOT NULL
+     ORDER BY b.brand_name`,
+    [p],
+  );
+  return rows;
+}
+
+export async function allClientSalesChannels(db = pool) {
+  const { rows } = await db.query(
+    'SELECT brand_id, channel::text AS channel, is_used, source FROM client_sales_channels',
+  );
+  return rows;
+}
+
+// Brands whose Meta spend can't be traced to an ad account: they have
+// meta_* platform spend somewhere but zero brand_ad_accounts rows.
+export async function metaSpendWithoutAdAccounts(db = pool) {
+  const { rows } = await db.query(
+    `SELECT b.brand_id, b.brand_name, b.bm_id,
+            SUM(cps.amount_spent) AS meta_spend_total,
+            count(DISTINCT cps.period) AS months
+     FROM client_platform_spend_monthly cps
+     JOIN brands b ON b.brand_id = cps.brand_id
+     WHERE cps.platform::text LIKE 'meta\\_%'
+       AND NOT EXISTS (SELECT 1 FROM brand_ad_accounts a WHERE a.brand_id = b.brand_id)
+     GROUP BY b.brand_id, b.brand_name, b.bm_id
+     ORDER BY meta_spend_total DESC`,
+  );
+  return rows;
+}
+
+// Channel-sales vs revenue reconciliation for `period`.
+export async function channelReconciliation(period, db = pool) {
+  const p = `${period}-01`;
+  const { rows } = await db.query(
+    `SELECT b.brand_id, b.brand_name, cmm.revenue,
+            COALESCE(ccs.total, 0) + COALESCE(cco.total, 0) AS channel_total,
+            COALESCE(ccs.n, 0) + COALESCE(cco.n, 0) AS channel_rows
+     FROM client_monthly_metrics cmm
+     JOIN brands b ON b.brand_id = cmm.brand_id
+     LEFT JOIN (SELECT brand_id, SUM(sales) total, count(*) n FROM client_channel_sales_monthly WHERE period = $1::date GROUP BY brand_id) ccs ON ccs.brand_id = b.brand_id
+     LEFT JOIN (SELECT brand_id, SUM(sales_amount) total, count(*) n FROM client_channel_sales_other WHERE period = $1::date GROUP BY brand_id) cco ON cco.brand_id = b.brand_id
+     WHERE cmm.period = $1::date
+     ORDER BY b.brand_name`,
+    [p],
   );
   return rows;
 }

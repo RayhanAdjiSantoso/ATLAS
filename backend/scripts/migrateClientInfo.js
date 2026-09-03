@@ -56,6 +56,7 @@ const SHEET_NAME = 'Client info';
 const args = process.argv.slice(2);
 const COMMIT = args.includes('--commit');
 const ACTIVE_ONLY = args.includes('--active-only');
+const CHANNELS_MODE = args.includes('--channels'); // populate client_sales_channels (§2.2) instead of brands
 const fileArg = args.find((a) => a.startsWith('--file='));
 const XLSX_PATH = fileArg ? fileArg.slice('--file='.length) : DEFAULT_XLSX;
 
@@ -67,6 +68,7 @@ const COL = {
   industry: 7,
   subIndustry: 8,
   bmId: 10,
+  enabledWebsite: 14, // "Enabled Website" — a clean True/False boolean
   displayAds: 17,
   marketplaceAds: 18,
   pic: 24,
@@ -129,6 +131,27 @@ const PLATFORM_HINTS = [
 // even when they sit inside an otherwise-mapped token (e.g. "Tiktok Boost
 // Post" maps to meta_boost but is really a TikTok placement).
 const NO_ENUM_WORDS = ['tokopedia', 'tokped', 'topads', 'ttam', 'tiktok', 'website', 'lazada', 'leads'];
+
+// City / branch abbreviations — presence means the free-text encodes a
+// per-branch setup (e.g. Healthy Wagyu's "CPAS Shopee Bdg, Tgr, Jaksel"),
+// a detail level closer to brand_ad_accounts than to a plain channel flag.
+const CITY_HINTS = [
+  'bandung', 'bdg', 'jakarta', 'jkt', 'jaksel', 'jakbar', 'jakpus', 'jaktim', 'jakut',
+  'tangerang', 'tgr', 'tangsel', 'bekasi', 'bogor', 'depok', 'cikarang',
+  'surabaya', 'sby', 'sidoarjo', 'malang', 'semarang', 'smg', 'solo', 'surakarta',
+  'yogya', 'yogyakarta', 'jogja', 'klaten', 'tegal', 'cirebon',
+  'medan', 'palembang', 'makassar', 'denpasar', 'bali', 'lampung', 'batam',
+];
+
+// Derived channel flags for client_sales_channels (§2.2). Kept SEPARATE
+// from the raw text and from the §2.5 platform-enum guesses — a "yes/no"
+// convenience only, never a replacement for the original wording.
+const CHANNEL_FLAG_HINTS = {
+  shopee: ['shopee', 'cpas shopee', 'shopee iklanku', 'shopee ads', 'iklanku'],
+  tiktok_shop: ['tiktok', 'ttam', 'gmv max', 'gmv'],
+  website: ['website', 'web '],
+  offline: ['offline', 'toko fisik', 'store fisik'],
+};
 
 // --- helpers -------------------------------------------------------------
 const clean = (v) => {
@@ -199,7 +222,14 @@ function classifyIndustry(industryRaw, subRaw) {
 
 function parsePlatforms(displayAds, marketplaceAds) {
   const raw = [clean(displayAds), clean(marketplaceAds)].filter(Boolean).join(' ; ');
-  if (!raw) return { raw_display_ads: clean(displayAds), raw_marketplace_ads: clean(marketplaceAds), mapped: [], unmapped: [], needs_review: false };
+  if (!raw) {
+    return {
+      raw_display_ads: clean(displayAds), raw_marketplace_ads: clean(marketplaceAds),
+      raw_tokens: [], mapped: [], unmapped: [],
+      channel_flags: { shopee: false, tiktok_shop: false, website: false, offline: false },
+      branch_hint: [], needs_review: false,
+    };
+  }
 
   const hay = raw.toLowerCase();
   const mapped = new Set();
@@ -222,13 +252,150 @@ function parsePlatforms(displayAds, marketplaceAds) {
     unmapped.add(`${tok} (unrecognised)`);
   }
 
+  // verbatim tokens — split only on separators, NO case-folding / rewriting.
+  // "CPAS Shopee Bdg" stays "CPAS Shopee Bdg", not "shopee".
+  const rawTokens = raw.split(/[;,\n]/).map((t) => t.trim()).filter(Boolean);
+
+  const cityHits = CITY_HINTS.filter((c) => new RegExp(`(?<![a-z])${c}(?![a-z])`).test(hay));
+
+  const channelFlags = {};
+  for (const [ch, needles] of Object.entries(CHANNEL_FLAG_HINTS)) {
+    channelFlags[ch] = needles.some((nd) => hay.includes(nd));
+  }
+
   return {
     raw_display_ads: clean(displayAds),
     raw_marketplace_ads: clean(marketplaceAds),
+    raw_tokens: rawTokens,
     mapped: [...mapped],
     unmapped: [...unmapped],
-    needs_review: unmapped.size > 0 || mapped.size === 0,
+    channel_flags: channelFlags,
+    branch_hint: cityHits,
+    needs_review: unmapped.size > 0 || mapped.size === 0 || cityHits.length > 0,
   };
+}
+
+const SALES_CHANNEL_ENUM = ['shopee', 'tiktok_shop', 'website', 'offline'];
+
+// --channels: derive client_sales_channels (§2.2) rows from the sheet.
+//   website  -> the clean "Enabled Website" boolean (true OR false) when
+//              set; else a positive from the ads text; else no row.
+//   shopee/tiktok_shop -> a POSITIVE only, when the Display/Marketplace Ads
+//              free-text names the channel. NOT a negative: those columns
+//              describe where a client ADVERTISES, which is a lower bound
+//              on where it SELLS, not the full picture (Petite Fleur has
+//              real Shopee sales but "Google Ads, Main Account" as its ads
+//              text). Real sales data (client_channel_sales_monthly) is
+//              layered on top in --commit as a stronger positive.
+//   offline  -> no reliable sheet signal at all; effectively never a row
+//              from here.
+//   A client with no signal for a channel gets NO row -> S8 treats it as
+//   "belum dinilai", not "tidak dipakai".
+function channelRowsFor(brandName, row) {
+  const ewRaw = row[COL.enabledWebsite];
+  const ew = ewRaw === true ? true : ewRaw === false ? false : null;
+  const p = parsePlatforms(row[COL.displayAds], row[COL.marketplaceAds]);
+  const hasText = !!(p.raw_display_ads || p.raw_marketplace_ads);
+
+  const out = [];
+  if (ew !== null) out.push({ brand_name: brandName, channel: 'website', is_used: ew, source: 'enabled_website_col' });
+  else if (hasText && p.channel_flags.website) out.push({ brand_name: brandName, channel: 'website', is_used: true, source: 'ads_text_positive' });
+
+  if (hasText) {
+    for (const ch of ['shopee', 'tiktok_shop', 'offline']) {
+      if (p.channel_flags[ch]) out.push({ brand_name: brandName, channel: ch, is_used: true, source: 'ads_text_positive' });
+    }
+  }
+  return out;
+}
+
+async function runChannelsMode(grid, firstDataRowIdx) {
+  const rows = [];
+  const perClientCount = new Map();
+  for (let i = firstDataRowIdx; i < grid.length; i += 1) {
+    const r = grid[i];
+    if (!r) continue;
+    const name = clean(r[COL.brandName]);
+    if (!name || EXCLUDE_BRANDS.has(name.toLowerCase())) continue;
+    const cr = channelRowsFor(name, r);
+    rows.push(...cr);
+    perClientCount.set(name, cr.length);
+  }
+
+  writeCsv('client_sales_channels_preview.csv',
+    ['brand_name', 'channel', 'is_used', 'source'],
+    rows.map((x) => ({ ...x, is_used: x.is_used ? 'true' : 'false' })));
+
+  const by = (f) => rows.reduce((m, x) => (m[f(x)] = (m[f(x)] || 0) + 1, m), {});
+  const noSignal = [...perClientCount].filter(([, n]) => n === 0).map(([n]) => n);
+  console.log('='.repeat(72));
+  console.log(`CHANNELS mode · ${COMMIT ? 'COMMIT' : 'DRY RUN'} · source: ${XLSX_PATH}`);
+  console.log('-'.repeat(72));
+  console.log(`client_sales_channels rows to write : ${rows.length}`);
+  console.log(`  by channel : ${JSON.stringify(by((x) => x.channel))}`);
+  console.log(`  by source  : ${JSON.stringify(by((x) => x.source))}`);
+  console.log(`  is_used    : ${JSON.stringify(by((x) => (x.is_used ? 'true' : 'false')))}`);
+  console.log(`clients with at least one channel row : ${[...perClientCount.values()].filter((n) => n > 0).length}`);
+  console.log(`clients with NO channel signal at all : ${noSignal.length}`);
+  console.log(`  -> ${noSignal.join(', ')}`);
+  console.log('-'.repeat(72));
+  console.log(`Preview CSV: ${path.join(OUT_DIR, 'client_sales_channels_preview.csv')}`);
+  console.log('='.repeat(72));
+
+  if (!COMMIT) {
+    console.log('\nDry run. Review the CSV, then re-run with --channels --commit.');
+    return;
+  }
+
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET search_path TO public');
+    const nameToId = new Map(
+      (await client.query('SELECT brand_id, brand_name FROM brands')).rows.map((r) => [r.brand_name, r.brand_id]),
+    );
+    const missing = [...new Set(rows.map((r) => r.brand_name))].filter((n) => !nameToId.has(n));
+    if (missing.length) throw new Error(`brand_name not found in brands: ${missing.join(', ')}`);
+
+    // stronger positive: any channel with actual sales data
+    const salesData = (await client.query(
+      `SELECT brand_id, channel::text AS channel FROM client_channel_sales_monthly GROUP BY brand_id, channel`,
+    )).rows;
+
+    const all = [
+      ...rows.map((r) => ({ brand_id: nameToId.get(r.brand_name), channel: r.channel, is_used: r.is_used, source: r.source })),
+      ...salesData.map((r) => ({ brand_id: r.brand_id, channel: r.channel, is_used: true, source: 'sales_data' })),
+    ];
+    // sales_data wins over sheet parse for the same (brand, channel)
+    const byKey = new Map();
+    for (const r of all) {
+      const k = `${r.brand_id}|${r.channel}`;
+      const prev = byKey.get(k);
+      if (!prev || r.source === 'sales_data') byKey.set(k, r);
+    }
+
+    let inserted = 0;
+    let updated = 0;
+    for (const r of byKey.values()) {
+      const res = await client.query(
+        `INSERT INTO client_sales_channels (brand_id, channel, is_used, source)
+         VALUES ($1, $2::sales_channel, $3, $4)
+         ON CONFLICT (brand_id, channel) DO UPDATE SET is_used = EXCLUDED.is_used, source = EXCLUDED.source
+         RETURNING (xmax::text = '0') AS was_insert`,
+        [r.brand_id, r.channel, r.is_used, r.source],
+      );
+      if (res.rows[0].was_insert) inserted += 1; else updated += 1;
+    }
+    await client.query('COMMIT');
+    console.log(`\nCOMMITTED: ${inserted} inserted, ${updated} updated (incl. ${salesData.length} from real sales data).`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('\nROLLED BACK.');
+    throw err;
+  } finally {
+    await client.end();
+  }
 }
 
 // --- main --------------------------------------------------------------
@@ -251,6 +418,11 @@ async function main() {
     process.exit(1);
   }
   const FIRST_DATA_ROW_IDX = headerIdx + 1;
+
+  if (CHANNELS_MODE) {
+    await runChannelsMode(grid, FIRST_DATA_ROW_IDX);
+    return;
+  }
 
   const brandsPreview = [];
   const displayAdsPreview = [];
@@ -332,8 +504,14 @@ async function main() {
       brand_name: brandName,
       raw_display_ads: p.raw_display_ads ?? '',
       raw_marketplace_ads: p.raw_marketplace_ads ?? '',
-      mapped_platforms: p.mapped.join(' | '),
+      raw_tokens: p.raw_tokens.join(' | '), // verbatim, not normalised
+      channel_shopee: p.channel_flags.shopee ? 'y' : '',
+      channel_tiktok_shop: p.channel_flags.tiktok_shop ? 'y' : '',
+      channel_website: p.channel_flags.website ? 'y' : '',
+      channel_offline: p.channel_flags.offline ? 'y' : '',
+      platform_enum_guess: p.mapped.join(' | '),
       unmapped_tokens: p.unmapped.join(' | '),
+      branch_hint: p.branch_hint.join(' | '),
       needs_review: p.needs_review ? 'yes' : '',
     });
   }
@@ -349,8 +527,13 @@ async function main() {
     [...hierarchyPairs.values()].sort((a, b) =>
       (a.kategori_besar + a.industry + a.sub_industry).localeCompare(b.kategori_besar + b.industry + b.sub_industry)));
 
+  // Raw text (raw_display_ads / raw_marketplace_ads / raw_tokens) is the
+  // authoritative record — the channel_* flags and platform_enum_guess are
+  // derived conveniences and must never overwrite or replace it.
   writeCsv('display_ads_parse_preview.csv',
-    ['brand_name', 'raw_display_ads', 'raw_marketplace_ads', 'mapped_platforms', 'unmapped_tokens', 'needs_review'],
+    ['brand_name', 'raw_display_ads', 'raw_marketplace_ads', 'raw_tokens',
+      'channel_shopee', 'channel_tiktok_shop', 'channel_website', 'channel_offline',
+      'platform_enum_guess', 'unmapped_tokens', 'branch_hint', 'needs_review'],
     displayAdsPreview);
 
   writeCsv('unresolved_industry_pairs.csv',
@@ -373,6 +556,8 @@ async function main() {
   console.log(`industry_hierarchy pairs (clean): ${hierarchyPairs.size}`);
   console.log(`Unresolved industry/sub pairs  : ${unresolvedPairs.length}`);
   console.log(`Display/Marketplace Ads rows needing review: ${displayAdsPreview.filter((r) => r.needs_review).length}`);
+  console.log(`  filled (any Display/Marketplace Ads text): ${displayAdsPreview.filter((r) => r.raw_display_ads || r.raw_marketplace_ads).length}`);
+  console.log(`  with branch/city hint (per-branch setup) : ${displayAdsPreview.filter((r) => r.branch_hint).length}  -> ${displayAdsPreview.filter((r) => r.branch_hint).map((r) => r.brand_name).join(', ') || '(none)'}`);
   console.log(`Excluded (internal / non-client): ${excluded.length}  -> ${excluded.map((e) => e.brand_name).join(', ') || '(none)'}`);
   if (ACTIVE_ONLY) console.log(`Skipped (not ACTIVE/FREEZE)    : ${skipped.length}`);
   console.log('-'.repeat(72));
@@ -423,7 +608,9 @@ async function main() {
   if (!COMMIT) {
     console.log('\nDry run only. Review the CSVs, then re-run with --commit to write.');
     console.log('NOTE: Display/Marketplace Ads parsing is NOT written to the DB by this');
-    console.log('script (no target table yet) — it is exported for review only.');
+    console.log('script (no target table yet) — it is exported for review only. The raw');
+    console.log('text (raw_display_ads / raw_marketplace_ads / raw_tokens) is authoritative;');
+    console.log('channel_* flags + platform_enum_guess are derived, never a replacement.');
     return;
   }
 

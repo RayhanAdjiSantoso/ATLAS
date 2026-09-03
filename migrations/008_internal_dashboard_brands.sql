@@ -68,6 +68,11 @@ ALTER TABLE brands ADD COLUMN IF NOT EXISTS industry      TEXT;
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS sub_industry  TEXT;
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS bm_id         TEXT;  -- "Business ID" = BM ID; TEXT to avoid 16-digit precision loss
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS pic           TEXT;
+-- "Mulai kerja sama" — first month of engagement (day = 1). Not in the
+-- "Client info" sheet; collected separately from AO/Consultant/PIC records
+-- and loaded by migrateClientInfo.js (--join-dates). NULL where unknown —
+-- never proxied from "first month with data" (S1/S2 "new client" logic).
+ALTER TABLE brands ADD COLUMN IF NOT EXISTS join_date     DATE;
 
 -- Generic hand-review flag (free text, not boolean): the migration
 -- scripts set this to a specific reason for rows that need a human look
@@ -118,6 +123,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_brand_ad_accounts_primary
 -- column. A later migration that needs a new column in this view edits
 -- this statement.
 -- ---------------------------------------------------------------------
+-- NOTE on column order: CREATE OR REPLACE VIEW may only APPEND columns, so
+-- new brands columns are added at the very end here (after kategori_besar).
 CREATE OR REPLACE VIEW brands_with_category AS
 SELECT b.brand_id,
        b.brand_name,
@@ -132,7 +139,8 @@ SELECT b.brand_id,
        (SELECT ih.kategori_besar
           FROM industry_hierarchy ih
          WHERE ih.industry = b.industry
-         LIMIT 1) AS kategori_besar
+         LIMIT 1) AS kategori_besar,
+       b.join_date
 FROM brands b;
 
 -- ---------------------------------------------------------------------

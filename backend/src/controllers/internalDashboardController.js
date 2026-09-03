@@ -137,6 +137,53 @@ export const getIndustries = asyncHandler(async (req, res) => {
   }));
 });
 
+// --- S5 Benchmarking ----------------------------------------
+export const getBenchmark = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getBenchmark({
+    client_id: req.query.client_id,
+    period: req.query.period,
+    compare: req.query.compare,
+  }));
+});
+
+// --- S7 Client Detail + Ranking -----------------------------
+export const getClientRanking = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getClientRanking({
+    period: req.query.period,
+    compare: req.query.compare,
+    metric: req.query.metric,
+    status: req.query.status,
+    category: req.query.category,
+  }));
+});
+
+export const getClientDetail = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getClientDetail({
+    client_id: req.params.id,
+    period: req.query.period,
+    compare: req.query.compare,
+  }));
+});
+
+// --- S8 Data Quality ---------------------------------------
+export const getDataQuality = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getDataQuality({ period: req.query.period }));
+});
+
+// --- S2 Business Checkup -------------------------------------
+export const getBusinessCheckup = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getBusinessCheckup({
+    period: req.query.period,
+    compare: req.query.compare,
+    category: req.query.category,
+  }));
+});
+
 // --- S6 Channel & Platform -----------------------------------
 export const getChannels = asyncHandler(async (req, res) => {
   validate(req);

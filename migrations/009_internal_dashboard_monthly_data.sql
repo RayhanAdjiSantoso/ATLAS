@@ -116,20 +116,23 @@ CREATE TRIGGER trg_ccs_updated_at BEFORE UPDATE ON client_channel_sales_monthly
 -- ---------------------------------------------------------------------
 -- §2.5  client_platform_spend_monthly — ad spend + funnel per platform
 --
---   REQUIRED (NOT NULL): raw, summable counters only —
---     amount_spent, impressions, link_clicks, purchase, purchase_value
---   OPTIONAL raw:
---     reach, frequency, view_content, atc, lpv, ig_profile_visit
---       (ig_profile_visit is shown with a "PROXY" label in the UI, and
---        link_clicks is used as its proxy in rollups — breakdown §4)
---   OPTIONAL stored ratios (cpm, cpc, ctr, cost_per_vc, cost_per_atc,
+--   REQUIRED (NOT NULL): amount_spent only — it feeds total_spend /
+--     blended_roas (S1) directly, so a spend row with no amount is
+--     meaningless. A fully-rejected row would silently under-state
+--     portfolio spend, which is worse than missing derived metrics.
+--   NULLABLE raw (summable): impressions, link_clicks, purchase,
+--     purchase_value — a source may report spend without them (e.g. a
+--     hand-keyed monthly total). Rollups treat NULL as "no data", never 0.
+--   NULLABLE raw (also): reach, frequency, view_content, atc, lpv,
+--     ig_profile_visit (ig_profile_visit shows a "PROXY" label; link_clicks
+--     is its rollup proxy — breakdown §4).
+--   NULLABLE stored ratios (cpm, cpc, ctr, cost_per_vc, cost_per_atc,
 --     cost_per_purchase, roas):
 --       *** DISPLAY-ONLY, single-month cross-check against Ads Manager. ***
 --       Every multi-period rollup (S1/S2/S3/S7) MUST recompute ratios from
---       the raw NOT NULL columns above (sum components first, then divide)
---       and MUST NEVER SUM/AVG these stored ratio columns. This is the
---       explicit guard against the old BI dashboard's "ROAS 118x" bug
---       (ratios averaged across months where spend input had stopped).
+--       the raw columns above (sum components first, then divide) and MUST
+--       NEVER SUM/AVG these stored ratio columns. Explicit guard against
+--       the old BI dashboard's "ROAS 118x" bug.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS client_platform_spend_monthly (
     client_platform_spend_id  SERIAL PRIMARY KEY,
@@ -137,14 +140,14 @@ CREATE TABLE IF NOT EXISTS client_platform_spend_monthly (
     period        DATE        NOT NULL,
     platform      ad_platform NOT NULL,
 
-    -- required (raw / summable)
+    -- required
     amount_spent   NUMERIC(16,2) NOT NULL,
-    impressions    BIGINT        NOT NULL,
-    link_clicks    BIGINT        NOT NULL,
-    purchase       INTEGER       NOT NULL,
-    purchase_value NUMERIC(16,2) NOT NULL,
 
-    -- optional (raw / summable)
+    -- nullable raw / summable
+    impressions    BIGINT,
+    link_clicks    BIGINT,
+    purchase       INTEGER,
+    purchase_value NUMERIC(16,2),
     reach             BIGINT,
     frequency         NUMERIC(10,4),
     view_content      INTEGER,
@@ -152,7 +155,7 @@ CREATE TABLE IF NOT EXISTS client_platform_spend_monthly (
     lpv               INTEGER,
     ig_profile_visit  INTEGER,
 
-    -- optional (stored ratios — DISPLAY-ONLY, never aggregated; see block above)
+    -- nullable stored ratios — DISPLAY-ONLY, never aggregated (see block above)
     cpm               NUMERIC(14,4),
     cpc               NUMERIC(14,4),
     ctr               NUMERIC(9,6),
@@ -167,11 +170,12 @@ CREATE TABLE IF NOT EXISTS client_platform_spend_monthly (
 
     CONSTRAINT ux_client_platform_spend UNIQUE (brand_id, period, platform),
     CONSTRAINT ck_cps_period_month CHECK (period = date_trunc('month', period)::date),
-    CONSTRAINT ck_cps_required_nonneg CHECK (
-        amount_spent >= 0 AND impressions >= 0 AND link_clicks >= 0
-        AND purchase >= 0 AND purchase_value >= 0
-    ),
-    CONSTRAINT ck_cps_optional_nonneg CHECK (
+    CONSTRAINT ck_cps_amount_nonneg CHECK (amount_spent >= 0),
+    CONSTRAINT ck_cps_raw_nonneg CHECK (
+        (impressions      IS NULL OR impressions      >= 0) AND
+        (link_clicks      IS NULL OR link_clicks      >= 0) AND
+        (purchase         IS NULL OR purchase         >= 0) AND
+        (purchase_value   IS NULL OR purchase_value   >= 0) AND
         (reach            IS NULL OR reach            >= 0) AND
         (frequency        IS NULL OR frequency        >= 0) AND
         (view_content     IS NULL OR view_content     >= 0) AND
@@ -180,6 +184,40 @@ CREATE TABLE IF NOT EXISTS client_platform_spend_monthly (
         (ig_profile_visit IS NULL OR ig_profile_visit >= 0)
     )
 );
+
+-- Bring an already-created table (from an earlier run of this file) in
+-- line with the looser shape above. All idempotent.
+ALTER TABLE client_platform_spend_monthly ALTER COLUMN impressions    DROP NOT NULL;
+ALTER TABLE client_platform_spend_monthly ALTER COLUMN link_clicks    DROP NOT NULL;
+ALTER TABLE client_platform_spend_monthly ALTER COLUMN purchase       DROP NOT NULL;
+ALTER TABLE client_platform_spend_monthly ALTER COLUMN purchase_value DROP NOT NULL;
+ALTER TABLE client_platform_spend_monthly DROP CONSTRAINT IF EXISTS ck_cps_required_nonneg;
+ALTER TABLE client_platform_spend_monthly DROP CONSTRAINT IF EXISTS ck_cps_optional_nonneg;
+DO $$ BEGIN
+    ALTER TABLE client_platform_spend_monthly ADD CONSTRAINT ck_cps_amount_nonneg CHECK (amount_spent >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE client_platform_spend_monthly ADD CONSTRAINT ck_cps_raw_nonneg CHECK (
+        (impressions      IS NULL OR impressions      >= 0) AND
+        (link_clicks      IS NULL OR link_clicks      >= 0) AND
+        (purchase         IS NULL OR purchase         >= 0) AND
+        (purchase_value   IS NULL OR purchase_value   >= 0) AND
+        (reach            IS NULL OR reach            >= 0) AND
+        (frequency        IS NULL OR frequency        >= 0) AND
+        (view_content     IS NULL OR view_content     >= 0) AND
+        (atc              IS NULL OR atc              >= 0) AND
+        (lpv              IS NULL OR lpv              >= 0) AND
+        (ig_profile_visit IS NULL OR ig_profile_visit >= 0)
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- `is_partial_month`: this row covers fewer than a full calendar month
+-- (e.g. a client that started mid-month, or an export cut short). Set by
+-- the input form. S5 Benchmarking's "exclude <25 days of history"
+-- safeguard keys off this flag; until the form captures it, it stays
+-- FALSE and the safeguard is inert.
+ALTER TABLE client_platform_spend_monthly
+  ADD COLUMN IF NOT EXISTS is_partial_month BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE INDEX IF NOT EXISTS ix_cps_brand_period ON client_platform_spend_monthly (brand_id, period);
 CREATE INDEX IF NOT EXISTS ix_cps_period       ON client_platform_spend_monthly (period);
 CREATE INDEX IF NOT EXISTS ix_cps_platform     ON client_platform_spend_monthly (platform);
