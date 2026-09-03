@@ -103,6 +103,7 @@ export const monthlyMetricsBodyValidation = [
   optInt(body('transaksi')),
   optInt(body('qty_sold')),
   optNum(body('target_sales')),
+  body('is_partial_month').optional().isBoolean().withMessage('is_partial_month harus boolean'),
 ];
 
 // --- §2.4 client_channel_sales_monthly ------------------------------

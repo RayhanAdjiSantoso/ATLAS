@@ -29,7 +29,7 @@ export async function listClients(db = pool) {
 const CMM_SELECT = `
   SELECT client_monthly_metric_id AS id, brand_id,
          to_char(period, 'YYYY-MM') AS period,
-         revenue, transaksi, qty_sold, target_sales,
+         revenue, transaksi, qty_sold, target_sales, is_partial_month,
          created_by, created_at, updated_at
   FROM client_monthly_metrics
 `;
@@ -42,15 +42,16 @@ export async function listMonthlyMetrics(brandId, db = pool) {
 export async function upsertMonthlyMetric(v, db = pool) {
   const { rows } = await db.query(
     `INSERT INTO client_monthly_metrics
-       (brand_id, period, revenue, transaksi, qty_sold, target_sales, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (brand_id, period, revenue, transaksi, qty_sold, target_sales, is_partial_month, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (brand_id, period) DO UPDATE SET
-       revenue      = EXCLUDED.revenue,
-       transaksi    = EXCLUDED.transaksi,
-       qty_sold     = EXCLUDED.qty_sold,
-       target_sales = EXCLUDED.target_sales
+       revenue          = EXCLUDED.revenue,
+       transaksi        = EXCLUDED.transaksi,
+       qty_sold         = EXCLUDED.qty_sold,
+       target_sales     = EXCLUDED.target_sales,
+       is_partial_month = EXCLUDED.is_partial_month
      RETURNING client_monthly_metric_id AS id, (xmax::text = '0') AS was_insert`,
-    [v.brandId, v.period, v.revenue, v.transaksi, v.qtySold, v.targetSales, v.userId],
+    [v.brandId, v.period, v.revenue, v.transaksi, v.qtySold, v.targetSales, v.isPartialMonth ?? false, v.userId],
   );
   return rows[0];
 }
@@ -216,7 +217,7 @@ export async function listBrandsForOverview({ status, kategoriBesar }, db = pool
 
 export async function monthlyRevenueByBrand(brandIds, startPeriod, endPeriod, db = pool) {
   const { rows } = await db.query(
-    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, revenue, target_sales
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, revenue, target_sales, is_partial_month
      FROM client_monthly_metrics
      WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
     [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
@@ -266,7 +267,8 @@ export async function monthlyAdTotalsByBrand(brandIds, startPeriod, endPeriod, d
             SUM(amount_spent) AS spend, SUM(impressions) AS impressions,
             SUM(link_clicks) AS link_clicks, SUM(purchase) AS purchase,
             SUM(purchase_value) AS purchase_value,
-            SUM(view_content) AS view_content, SUM(atc) AS atc
+            SUM(view_content) AS view_content, SUM(atc) AS atc,
+            bool_or(is_partial_month) AS any_partial_spend
      FROM client_platform_spend_monthly
      WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date
      GROUP BY brand_id, period`,

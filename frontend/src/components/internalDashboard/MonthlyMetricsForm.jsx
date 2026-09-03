@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 
-const EMPTY = { revenue: '', transaksi: '', qty_sold: '', target_sales: '' };
+const EMPTY = { revenue: '', transaksi: '', qty_sold: '', target_sales: '', is_partial_month: false };
 
 const numOrUndef = (s) => (s === '' || s === null ? undefined : Number(s));
 const fmtMoney = (v) => (v == null ? '-' : `Rp${new Intl.NumberFormat('id-ID').format(Number(v))}`);
@@ -39,6 +39,7 @@ export default function MonthlyMetricsForm({ clientId, period, onPickPeriod, onS
         transaksi: existing.transaksi ?? '',
         qty_sold: existing.qty_sold ?? '',
         target_sales: existing.target_sales ?? '',
+        is_partial_month: !!existing.is_partial_month,
       }
       : EMPTY);
     setMessage(null);
@@ -63,6 +64,7 @@ export default function MonthlyMetricsForm({ clientId, period, onPickPeriod, onS
         transaksi: numOrUndef(form.transaksi),
         qty_sold: numOrUndef(form.qty_sold),
         target_sales: numOrUndef(form.target_sales),
+        is_partial_month: form.is_partial_month,
       });
       setMessage({ type: 'success', text: `Tersimpan: ${period}.` });
       load();
@@ -123,6 +125,14 @@ export default function MonthlyMetricsForm({ clientId, period, onPickPeriod, onS
           </div>
         </div>
 
+        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.85rem', marginBottom: '1rem' }}>
+          <input type="checkbox" style={{ width: 'auto' }} checked={form.is_partial_month}
+            onChange={(e) => setForm((f) => ({ ...f, is_partial_month: e.target.checked }))} />
+          Bulan Parsial <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+            (client mulai/berhenti di tengah bulan — dikecualikan penuh dari perbandingan peer di Benchmarking, tapi tetap dihitung di total portfolio)
+          </span>
+        </label>
+
         {message && <div className={`alert alert-${message.type}`}>{message.text}</div>}
 
         <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
@@ -144,7 +154,10 @@ export default function MonthlyMetricsForm({ clientId, period, onPickPeriod, onS
             <tbody>
               {entries.map((e) => (
                 <tr key={e.id} style={e.period === period ? { background: 'var(--primary-light)' } : undefined}>
-                  <td>{e.period}</td>
+                  <td>
+                    {e.period}
+                    {e.is_partial_month && <span className="badge badge-warning" style={{ marginLeft: 4, fontSize: '0.6rem' }}>parsial</span>}
+                  </td>
                   <td>{fmtMoney(e.revenue)}</td>
                   <td>{fmtNum(e.transaksi)}</td>
                   <td>{fmtNum(e.qty_sold)}</td>

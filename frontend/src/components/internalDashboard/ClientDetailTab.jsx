@@ -99,10 +99,22 @@ function DetailView() {
           </div>
 
           <OverviewTrendChart trend={(data.trend || []).map((t) => ({ period: t.period, sales: t.revenue, spend: t.spend, roas: t.roas }))} />
+          {(data.trend || []).some((t) => t.is_partial_month) && (
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '-0.75rem 0 0' }}>
+              Bulan parsial: {data.trend.filter((t) => t.is_partial_month).map((t) => t.period).join(', ')} — ditampilkan apa adanya di tren, tapi dikecualikan dari Benchmarking.
+            </p>
+          )}
 
           <div className="card">
             <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Scorecard vs Peer</h3>
-            {data.scorecard.sub_industry ? (
+            {!data.scorecard.sub_industry ? (
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{data.scorecard.note}</p>
+            ) : data.scorecard.client_period_partial ? (
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {period} ditandai <strong>bulan parsial</strong> — tidak dibandingkan dengan peer.
+                Data mentahnya ada di tren & funnel di atas.
+              </p>
+            ) : (
               <>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
                   Peer group: {data.scorecard.sub_industry} · {data.scorecard.peer_n_total} client ({data.scorecard.peer_n_with_data} ada data) ·
@@ -111,8 +123,6 @@ function DetailView() {
                 </p>
                 {data.scorecard.distribution.map((d) => <PeerDistributionRow key={d.metric} d={d} />)}
               </>
-            ) : (
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{data.scorecard.note}</p>
             )}
           </div>
 
