@@ -60,6 +60,21 @@ export const benchmarkQueryValidation = [
   query('compare').optional().isIn(['mom', 'yoy']),
 ];
 
+// --- S7 Client Detail + Ranking -------------------------------
+export const clientDetailValidation = [
+  param('id').isInt({ min: 1 }).withMessage('id client tidak valid'),
+  query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),
+  query('compare').optional().isIn(['mom', 'yoy']),
+];
+
+export const clientRankingQueryValidation = [
+  query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),
+  query('compare').optional().isIn(['mom', 'yoy']),
+  query('metric').optional().isIn(['revenue', 'spend', 'blended_roas', 'growth', 'cpp', 'ad_cost_ratio']),
+  query('status').optional().isIn(['active', 'all']),
+  query('category').optional().isIn(['retail', 'b2b_service', 'fnb', 'all']),
+];
+
 // --- S2 Business Checkup ----------------------------------------
 export const businessCheckupQueryValidation = [
   query('period').matches(PERIOD_RE).withMessage('period wajib, format YYYY-MM'),

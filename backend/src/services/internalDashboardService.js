@@ -1035,6 +1035,53 @@ const BENCHMARK_METRICS = [
   { key: 'ad_cost_ratio', label: 'Ad Cost Ratio', lowerBetter: true },
 ];
 
+// Per-client ad metrics from raw monthly sums. blended_roas = revenue/spend
+// (S1 definition — NOT S6's platform-attributed purchase_value/spend).
+function adMetrics(rev, ad) {
+  if (!ad) return null;
+  const s = ad.spend;
+  return {
+    cpm: ad.impressions > 0 ? (s / ad.impressions) * 1000 : null,
+    cpc: ad.link_clicks > 0 ? s / ad.link_clicks : null,
+    ctr: ad.impressions > 0 ? ad.link_clicks / ad.impressions : null,
+    blended_roas: rev != null && s > 0 ? rev / s : null,
+    cpp: ad.purchase > 0 ? s / ad.purchase : null,
+    ad_cost_ratio: rev != null && rev > 0 ? s / rev : null,
+  };
+}
+
+// Peer distribution over BENCHMARK_METRICS + client position + efficiency
+// index. `metricsAt(id)` -> a metrics object or null. Shared by S5
+// (Benchmarking) and S7 (compact scorecard).
+function peerDistribution(cohortIds, clientId, metricsAt) {
+  const cm = metricsAt(clientId);
+  const distribution = BENCHMARK_METRICS.map((m) => {
+    const raw = cohortIds.map((id) => metricsAt(id)?.[m.key]).filter((v) => v != null);
+    const vals = trimP1P99(raw);
+    const med = median(vals);
+    const cv = cm?.[m.key] ?? null;
+    let effIndex = null;
+    if (cv != null && med != null && med > 0 && cv > 0) {
+      effIndex = (m.lowerBetter ? med / cv : cv / med) * 100; // >100 always = better than peer median
+    }
+    return {
+      metric: m.key,
+      label: m.label,
+      lower_better: m.lowerBetter,
+      n: vals.length,
+      p25: percentile(vals, 25),
+      median: med,
+      p75: percentile(vals, 75),
+      client_value: cv,
+      client_percentile: cv != null && vals.length ? percentileRank(vals, cv) : null,
+      efficiency_index: effIndex,
+    };
+  });
+  const idxVals = distribution.map((d) => d.efficiency_index).filter((v) => v != null && v > 0);
+  const composite = idxVals.length ? idxVals.reduce((a, b) => a * b, 1) ** (1 / idxVals.length) : null;
+  return { distribution, composite };
+}
+
 export async function getBenchmark(params) {
   const clientId = Number(params.client_id);
   const period = params.period;
@@ -1073,56 +1120,21 @@ export async function getBenchmark(params) {
       link_clicks: Number(r.link_clicks || 0),
       purchase: Number(r.purchase || 0),
       purchase_value: Number(r.purchase_value || 0),
+      view_content: r.view_content == null ? null : Number(r.view_content),
+      atc: r.atc == null ? null : Number(r.atc),
     });
   }
   const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
   const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
 
-  const metricsFor = (id, p) => {
-    const ad = adAt(id, p);
-    if (!ad) return null;
-    const rev = revAt(id, p);
-    const s = ad.spend;
-    return {
-      cpm: ad.impressions > 0 ? (s / ad.impressions) * 1000 : null,
-      cpc: ad.link_clicks > 0 ? s / ad.link_clicks : null,
-      ctr: ad.impressions > 0 ? ad.link_clicks / ad.impressions : null,
-      blended_roas: rev != null && s > 0 ? rev / s : null, // revenue / spend — same as S1
-      cpp: ad.purchase > 0 ? s / ad.purchase : null,
-      ad_cost_ratio: rev != null && rev > 0 ? s / rev : null,
-    };
-  };
+  const metricsFor = (id, p) => adMetrics(revAt(id, p), adAt(id, p));
 
   const clientMetrics = metricsFor(clientId, period);
   const peerIds = cohortIds.filter((id) => id !== clientId);
 
-  // --- distribution per metric (P1–P99 trim, then P25/median/P75) ---
-  const distribution = BENCHMARK_METRICS.map((m) => {
-    const raw = cohortIds.map((id) => metricsFor(id, period)?.[m.key]).filter((v) => v != null);
-    const vals = trimP1P99(raw);
-    const med = median(vals);
-    const cv = clientMetrics?.[m.key] ?? null;
-    let effIndex = null;
-    if (cv != null && med != null && med > 0 && cv > 0) {
-      effIndex = (m.lowerBetter ? med / cv : cv / med) * 100; // >100 always = better than peer median
-    }
-    return {
-      metric: m.key,
-      label: m.label,
-      lower_better: m.lowerBetter,
-      n: vals.length,
-      p25: percentile(vals, 25),
-      median: med,
-      p75: percentile(vals, 75),
-      client_value: cv,
-      client_percentile: cv != null && vals.length ? percentileRank(vals, cv) : null,
-      efficiency_index: effIndex,
-    };
-  });
-  const idxVals = distribution.map((d) => d.efficiency_index).filter((v) => v != null && v > 0);
-  const compositeIndex = idxVals.length
-    ? idxVals.reduce((a, b) => a * b, 1) ** (1 / idxVals.length)
-    : null;
+  const { distribution, composite: compositeIndex } = peerDistribution(
+    cohortIds, clientId, (id) => metricsFor(id, period),
+  );
 
   // --- market movement (like-for-like peer growth, client excluded) ---
   const peerCohort = buildCohort(peerIds, revAt, period, comparePeriod);
@@ -1207,5 +1219,243 @@ export async function getBenchmark(params) {
       note: 'Index 100 = setara median peer. Untuk metrik "lower is better" (CPM/CPC/CPP/Ad Cost Ratio) arah dibalik supaya >100 selalu berarti lebih efisien. Composite = rata-rata geometrik index antar-metrik yang tersedia.',
     },
     cpm_trend,
+  };
+}
+
+// =====================================================================
+// S7 — Client Detail  &  Ranking
+// =====================================================================
+// Scorecard vs peer reuses the S5 peer-group logic (peerDistribution()).
+// "Mulai kerja sama" is intentionally null/TBD — join_date does not exist
+// yet and must NOT be proxied.
+
+const AD_PLATFORMS_S7 = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads'];
+
+export async function getClientDetail(params) {
+  const clientId = Number(params.client_id);
+  const period = params.period;
+  const compare = params.compare === 'yoy' ? 'yoy' : 'mom';
+
+  const profile = await repo.getBrandProfile(clientId);
+  if (!profile) throw new AppError('Client tidak ditemukan', 404);
+
+  const comparePeriod = shiftMonth(period, compare === 'yoy' ? -12 : -1);
+  const windowStart = shiftMonth(period, -(S1_CONFIG.trendWindowMonths - 1));
+  const trendStartEff = comparePeriod < windowStart ? comparePeriod : windowStart;
+  const months = [];
+  for (let i = -(S1_CONFIG.trendWindowMonths - 1); i <= 0; i += 1) months.push(shiftMonth(period, i));
+
+  // peer cohort (same sub_industry) for the scorecard
+  const allBrands = await repo.listBrandsForOverview({ status: 'all', kategoriBesar: null });
+  const subIndustry = profile.sub_industry || null;
+  const cohortIds = subIndustry
+    ? allBrands.filter((b) => b.sub_industry === subIndustry).map((b) => b.brand_id)
+    : [clientId];
+
+  const [revRows, adRows, platRows] = await Promise.all([
+    repo.monthlyRevenueByBrand(cohortIds, trendStartEff, period),
+    repo.monthlyAdTotalsByBrand(cohortIds, trendStartEff, period),
+    repo.platformMetricsGrid([clientId], period, period),
+  ]);
+
+  const revBy = new Map();
+  const targetBy = new Map();
+  for (const r of revRows) {
+    if (r.revenue != null) revBy.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
+    if (r.target_sales != null) targetBy.set(`${r.brand_id}|${r.period}`, Number(r.target_sales));
+  }
+  const adBy = new Map();
+  for (const r of adRows) {
+    adBy.set(`${r.brand_id}|${r.period}`, {
+      spend: Number(r.spend || 0),
+      impressions: Number(r.impressions || 0),
+      link_clicks: Number(r.link_clicks || 0),
+      purchase: Number(r.purchase || 0),
+      purchase_value: Number(r.purchase_value || 0),
+      view_content: r.view_content == null ? null : Number(r.view_content),
+      atc: r.atc == null ? null : Number(r.atc),
+    });
+  }
+  const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
+  const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
+
+  // --- 13-month trend for this client ---
+  const trend = months.map((mo) => {
+    const rev = revAt(clientId, mo);
+    const ad = adAt(clientId, mo);
+    const spend = ad ? ad.spend : null;
+    return {
+      period: mo,
+      revenue: rev,
+      spend,
+      roas: rev != null && spend != null && spend > 0 ? rev / spend : null,
+    };
+  });
+
+  // --- scorecard vs peer (compact S5) ---
+  const scorecard = subIndustry
+    ? {
+      sub_industry: subIndustry,
+      peer_n_total: cohortIds.length,
+      peer_n_with_data: cohortIds.filter((id) => adAt(id, period)).length,
+      ...peerDistribution(cohortIds, clientId, (id) => adMetrics(revAt(id, period), adAt(id, period))),
+    }
+    : { sub_industry: null, note: 'Client belum punya sub-industry — scorecard vs peer tidak tersedia.' };
+
+  // --- funnel (aggregate from client_platform_spend_monthly for `period`) ---
+  const cAd = adAt(clientId, period);
+  const funnel = cAd
+    ? (() => {
+      const stages = [
+        { key: 'impressions', label: 'Impression', value: cAd.impressions },
+        { key: 'link_clicks', label: 'Link Click', value: cAd.link_clicks },
+        { key: 'view_content', label: 'View Content', value: cAd.view_content },
+        { key: 'atc', label: 'Add to Cart', value: cAd.atc },
+        { key: 'purchase', label: 'Purchase', value: cAd.purchase },
+      ];
+      return stages.map((s, i) => {
+        const prev = i > 0 ? stages[i - 1].value : null;
+        return {
+          ...s,
+          conv_from_prev: s.value != null && prev != null && prev > 0 ? s.value / prev : null,
+        };
+      });
+    })()
+    : null;
+
+  // --- spend allocation per platform (this client, this period) ---
+  const platByName = new Map(platRows.map((r) => [r.platform, r]));
+  const totalSpend = platRows.reduce((a, r) => a + Number(r.amount_spent || 0), 0);
+  const spend_allocation = AD_PLATFORMS_S7
+    .map((pl) => {
+      const r = platByName.get(pl);
+      if (!r) return null;
+      const spend = Number(r.amount_spent || 0);
+      return {
+        platform: pl,
+        spend,
+        share_pct: totalSpend > 0 ? spend / totalSpend : null,
+        purchase_value: Number(r.purchase_value || 0),
+        platform_attributed_roas: spend > 0 ? Number(r.purchase_value || 0) / spend : null,
+      };
+    })
+    .filter(Boolean);
+
+  const revNow = revAt(clientId, period);
+  const revPrior = revAt(clientId, comparePeriod);
+  const spendNow = cAd ? cAd.spend : null;
+
+  return {
+    period,
+    compare_period: comparePeriod,
+    profile: {
+      brand_id: profile.brand_id,
+      brand_name: profile.brand_name,
+      status: profile.status,
+      industry: profile.industry,
+      sub_industry: profile.sub_industry,
+      kategori_besar: profile.kategori_besar,
+      bm_id: profile.bm_id,
+      pic: profile.pic,
+      ad_account_count: profile.ad_account_count,
+      join_date: null,
+      join_date_status: 'TBD', // join_date belum ada — jangan di-proxy
+      data_review_note: profile.migration_review_note,
+    },
+    headline: {
+      revenue: revNow,
+      revenue_delta_pct: revNow != null && revPrior != null && revPrior > 0 ? revNow / revPrior - 1 : null,
+      spend: spendNow,
+      blended_roas: revNow != null && spendNow != null && spendNow > 0 ? revNow / spendNow : null,
+      vs_target_pct: (() => {
+        const t = targetBy.get(`${clientId}|${period}`);
+        return revNow != null && t != null && t > 0 ? revNow / t - 1 : null;
+      })(),
+    },
+    trend,
+    scorecard,
+    funnel,
+    funnel_note: 'Dihitung agregat dari client_platform_spend_monthly (semua platform digabung). Stage dengan input kosong tampil null, bukan 0.',
+    spend_allocation,
+  };
+}
+
+const RANKING_METRICS = {
+  revenue: { label: 'Revenue', dir: 'desc', source: 'rev' },
+  spend: { label: 'Ad Spend', dir: 'desc', source: 'ad' },
+  blended_roas: { label: 'Blended ROAS', dir: 'desc', source: 'metric' },
+  growth: { label: 'Growth', dir: 'desc', source: 'growth' },
+  cpp: { label: 'Cost per Purchase', dir: 'asc', source: 'metric' },
+  ad_cost_ratio: { label: 'Ad Cost Ratio', dir: 'asc', source: 'metric' },
+};
+
+export async function getClientRanking(params) {
+  const period = params.period;
+  const compare = params.compare === 'yoy' ? 'yoy' : 'mom';
+  const metricKey = RANKING_METRICS[params.metric] ? params.metric : 'revenue';
+  const metricCfg = RANKING_METRICS[metricKey];
+  const status = params.status || 'active';
+  const category = params.category || 'all';
+  const kategoriBesar = category === 'all' ? null : (CATEGORY_MAP[category] ?? null);
+
+  const brands = await repo.listBrandsForOverview({ status, kategoriBesar });
+  const brandIds = brands.map((b) => b.brand_id);
+  const brandById = new Map(brands.map((b) => [b.brand_id, b]));
+
+  const comparePeriod = shiftMonth(period, compare === 'yoy' ? -12 : -1);
+  const [revRows, adRows] = await Promise.all([
+    repo.monthlyRevenueByBrand(brandIds, comparePeriod, period),
+    repo.monthlyAdTotalsByBrand(brandIds, comparePeriod, period),
+  ]);
+  const revBy = new Map();
+  for (const r of revRows) if (r.revenue != null) revBy.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
+  const adBy = new Map();
+  for (const r of adRows) {
+    adBy.set(`${r.brand_id}|${r.period}`, {
+      spend: Number(r.spend || 0),
+      impressions: Number(r.impressions || 0),
+      link_clicks: Number(r.link_clicks || 0),
+      purchase: Number(r.purchase || 0),
+      purchase_value: Number(r.purchase_value || 0),
+    });
+  }
+  const revAt = (id, p) => (revBy.has(`${id}|${p}`) ? revBy.get(`${id}|${p}`) : null);
+  const adAt = (id, p) => adBy.get(`${id}|${p}`) || null;
+
+  const rows = brandIds.map((id) => {
+    const rev = revAt(id, period);
+    const ad = adAt(id, period);
+    const m = adMetrics(rev, ad);
+    const priorRev = revAt(id, comparePeriod);
+    let value = null;
+    if (metricCfg.source === 'rev') value = rev;
+    else if (metricCfg.source === 'ad') value = ad ? ad.spend : null;
+    else if (metricCfg.source === 'growth') value = rev != null && priorRev != null && priorRev > 0 ? rev / priorRev - 1 : null;
+    else value = m?.[metricKey] ?? null;
+    const b = brandById.get(id);
+    return {
+      brand_id: id,
+      brand_name: b.brand_name,
+      sub_industry: b.sub_industry,
+      kategori_besar: b.kategori_besar,
+      value,
+      revenue: rev,
+      spend: ad ? ad.spend : null,
+      blended_roas: m?.blended_roas ?? null,
+    };
+  });
+
+  const withVal = rows.filter((r) => r.value != null);
+  const noVal = rows.filter((r) => r.value == null);
+  withVal.sort((a, b) => (metricCfg.dir === 'asc' ? a.value - b.value : b.value - a.value));
+
+  return {
+    period,
+    compare_period: comparePeriod,
+    filters: { compare, metric: metricKey, status, category },
+    metric: { key: metricKey, label: metricCfg.label, direction: metricCfg.dir, lower_better: metricCfg.dir === 'asc' },
+    available_metrics: Object.entries(RANKING_METRICS).map(([k, v]) => ({ key: k, label: v.label })),
+    ranked: withVal.map((r, i) => ({ rank: i + 1, ...r })),
+    no_data: noVal.map((r) => ({ brand_id: r.brand_id, brand_name: r.brand_name, sub_industry: r.sub_industry })),
   };
 }

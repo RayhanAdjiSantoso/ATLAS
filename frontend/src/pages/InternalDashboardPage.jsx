@@ -6,11 +6,12 @@ import IndustryTab from '../components/internalDashboard/IndustryTab.jsx';
 import ChannelPlatformTab from '../components/internalDashboard/ChannelPlatformTab.jsx';
 import BusinessCheckupTab from '../components/internalDashboard/BusinessCheckupTab.jsx';
 import BenchmarkTab from '../components/internalDashboard/BenchmarkTab.jsx';
+import ClientDetailTab from '../components/internalDashboard/ClientDetailTab.jsx';
 
 // Internal Dashboard MIL Digital — admin-only, all-clients performance.
-// S1/S2/S3/S4/S5/S6 + Input Data exist; S7 Client Detail and S8 Data
-// Quality become sibling tabs later.
-const TABS = ['Executive Overview', 'Business Checkup', 'Kategori Besar', 'Industry', 'Benchmarking', 'Channel & Platform', 'Input Data'];
+// S1–S7 + Input Data exist; S8 Data Quality comes later (needs
+// client_sales_channels §2.2 first).
+const TABS = ['Executive Overview', 'Business Checkup', 'Kategori Besar', 'Industry', 'Benchmarking', 'Channel & Platform', 'Client Detail', 'Input Data'];
 const TAB_COMPONENTS = {
   'Executive Overview': ExecutiveOverviewTab,
   'Business Checkup': BusinessCheckupTab,
@@ -18,6 +19,7 @@ const TAB_COMPONENTS = {
   Industry: IndustryTab,
   Benchmarking: BenchmarkTab,
   'Channel & Platform': ChannelPlatformTab,
+  'Client Detail': ClientDetailTab,
   'Input Data': InputDataTab,
 };
 

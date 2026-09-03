@@ -147,6 +147,27 @@ export const getBenchmark = asyncHandler(async (req, res) => {
   }));
 });
 
+// --- S7 Client Detail + Ranking -----------------------------
+export const getClientRanking = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getClientRanking({
+    period: req.query.period,
+    compare: req.query.compare,
+    metric: req.query.metric,
+    status: req.query.status,
+    category: req.query.category,
+  }));
+});
+
+export const getClientDetail = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getClientDetail({
+    client_id: req.params.id,
+    period: req.query.period,
+    compare: req.query.compare,
+  }));
+});
+
 // --- S2 Business Checkup -------------------------------------
 export const getBusinessCheckup = asyncHandler(async (req, res) => {
   validate(req);

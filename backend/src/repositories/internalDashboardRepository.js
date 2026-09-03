@@ -253,7 +253,8 @@ export async function monthlyAdTotalsByBrand(brandIds, startPeriod, endPeriod, d
     `SELECT brand_id, to_char(period, 'YYYY-MM') AS period,
             SUM(amount_spent) AS spend, SUM(impressions) AS impressions,
             SUM(link_clicks) AS link_clicks, SUM(purchase) AS purchase,
-            SUM(purchase_value) AS purchase_value
+            SUM(purchase_value) AS purchase_value,
+            SUM(view_content) AS view_content, SUM(atc) AS atc
      FROM client_platform_spend_monthly
      WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date
      GROUP BY brand_id, period`,
@@ -273,6 +274,20 @@ export async function platformMetricsGrid(brandIds, startPeriod, endPeriod, db =
     [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
   );
   return rows;
+}
+
+// S7 — profile bits.
+export async function getBrandProfile(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT b.brand_id, b.brand_name, b.status::text AS status, b.industry, b.sub_industry,
+            b.bm_id, b.pic, b.migration_review_note, bwc.kategori_besar,
+            (SELECT count(*)::int FROM brand_ad_accounts a WHERE a.brand_id = b.brand_id) AS ad_account_count
+     FROM brands b
+     LEFT JOIN brands_with_category bwc ON bwc.brand_id = b.brand_id
+     WHERE b.brand_id = $1`,
+    [brandId],
+  );
+  return rows[0] ?? null;
 }
 
 export const CPS_COLUMNS = CPS_COLS;
