@@ -937,6 +937,13 @@ export async function getChannels(params) {
 // set. (Same as S1, that "no data now" bucket also catches a client whose
 // current month simply hasn't been input yet — no join_date to tell them
 // apart.)
+//
+// KNOWN GAP (revisit when real partial-month data triggers it): S2 does
+// NOT exclude is_partial_month rows the way S5 does. A partial month
+// compared to a full month can mis-classify a client as "declining" in
+// the waterfall / movement matrix. S1 is safe (portfolio totals only);
+// S2 is per-client so it can bite. Left as-is until a real case appears
+// — same "revisit on a concrete case" policy as the S6 coverage notes.
 
 export async function getBusinessCheckup(params) {
   const period = params.period;
@@ -1578,7 +1585,7 @@ export async function getDataQuality(params) {
   const [snapshot, csc, unmappedAcc, recon, log] = await Promise.all([
     repo.dataQualitySnapshot(period),
     repo.allClientSalesChannels(),
-    repo.metaSpendWithoutAdAccounts(),
+    repo.metaSpendAdAccountGaps(),
     repo.channelReconciliation(period),
     repo.listIngestionLog({ limit: 40 }),
   ]);
@@ -1634,13 +1641,15 @@ export async function getDataQuality(params) {
     note: 'is_used null = channel belum dinilai (belum ada di client_sales_channels), bukan "tidak dipakai".',
   };
 
-  // --- 2. Ad account belum ter-mapping ---------------------------
+  // --- 2. Ad account belum ter-mapping (2 tier) ------------------
+  const accRow = (r) => ({
+    brand_id: r.brand_id, brand_name: r.brand_name, bm_id: r.bm_id,
+    meta_spend_total: Number(r.meta_spend_total), months: Number(r.months),
+  });
   const ad_accounts_unmapped = {
-    clients: unmappedAcc.map((r) => ({
-      brand_id: r.brand_id, brand_name: r.brand_name, bm_id: r.bm_id,
-      meta_spend_total: Number(r.meta_spend_total), months: Number(r.months),
-    })),
-    note: 'Client punya spend Meta (meta_*) tapi 0 baris di brand_ad_accounts — spend-nya tidak bisa ditelusuri ke akun iklan tertentu. brand_ad_accounts belum diisi (sheet cuma punya angka "# Ad account", bukan daftar ID).',
+    hard: unmappedAcc.filter((r) => r.hard).map(accRow),
+    soft: unmappedAcc.filter((r) => !r.hard).map(accRow),
+    note: 'HARD = punya spend Meta tapi bm_id kosong → spend tidak terikat ke Business Manager mana pun. SOFT = bm_id ada tapi 0 baris brand_ad_accounts → daftar akun iklan belum diisi (semua client sekarang; sheet cuma punya angka "# Ad account", bukan act_ ID). brand_ad_accounts akan diisi dari input manual / CONFIG.ACCOUNTS proyek automation.',
   };
 
   // --- 3. Campaign belum terklasifikasi -------------------------

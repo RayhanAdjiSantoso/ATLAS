@@ -99,23 +99,35 @@ export default function DataQualityTab() {
               <h3 style={{ fontSize: '1rem' }}>2 · Ad Account Belum Ter-mapping</h3>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.3rem 0 0' }}>{data.ad_accounts_unmapped.note}</p>
             </div>
-            {data.ad_accounts_unmapped.clients.length === 0 ? (
-              <div className="empty-state">Tidak ada.</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ marginTop: '1rem' }}>
-                  <thead><tr><th>Client</th><th>BM ID</th><th>Total Meta spend</th><th>Bulan</th></tr></thead>
-                  <tbody>
-                    {data.ad_accounts_unmapped.clients.map((c) => (
-                      <tr key={c.brand_id}>
-                        <td>{c.brand_name}</td><td>{c.bm_id || '-'}</td>
-                        <td>{money(c.meta_spend_total)}</td><td>{c.months}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {[
+              ['hard', 'HARD — spend Meta ada, BM ID kosong', 'badge-danger'],
+              ['soft', 'SOFT — BM ID ada, daftar ad account belum diisi', 'badge-warning'],
+            ].map(([key, title, badge]) => (
+              <div key={key} style={{ padding: '0.75rem 1.5rem 0' }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, margin: '0.5rem 0 0.25rem' }}>
+                  <span className={`badge ${badge}`} style={{ fontSize: '0.6rem', marginRight: 6 }}>{data.ad_accounts_unmapped[key].length}</span>
+                  {title}
+                </div>
+                {data.ad_accounts_unmapped[key].length === 0 ? (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.25rem 0 0.5rem' }}>— tidak ada</div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table>
+                      <thead><tr><th>Client</th><th>BM ID</th><th>Total Meta spend</th><th>Bulan</th></tr></thead>
+                      <tbody>
+                        {data.ad_accounts_unmapped[key].map((c) => (
+                          <tr key={c.brand_id}>
+                            <td>{c.brand_name}</td><td>{c.bm_id || '-'}</td>
+                            <td>{money(c.meta_spend_total)}</td><td>{c.months}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            )}
+            ))}
+            <div style={{ height: '1rem' }} />
           </div>
 
           {/* 3. Campaign belum terklasifikasi */}

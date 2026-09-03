@@ -345,19 +345,23 @@ export async function allClientSalesChannels(db = pool) {
   return rows;
 }
 
-// Brands whose Meta spend can't be traced to an ad account: they have
-// meta_* platform spend somewhere but zero brand_ad_accounts rows.
-export async function metaSpendWithoutAdAccounts(db = pool) {
+// Brands with Meta spend but incomplete ad-account mapping. Two tiers:
+//   hard — no bm_id at all: spend not tied to any Business Manager.
+//   soft — has a bm_id, but no brand_ad_accounts rows yet (everyone, for
+//          now — brand_ad_accounts is unpopulated; the sheet has only an
+//          ad-account COUNT, never the act_ IDs).
+export async function metaSpendAdAccountGaps(db = pool) {
   const { rows } = await db.query(
     `SELECT b.brand_id, b.brand_name, b.bm_id,
             SUM(cps.amount_spent) AS meta_spend_total,
-            count(DISTINCT cps.period) AS months
+            count(DISTINCT cps.period) AS months,
+            (b.bm_id IS NULL) AS hard
      FROM client_platform_spend_monthly cps
      JOIN brands b ON b.brand_id = cps.brand_id
      WHERE cps.platform::text LIKE 'meta\\_%'
        AND NOT EXISTS (SELECT 1 FROM brand_ad_accounts a WHERE a.brand_id = b.brand_id)
      GROUP BY b.brand_id, b.brand_name, b.bm_id
-     ORDER BY meta_spend_total DESC`,
+     ORDER BY (b.bm_id IS NULL) DESC, meta_spend_total DESC`,
   );
   return rows;
 }
