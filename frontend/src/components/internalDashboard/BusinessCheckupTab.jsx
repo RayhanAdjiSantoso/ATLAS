@@ -62,6 +62,21 @@ export default function BusinessCheckupTab() {
 
           <WaterfallChart w={{ ...data.waterfall, period: data.period }} />
 
+          {(data.waterfall.annotations?.new_needs_review?.length > 0
+            || data.waterfall.annotations?.churn_needs_review?.length > 0) && (
+            <div className="alert alert-error" style={{ fontSize: '0.8rem' }}>
+              <strong>Perlu dicek — kemungkinan salah klasifikasi (angka bridge tidak terpengaruh):</strong>
+              <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.1rem' }}>
+                {data.waterfall.annotations.new_needs_review.map((x) => (
+                  <li key={`n-${x.brand_id}`}>{x.brand_name}: {x.flag}</li>
+                ))}
+                {data.waterfall.annotations.churn_needs_review.map((x) => (
+                  <li key={`c-${x.brand_id}`}>{x.brand_name}: {x.flag}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <h3 style={{ fontSize: '1rem', padding: '1rem 1.5rem 0' }}>10 Pergerakan Terbesar</h3>
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.3rem 1.5rem 0' }}>

@@ -202,7 +202,8 @@ export async function listBrandsForOverview({ status, kategoriBesar }, db = pool
   // status IS NOT NULL excludes the handful of pre-migration report-generator
   // brand rows that never went through the "Client info" import.
   const { rows } = await db.query(
-    `SELECT brand_id, brand_name, industry, sub_industry, kategori_besar, status::text AS status
+    `SELECT brand_id, brand_name, industry, sub_industry, kategori_besar,
+            status::text AS status, join_date::text AS join_date
      FROM brands_with_category
      WHERE status IS NOT NULL
        AND ($1::text = 'all' OR status = 'active')

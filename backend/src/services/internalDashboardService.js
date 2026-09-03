@@ -232,6 +232,29 @@ export function buildCohort(brandIds, valueAt, currentKey, priorKey) {
 }
 
 const growth = (cur, prior) => (prior != null && prior > 0 ? cur / prior - 1 : null);
+
+// Cross-check the proxy new/churn classification. These NEVER move a client
+// between buckets or touch the waterfall bridge — they are annotations only
+// (breakdown / user direction: keep the validated proxy, add a flag layer).
+//   "new"  : proxy = has current-period data, no compare-period data.
+//            join_date older than the compare period => likely a not-yet-
+//            input prior month, not a genuinely new client.
+//   "churn": proxy = had compare-period data, none this period.
+//            status still 'active' => likely un-input data, not real churn.
+function newClientFlag(meta, comparePeriodYm) {
+  if (!meta?.join_date || !comparePeriodYm) return null;
+  const jdYm = meta.join_date.slice(0, 7);
+  if (jdYm < comparePeriodYm) {
+    return `Tercatat "baru" oleh sistem, tapi join_date ${meta.join_date} — client sudah ada sejak sebelum ${comparePeriodYm}. Kemungkinan data periode sebelumnya belum diinput, bukan client baru.`;
+  }
+  return null; // join_date jatuh di window (atau setelahnya) -> proxy sudah benar
+}
+function churnClientFlag(meta) {
+  if (meta?.status === 'active') {
+    return 'Tercatat "churn" oleh sistem, tapi status masih ACTIVE. Kemungkinan data periode ini belum diinput, bukan churn.';
+  }
+  return null;
+}
 const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const median = (xs) => percentile(xs, 50);
 // Linear-interpolated percentile (p in 0..100). Returns null for empty input.
@@ -444,10 +467,19 @@ export async function getOverview(params) {
     basis,
     compare,
     buckets: GROWTH_BUCKETS.map((b) => ({ label: b.label, count: bucketCounts[b.label] })),
-    // Until join_date exists, "entered" mixes genuinely-new clients with
-    // ones whose prior month simply hasn't been input yet (see plan flag).
-    entered: cohort.entered.map((r) => withName(r, { current: r.current })),
-    left: cohort.left.map((r) => withName(r, { prior: r.prior })),
+    // Proxy: "entered" = has current-period data, none in the compare
+    // period. Each carries a cross-check `flag` (join_date older than the
+    // compare period => probably un-input history, not a new client);
+    // `left` carries one too (status still active => probably un-input, not
+    // churn). Flags are annotations — the buckets above are unchanged.
+    entered: cohort.entered.map((r) => withName(r, {
+      current: r.current,
+      flag: newClientFlag(brandById.get(r.brandId), comparePeriod),
+    })),
+    left: cohort.left.map((r) => withName(r, {
+      prior: r.prior,
+      flag: churnClientFlag(brandById.get(r.brandId)),
+    })),
   };
 
   // ---- perlu perhatian (vs sub-industry peer average) ----
@@ -903,6 +935,17 @@ export async function getBusinessCheckup(params) {
     // reconciliation: prior + growth + decline + new + churn === current
     reconciles: Math.abs((priorTotal + growAmt + declineAmt + newAmt + churnAmt) - currentTotal) < 1,
     counts: { growth: growN, decline: declineN, flat: flatN, new: cohort.entered.length, churn: cohort.left.length },
+    // Cross-check annotations — do NOT affect the bridge above. A "new"
+    // client whose join_date predates the prior period, or a "churn"
+    // client still marked active, is probably un-input data.
+    annotations: {
+      new_needs_review: cohort.entered
+        .map((c) => ({ brand_id: c.brandId, brand_name: name(c.brandId), current: c.current, flag: newClientFlag(brandById.get(c.brandId), comparePeriod) }))
+        .filter((x) => x.flag),
+      churn_needs_review: cohort.left
+        .map((c) => ({ brand_id: c.brandId, brand_name: name(c.brandId), prior: c.prior, flag: churnClientFlag(brandById.get(c.brandId)) }))
+        .filter((x) => x.flag),
+    },
   };
 
   // ---- client movement matrix (like-for-like cohort only) -------

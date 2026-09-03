@@ -32,16 +32,30 @@ export default function GrowthDistribution({ data }) {
       {(entered.length > 0 || left.length > 0) && (
         <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           {entered.length > 0 && (
-            <p style={{ margin: '0.25rem 0' }}>
-              <strong>Belum ada pembanding ({entered.length}):</strong> {entered.map((e) => e.brand_name).join(', ')}
-              <br />
-              <em>Bisa client baru, atau bulan sebelumnya belum diinput — belum bisa dibedakan sampai ada join_date.</em>
-            </p>
+            <div style={{ margin: '0.4rem 0' }}>
+              <strong>Belum ada pembanding ({entered.length})</strong> — client dengan data periode ini tapi tidak di periode pembanding:
+              <ul style={{ margin: '0.3rem 0 0', paddingLeft: '1.1rem' }}>
+                {entered.map((e) => (
+                  <li key={e.brand_id} style={{ margin: '0.15rem 0' }}>
+                    {e.brand_name}
+                    {e.flag && <span style={{ color: 'var(--danger)' }}> — ⚠ {e.flag}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           {left.length > 0 && (
-            <p style={{ margin: '0.25rem 0' }}>
-              <strong>Tidak ada data periode ini ({left.length}):</strong> {left.map((e) => e.brand_name).join(', ')}
-            </p>
+            <div style={{ margin: '0.4rem 0' }}>
+              <strong>Tidak ada data periode ini ({left.length})</strong>:
+              <ul style={{ margin: '0.3rem 0 0', paddingLeft: '1.1rem' }}>
+                {left.map((e) => (
+                  <li key={e.brand_id} style={{ margin: '0.15rem 0' }}>
+                    {e.brand_name}
+                    {e.flag && <span style={{ color: 'var(--danger)' }}> — ⚠ {e.flag}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}
