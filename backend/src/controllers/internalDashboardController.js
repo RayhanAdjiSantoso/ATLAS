@@ -137,6 +137,16 @@ export const getIndustries = asyncHandler(async (req, res) => {
   }));
 });
 
+// --- S2 Business Checkup -------------------------------------
+export const getBusinessCheckup = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getBusinessCheckup({
+    period: req.query.period,
+    compare: req.query.compare,
+    category: req.query.category,
+  }));
+});
+
 // --- S6 Channel & Platform -----------------------------------
 export const getChannels = asyncHandler(async (req, res) => {
   validate(req);

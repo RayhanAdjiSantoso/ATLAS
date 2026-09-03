@@ -830,3 +830,163 @@ export async function getChannels(params) {
     client_coverage,
   };
 }
+
+// =====================================================================
+// S2 — Business Checkup
+// =====================================================================
+// Reuses buildCohort() + shiftMonth() from S1 for the like-for-like split.
+//
+// DESIGN NOTE: S2 does NOT honour the `status` filter — it always spans
+// every migrated client. Churn is detected as "had sales last period,
+// none this period", which only works if the churned client stays in the
+// set. (Same as S1, that "no data now" bucket also catches a client whose
+// current month simply hasn't been input yet — no join_date to tell them
+// apart.)
+
+export async function getBusinessCheckup(params) {
+  const period = params.period;
+  const compare = params.compare === 'yoy' ? 'yoy' : 'mom';
+  const category = params.category || 'all';
+  const kategoriBesar = category === 'all' ? null : (CATEGORY_MAP[category] ?? null);
+
+  const grid = await loadMonthlyGrid({ status: 'all', kategoriBesar, period, compare });
+  const { brandIds, brandById, comparePeriod, months, revAt, spendAt, targetAt } = grid;
+
+  const cohort = buildCohort(brandIds, revAt, period, comparePeriod);
+  const name = (id) => brandById.get(id).brand_name;
+
+  // ---- waterfall: prior_total -> current_total -------------------
+  const priorTotal = cohort.both.reduce((a, c) => a + c.prior, 0) + cohort.left.reduce((a, c) => a + c.prior, 0);
+  const currentTotal = cohort.both.reduce((a, c) => a + c.current, 0) + cohort.entered.reduce((a, c) => a + c.current, 0);
+
+  let growAmt = 0;
+  let declineAmt = 0;
+  let growN = 0;
+  let declineN = 0;
+  let flatN = 0;
+  for (const c of cohort.both) {
+    const d = c.current - c.prior;
+    if (d > 0) { growAmt += d; growN += 1; }
+    else if (d < 0) { declineAmt += d; declineN += 1; }
+    else flatN += 1;
+  }
+  const newAmt = cohort.entered.reduce((a, c) => a + c.current, 0);
+  const churnAmt = -cohort.left.reduce((a, c) => a + c.prior, 0);
+
+  const waterfall = {
+    prior_period: comparePeriod,
+    prior_total: priorTotal,
+    growth: growAmt,
+    decline: declineAmt, // <= 0
+    new_clients: newAmt,
+    churn: churnAmt, // <= 0
+    current_total: currentTotal,
+    // reconciliation: prior + growth + decline + new + churn === current
+    reconciles: Math.abs((priorTotal + growAmt + declineAmt + newAmt + churnAmt) - currentTotal) < 1,
+    counts: { growth: growN, decline: declineN, flat: flatN, new: cohort.entered.length, churn: cohort.left.length },
+  };
+
+  // ---- client movement matrix (like-for-like cohort only) -------
+  const movement_matrix = cohort.both.map((c) => ({
+    brand_id: c.brandId,
+    brand_name: name(c.brandId),
+    kategori_besar: brandById.get(c.brandId).kategori_besar || null,
+    sales: c.current,
+    growth: c.prior > 0 ? c.current / c.prior - 1 : null,
+    ad_spend: spendAt(c.brandId, period),
+    direction: c.current >= c.prior ? 'up' : 'down',
+  }));
+
+  // ---- spend vs sales (needs spend AND sales in both periods) ---
+  const spend_vs_sales = cohort.both
+    .map((c) => {
+      const sp = spendAt(c.brandId, period);
+      const spPrior = spendAt(c.brandId, comparePeriod);
+      if (sp == null || spPrior == null || spPrior <= 0 || c.prior <= 0) return null;
+      return {
+        brand_id: c.brandId,
+        brand_name: name(c.brandId),
+        sales_delta_pct: c.current / c.prior - 1,
+        spend_delta_pct: sp / spPrior - 1,
+        sales: c.current,
+      };
+    })
+    .filter(Boolean);
+
+  // ---- top 10 movers by absolute contribution to portfolio delta ----
+  const netChange = currentTotal - priorTotal;
+  const contribRows = [
+    ...cohort.both.map((c) => ({ id: c.brandId, type: c.current >= c.prior ? 'growth' : 'decline', prior: c.prior, current: c.current, contribution: c.current - c.prior })),
+    ...cohort.entered.map((c) => ({ id: c.brandId, type: 'new', prior: null, current: c.current, contribution: c.current })),
+    ...cohort.left.map((c) => ({ id: c.brandId, type: 'churn', prior: c.prior, current: null, contribution: -c.prior })),
+  ];
+  const top_movers = contribRows
+    .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))
+    .slice(0, 10)
+    .map((r) => ({
+      brand_id: r.id,
+      brand_name: name(r.id),
+      type: r.type,
+      prior: r.prior,
+      current: r.current,
+      delta_abs: r.contribution,
+      delta_pct: r.prior != null && r.prior > 0 ? r.current / r.prior - 1 : null,
+      contribution_pct_of_change: netChange !== 0 ? r.contribution / netChange : null,
+    }));
+
+  // ---- portfolio index (base = first non-null month = 100) ------
+  const salesSeries = months.map((mo) => grid.sumFor(brandIds, mo, revAt));
+  const spendSeries = months.map((mo) => grid.sumFor(brandIds, mo, spendAt));
+  const indexTo100 = (series) => {
+    const baseIdx = series.findIndex((v) => v != null && v > 0);
+    if (baseIdx === -1) return series.map(() => null);
+    const base = series[baseIdx];
+    return series.map((v) => (v == null ? null : (v / base) * 100));
+  };
+  const salesIdx = indexTo100(salesSeries);
+  const spendIdx = indexTo100(spendSeries);
+  const portfolio_index = {
+    base_note: 'Base 100 = bulan pertama dengan data di window. Belum dikontrol komposisi (client sama sepanjang window) — versi like-for-like penuh baru bermakna setelah ada histori.',
+    series: months.map((mo, i) => ({ period: mo, sales_index: salesIdx[i], spend_index: spendIdx[i] })),
+  };
+
+  // ---- actual vs target per kategori --------------------------
+  // Only clients that have BOTH an actual revenue and a target_sales for
+  // `period` count. target_sales is nullable -> excluded, never treated as 0.
+  const KATS = ['Retail', 'B2B/Service', 'F&B'];
+  const actual_vs_target = KATS.map((kat) => {
+    const ids = brandIds.filter((id) => (brandById.get(id).kategori_besar || null) === kat);
+    let actual = 0;
+    let target = 0;
+    const included = [];
+    const excludedNoTarget = [];
+    for (const id of ids) {
+      const rev = revAt(id, period);
+      const tgt = targetAt(id, period);
+      if (rev != null && tgt != null) { actual += rev; target += tgt; included.push(name(id)); }
+      else if (rev != null) excludedNoTarget.push(name(id));
+    }
+    return {
+      kategori_besar: kat,
+      actual: included.length ? actual : null,
+      target: included.length ? target : null,
+      attainment_pct: included.length && target > 0 ? actual / target : null,
+      n_included: included.length,
+      n_excluded_no_target: excludedNoTarget.length,
+      excluded_no_target: excludedNoTarget,
+    };
+  });
+
+  return {
+    period,
+    compare_period: comparePeriod,
+    filters: { compare, category },
+    note: 'S2 selalu mencakup semua client (filter status diabaikan) supaya churn bisa terdeteksi dari hilangnya data. "New" & "churn" bisa jadi client baru/berhenti ATAU data yang belum/berhenti diinput — belum bisa dibedakan tanpa join_date.',
+    waterfall,
+    movement_matrix,
+    spend_vs_sales,
+    top_movers,
+    portfolio_index,
+    actual_vs_target,
+  };
+}
