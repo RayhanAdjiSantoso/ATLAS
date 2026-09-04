@@ -19,7 +19,9 @@ export const DEFS = {
     'purchases conversion value for shared',
     'purchase roas for shared',
   ],
-  cpasDemo: ['amount spent', 'cost per adds to cart', 'cost per add to cart', 'cost per purchase with shared', 'purchase roas for shared'],
+  // 'cost per puchase' (sic) covers MIL's typo'd template column; the
+  // properly-spelled key stays as a fallback for other exports.
+  cpasDemo: ['amount spent', 'cost per adds to cart', 'cost per add to cart', 'cost per puchase', 'cost per purchase with shared', 'purchase roas for shared'],
   cpasNV: [
     'amount spent',
     'results',
@@ -52,22 +54,39 @@ export const RATE_KW = ['cost', 'cpm', 'cpc', 'cpa', 'cpp', 'ctr', 'ratio', 'rat
 // cost column gets mislabeled with the base metric's name. Meta also
 // varies singular/plural spelling per export ("purchase" vs "purchases",
 // "add" vs "adds", "view" vs "views") so both variants are listed.
+//
+// CPAS ("… for/with shared items") metrics keep an explicit "(shared items)"
+// suffix so the three Adds-to-Cart columns (count / cost per / conversion
+// value) and the two Purchases columns don't all collapse to one ambiguous
+// label. The MIL Meta Ads Reporting template also ships some columns with
+// custom names — "Cost per adds to cart (shared items) (IDR)", and a
+// "Cost per puchase (…)" typo — matched here too. "Results" / "Cost per
+// result" in a CPAS file is Meta's blended results metric (it sums across
+// each campaign's own result type), tagged "(blended)" to say so.
 export const RENAME_MAP: { match: string; label: string }[] = [
-  { match: 'purchases conversion value for shared items only', label: 'Purchases Conversion Value' },
-  { match: 'purchase roas for shared items only', label: 'ROAS' },
-  { match: 'cost per purchase with shared', label: 'Cost per Purchase' },
-  { match: 'cost per purchases with shared', label: 'Cost per Purchase' },
-  { match: 'cost per atc with', label: 'Cost per Add to Cart' },
-  { match: 'cost per atc shared', label: 'Cost per Add to Cart' },
-  { match: 'cost per add to cart with shared', label: 'Cost per Add to Cart' },
-  { match: 'cost per adds to cart with shared', label: 'Cost per Add to Cart' },
-  { match: 'cost per content view with shared', label: 'Cost per Content View' },
-  { match: 'cost per content views with shared', label: 'Cost per Content View' },
+  { match: 'purchases conversion value for shared items only', label: 'Purchases Conversion Value (shared items)' },
+  { match: 'purchase roas for shared items only', label: 'Purchase ROAS (shared items)' },
+  { match: 'adds to cart conversion value for shared items only', label: 'Adds to Cart Conversion Value (shared items)' },
+  { match: 'cost per purchase with shared', label: 'Cost per Purchase (shared items)' },
+  { match: 'cost per purchases with shared', label: 'Cost per Purchase (shared items)' },
+  { match: 'cost per purchase (shared', label: 'Cost per Purchase (shared items)' },
+  { match: 'cost per puchase', label: 'Cost per Purchase (shared items)' },
+  { match: 'cost per atc with', label: 'Cost per Add to Cart (shared items)' },
+  { match: 'cost per atc shared', label: 'Cost per Add to Cart (shared items)' },
+  { match: 'cost per add to cart with shared', label: 'Cost per Add to Cart (shared items)' },
+  { match: 'cost per adds to cart with shared', label: 'Cost per Add to Cart (shared items)' },
+  { match: 'cost per add to cart (shared', label: 'Cost per Add to Cart (shared items)' },
+  { match: 'cost per adds to cart (shared', label: 'Cost per Add to Cart (shared items)' },
+  { match: 'cost per content view with shared', label: 'Cost per Content View (shared items)' },
+  { match: 'cost per content views with shared', label: 'Cost per Content View (shared items)' },
+  { match: 'cost per content view (shared', label: 'Cost per Content View (shared items)' },
+  { match: 'cost per content views (shared', label: 'Cost per Content View (shared items)' },
   { match: 'cost per reach', label: 'Cost per Reach' },
-  { match: 'cost per result', label: 'Cost per Result' },
-  { match: 'purchases with shared items', label: 'Purchases' },
-  { match: 'adds to cart with shared items', label: 'Add to Cart' },
-  { match: 'content views with shared items', label: 'Content Views' },
+  { match: 'cost per result', label: 'Cost per Result (blended)' },
+  { match: 'purchases with shared items', label: 'Purchases (shared items)' },
+  { match: 'adds to cart with shared items', label: 'Adds to Cart (shared items)' },
+  { match: 'content views with shared items', label: 'Content Views (shared items)' },
+  { match: 'results', label: 'Results (blended)' },
   { match: 'purchases conversion value', label: 'Purchases Conversion Value' },
   { match: 'purchases', label: 'Purchases' },
   { match: 'cost per purchase', label: 'Cost per Purchase' },
@@ -145,6 +164,15 @@ export const COST_PER_MAP: { cost: string; denom: string }[] = [
   { cost: 'cost per message', denom: 'total message' },
   { cost: 'cost per purchase with', denom: 'purchases with shared' },
   { cost: 'cost per purchases with', denom: 'purchases with shared' },
+  // MIL's Meta Ads Reporting template renames this column "Cost per
+  // puchase (shared items) (IDR)" (sic — the "r" is missing) and drops the
+  // "with" ("… (shared items)" not "… with shared items"), so neither the
+  // typo'd spelling nor the paren form matches the two rules above. Without
+  // these, agg() falls through to an Impressions-weighted average of Meta's
+  // own per-row cost values (wrong: shows ~Rp34k instead of Spend ÷
+  // Purchases). Both point at the real "Purchases with shared items" count.
+  { cost: 'cost per puchase', denom: 'purchases with shared' },
+  { cost: 'cost per purchase (shared', denom: 'purchases with shared' },
   { cost: 'cost per purchase', denom: 'purchase' },
   { cost: 'cost per atc with', denom: 'adds to cart with shared' },
   { cost: 'cost per adds to cart with', denom: 'adds to cart with shared' },

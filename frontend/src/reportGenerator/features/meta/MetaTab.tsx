@@ -622,19 +622,19 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               <DemoBreakdownCard heading="Non-Boost Post · Gender Breakdown" badge={`data ${report.p2}`} rows={report.genderDemo.rows} dimCol={report.genderDemo.dimCol} allCols={report.genderDemo.allCols} defaultCols={report.genderDemo.defaultCols} />
             )}
             {report.cpas?.overall && (
-              <OverviewDetailedCard heading="CPAS Marketplace" badge="Overall" overviewRows={report.cpas.overall.overviewRows} detailedRows={report.cpas.overall.detailedRows} allCols={report.cpas.overall.allCols} p1={report.p1} p2={report.p2} />
+              <OverviewDetailedCard heading="CPAS Marketplace" badge="Overall" overviewRows={report.cpas.overall.overviewRows} detailedRows={report.cpas.overall.detailedRows} allCols={report.cpas.overall.allCols} p1={report.cpas.p1} p2={report.cpas.p2} />
             )}
             {report.cpas?.ageDemo && (
-              <DemoBreakdownCard heading="CPAS Marketplace · Age Breakdown" badge={`data ${report.p2}`} rows={report.cpas.ageDemo.rows} dimCol={report.cpas.ageDemo.dimCol} allCols={report.cpas.ageDemo.allCols} defaultCols={report.cpas.ageDemo.defaultCols} />
+              <DemoBreakdownCard heading="CPAS Marketplace · Age Breakdown" badge={`data ${report.cpas.p2}`} rows={report.cpas.ageDemo.rows} dimCol={report.cpas.ageDemo.dimCol} allCols={report.cpas.ageDemo.allCols} defaultCols={report.cpas.ageDemo.defaultCols} />
             )}
             {report.cpas?.genderDemo && (
-              <DemoBreakdownCard heading="CPAS Marketplace · Gender Breakdown" badge={`data ${report.p2}`} rows={report.cpas.genderDemo.rows} dimCol={report.cpas.genderDemo.dimCol} allCols={report.cpas.genderDemo.allCols} defaultCols={report.cpas.genderDemo.defaultCols} />
+              <DemoBreakdownCard heading="CPAS Marketplace · Gender Breakdown" badge={`data ${report.cpas.p2}`} rows={report.cpas.genderDemo.rows} dimCol={report.cpas.genderDemo.dimCol} allCols={report.cpas.genderDemo.allCols} defaultCols={report.cpas.genderDemo.defaultCols} />
             )}
             {report.cpas?.nv && (
-              <OverviewDetailedCard heading="CPAS Marketplace · NV" badge="New Visitor" overviewRows={report.cpas.nv.overviewRows} detailedRows={report.cpas.nv.detailedRows} allCols={report.cpas.nv.allCols} p1={report.p1} p2={report.p2} />
+              <OverviewDetailedCard heading="CPAS Marketplace · NV" badge="New Visitor" overviewRows={report.cpas.nv.overviewRows} detailedRows={report.cpas.nv.detailedRows} allCols={report.cpas.nv.allCols} p1={report.cpas.p1} p2={report.cpas.p2} />
             )}
             {report.cpas?.rm && (
-              <OverviewDetailedCard heading="CPAS Marketplace · RM" badge="Retargeting" overviewRows={report.cpas.rm.overviewRows} detailedRows={report.cpas.rm.detailedRows} allCols={report.cpas.rm.allCols} p1={report.p1} p2={report.p2} />
+              <OverviewDetailedCard heading="CPAS Marketplace · RM" badge="Retargeting" overviewRows={report.cpas.rm.overviewRows} detailedRows={report.cpas.rm.detailedRows} allCols={report.cpas.rm.allCols} p1={report.cpas.p1} p2={report.cpas.p2} />
             )}
           </div>
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
