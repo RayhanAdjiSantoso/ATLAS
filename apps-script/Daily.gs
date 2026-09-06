@@ -163,7 +163,7 @@ function dailyUrgentCheck() {
       log.push(acct.client + ': ' + brandFindingsCount + ' temuan (' + brandSubs.length + ' langganan)');
     } catch (e) {
       brandSubs.forEach(function (s) {
-        pushTo_(failuresByEmail, s.email, { client: acct.client, message: e.message });
+        pushTo_(failuresByEmail, s.email, { client: acct.client, type: acct.type, message: e.message });
       });
       log.push('GAGAL ' + acct.client + ': ' + e.message);
     }
@@ -240,6 +240,7 @@ function evaluateBrandDailyForSub_(acct, meta, byDate, tz, sub, yesterdayDate) {
     var ctx = {
       email: sub.email,
       client: acct.client,
+      type: acct.type,
       campaignId: id,
       campaign: name,
       resultKey: key,
@@ -391,6 +392,7 @@ function makeFinding_(ctx, rule, title, detail, dc) {
     detail: detail,
     email: ctx.email,
     client: ctx.client,
+    type: ctx.type,
     campaign: ctx.campaign,
     resultKey: ctx.resultKey,
     proxy: ctx.proxy,
@@ -494,30 +496,35 @@ function buildUrgentHtml_(findings, failures, yLabel) {
     h += '<div style="border-left:4px solid #8a8d91;background:#f5f6f7;padding:10px 14px;margin:12px 0">';
     h += '<div style="font-weight:bold;margin-bottom:6px">Brand gagal ditarik</div>';
     failures.forEach(function (f) {
-      h += '<div style="font-size:13px;margin:3px 0">' + f.client +
+      h += '<div style="font-size:13px;margin:3px 0">' + f.client + typeBadge_(f.type) +
            ' — <span style="color:#65676b">' + f.message + '</span></div>';
     });
     h += '</div>';
   }
 
-  // kelompokkan per brand
+  // Kelompokkan per brand -- brand yang sama bisa punya lebih dari satu ad
+  // account (mis. "Crabus" MAIN dan "Crabus" CPAS), jadi key-nya harus ikut
+  // type, bukan cuma nama client, supaya temuan keduanya tidak ketuker jadi
+  // satu section.
   var byClient = {};
   findings.forEach(function (f) {
-    if (!byClient[f.client]) byClient[f.client] = [];
-    byClient[f.client].push(f);
+    var key = f.client + '|' + (f.type || '');
+    if (!byClient[key]) byClient[key] = { client: f.client, type: f.type, items: [] };
+    byClient[key].items.push(f);
   });
 
-  Object.keys(byClient).forEach(function (client) {
+  Object.keys(byClient).forEach(function (key) {
+    var group = byClient[key];
     h += '<h3 style="margin:20px 0 6px;padding-bottom:4px;border-bottom:2px solid #e4e6eb">' +
-         client + '</h3>';
+         group.client + typeBadge_(group.type) + '</h3>';
 
     // urutkan: aturan 'zero' (berhenti total) dianggap paling mendesak
-    byClient[client].sort(function (a, b) {
+    group.items.sort(function (a, b) {
       var rank = function (f) { return f.ruleType === 'zero' ? 0 : 1; };
       return rank(a) - rank(b);
     });
 
-    byClient[client].forEach(function (f) {
+    group.items.forEach(function (f) {
       var color = urgentColor_(f);
       h += '<div style="border-left:4px solid ' + color +
            ';background:#fbfbfb;padding:10px 14px;margin:10px 0">';
