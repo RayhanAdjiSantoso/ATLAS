@@ -483,7 +483,7 @@ function weeklyRun() {
         });
       } catch (e) {
         brandSubs.forEach(function (s) {
-          pushTo_(failuresByEmail, s.email, { client: acct.client, message: e.message });
+          pushTo_(failuresByEmail, s.email, { client: acct.client, type: acct.type, message: e.message });
         });
         log.push('GAGAL ' + acct.client + ': ' + e.message);
       }
@@ -667,6 +667,7 @@ function evaluateBrandWeeklyForSub_(acct, token, meta, byDate, tz, sub) {
 
   return {
     client: acct.client,
+    type: acct.type,
     email: sub.email,
     metrics: ws.metrics,
     minSpend: ws.minSpend,
@@ -1216,7 +1217,7 @@ function buildReportHtml_(reports, flagged, zero, failures) {
     h += '<div style="border-left:4px solid #8a8d91;background:#f5f6f7;padding:10px 14px;margin:12px 0">';
     h += '<div style="font-weight:bold;margin-bottom:6px">Brand yang gagal ditarik</div>';
     failures.forEach(function (f) {
-      h += '<div style="margin:3px 0;font-size:13px">' + f.client +
+      h += '<div style="margin:3px 0;font-size:13px">' + f.client + typeBadge_(f.type) +
            ' — <span style="color:#65676b">' + f.message + '</span></div>';
     });
     h += '<div style="font-size:12px;color:#65676b;margin-top:6px">' +
@@ -1233,7 +1234,7 @@ function buildReportHtml_(reports, flagged, zero, failures) {
 
   reports.forEach(function (r) {
     h += '<h3 style="margin:22px 0 4px;padding-bottom:4px;border-bottom:2px solid #e4e6eb">' +
-         r.client + '</h3>';
+         r.client + typeBadge_(r.type) + '</h3>';
     h += '<p style="margin:0 0 4px;color:#65676b;font-size:12px">Jendela: ' +
          r.periods.narrow.current.label + ' vs ' + r.periods.narrow.previous.label + '</p>';
 
@@ -1367,6 +1368,15 @@ function buildSummaryTable_(r) {
 function proxyBadge_() {
   return '<span style="background:#fff3cd;color:#8a6d00;padding:1px 6px;' +
          'border-radius:3px;font-size:11px;margin-left:6px">PROXY</span>';
+}
+
+// Beberapa brand punya lebih dari satu ad account dengan nama sama (mis.
+// "Crabus" MAIN dan "Crabus" CPAS) -- tanpa ini, judul section di email
+// tidak bisa dibedakan satu sama lain.
+function typeBadge_(type) {
+  if (!type) return '';
+  return ' <span style="background:#e7ecf5;color:#3c4a63;padding:1px 6px;' +
+         'border-radius:3px;font-size:11px;font-weight:normal;vertical-align:middle">' + type + '</span>';
 }
 
 function metricLine_(label, now, prev, d, mode, isCurrency) {

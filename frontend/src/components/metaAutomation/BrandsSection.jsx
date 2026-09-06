@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
+import BrandCombo from './BrandCombo.jsx';
 
 const EMPTY_FORM = { id: '', client: '', type: 'MAIN', token: '' };
 
@@ -184,7 +185,13 @@ export default function BrandsSection() {
           </div>
           <div className="form-group">
             <label>Nama Brand</label>
-            <input value={form.client} onChange={(e) => setForm((f) => ({ ...f, client: e.target.value }))} placeholder="mis. Maiimi" />
+            <BrandCombo
+              options={Array.from(new Set(brands.map((b) => b.client))).sort()}
+              value={form.client}
+              placeholder="mis. Maiimi"
+              allowCustom
+              onChange={(v) => setForm((f) => ({ ...f, client: v }))}
+            />
           </div>
           <div className="form-group">
             <label>Tipe Ad Account</label>

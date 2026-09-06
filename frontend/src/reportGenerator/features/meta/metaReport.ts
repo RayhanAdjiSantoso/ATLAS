@@ -40,6 +40,13 @@ export interface DemoData {
 }
 
 export interface CpasSections {
+  // CPAS is its own file with its own Month breakdown — its comparison
+  // periods are whatever two months that file spans, independent of the
+  // main-account file's periods (which can be a custom Day-breakdown
+  // sub-range like "1-15 Jul"). Rendered as the CPAS cards' column headers
+  // instead of the main report's p1/p2.
+  p1: string;
+  p2: string;
   overall?: OverviewDetailedData;
   ageDemo?: DemoData;
   genderDemo?: DemoData;
@@ -291,7 +298,15 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     // it the "Overall" tab double-counts every absolute metric (the NV/RM
     // tabs happen to escape it only because groupByCamp's "NV"/"RM" regex
     // never matches a subtotal's "All" campaign name).
-    const { old: cOld, cur: cCur } = splitMonths(stripCampaignSubtotals(cpasRows), cMonthCol);
+    const { old: cOld, cur: cCur, months: cMonths } = splitMonths(stripCampaignSubtotals(cpasRows), cMonthCol);
+    // CPAS has its own comparison periods — the two calendar months its file
+    // spans — not the main-account file's p1/p2 (which may be a custom
+    // Day-breakdown sub-range). Fall back to the main periods only if the
+    // CPAS Month column couldn't be parsed into labels.
+    const cOldPeriod = parseMetaMonthValue(cMonths[0]);
+    const cCurPeriod = parseMetaMonthValue(cMonths[cMonths.length - 1]);
+    const cP1 = cOldPeriod.label || p1;
+    const cP2 = cCurPeriod.label || p2;
     const cAllCols = cpasHeaders.filter((h) => isNumericCol(h, cpasRows) && !cDimCols.includes(h));
     const defCpasOverall = matchDef(DEFS.cpasOverall, cAllCols);
     const defCpasDemo = matchDef(DEFS.cpasDemo, cAllCols);
@@ -302,7 +317,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const cSpentCol = cAllCols.find((c) => c.toLowerCase().includes('amount spent'));
     const cpasKpis: SummaryKpi[] = [];
 
-    const cpas: CpasSections = {};
+    const cpas: CpasSections = { p1: cP1, p2: cP2 };
     if (defCpasOverall.length) {
       const overallKpiRows = buildKPI(cOld, cCur, defCpasOverall);
       cpas.overall = { overviewRows: toDisplayRows(overallKpiRows), detailedRows: toDisplayRows(buildKPI(cOld, cCur, cAllCols)), allCols: cAllCols };
@@ -330,8 +345,13 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       cpasKpis.push(...toSummaryRows(rmKpiRows, 'RM'));
       if (cSpentCol) metaSpend.cpasRM = { old: agg(rmOld, cSpentCol), cur: agg(rmCur, cSpentCol) };
     }
-    report.cpas = cpas;
-    report.summary.cpasKpis = cpasKpis;
+    // Only expose the CPAS section when at least one sub-section actually
+    // matched — `cpas` always carries p1/p2, so an Object.keys() length check
+    // downstream would otherwise treat a column-less file as "has CPAS".
+    if (cpas.overall || cpas.nv || cpas.rm || cpas.ageDemo || cpas.genderDemo) {
+      report.cpas = cpas;
+      report.summary.cpasKpis = cpasKpis;
+    }
   }
 
   report.summary.kpis = metaKpis;
