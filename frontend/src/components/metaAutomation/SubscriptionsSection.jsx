@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Trash2, Plus, X, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../../api/client.js';
+import BrandCombo from './BrandCombo.jsx';
 
 // Katalog field yang bisa dipantau -- BUKAN daftar metrik tetap lagi.
 // User bebas menyusun kombinasi field + arah + threshold sendiri lewat
@@ -377,6 +378,7 @@ export default function SubscriptionsSection() {
               <tr>
                 <th>Email</th>
                 <th>Brand</th>
+                <th>Tipe</th>
                 <th>Aturan Weekly</th>
                 <th>Aturan Daily</th>
                 <th>Dibuat</th>
@@ -388,6 +390,7 @@ export default function SubscriptionsSection() {
                 <tr key={s.id}>
                   <td>{s.email}</td>
                   <td>{s.brandClient}</td>
+                  <td>{brands.find((b) => b.id === s.brandId)?.type || '-'}</td>
                   <td>{(s.weeklyMetrics || []).length}</td>
                   <td>{(s.dailyMetrics || []).length}</td>
                   <td>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('id-ID') : '-'}</td>
@@ -432,14 +435,12 @@ export default function SubscriptionsSection() {
           </div>
           <div className="form-group">
             <label>Brand</label>
-            <select
+            <BrandCombo
+              options={brandNames}
               value={form.brand}
-              onChange={(e) => setForm((f) => ({ ...f, brand: e.target.value, type: '', brandId: '' }))}
-              style={{ width: '100%' }}
-            >
-              <option value="">Pilih brand...</option>
-              {brandNames.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
+              placeholder="Pilih brand..."
+              onChange={(v) => setForm((f) => ({ ...f, brand: v, type: '', brandId: '' }))}
+            />
           </div>
           <div className="form-group">
             <label>Tipe Ad Account</label>
