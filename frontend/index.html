@@ -6,7 +6,12 @@
     <title>ATLAS — Shopee Analytics</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+    <!-- DM Sans is ATLAS's original face (src/index.css). Inter is the face the
+         .mil-ui design system declares (--f) and has always asked for, but no
+         one ever loaded it — Beranda, Report Generator and the console were all
+         silently falling back to system-ui. Loading it here is what makes those
+         pages render as their own stylesheet intends. -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Inter:wght@400..800&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>

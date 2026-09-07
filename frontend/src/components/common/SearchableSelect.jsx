@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 // Single-select combobox with a type-to-filter search box. Drop-in
 // replacement for a plain <select> where the option list is long enough
@@ -69,7 +70,18 @@ export default function SearchableSelect({
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {selected ? selected.label : placeholder}
         </span>
-        <span style={{ color: 'var(--text-placeholder)', fontSize: '0.7rem' }}>▼</span>
+        {/* A drawn icon, not a "▼" character: the glyph rendered in whatever
+            the system font had, at a weight nothing else on the page shares. */}
+        <ChevronDown
+          size={15}
+          strokeWidth={2}
+          style={{
+            color: 'var(--text-placeholder)',
+            flexShrink: 0,
+            transition: 'transform .18s cubic-bezier(.22,1,.36,1)',
+            transform: open ? 'rotate(180deg)' : 'none',
+          }}
+        />
       </button>
 
       {open && (

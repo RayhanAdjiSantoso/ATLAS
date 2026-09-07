@@ -22,9 +22,12 @@ dist/
 .claude/skills/impeccable/
 .claude/agents/impeccable-*
 .claude/settings.local.json
-# Its critique log is per-run scratch. DESIGN.md and .impeccable/design.json
-# are the durable outputs and DO belong in the repo once they exist.
+# Per-run scratch. DESIGN.md, .impeccable/design.json and .impeccable/surfaces/
+# are the durable outputs and DO belong in the repo.
 .impeccable/critique/
+.impeccable/review/
+.impeccable/questions/
+.impeccable/hook.cache.json
 
 # Local UI/UX skill pack (ui-ux-pro-max) — reference data, not app code.
 frontend/.claude/skills/

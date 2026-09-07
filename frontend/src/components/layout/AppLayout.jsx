@@ -8,8 +8,10 @@ import {
   Megaphone,
   FileBarChart,
   Building2,
+  SlidersHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Menu,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
@@ -20,6 +22,9 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true },
   { to: '/dashboard', label: 'Dashboard Business Overview', Icon: LayoutDashboard },
+  // Sits directly under the dashboard it feeds: this is where the data those
+  // charts read comes in, and it used to be that page's first tab.
+  { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal },
   { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart },
   { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, adminOnly: true },
   { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, adminOnly: true },
@@ -46,6 +51,11 @@ export default function AppLayout() {
   // and the charts visibly re-draw. Floating costs nothing.
   const [peek, setPeek] = useState(false);
 
+  // Phone-width drawer. Separate from `collapsed`, which is the desktop rail's
+  // remembered preference: a drawer is closed by default every visit, and
+  // remembering it would be remembering the wrong thing.
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   useEffect(() => {
     try {
       localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
@@ -64,6 +74,14 @@ export default function AppLayout() {
     navigate('/login');
   };
 
+  // Escape closes the drawer, the way every other overlay on the web does.
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setMobileOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
+
   const links = NAV.filter((n) => !n.adminOnly || isAdmin);
   const open = !collapsed || peek;
 
@@ -74,8 +92,16 @@ export default function AppLayout() {
           peek widen the panel without moving the page underneath it. */}
       <div className={`sidebar-spacer${collapsed ? ' collapsed' : ''}`} aria-hidden />
 
+      <button
+        type="button"
+        className={`sidebar-scrim${mobileOpen ? ' is-open' : ''}`}
+        aria-label="Tutup menu"
+        tabIndex={mobileOpen ? 0 : -1}
+        onClick={() => setMobileOpen(false)}
+      />
+
       <aside
-        className={`sidebar${collapsed ? ' collapsed' : ''}${peek ? ' peek' : ''}`}
+        className={`sidebar${collapsed ? ' collapsed' : ''}${peek ? ' peek' : ''}${mobileOpen ? ' mobile-open' : ''}`}
         onMouseEnter={() => collapsed && setPeek(true)}
         onMouseLeave={() => setPeek(false)}
       >
@@ -91,6 +117,7 @@ export default function AppLayout() {
               key={to}
               to={to}
               end={end}
+              onClick={() => setMobileOpen(false)}
               className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
               // Only useful while collapsed; when the label is on screen a
               // tooltip repeating it is noise.
@@ -136,6 +163,23 @@ export default function AppLayout() {
       </aside>
 
       <main className="main-content">
+        {/* Only rendered at phone widths (CSS), where the sidebar is a drawer. */}
+        <div className="mobile-bar">
+          <button
+            type="button"
+            className="mobile-bar-btn"
+            aria-label="Buka menu"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen(true)}
+          >
+            <Menu size={20} />
+          </button>
+          <Link to="/" className="sidebar-brand" style={{ margin: 0 }}>
+            <span className="sidebar-brand-a">A</span>
+            <span>TLAS</span>
+            <span className="sidebar-brand-dot">.</span>
+          </Link>
+        </div>
         <Outlet />
       </main>
     </div>

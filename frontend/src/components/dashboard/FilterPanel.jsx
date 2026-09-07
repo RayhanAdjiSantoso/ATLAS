@@ -106,49 +106,51 @@ export default function FilterPanel({ filters, onChange }) {
     onChange({ ...filters, compareStartDate: startDate, compareEndDate: endDate });
   };
 
+  // The console's control bar. Brand, period and comparison are the axes every
+  // number on the page is read against, so they sit in one sticky row rather
+  // than a card that scrolls away — and the comparison controls appear in that
+  // same row instead of opening a second block beneath it.
   return (
-    <div className="card filter-panel" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
-      <div className="filter-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) minmax(200px, 1fr) auto', gap: '1rem', alignItems: 'end' }}>
-
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label htmlFor="brand-select">Brand</label>
-          <SearchableSelect
-            id="brand-select"
-            placeholder="Pilih Brand..."
-            value={filters.brandId}
-            options={brands.map((b) => ({ value: b.brand_id, label: b.brand_name }))}
-            onChange={(val) => handleChange('brandId', val)}
-          />
-        </div>
-
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Tanggal Mulai &amp; Tanggal Akhir</label>
-          <DateRangePicker
-            startDate={filters.startDate}
-            endDate={filters.endDate}
-            onChange={handleRangeChange}
-          />
-        </div>
-
-        <div className="form-group" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', height: '100%' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0, whiteSpace: 'nowrap' }}>
-            <input
-              type="checkbox"
-              checked={showCompare}
-              onChange={(e) => {
-                setShowCompare(e.target.checked);
-                handleChange('compare', e.target.checked);
-              }}
-            />
-            Bandingkan Periode
-          </label>
-        </div>
+    <div className="con-controls">
+      <div className="con-ctl con-ctl-brand">
+        <label htmlFor="brand-select">Brand</label>
+        <SearchableSelect
+          id="brand-select"
+          placeholder="Pilih brand..."
+          value={filters.brandId}
+          options={brands.map((b) => ({ value: b.brand_id, label: b.brand_name }))}
+          onChange={(val) => handleChange('brandId', val)}
+        />
       </div>
 
+      <div className="con-ctl con-ctl-period">
+        <label>Periode</label>
+        <DateRangePicker
+          startDate={filters.startDate}
+          endDate={filters.endDate}
+          onChange={handleRangeChange}
+        />
+      </div>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={showCompare}
+        className={`con-switch${showCompare ? ' is-on' : ''}`}
+        onClick={() => {
+          const next = !showCompare;
+          setShowCompare(next);
+          handleChange('compare', next);
+        }}
+      >
+        <span className="con-switch-track" aria-hidden><span className="con-switch-thumb" /></span>
+        Bandingkan periode
+      </button>
+
       {showCompare && (
-        <div className="compare-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor="compare-type-select">Periode Pembanding</label>
+        <>
+          <div className="con-ctl">
+            <label htmlFor="compare-type-select">Basis pembanding</label>
             <select
               id="compare-type-select"
               value={compareType}
@@ -160,24 +162,21 @@ export default function FilterPanel({ filters, onChange }) {
             </select>
           </div>
 
-          {compareType === 'custom' ? (
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Tanggal Pembanding</label>
+          <div className="con-ctl con-ctl-period">
+            <label>Periode pembanding</label>
+            {compareType === 'custom' ? (
               <DateRangePicker
                 startDate={filters.compareStartDate}
                 endDate={filters.compareEndDate}
                 onChange={handleCompareRangeChange}
               />
-            </div>
-          ) : (
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Tanggal Pembanding</label>
-              <div style={{ padding: '0.625rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                {formatDMY(filters.compareStartDate)} - {formatDMY(filters.compareEndDate)}
+            ) : (
+              <div className="con-ctl-static">
+                {formatDMY(filters.compareStartDate)} &ndash; {formatDMY(filters.compareEndDate)}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

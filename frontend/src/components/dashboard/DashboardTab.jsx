@@ -1,6 +1,5 @@
-import { useEffect, useState, Children, Fragment } from 'react';
-import { Download } from 'lucide-react';
-import api from '../../api/client.js';
+import { useState, Children, Fragment } from 'react';
+import { Download, Building2, Inbox, RotateCcw } from 'lucide-react';
 import KpiCard from './KpiCard.jsx';
 import LineChart from './LineChart.jsx';
 import DonutChart from './DonutChart.jsx';
@@ -227,19 +226,6 @@ function PeriodHeader({ title, range }) {
   );
 }
 
-// Static "pertanyaan utama" framing shown at the top of every tab, so the
-// user knows what question the section below is meant to answer before
-// reading KPIs/charts. Separate from each tab's dynamic InsightCard/headline
-// (which answers the question with this period's actual numbers) -- this is
-// the question, not the answer, so the two never duplicate each other.
-function TabHeadline({ question }) {
-  return (
-    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-      {question}
-    </div>
-  );
-}
-
 // One metric's best/worst performing day, formatted for display. Reuses
 // computeMetricExtremes (same logic as the Business Growth tab) so "best day"
 // means the same thing everywhere in the dashboard: the day with the
@@ -257,7 +243,7 @@ function BestWorstDayCard({ label, trends, metric, formatValue }) {
   const worstText = describe(worstDates);
 
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1rem' }}>
+    <div className="con-tile" style={{ padding: '1rem' }}>
       <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text)', marginBottom: '0.5rem' }}>{label}</div>
       <div style={{ fontSize: '0.8rem', color: 'var(--success)', marginBottom: '0.3rem' }}>
         <strong>Terbaik:</strong> {bestText || '-'}
@@ -270,7 +256,7 @@ function BestWorstDayCard({ label, trends, metric, formatValue }) {
 }
 
 // TAB 1: EXECUTIVE SNAPSHOT
-function renderExecutiveSnapshot(data, { onNavigateTab } = {}) {
+function renderExecutiveSnapshot(data, { onNavigateTab, stripOwnsKpis = false } = {}) {
     const {
       kpis = {},
       health = { details: {} },
@@ -291,17 +277,26 @@ function renderExecutiveSnapshot(data, { onNavigateTab } = {}) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-        {/* KPI Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-          <KpiCard title="GMV (Penjualan)" value={kpis.gmv?.value} type="currency" growth={kpis.gmv?.growth} sparkline={gmvSparkline} note="Tren harian GMV lengkap ada di tab Business Growth." />
-          <KpiCard title="Transaksi" value={kpis.transactions?.value} type="number" growth={kpis.transactions?.growth} />
-          <KpiCard title="Produk Terjual (Unit)" value={kpis.unitsSold?.value} type="number" growth={kpis.unitsSold?.growth} />
-          <KpiCard title="AOV (Rata-rata Order)" value={kpis.aov?.value} type="currency" growth={kpis.aov?.growth} />
-          <KpiCard title="Pelanggan Unik" value={kpis.uniqueCustomers?.value} type="number" growth={kpis.uniqueCustomers?.growth} />
-          <KpiCard title="Tingkat Konversi (CVR Pesanan)" value={kpis.cvr?.value} type="percentage" growth={kpis.cvr?.growth} note="Rata-rata harian 'Tingkat Konversi Pesanan' yang dilaporkan Shopee langsung (Pesanan Dibayar / Pengunjung). Berbeda basis hitung dari 'CVR Funnel' di tab Traffic & Funnel." />
-          <KpiCard title="Tingkat Pembatalan" value={kpis.cancellationRate?.value} type="percentage" growth={kpis.cancellationRate?.growth} invert note="Kenaikan tingkat pembatalan adalah sinyal negatif, sehingga ditandai merah meskipun nilainya naik." />
-          <KpiCard title="Total Diskon Diberikan" value={kpis.totalDiscount?.value} type="currency" growth={kpis.totalDiscount?.growth} />
-        </div>
+        {/* KPI Grid.
+
+            The console's KPI strip is this exact row, pinned above the panel
+            and visible whichever domain is focused, so printing it again here
+            showed the same eight figures twice in one viewport. `stripOwnsKpis`
+            is set only when the strip is actually carrying them — in comparison
+            mode the strip shows the main period alone, so both columns keep
+            their own grid and no comparison figure goes missing. */}
+        {!stripOwnsKpis && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            <KpiCard title="GMV (Penjualan)" value={kpis.gmv?.value} type="currency" growth={kpis.gmv?.growth} sparkline={gmvSparkline} note="Tren harian GMV lengkap ada di tab Business Growth." />
+            <KpiCard title="Transaksi" value={kpis.transactions?.value} type="number" growth={kpis.transactions?.growth} />
+            <KpiCard title="Produk Terjual (Unit)" value={kpis.unitsSold?.value} type="number" growth={kpis.unitsSold?.growth} />
+            <KpiCard title="AOV (Rata-rata Order)" value={kpis.aov?.value} type="currency" growth={kpis.aov?.growth} />
+            <KpiCard title="Pelanggan Unik" value={kpis.uniqueCustomers?.value} type="number" growth={kpis.uniqueCustomers?.growth} />
+            <KpiCard title="Tingkat Konversi (CVR Pesanan)" value={kpis.cvr?.value} type="percentage" growth={kpis.cvr?.growth} note="Rata-rata harian 'Tingkat Konversi Pesanan' yang dilaporkan Shopee langsung (Pesanan Dibayar / Pengunjung). Berbeda basis hitung dari 'CVR Funnel' di tab Traffic & Funnel." />
+            <KpiCard title="Tingkat Pembatalan" value={kpis.cancellationRate?.value} type="percentage" growth={kpis.cancellationRate?.growth} invert note="Kenaikan tingkat pembatalan adalah sinyal negatif, sehingga ditandai merah meskipun nilainya naik." />
+            <KpiCard title="Total Diskon Diberikan" value={kpis.totalDiscount?.value} type="currency" growth={kpis.totalDiscount?.growth} />
+          </div>
+        )}
 
         {/* Best/Worst Performing Day per metric */}
         <div className="card" style={{ padding: '1.25rem' }}>
@@ -335,12 +330,12 @@ function renderExecutiveSnapshot(data, { onNavigateTab } = {}) {
           <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <h3 style={{ fontSize: '1rem', color: 'var(--text)' }}>Komposisi Pembeli</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center' }}>
+              <div className="con-tile" style={{ padding: '1rem', textAlign: 'center' }}>
                 <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary)' }}>{formatNumber(buyerComposition.newBuyers)}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Pembeli Baru</div>
               </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--success)' }}>{formatNumber(buyerComposition.existingBuyers)}</div>
+              <div className="con-tile" style={{ padding: '1rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#0d9488' }}>{formatNumber(buyerComposition.existingBuyers)}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Pembeli Lama</div>
               </div>
             </div>
@@ -375,7 +370,7 @@ function renderExecutiveSnapshot(data, { onNavigateTab } = {}) {
                 <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text)' }} title={bottomProduct.name}>{bottomProduct.name}</div>
                 <div style={{ display: 'flex', gap: '1.5rem' }}>
                   <div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--danger)' }}>{formatCurrency(bottomProduct.revenue)}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text)' }}>{formatCurrency(bottomProduct.revenue)}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total Revenue</div>
                   </div>
                   <div>
@@ -394,7 +389,10 @@ function renderExecutiveSnapshot(data, { onNavigateTab } = {}) {
         {/* Business Health Analysis */}
         <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>Kesehatan Toko: <span style={{ color: (health.score || 0) >= 65 ? 'var(--success)' : 'var(--warning)', fontWeight: '700' }}>{health.label || '-'}</span></h2>
+            <h2 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>
+              Kesehatan Toko:{' '}
+              <span className={`con-band${(health.score || 0) >= 65 ? '' : ' is-watch'}`}>{health.label || '-'}</span>
+            </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
               Skor analisis didasarkan pada metrik konversi (CVR) dan pertumbuhan penjualan.
             </p>
@@ -402,7 +400,7 @@ function renderExecutiveSnapshot(data, { onNavigateTab } = {}) {
 
           <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '2rem', fontWeight: '800', color: (health.score || 0) >= 65 ? 'var(--success)' : 'var(--warning)' }}>{health.score || 0}/100</div>
+              <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text)' }}>{health.score || 0}/100</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Skor Kesehatan</div>
             </div>
 
@@ -572,9 +570,12 @@ function GrowthHeadlineCard({ headline, hasCompare }) {
   const toneBg = headline.tone === 'up' ? 'var(--success-bg)' : headline.tone === 'down' ? 'var(--danger-bg)' : 'var(--bg-elevated)';
 
   return (
-    <div className="card" style={{ padding: '1.25rem', borderLeft: `4px solid ${toneColor}`, background: toneBg }}>
-      <div style={{ fontSize: '1.05rem', fontWeight: '700', color: toneColor, marginBottom: '0.35rem' }}>{headline.label}</div>
-      <div style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{headline.detail}</div>
+    <div className="con-insight is-lead" style={{ background: toneBg }}>
+      <span className="con-insight-dot" style={{ background: toneColor }} aria-hidden />
+      <div>
+        <div className="con-insight-label" style={{ color: toneColor }}>{headline.label}</div>
+        <div className="con-insight-detail">{headline.detail}</div>
+      </div>
     </div>
   );
 }
@@ -839,29 +840,36 @@ function TrafficOverviewCard({ overview, title = 'Total Traffic' }) {
 }
 
 function FunnelRateCard({ funnelRates = {} }) {
+  // Four rows, not a 2x2 grid. These labels are long — "CVR Funnel (Siap Kirim
+  // ÷ Product Visitor)" — and in the narrow column beside the funnel a 2x2
+  // wrapped each cell to a different height, so four peer metrics stopped
+  // reading as peers. Rows let the label run and keep the numbers in one
+  // right-aligned tabular column you can compare down.
+  const rows = [
+    { key: 'atcRate', label: 'ATC Rate', sub: 'Keranjang / Visitor' },
+    { key: 'poRate', label: 'PO Rate', sub: 'Checkout / ATC' },
+    { key: 'coRate', label: 'CO Rate', sub: 'Siap Kirim / Checkout' },
+    {
+      key: 'cvr',
+      label: 'CVR Funnel',
+      sub: 'Siap Kirim / Product Visitor',
+      note: "CVR Funnel = Pesanan Siap Dikirim ÷ Product Visitor, dihitung dari tahapan funnel di tab ini. Berbeda dari 'CVR Pesanan' di tab Executive Snapshot, yang merupakan rata-rata harian 'Tingkat Konversi Pesanan' yang dilaporkan Shopee langsung -- kedua angka ini tidak dapat dibandingkan 1:1.",
+    },
+  ];
+
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '.9rem' }}>
       <h3 style={{ fontSize: '1rem', color: 'var(--text)' }}>Metrik Rasio Funnel</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', height: '100%', alignContent: 'center' }}>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary)' }}>{formatPercent((funnelRates.atcRate || 0) * 100, 2)}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ATC Rate (Keranjang/Visitor)</div>
-        </div>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary)' }}>{formatPercent((funnelRates.poRate || 0) * 100, 2)}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PO Rate (Checkout/ATC)</div>
-        </div>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary)' }}>{formatPercent((funnelRates.coRate || 0) * 100, 2)}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CO Rate (Siap Kirim/Checkout)</div>
-        </div>
-        <div
-          style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center', cursor: 'help' }}
-          title="CVR Funnel = Pesanan Siap Dikirim ÷ Product Visitor, dihitung dari tahapan funnel di tab ini. Berbeda dari 'CVR Pesanan' di tab Executive Snapshot, yang merupakan rata-rata harian 'Tingkat Konversi Pesanan' yang dilaporkan Shopee langsung -- kedua angka ini tidak dapat dibandingkan 1:1."
-        >
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--success)' }}>{formatPercent((funnelRates.cvr || 0) * 100, 2)}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CVR Funnel (Siap Kirim ÷ Product Visitor)</div>
-        </div>
+      <div className="con-ratelist">
+        {rows.map((r) => (
+          <div className="con-rate" key={r.key} title={r.note} style={r.note ? { cursor: 'help' } : undefined}>
+            <div className="con-rate-name">
+              {r.label}
+              <span>{r.sub}</span>
+            </div>
+            <div className="con-rate-val">{formatPercent((funnelRates[r.key] || 0) * 100, 2)}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -874,9 +882,12 @@ function InsightCard({ tone, label, detail }) {
   const toneColor = tone === 'up' ? 'var(--success)' : tone === 'down' ? 'var(--danger)' : 'var(--text-muted)';
   const toneBg = tone === 'up' ? 'var(--success-bg)' : tone === 'down' ? 'var(--danger-bg)' : 'var(--bg-elevated)';
   return (
-    <div className="card" style={{ padding: '1.1rem 1.25rem', borderLeft: `4px solid ${toneColor}`, background: toneBg }}>
-      <div style={{ fontSize: '0.95rem', fontWeight: '700', color: toneColor, marginBottom: '0.3rem' }}>{label}</div>
-      <div style={{ fontSize: '0.85rem', color: 'var(--text)' }}>{detail}</div>
+    <div className="con-insight" style={{ background: toneBg }}>
+      <span className="con-insight-dot" style={{ background: toneColor }} aria-hidden />
+      <div>
+        <div className="con-insight-label" style={{ color: toneColor }}>{label}</div>
+        <div className="con-insight-detail">{detail}</div>
+      </div>
     </div>
   );
 }
@@ -946,7 +957,11 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
               <FunnelRateCard funnelRates={comparePeriod.funnelRates} />
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+            /* The funnel takes the larger share: it is the only chart here
+               whose bars need room to be read, while the ratio card is four
+               numbers that fit anything. An even split squeezed the funnel's
+               bar track down to a few dozen pixels. */
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1.55fr) minmax(230px, 1fr)', gap: '1rem' }}>
               <FunnelChart data={funnel} title="Analisis Corong Konversi (Funnel)" />
               <FunnelRateCard funnelRates={funnelRates} />
             </div>
@@ -1889,29 +1904,11 @@ function renderProductPerformance(data, { productPerformanceLevel = 'category', 
     );
 }
 
-// Rendered once above the tab body (both compare and non-compare layouts) so
-// it's never duplicated per-column in comparison mode -- the question is the
-// same for both periods, only the answer below it differs.
-const TAB_QUESTIONS = {
-  'Executive Snapshot': 'Bagaimana performa bisnis secara keseluruhan pada periode ini?',
-  'Business Growth': 'Apakah bisnis tumbuh atau menurun dibandingkan periode sebelumnya, dan apa pendorong utamanya?',
-  'Traffic & Funnel': 'Di tahap mana pelanggan paling banyak drop-off sebelum menyelesaikan pembelian?',
-  'Retention Analysis': 'Segmen pelanggan mana yang paling bernilai, dan mana yang berisiko churn?',
-  'Transaction Behavior': 'Bagaimana pola pembayaran, pengiriman, dan pembatalan transaksi pelanggan?',
-  'Basket Analysis': 'Produk apa yang paling sering dibeli bersamaan, dan bagaimana pola repeat purchase pelanggan?',
-  'Product Performance': 'Produk mana yang menjadi pendorong pertumbuhan, dan mana yang mulai melemah?',
-};
-
-const TAB_ENDPOINTS = {
-  'Executive Snapshot': '/dashboard/executive-snapshot',
-  'Business Growth': '/dashboard/business-growth',
-  'Traffic & Funnel': '/dashboard/traffic-funnel',
-  'Retention Analysis': '/dashboard/rfm',
-  'Transaction Behavior': '/dashboard/transaction-behavior',
-  'Basket Analysis': '/dashboard/basket-analysis',
-  'Product Performance': '/dashboard/product-performance',
-};
-
+// Which renderer draws each domain. The domain list itself — labels, icons,
+// endpoints, and the question each one answers — lives in domains.js, because
+// the rail, the module summaries and the fetcher all read the same list; three
+// parallel copies of it is how "Upload Data" once ended up a peer of
+// "Retention Analysis" in one object and absent from the others.
 const TAB_RENDERERS = {
   'Executive Snapshot': renderExecutiveSnapshot,
   'Business Growth': renderBusinessGrowth,
@@ -1922,77 +1919,82 @@ const TAB_RENDERERS = {
   'Product Performance': renderProductPerformance,
 };
 
-export default function DashboardTab({ activeTab, filters, onNavigateTab }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+// Loading shows the shape of what is coming rather than the word "Memuat".
+// The console keeps the rail, the strip and every summary on screen while
+// this runs, so the page never blanks — only this panel settles.
+function DomainSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }} aria-busy="true" aria-live="polite">
+      <span className="sr-only">Memuat analisis domain ini...</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '.85rem' }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="card" style={{ padding: '1rem' }}>
+            <span className="con-skel is-narrow" style={{ height: '.6rem' }} />
+            <span className="con-skel is-wide" style={{ height: '1.3rem', marginTop: '.7rem' }} />
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{ padding: '1rem', height: 260 }}>
+        <span className="con-skel is-narrow" style={{ height: '.7rem' }} />
+        <span className="con-skel" style={{ height: '200px', marginTop: '1rem', borderRadius: 10 }} />
+      </div>
+    </div>
+  );
+}
+
+// Renders one analytic domain. Fetching moved out to useConsoleData: the
+// console holds every domain at once, so no single panel is allowed to own
+// the request that fills it.
+export default function DashboardTab({
+  activeTab,
+  filters,
+  data,
+  status = 'ready',
+  error = '',
+  onRetry,
+  productPerformanceLevel = 'category',
+  setProductPerformanceLevel,
+  onNavigateTab,
+}) {
+  // Purely presentational, and only Retention reads it — unlike the product
+  // level, which changes what gets fetched and so is owned by the console.
   const [rfmMatrixDim, setRfmMatrixDim] = useState('rf');
-  const [productPerformanceLevel, setProductPerformanceLevel] = useState('category');
-
-  useEffect(() => {
-    if (!filters.brandId) return;
-
-    setData(null);
-    setLoading(true);
-    setError('');
-
-    const endpoint = TAB_ENDPOINTS[activeTab];
-    const params = {
-      brandId: filters.brandId,
-      startDate: filters.startDate,
-      endDate: filters.endDate,
-    };
-
-    if (filters.compare && filters.compareStartDate && filters.compareEndDate) {
-      params.compareStartDate = filters.compareStartDate;
-      params.compareEndDate = filters.compareEndDate;
-    }
-
-    if (activeTab === 'Product Performance') {
-      params.level = productPerformanceLevel;
-    }
-
-    api.get(endpoint, { params })
-      .then((res) => {
-        setData(res.data);
-      })
-      .catch((err) => {
-        setError(err.response?.data?.message || 'Gagal memuat data dashboard');
-        setData(null);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [activeTab, filters, productPerformanceLevel]);
 
   if (!filters.brandId) {
     return (
-      <div className="empty-state card">
-        <p>Pilih brand terlebih dahulu untuk melihat dashboard.</p>
+      <div className="con-state">
+        <Building2 className="con-state-ico" size={28} strokeWidth={1.5} />
+        <strong>Pilih brand terlebih dahulu</strong>
+        <p>Analisis dimuat per brand dan per periode. Pilih brand pada bar di atas untuk memulai.</p>
       </div>
     );
   }
 
-  if (loading) {
-    return (
-      <div className="empty-state card">
-        <p>Memuat data analisis...</p>
-      </div>
-    );
-  }
+  if (status === 'loading' || status === 'idle') return <DomainSkeleton />;
 
-  if (error) {
+  if (status === 'error') {
     return (
-      <div className="alert alert-error">
-        {error}
+      <div className="con-err" role="alert">
+        <div style={{ fontWeight: 700, marginBottom: '.25rem' }}>Data domain ini gagal dimuat</div>
+        <div>{error}</div>
+        {onRetry && (
+          <button type="button" className="btn btn-secondary" style={{ marginTop: '.85rem' }} onClick={onRetry}>
+            <RotateCcw size={14} /> Coba lagi
+          </button>
+        )}
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="empty-state card">
-        <p>Tidak ada data untuk periode ini. Pastikan Anda sudah mengunggah data shopee untuk brand dan periode terpilih.</p>
+      <div className="con-state">
+        <Inbox className="con-state-ico" size={28} strokeWidth={1.5} />
+        <strong>Belum ada data untuk periode ini</strong>
+        <p>
+          Unggah data Shopee untuk brand dan periode terpilih melalui Pengaturan Brand,
+          lalu buka kembali halaman ini.
+        </p>
       </div>
     );
   }
@@ -2008,13 +2010,11 @@ export default function DashboardTab({ activeTab, filters, onNavigateTab }) {
     startDate: filters.startDate, endDate: filters.endDate,
   };
   const showCompare = filters.compare && data.compare;
-  const question = TAB_QUESTIONS[activeTab];
 
   if (!showCompare) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {question && <TabHeadline question={question} />}
-        {renderer(data, rendererExtra)}
+        {renderer(data, { ...rendererExtra, stripOwnsKpis: true })}
       </div>
     );
   }
@@ -2023,25 +2023,22 @@ export default function DashboardTab({ activeTab, filters, onNavigateTab }) {
   // grid rows (main | compare) instead of stacking each side independently,
   // so a taller section on one side can never push the next section on the
   // other side out of alignment. Both calls use the same renderer, so their
-  // top-level section counts always match — only the data differs.
+  // top-level section counts always match -- only the data differs.
   const mainSections = Children.toArray(renderer(data, rendererExtra).props.children);
   const compareSections = Children.toArray(renderer(data.compare, rendererExtra).props.children);
   const rowCount = Math.max(mainSections.length, compareSections.length);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {question && <TabHeadline question={question} />}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1.5rem', alignItems: 'stretch' }}>
-        <PeriodHeader title="Periode Utama" range={`${formatDateLabel(filters.startDate)} - ${formatDateLabel(filters.endDate)}`} />
-        <PeriodHeader title="Periode Pembanding" range={`${formatDateLabel(filters.compareStartDate)} - ${formatDateLabel(filters.compareEndDate)}`} />
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1.5rem', alignItems: 'stretch' }}>
+      <PeriodHeader title="Periode Utama" range={`${formatDateLabel(filters.startDate)} - ${formatDateLabel(filters.endDate)}`} />
+      <PeriodHeader title="Periode Pembanding" range={`${formatDateLabel(filters.compareStartDate)} - ${formatDateLabel(filters.compareEndDate)}`} />
 
-        {Array.from({ length: rowCount }, (_, i) => (
-          <Fragment key={i}>
-            <div style={{ minWidth: 0 }}>{mainSections[i] || null}</div>
-            <div style={{ minWidth: 0 }}>{compareSections[i] || null}</div>
-          </Fragment>
-        ))}
-      </div>
+      {Array.from({ length: rowCount }, (_, i) => (
+        <Fragment key={i}>
+          <div style={{ minWidth: 0 }}>{mainSections[i] || null}</div>
+          <div style={{ minWidth: 0 }}>{compareSections[i] || null}</div>
+        </Fragment>
+      ))}
     </div>
   );
 }

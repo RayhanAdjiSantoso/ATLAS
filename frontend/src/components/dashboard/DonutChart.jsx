@@ -1,14 +1,23 @@
 import { useState, useMemo } from 'react';
 import { formatPercent } from '../../utils/format.js';
 
+// Categorical palette, drawn from the design system's own hues rather than
+// the generic blue/green/amber/red run. Two things drive the order:
+//
+//   1. Red is not in it. On this page red means "worse" — every delta pill,
+//      every "Terburuk" line — so spending it on a traffic source called
+//      "Lainnya" made a neutral slice read as an alert.
+//   2. The accent leads, and the muted slate sits last, which is where the
+//      residual "Lainnya" / "Chat" style categories usually land. The biggest
+//      share gets the strongest colour by construction.
 const COLORS = [
-  '#3b82f6', // blue
-  '#10b981', // green
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#8b5cf6', // purple
-  '#ec4899', // pink
-  '#06b6d4', // cyan
+  '#1e3eb8', // accent blue
+  '#00a3c2', // cyan
+  '#0d9488', // teal
+  '#7c3aed', // violet
+  '#f5a623', // gold
+  '#5a6a90', // slate — the quiet tail
+  '#b8c5f5', // pale accent
 ];
 
 function polarToCartesian(cx, cy, r, angleDeg) {
@@ -61,6 +70,17 @@ export default function DonutChart({ data = [], title = 'Sumber Traffic', onSele
     return { segments: mappedSegments, total: totalVal };
   }, [data]);
 
+  // A ring is degenerate whenever ONE category holds the entire total, not
+  // only when it is the only category listed. Traffic Source [Video] arrives
+  // as four categories at 100/0/0/0, so the old `segments.length === 1` guard
+  // missed it: the 0deg-to-360deg arc collapsed to a single point and the
+  // round line cap drew it as a floating dot beside a legend of zeroes.
+  const soleIndex = useMemo(() => {
+    const nonZero = segments.filter((sg) => sg.percent > 0);
+    if (total > 0 && nonZero.length === 1) return segments.indexOf(nonZero[0]);
+    return -1;
+  }, [segments, total]);
+
   const handleSegmentClick = (name) => {
     if (onSelectSegment) {
       onSelectSegment(name);
@@ -84,23 +104,19 @@ export default function DonutChart({ data = [], title = 'Sumber Traffic', onSele
         {/* SVG Donut */}
         <div style={{ position: 'relative', width: '200px', height: '200px' }}>
           <svg viewBox="0 0 200 200" width="100%" height="100%">
-            {segments.length === 1 && total > 0 ? (
-              // A single category fills the whole ring — an arc from 0deg to
-              // 360deg is a degenerate (invisible) SVG path, so render a
-              // plain full circle instead. Guarded on total > 0 so a single
-              // category sitting at 0% doesn't render as a misleading full
-              // (100%-looking) ring.
+            {soleIndex >= 0 ? (
+              // One category holds the whole total: draw the closed ring.
               <circle
                 cx={center}
                 cy={center}
                 r={radius}
                 fill="none"
-                stroke={segments[0].color}
-                strokeWidth={hoveredIndex === 0 ? strokeWidth + 4 : strokeWidth}
+                stroke={segments[soleIndex].color}
+                strokeWidth={hoveredIndex === soleIndex ? strokeWidth + 4 : strokeWidth}
                 style={{ cursor: 'pointer', transition: 'stroke-width 0.2s' }}
-                onMouseEnter={() => setHoveredIndex(0)}
+                onMouseEnter={() => setHoveredIndex(soleIndex)}
                 onMouseLeave={() => setHoveredIndex(null)}
-                onClick={() => handleSegmentClick(segments[0].name)}
+                onClick={() => handleSegmentClick(segments[soleIndex].name)}
               />
             ) : (
               segments.map((seg, idx) => (

@@ -37,6 +37,13 @@ export default function FunnelChart({ data = [], title = 'Analisis Funnel Kunjun
           // so it's shown as "-" rather than silently hidden or misreported
           // as a computed zero.
           const prevVal = idx > 0 ? Number(data[idx - 1].value || 0) : null;
+          // Width of the stage above, drawn as a ghost behind this bar. Stages
+          // past the first are a few percent of the basis, so as plain bars
+          // they read as empty track and the chart whose whole job is drop-off
+          // showed none of it. The ghost makes the loss the visible thing: the
+          // filled part is what survived, the pale part is what fell away.
+          // Both are the true linear fraction — nothing is rescaled.
+          const prevPct = prevVal != null && maxVal > 0 ? (prevVal / maxVal) * 100 : null;
           const stepConv = idx > 0 && prevVal > 0
             ? (Number(step.value || 0) / prevVal) * 100
             : null;
@@ -48,45 +55,66 @@ export default function FunnelChart({ data = [], title = 'Analisis Funnel Kunjun
                   every non-first step, never hidden just because a value
                   along the way happens to be 0. */}
               {idx > 0 && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontSize: '0.75rem',
-                  color: 'var(--primary)',
-                  fontWeight: '600',
-                  margin: '-0.5rem 0 0.5rem 2rem',
-                  background: 'rgba(59, 130, 246, 0.08)',
-                  padding: '0.15rem 0.6rem',
-                  borderRadius: '4px',
-                  width: 'fit-content'
-                }}>
-                  <span>↓ Tingkat Konversi Tahap: {stepConv !== null ? formatPercent(stepConv) : '- (tahap sebelumnya 0)'}</span>
+                <div className="con-step">
+                  <span className="con-step-txt">
+                    Tingkat konversi tahap: {stepConv !== null ? formatPercent(stepConv) : '— (tahap sebelumnya 0)'}
+                  </span>
+                  {/* The absolute bars below are the true share of the basis,
+                      which makes the last stages tiny however healthy they are.
+                      This meter is the other half of the story — retention from
+                      the stage immediately above — drawn at full scale so a 94%
+                      carry-through and a 17% collapse read as different events. */}
+                  {stepConv !== null && (
+                    <span className="con-step-meter" aria-hidden>
+                      <span style={{ width: `${Math.max(Math.min(stepConv, 100), 1)}%` }} />
+                    </span>
+                  )}
                 </div>
               )}
 
               {/* Bar Row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ width: '130px', fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+              {/* Grid, not flex with fixed widths: the label and the two
+                  numeric columns used to be unshrinkable, so in a narrow
+                  container they consumed the row and the bar track — the only
+                  part carrying the shape of the funnel — collapsed to a sliver.
+                  Here the track is the column that keeps the remaining space
+                  and the others give way. */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(72px, 118px) minmax(90px, 1fr) auto', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: '500', minWidth: 0 }}>
                   {step.name}
                 </div>
                 
-                <div style={{ flex: 1, position: 'relative', background: 'var(--bg-elevated)', borderRadius: '6px', height: '36px', overflow: 'hidden' }}>
-                  {/* Progress fill */}
+                <div style={{ position: 'relative', background: 'var(--bg-elevated)', borderRadius: '6px', height: '36px', overflow: 'hidden', minWidth: 0 }}>
+                  {/* What the previous stage held, behind what this one kept. */}
+                  {prevPct != null && (
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      width: `${prevPct}%`,
+                      background: 'var(--primary-light)',
+                      borderRadius: '6px',
+                    }} />
+                  )}
+                  {/* Progress fill. A non-zero stage never renders as nothing:
+                      2px is the floor, so "small" and "none" stay different. */}
                   <div style={{
-                    width: `${percentOfTotal}%`,
+                    position: 'relative',
+                    width: percentOfTotal > 0 ? `max(${percentOfTotal}%, 2px)` : 0,
                     height: '100%',
-                    background: 'linear-gradient(90deg, var(--primary) 0%, #8b5cf6 100%)',
+                    background: 'var(--primary)',
                     borderRadius: '6px',
                     transition: 'width 0.5s ease-out'
                   }}></div>
                 </div>
 
-                <div style={{ flexShrink: 0, whiteSpace: 'nowrap', textAlign: 'right', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)' }}>
-                  {formatNumber(step.value)}
-                </div>
-                <div style={{ flexShrink: 0, whiteSpace: 'nowrap', textAlign: 'right', width: '90px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {idx === 0 ? 'Basis (100%)' : formatPercent(percentOfTotal)}
+                {/* Value and share share one cell — two unshrinkable columns
+                    for four characters each was most of the row. */}
+                <div style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)' }}>
+                    {formatNumber(step.value)}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {idx === 0 ? 'Basis (100%)' : formatPercent(percentOfTotal)}
+                  </div>
                 </div>
               </div>
 

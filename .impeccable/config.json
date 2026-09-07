@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-09-07T14:28:29.537Z",
+        "reason": "Inter is declared by the project's own design system: reportGenerator/index.css sets --f:'Inter' in the generated .mil-ui block, and Beranda and Report Generator already render in it. PRODUCT.md records one-family platform coherence as a brand commitment, so changing the face on this one surface would break it. The console did not choose Inter; it inherited it, and this build's only font change was loading the face the system had always asked for."
+      }
+    ]
+  }
+}

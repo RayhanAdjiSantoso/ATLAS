@@ -9,6 +9,7 @@ import HistoryPage from './pages/HistoryPage.jsx';
 import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
 import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
+import BrandSettingsPage from './pages/BrandSettingsPage.jsx';
 
 export default function App() {
   return (
@@ -22,6 +23,11 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          {/* Ingest, moved off Business Overview's tab strip. Any logged-in
+              user may load their brand's data, same as before — it was an
+              unrestricted tab, so restricting it here would take away access
+              people already had. */}
+          <Route path="/pengaturan-brand" element={<BrandSettingsPage />} />
           <Route path="/history" element={<HistoryPage />} />
           {/* No role restriction — any logged-in user, unlike meta-automation below.
               The report type is a URL param so each one is linkable and the
