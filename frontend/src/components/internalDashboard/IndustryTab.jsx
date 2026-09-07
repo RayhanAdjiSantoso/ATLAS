@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import api from '../../api/client.js';
 import { formatPercent } from '../../utils/format.js';
 import OverviewFilterBar from './OverviewFilterBar.jsx';
+import GrowthHeatmap from './GrowthHeatmap.jsx';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const DEFAULTS = { period: thisMonth(), compare: 'mom', status: 'active', basis: 'like_for_like', level: 'sub_industry' };
@@ -59,6 +60,10 @@ export default function IndustryTab() {
 
       {data && (
         <>
+          <GrowthHeatmap data={data.growth_heatmap}
+            title={`Heatmap Pertumbuhan ${data.filters.level === 'industry' ? 'Industry' : 'Sub-industry'}`}
+            subtitle={`Growth MoM agregat per ${data.filters.level === 'industry' ? 'industry' : 'sub-industry'}, ${data.growth_heatmap?.months?.length ?? 8} bulan terakhir. Pola musiman (mis. Ramadan/Lebaran) muncul sebagai kolom, bukan masalah per client.`} />
+
           <div className="card" style={{ padding: '1.25rem' }}>
             <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Ukuran &amp; Pertumbuhan per {data.filters.level === 'industry' ? 'Industry' : 'Sub-industry'}</h3>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Lebar = sales periode ini · warna = growth agregat ({data.filters.compare.toUpperCase()}).</p>
@@ -90,12 +95,19 @@ export default function IndustryTab() {
                     <th>Kategori</th><th>N</th><th>Ada data</th><th>Ada spend</th>
                     <th>Sales</th><th>Median sales/client</th>
                     <th>Growth agregat</th><th>Median growth/client</th><th>Median ROAS/client</th>
+                    <th>Median CPM/client</th><th>Median CTR/client</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.groups.map((g) => (
                     <tr key={g.key}>
-                      <td>{g.key}</td>
+                      <td>
+                        {g.key}
+                        {g.n_clients < 3 && (
+                          <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: '0.58rem' }}
+                            title="N < 3 — ditampilkan tapi kurang bermakna secara statistik, bukan dasar benchmark">n&lt;3</span>
+                        )}
+                      </td>
                       <td>{g.kategori_besar || '-'}</td>
                       <td>{g.n_clients}</td>
                       <td>{g.n_with_data}</td>
@@ -105,6 +117,8 @@ export default function IndustryTab() {
                       <td>{pct(g.aggregate_growth)}</td>
                       <td>{pct(g.median_client_growth)}</td>
                       <td>{g.median_client_roas?.toFixed(2) ?? '-'}</td>
+                      <td>{g.median_client_cpm != null ? money(g.median_client_cpm) : '-'}</td>
+                      <td>{g.median_client_ctr != null ? formatPercent(g.median_client_ctr * 100, 2) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>

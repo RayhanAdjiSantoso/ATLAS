@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Check, X, Minus, Info } from 'lucide-react';
+import { Check, X, Minus, Info, AlertTriangle } from 'lucide-react';
 import api from '../../api/client.js';
+import KpiCard from '../dashboard/KpiCard.jsx';
 import { formatPercent } from '../../utils/format.js';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -13,6 +14,13 @@ function TriCell({ v }) {
   if (v === false) return <X size={14} style={{ color: 'var(--danger)' }} />;
   return <Minus size={14} style={{ color: 'var(--text-muted)' }} />;
 }
+
+const STATE_BADGE = {
+  complete: ['badge-success', 'Lengkap'],
+  partial: ['badge-warning', 'Parsial'],
+  empty: ['badge-danger', 'Kosong'],
+};
+const SEV_BADGE = { critical: 'badge-danger', warning: 'badge-warning', info: 'badge-info' };
 
 const CHANNELS = ['shopee', 'tiktok_shop', 'website', 'offline'];
 
@@ -55,6 +63,42 @@ export default function DataQualityTab() {
 
       {data && (
         <>
+          {/* KPI ringkas */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
+            <KpiCard title="Kelengkapan Data Periode" value={cm.summary.completeness_pct} type="percentage"
+              note={`Sel fact-table terisi ÷ (client aktif × 3). Lengkap ${cm.summary.complete} · parsial ${cm.summary.partial} · kosong ${cm.summary.empty}.`} />
+            <KpiCard title="Ad Account Belum Ter-mapping" value={data.ad_accounts_unmapped.hard.length + data.ad_accounts_unmapped.soft.length} type="number"
+              note={`${data.ad_accounts_unmapped.hard.length} HARD (spend tanpa BM ID) · ${data.ad_accounts_unmapped.soft.length} SOFT (act_ ID belum diisi).`} />
+            <KpiCard title="Selisih Rekonsiliasi" value={data.reconciliation.channel_sales_vs_revenue.filter((r) => r.status === 'mismatch').length} type="number"
+              note="Client dengan total channel sales ≠ revenue di luar toleransi 0,5%." />
+            <KpiCard title="Tindakan Perlu Dikerjakan" value={data.action_items.length} type="number"
+              note={`${data.action_items.filter((a) => a.severity === 'critical').length} kritis · ${data.action_items.filter((a) => a.severity === 'warning').length} warning · ${data.action_items.filter((a) => a.severity === 'info').length} info.`} />
+          </div>
+
+          {/* Daftar Tindakan terkonsolidasi */}
+          <div className="card">
+            <h3 style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+              <AlertTriangle size={16} /> Daftar Tindakan — {period}
+            </h3>
+            {data.action_items.length === 0 ? (
+              <div className="empty-state">Tidak ada tindakan tertunda periode ini.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {data.action_items.map((a, i) => (
+                  <div key={`${a.type}-${a.brand_id}-${i}`} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.85rem' }}>
+                    <span className={`badge ${SEV_BADGE[a.severity]}`} style={{ fontSize: '0.6rem', flexShrink: 0, marginTop: 2 }}>
+                      {a.severity === 'critical' ? 'KRITIS' : a.severity === 'warning' ? 'WARNING' : 'INFO'}
+                    </span>
+                    <div>
+                      <strong>{a.label}</strong>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{a.detail}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* 1. Matriks Kelengkapan */}
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.5rem 0' }}>
@@ -69,7 +113,7 @@ export default function DataQualityTab() {
               <table style={{ marginTop: '1rem' }}>
                 <thead>
                   <tr>
-                    <th>Client</th><th>Status</th><th>Metrik</th><th>Channel sales</th><th>Platform spend</th>
+                    <th>Client</th><th>Status</th><th>Kelengkapan</th><th>Metrik</th><th>Channel sales</th><th>Platform spend</th>
                     {CHANNELS.map((ch) => <th key={ch} style={{ fontSize: '0.68rem' }}>{ch}</th>)}
                   </tr>
                 </thead>
@@ -78,6 +122,11 @@ export default function DataQualityTab() {
                     <tr key={c.brand_id}>
                       <td>{c.brand_name}</td>
                       <td>{c.status}</td>
+                      <td>
+                        <span className={`badge ${STATE_BADGE[c.data_state][0]}`} style={{ fontSize: '0.62rem' }}>
+                          {STATE_BADGE[c.data_state][1]}
+                        </span>
+                      </td>
                       <td style={{ textAlign: 'center' }}><TriCell v={c.has_monthly_metrics} /></td>
                       <td style={{ textAlign: 'center' }}><TriCell v={c.has_channel_sales} /></td>
                       <td style={{ textAlign: 'center' }}><TriCell v={c.has_platform_spend} /></td>
@@ -87,7 +136,7 @@ export default function DataQualityTab() {
                       })}
                     </tr>
                   ))}
-                  {rows.length === 0 && <tr><td colSpan={9} className="empty-state">Tidak ada client.</td></tr>}
+                  {rows.length === 0 && <tr><td colSpan={10} className="empty-state">Tidak ada client.</td></tr>}
                 </tbody>
               </table>
             </div>

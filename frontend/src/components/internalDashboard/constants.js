@@ -50,4 +50,15 @@ export const TARGET_LABELS = {
   client_monthly_metrics: 'Metrik Bulanan',
   client_channel_sales_monthly: 'Sales per Channel',
   client_platform_spend_monthly: 'Spend per Platform',
+  client_sales_channels: 'Channel Dipakai',
+  brand_ad_accounts: 'Ad Account Meta',
+};
+
+// client_sales_channels.source — where the used/not-used value came from.
+export const CSC_SOURCE_LABELS = {
+  manual: 'input manual',
+  sales_data: 'dari data sales riil',
+  ads_text_positive: 'dari teks Display/Marketplace Ads',
+  enabled_website_col: 'dari kolom "Enabled Website"',
+  display_ads_parse: 'dari parsing Display Ads',
 };

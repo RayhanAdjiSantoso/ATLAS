@@ -236,7 +236,11 @@ function RankingView() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ marginTop: '1rem' }}>
               <thead>
-                <tr><th>#</th><th>Client</th><th>Sub-industry</th><th>Kategori</th><th>{data.metric.label}</th><th>Revenue</th><th>Spend</th><th>Blended ROAS</th></tr>
+                <tr>
+                  <th>#</th><th>Client</th><th>Sub-industry</th><th>Kategori</th><th>PIC</th>
+                  <th>{data.metric.label}</th><th>Revenue</th><th>Spend</th><th>Blended ROAS</th>
+                  <th>CPM</th><th>CTR</th><th>Percentile ROAS</th>
+                </tr>
               </thead>
               <tbody>
                 {data.ranked.map((r) => (
@@ -245,10 +249,14 @@ function RankingView() {
                     <td>{r.brand_name}</td>
                     <td>{r.sub_industry || '—'}</td>
                     <td>{r.kategori_besar || '—'}</td>
+                    <td>{r.pic || '—'}</td>
                     <td style={{ fontWeight: 600 }}>{fmtVal(r.value)}</td>
                     <td>{money(r.revenue)}</td>
                     <td>{money(r.spend)}</td>
                     <td>{r.blended_roas != null ? r.blended_roas.toFixed(2) : '-'}</td>
+                    <td>{r.cpm != null ? money(r.cpm) : '-'}</td>
+                    <td>{r.ctr != null ? pct(r.ctr) : '-'}</td>
+                    <td>{r.roas_percentile != null ? `P${Math.round(r.roas_percentile * 100)}` : '—'}</td>
                   </tr>
                 ))}
               </tbody>
