@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import api from '../../api/client.js';
 import { formatPercent } from '../../utils/format.js';
 import OverviewFilterBar from './OverviewFilterBar.jsx';
+import GrowthHeatmap from './GrowthHeatmap.jsx';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const DEFAULTS = { period: thisMonth(), compare: 'mom', status: 'active', basis: 'like_for_like', level: 'sub_industry' };
@@ -59,6 +60,10 @@ export default function IndustryTab() {
 
       {data && (
         <>
+          <GrowthHeatmap data={data.growth_heatmap}
+            title={`Heatmap Pertumbuhan ${data.filters.level === 'industry' ? 'Industry' : 'Sub-industry'}`}
+            subtitle={`Growth MoM agregat per ${data.filters.level === 'industry' ? 'industry' : 'sub-industry'}, ${data.growth_heatmap?.months?.length ?? 8} bulan terakhir. Pola musiman (mis. Ramadan/Lebaran) muncul sebagai kolom, bukan masalah per client.`} />
+
           <div className="card" style={{ padding: '1.25rem' }}>
             <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Ukuran &amp; Pertumbuhan per {data.filters.level === 'industry' ? 'Industry' : 'Sub-industry'}</h3>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Lebar = sales periode ini · warna = growth agregat ({data.filters.compare.toUpperCase()}).</p>
