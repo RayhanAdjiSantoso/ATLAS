@@ -142,27 +142,75 @@ tr:hover td { background: var(--primary-light); }
 .auth-card .subtitle { color: var(--text-muted); margin-bottom: 1.5rem; }
 
 .layout { display: flex; min-height: 100vh; }
-.sidebar {
+
+/* The sidebar collapses to an icon rail so a page of wide tables and charts
+   gets the width back. Two elements do that job:
+
+   .sidebar-spacer is the flex item — the only thing holding the column open
+   in the row. .sidebar itself is fixed, so hovering a collapsed rail can float
+   it back to full width without moving the page underneath. Expanding in place
+   would reflow every chart.js canvas and every wide table on each mouse pass;
+   floating over the top costs nothing. */
+.sidebar-spacer {
   width: 240px;
   flex-shrink: 0;
+  transition: width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sidebar-spacer.collapsed { width: 68px; }
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 240px;
+  /* Above the page, below the modals (which sit at 1000+). */
+  z-index: 50;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border);
   padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
-  height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.22s cubic-bezier(0.22, 1, 0.36, 1), padding 0.22s, box-shadow 0.22s;
 }
-/* Now an <a> to the landing page. `display: block` is load-bearing: as an
-   inline element its margin-bottom would not apply at all. The two anchor
-   resets undo the global `a { color: var(--primary) }` / hover underline —
-   this reads as a wordmark, not a link. */
-.sidebar-brand { display: block; font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; padding: 0 0.5rem; color: var(--text); }
+.sidebar.collapsed { width: 68px; padding-left: 0.75rem; padding-right: 0.75rem; }
+.sidebar.collapsed.peek {
+  width: 240px;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  box-shadow: var(--shadow-md);
+  /* Snap open, glide shut: widening while the labels are back in the flow
+     makes them re-wrap on every frame of the slide. */
+  transition: none;
+}
+
+/* Every collapsing piece of text carries this, and it is dropped outright
+   rather than animated to zero width. Animating max-width needs `nowrap` to
+   stop the text reflowing mid-slide — but "Dashboard Business Overview" is
+   232px of text in a 145px box, so nowrap clips it to "Dashboard Busines".
+   Fitting it on one line would need a ~326px sidebar. Wrapping is the only
+   honest option for a label that long, and a label that wraps cannot also
+   animate its width. */
+.sidebar-label { min-width: 0; }
+.sidebar.collapsed:not(.peek) .sidebar-label { display: none; }
+
+.sidebar-brand {
+  display: flex;
+  align-items: baseline;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  padding: 0 0.5rem;
+  color: var(--text);
+}
+/* The wordmark collapses to "A." rather than vanishing — the rail keeps an
+   identity, and the dot stays put as the accent it already was. */
 .sidebar-brand:hover { color: var(--text); text-decoration: none; }
-.sidebar-brand span { color: var(--primary); }
+.sidebar-brand-dot { color: var(--primary); }
+.sidebar.collapsed:not(.peek) .sidebar-brand { justify-content: center; padding: 0; }
+
 .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
 .sidebar-link {
   display: flex;
@@ -176,9 +224,44 @@ tr:hover td { background: var(--primary-light); }
 }
 .sidebar-link:hover { background: var(--primary-light); color: var(--primary); text-decoration: none; }
 .sidebar-link.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+.sidebar-ico { flex-shrink: 0; }
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.5rem;
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-toggle:hover { background: var(--primary-light); color: var(--primary); }
+.sidebar-logout { width: 100%; justify-content: center; }
+
+/* Collapsed: centre every row on its icon and drop the gap the hidden label
+   would otherwise still reserve. */
+.sidebar.collapsed:not(.peek) .sidebar-link,
+.sidebar.collapsed:not(.peek) .sidebar-toggle,
+.sidebar.collapsed:not(.peek) .sidebar-logout {
+  justify-content: center;
+  gap: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .sidebar-footer { padding-top: 1rem; border-top: 1px solid var(--border); }
 .user-info { font-size: 0.85rem; color: var(--text-muted); padding: 0.5rem; margin-bottom: 0.5rem; }
 .user-info strong { display: block; color: var(--text); }
+/* Hidden outright rather than clipped: a name and an email in a 68px rail
+   wrap into an unreadable stack, and neither is worth the rail's width. */
+.sidebar.collapsed:not(.peek) .user-info { display: none; }
 
 .main-content { flex: 1; padding: 2rem; overflow-x: auto; background: var(--bg); }
 
@@ -211,13 +294,35 @@ tr:hover td { background: var(--primary-light); }
 }
 
 @media (max-width: 768px) {
+  /* Stacked, and never collapsed: on a phone the sidebar is a full-width strip
+     at the top, so there is no side column to win back. The toggle and the
+     spacer both go away, and .collapsed / .peek are overridden rather than
+     left to fight these rules. */
   .layout { flex-direction: column; }
-  .sidebar {
+  .sidebar,
+  .sidebar.collapsed,
+  .sidebar.collapsed.peek {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--border);
     position: static;
     height: auto;
     overflow-y: visible;
+    padding: 1.5rem 1rem;
+    box-shadow: none;
   }
+  .sidebar-spacer { display: none; }
+  .sidebar-toggle { display: none; }
+  .sidebar.collapsed:not(.peek) .sidebar-label { max-width: 14rem; opacity: 1; }
+  .sidebar.collapsed:not(.peek) .user-info { display: block; }
+  .sidebar.collapsed:not(.peek) .sidebar-brand { justify-content: flex-start; padding: 0 0.5rem; }
+  .sidebar.collapsed:not(.peek) .sidebar-link {
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  /* Logout stays centred here, same as when expanded — it is a full-width
+     button, not a nav row. */
+  .sidebar.collapsed:not(.peek) .sidebar-logout { justify-content: center; gap: 0.5rem; }
 }
