@@ -46,5 +46,19 @@ export const S1 = {
   trendWindowMonths: 13,
 };
 
+export const S4 = {
+  // Growth heatmap (sub-industry x month). MoM aggregate growth per group
+  // per month; a month-cell needs at least `growthHeatmapMinClients` clients
+  // present in BOTH that month and the one before, else the cell is null
+  // ("–" — seasonality reads as a column, not a per-client problem).
+  //   - `growthHeatmapMonths`: how many trailing months the heatmap spans.
+  //   - `growthHeatmapCap`: |growth| that maps to the strongest colour
+  //     (PROVISIONAL — 0.25 from the mockup; recalibrate once real spread
+  //     across sub-industries is observable).
+  growthHeatmapMonths: 8,
+  growthHeatmapMinClients: 2,
+  growthHeatmapCap: 0.25,
+};
+
 // Maps the API `category` param to the stored kategori_besar value.
 export const CATEGORY_MAP = { retail: 'Retail', b2b_service: 'B2B/Service', fnb: 'F&B' };

@@ -1,6 +1,6 @@
 import pool from '../config/db.js';
 import { AppError } from '../utils/errors.js';
-import { S1 as S1_CONFIG, CATEGORY_MAP } from '../config/internalDashboard.js';
+import { S1 as S1_CONFIG, S4 as S4_CONFIG, CATEGORY_MAP } from '../config/internalDashboard.js';
 import * as brandService from './brandService.js';
 import * as repo from '../repositories/internalDashboardRepository.js';
 
@@ -874,12 +874,43 @@ export async function getIndustries(params) {
 
   const ungrouped = brands.filter((b) => !b[level]);
 
+  // --- growth heatmap: per group, MoM aggregate growth for each of the last
+  // N months. A cell needs >= growthHeatmapMinClients clients present in BOTH
+  // that month and the prior one, else null ("–"). Same window loadMonthlyGrid
+  // already fetched — no extra query.
+  const hmMonths = grid.months.slice(-S4_CONFIG.growthHeatmapMonths);
+  const growth_heatmap = {
+    months: hmMonths,
+    min_clients: S4_CONFIG.growthHeatmapMinClients,
+    cap: S4_CONFIG.growthHeatmapCap,
+    rows: groups.map((g) => {
+      const ids = byKey.get(g.key).ids;
+      const series = hmMonths.map((mo) => {
+        const idx = grid.months.indexOf(mo);
+        const prev = grid.months[idx - 1];
+        if (!prev) return { growth: null, n: 0 };
+        let now = 0;
+        let base = 0;
+        let n = 0;
+        for (const id of ids) {
+          const a = grid.revAt(id, mo);
+          const b = grid.revAt(id, prev);
+          if (a != null && b != null) { now += a; base += b; n += 1; }
+        }
+        const ok = n >= S4_CONFIG.growthHeatmapMinClients && base > 0;
+        return { growth: ok ? now / base - 1 : null, n };
+      });
+      return { key: g.key, kategori_besar: g.kategori_besar, cells: series };
+    }),
+  };
+
   return {
     period,
     compare_period: comparePeriod,
     filters: { compare, status, basis, level },
-    note: 'N per grup ditampilkan apa adanya — tidak ada ambang minimum (breakdown §4). Median untuk perbandingan; treemap: size = sales, warna = aggregate_growth.',
+    note: 'N per grup ditampilkan apa adanya — tidak ada ambang minimum (breakdown §4). Median untuk perbandingan; treemap: size = sales, warna = aggregate_growth. Heatmap: growth MoM agregat per bulan; sel "–" = client < min_clients di dua bulan berurutan.',
     groups,
+    growth_heatmap,
     ungrouped: { client_count: ungrouped.length, brand_names: ungrouped.map((b) => b.brand_name) },
   };
 }
