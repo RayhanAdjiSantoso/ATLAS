@@ -210,7 +210,7 @@ tr:hover td { background: var(--primary-light); }
 
 .sidebar-brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   font-size: 1.25rem;
   font-weight: 700;
   margin-bottom: 2rem;
@@ -221,6 +221,7 @@ tr:hover td { background: var(--primary-light); }
    identity, and the dot stays put as the accent it already was. */
 .sidebar-brand:hover { color: var(--text); text-decoration: none; }
 .sidebar-brand-dot { color: var(--primary); }
+.sidebar-brand-mark { width: 27px; height: 27px; display: block; flex-shrink: 0; }
 
 .sidebar-nav {
   flex: 1;
@@ -432,4 +433,25 @@ tr:hover td { background: var(--primary-light); }
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .sidebar-scrim { transition-duration: 0.001ms; }
+}
+
+/* ── ATLAS wordmark on Beranda ─────────────────────────────────────────
+   Lives here, not in reportGenerator/app/shell.css: that file is the ported
+   design system for the pages it came with, and these two rules are ATLAS's
+   own branding on top of it. */
+.home-band-logo {
+  display: block;
+  width: auto;
+  height: 30px;
+  margin-bottom: 1.1rem;
+}
+.home-footer-logo {
+  display: block;
+  height: 22px;
+  width: auto;
+  margin: 0 auto 0.7rem;
+  opacity: 0.75;
+}
+@media (max-width: 640px) {
+  .home-band-logo { height: 24px; }
 }

@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 // makes a later re-sync a file copy instead of a merge.
 import { Reveal } from '../reportGenerator/components/Reveal';
 import { MilMark } from '../reportGenerator/components/MilMark';
+import atlasWordmark from '../assets/atlas-wordmark.png';
 import '../reportGenerator/index.css';
 import '../reportGenerator/app/shell.css';
 import '../reportGenerator/app/atlas-fit.css';
@@ -187,6 +188,7 @@ export default function HomePage() {
             <CometStreak />
 
             <div className="home-band-copy">
+              <img src={atlasWordmark} alt="ATLAS — MIL Digital" className="home-band-logo" />
               <Link to="/report-generator/meta" className="home-badge">
                 <span className="home-badge-tag">Baru</span>
                 <span className="home-badge-text">Report Generator dengan tampilan baru</span>
@@ -284,6 +286,7 @@ export default function HomePage() {
         </section>
 
         <footer className="home-footer">
+          <img src={atlasWordmark} alt="" className="home-footer-logo" />
           <span>MIL Digital · ATLAS</span>
         </footer>
       </div>

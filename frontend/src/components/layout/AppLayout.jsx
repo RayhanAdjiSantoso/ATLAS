@@ -14,6 +14,7 @@ import {
   Menu,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import atlasIcon from '../../assets/atlas-icon.png';
 
 const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 
@@ -106,7 +107,9 @@ export default function AppLayout() {
         onMouseLeave={() => setPeek(false)}
       >
         <Link to="/" className="sidebar-brand">
-          <span className="sidebar-brand-a">A</span>
+          {/* The mark IS the A — collapsed, the rail keeps the logo and drops
+              the letters, which is what the wordmark does on its own. */}
+          <img src={atlasIcon} alt="" className="sidebar-brand-mark" />
           <span className="sidebar-label">TLAS</span>
           <span className="sidebar-brand-dot">.</span>
         </Link>
@@ -175,7 +178,7 @@ export default function AppLayout() {
             <Menu size={20} />
           </button>
           <Link to="/" className="sidebar-brand" style={{ margin: 0 }}>
-            <span className="sidebar-brand-a">A</span>
+            <img src={atlasIcon} alt="" className="sidebar-brand-mark" />
             <span>TLAS</span>
             <span className="sidebar-brand-dot">.</span>
           </Link>
