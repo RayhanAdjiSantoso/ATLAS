@@ -1,0 +1,9 @@
+# Sample data / one-off scripts — not needed by the deployed app
+*.xlsx
+import_shopee_data.py
+apps-script/
+backend/standalone/
+backend/test_api_local.js
+backend/scripts/out/
+backend/uploads/
+migrations/*.md

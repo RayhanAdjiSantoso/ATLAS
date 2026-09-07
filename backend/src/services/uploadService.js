@@ -92,7 +92,7 @@ export async function getUploadById(uploadId) {
 // see getReportGeneratorFile below), so stored_path is null for those.
 export async function getUploadFileById(uploadId) {
   const result = await pool.query(
-    `SELECT upload_id, user_id, original_filename, stored_path, source, raw_upload_id
+    `SELECT upload_id, user_id, original_filename, stored_path, raw_file, source, raw_upload_id
      FROM uploads
      WHERE upload_id = $1`,
     [uploadId],
@@ -110,12 +110,12 @@ export async function getReportGeneratorFile(rawUploadId) {
   return result.rows[0] ?? null;
 }
 
-export async function createUploadRecord({ uploadId, userId, brandId, fileType, filename, storedPath }) {
+export async function createUploadRecord({ uploadId, userId, brandId, fileType, filename, rawFile }) {
   const result = await pool.query(
-    `INSERT INTO uploads (upload_id, user_id, brand_id, file_type, original_filename, stored_path, status)
+    `INSERT INTO uploads (upload_id, user_id, brand_id, file_type, original_filename, raw_file, status)
      VALUES ($1, $2, $3, $4, $5, $6, 'pending')
      RETURNING *`,
-    [uploadId, userId, brandId, fileType, filename, storedPath],
+    [uploadId, userId, brandId, fileType, filename, rawFile],
   );
   return result.rows[0];
 }

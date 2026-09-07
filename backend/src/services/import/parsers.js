@@ -95,8 +95,14 @@ export function readSheetAsStrings(workbook, sheetName) {
   });
 }
 
-export function readWorkbook(filepath) {
-  return XLSX.readFile(filepath, { cellDates: false, raw: false });
+// Accepts either a filesystem path (dev / scripts) or a Buffer of the raw
+// file bytes (dashboard uploads, which are held in memory — see
+// middlewares/upload.js — and never touch disk on serverless).
+export function readWorkbook(src) {
+  if (Buffer.isBuffer(src)) {
+    return XLSX.read(src, { type: 'buffer', cellDates: false, raw: false });
+  }
+  return XLSX.readFile(src, { cellDates: false, raw: false });
 }
 
 export function readSheetRaw(workbook, sheetName) {

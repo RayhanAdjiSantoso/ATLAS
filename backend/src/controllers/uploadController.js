@@ -1,5 +1,3 @@
-import path from 'path';
-import fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import { validationResult } from 'express-validator';
 import { AppError, asyncHandler } from '../utils/errors.js';
@@ -27,8 +25,8 @@ export const uploadFile = asyncHandler(async (req, res) => {
   }
 
   const { brandId, fileType } = req.body;
-  const uploadId = req.uploadId || uuidv4();
-  const storedPath = req.file.path;
+  const uploadId = uuidv4();
+  const rawFile = req.file.buffer;
 
   const brand = await brandService.getBrandById(Number(brandId));
   if (!brand) {
@@ -41,7 +39,7 @@ export const uploadFile = asyncHandler(async (req, res) => {
     brandId: brand.brand_id,
     fileType,
     filename: req.file.originalname,
-    storedPath,
+    rawFile,
   });
 
   // Process synchronously for reliable status; can be made async later
@@ -49,7 +47,7 @@ export const uploadFile = asyncHandler(async (req, res) => {
     const result = await processUpload({
       uploadId,
       fileType,
-      filepath: storedPath,
+      filepath: rawFile,
       brandId: brand.brand_id,
     });
 
@@ -123,13 +121,12 @@ export const downloadUpload = asyncHandler(async (req, res) => {
     return;
   }
 
-  try {
-    await fs.access(upload.stored_path);
-  } catch {
-    throw new AppError('File tidak ditemukan di server', 404);
-  }
-
-  res.download(upload.stored_path, upload.original_filename);
+  // Dashboard uploads: raw bytes archived in public.uploads.raw_file (BYTEA).
+  // Rows created before migration 013 have no raw_file and can't be re-served.
+  if (!upload.raw_file) throw new AppError('File tidak ditemukan di server', 404);
+  res.setHeader('Content-Disposition', `attachment; filename="${upload.original_filename.replace(/"/g, '')}"`);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.send(upload.raw_file);
 });
 
 export const deleteUpload = asyncHandler(async (req, res) => {
@@ -140,11 +137,7 @@ export const deleteUpload = asyncHandler(async (req, res) => {
     throw new AppError('Akses ditolak', 403);
   }
 
-  const deleted = await uploadService.deleteUpload(req.params.uploadId);
-
-  if (deleted?.stored_path) {
-    await fs.rm(path.dirname(deleted.stored_path), { recursive: true, force: true }).catch(() => {});
-  }
+  await uploadService.deleteUpload(req.params.uploadId);
 
   res.json({ message: 'Upload berhasil dihapus' });
 });
