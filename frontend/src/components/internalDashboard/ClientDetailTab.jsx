@@ -5,13 +5,15 @@ import { formatPercent } from '../../utils/format.js';
 import KpiCard from '../dashboard/KpiCard.jsx';
 import DonutChart from '../dashboard/DonutChart.jsx';
 import ClientPicker from './ClientPicker.jsx';
-import OverviewTrendChart from './OverviewTrendChart.jsx';
+import SingleMetricTrendChart from './SingleMetricTrendChart.jsx';
 import PeerDistributionRow from './PeerDistributionRow.jsx';
 import { AD_PLATFORMS } from './constants.js';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const money = (v) => (v == null ? '-' : `Rp${new Intl.NumberFormat('id-ID').format(Math.round(v))}`);
 const pct = (v) => (v == null ? '-' : formatPercent(v * 100, 1));
+// KpiCard wants `growth` on the 0-100 scale; this API returns fractions.
+const gpct = (frac) => (frac == null ? null : frac * 100);
 const platLabel = (v) => AD_PLATFORMS.find((p) => p.value === v)?.label || v;
 const num = (v) => (v == null ? '-' : new Intl.NumberFormat('id-ID').format(v));
 
@@ -91,14 +93,17 @@ function DetailView() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-            <KpiCard title="Revenue" value={h.revenue} type="currency" growth={h.revenue_delta_pct} />
+            <KpiCard title="Revenue" value={h.revenue} type="currency" growth={gpct(h.revenue_delta_pct)} />
             <KpiCard title="Ad Spend" value={h.spend} type="currency" invert />
             <KpiCard title="Blended ROAS" value={h.blended_roas} type="number" note="revenue ÷ spend" />
             <KpiCard title="vs Target" value={h.vs_target_pct} type="percentage"
               note={h.vs_target_pct == null ? 'target bulan ini belum diisi' : null} />
           </div>
 
-          <OverviewTrendChart trend={(data.trend || []).map((t) => ({ period: t.period, sales: t.revenue, spend: t.spend, roas: t.roas }))} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
+            <SingleMetricTrendChart trend={data.trend || []} metricKey="revenue" title="Tren Revenue — 13 bulan" kind="line" color="var(--primary)" />
+            <SingleMetricTrendChart trend={data.trend || []} metricKey="spend" title="Tren Ad Spend — 13 bulan" kind="bar" color="#f59e0b" />
+          </div>
           {(data.trend || []).some((t) => t.is_partial_month) && (
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '-0.75rem 0 0' }}>
               Bulan parsial: {data.trend.filter((t) => t.is_partial_month).map((t) => t.period).join(', ')} — ditampilkan apa adanya di tren, tapi dikecualikan dari Benchmarking.

@@ -9,15 +9,29 @@
 // =====================================================================
 
 export const S1 = {
-  // "Perlu Perhatian" (§2.8): flag a client whose period-over-period
-  // revenue growth is at least this many points BELOW the AVERAGE growth
-  // of its sub-industry peers.
-  //   - average, not median (median is S3's tool — breakdown §4)
-  //   - sub_industry granularity (matches S5 peer groups — confirmed)
-  //   - no minimum-n gate (breakdown §4); peer_n is surfaced instead
-  //   - PROVISIONAL: 0.15 was an illustrative starting point, to be
-  //     replaced once cross-client growth spread is observable.
+  // "Perlu Perhatian" (§2.8) has FOUR independent signals — a client can
+  // surface on any of them (mockup MIL_Internal_Dashboard parity, user
+  // decision "Opsi 1: tambah di samping rule relatif, bukan mengganti"):
+  //
+  //   (a) peer-relative: growth at least `perluPerhatianGrowthGap` points
+  //       BELOW the AVERAGE growth of its sub-industry peers.
+  //         - average, not median (median is S3's tool — breakdown §4)
+  //         - sub_industry granularity (matches S5 peer groups)
+  //         - no minimum-n gate (breakdown §4); peer_n is surfaced
+  //   (b) overspend anomaly: spend growth > `perluPerhatianOverspendSpendGrowth`
+  //       while sales growth is negative — belanja naik, penjualan tidak.
+  //   (c) absolute ROAS floor: blended ROAS (revenue/spend) below
+  //       `perluPerhatianRoasFloor`.
+  //   (d) info only: count of clients excluded from this month's benchmark
+  //       (partial-month data — see S5 is_partial_month handling).
+  //
+  // ALL of (a)/(b)/(c) are PROVISIONAL placeholders. In particular the ROAS
+  // floor is lifted straight from the mockup's demo data — healthy ROAS
+  // varies wildly by industry, so recalibrate against real client data
+  // (same policy as `perluPerhatianGrowthGap`).
   perluPerhatianGrowthGap: 0.15,
+  perluPerhatianOverspendSpendGrowth: 0.05,
+  perluPerhatianRoasFloor: 3.2,
 
   // Growth-distribution histogram edges (fractions). Also provisional.
   growthBuckets: [

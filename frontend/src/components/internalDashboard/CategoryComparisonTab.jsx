@@ -42,7 +42,7 @@ export default function CategoryComparisonTab() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
             {data.categories.map((c) => (
               <KpiCard key={c.kategori_besar} title={c.kategori_besar} value={c.aggregate.sales} type="currency"
-                growth={c.aggregate.delta_pct}
+                growth={c.aggregate.delta_pct == null ? null : c.aggregate.delta_pct * 100}
                 note={`${c.aggregate.client_count} client · ROAS ${c.aggregate.blended_roas?.toFixed(2) ?? '-'}`
                   + `${c.aggregate.spend_coverage.of > 0 && c.aggregate.spend_coverage.value < c.aggregate.spend_coverage.of
                     ? ` (spend ${c.aggregate.spend_coverage.value}/${c.aggregate.spend_coverage.of})` : ''}`

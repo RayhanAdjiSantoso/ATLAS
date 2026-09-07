@@ -217,7 +217,7 @@ export async function listBrandsForOverview({ status, kategoriBesar }, db = pool
 
 export async function monthlyRevenueByBrand(brandIds, startPeriod, endPeriod, db = pool) {
   const { rows } = await db.query(
-    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, revenue, target_sales, is_partial_month
+    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, revenue, transaksi, target_sales, is_partial_month
      FROM client_monthly_metrics
      WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date`,
     [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
