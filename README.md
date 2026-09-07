@@ -37,13 +37,6 @@ npm run dev:backend   # http://localhost:5001
 npm run dev:frontend  # http://localhost:5173
 ```
 
-## Akun Demo
-
-| Role  | Email               | Password    |
-|-------|---------------------|-------------|
-| Admin | admin@atlas.local   | admin12345  |
-| User  | user@atlas.local    | user12345   |
-
 ## API Endpoints
 
 | Method | Endpoint           | Deskripsi                    |
