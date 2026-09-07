@@ -156,7 +156,12 @@ tr:hover td { background: var(--primary-light); }
   height: 100vh;
   overflow-y: auto;
 }
-.sidebar-brand { font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; padding: 0 0.5rem; color: var(--text); }
+/* Now an <a> to the landing page. `display: block` is load-bearing: as an
+   inline element its margin-bottom would not apply at all. The two anchor
+   resets undo the global `a { color: var(--primary) }` / hover underline —
+   this reads as a wordmark, not a link. */
+.sidebar-brand { display: block; font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; padding: 0 0.5rem; color: var(--text); }
+.sidebar-brand:hover { color: var(--text); text-decoration: none; }
 .sidebar-brand span { color: var(--primary); }
 .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
 .sidebar-link {

@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, History, LogOut, Megaphone, FileBarChart, Building2 } from 'lucide-react';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, History, Home, LogOut, Megaphone, FileBarChart, Building2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
 export default function AppLayout() {
@@ -14,8 +14,13 @@ export default function AppLayout() {
   return (
     <div className="layout">
       <aside className="sidebar">
-        <div className="sidebar-brand">ATLAS<span>.</span></div>
+        <Link to="/" className="sidebar-brand">ATLAS<span>.</span></Link>
         <nav className="sidebar-nav">
+          {/* `end` so this only lights up on "/" itself — without it the
+              landing page would read as active on every other route. */}
+          <NavLink to="/" end className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+            <Home size={18} /> Beranda
+          </NavLink>
           <NavLink to="/dashboard" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
             <LayoutDashboard size={18} /> Dashboard Business Overview
           </NavLink>

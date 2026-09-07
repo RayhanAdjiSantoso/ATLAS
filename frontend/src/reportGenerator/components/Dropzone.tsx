@@ -12,6 +12,9 @@ interface DropzoneProps {
   icon?: string;
 }
 
+// Compact single-row drop target: icon · label + hint/filename · status.
+// Keeps the full-area invisible <input> so both click and drag-drop still
+// work, but takes a fraction of the vertical space the old stacked card did.
 export function Dropzone({ tag, accept, onFile, loaded, fileName, infoText, disabled, className, icon }: DropzoneProps) {
   const [dragging, setDragging] = useState(false);
 
@@ -40,14 +43,21 @@ export function Dropzone({ tag, accept, onFile, loaded, fileName, infoText, disa
           e.target.value = '';
         }}
       />
-      <div className="dz-icon">{icon || '📂'}</div>
-      <div className="dz-tag">{tag}</div>
-      {loaded && fileName && (
-        <div>
-          <div className="dz-file">{fileName}</div>
-          {infoText && <div className="dz-rows">{infoText}</div>}
-        </div>
-      )}
+      <span className="dz-icon">{loaded ? '✓' : icon || '📄'}</span>
+      <span className="dz-main">
+        <span className="dz-tag">{tag}</span>
+        {loaded && fileName ? (
+          <span className="dz-file" title={fileName}>
+            {fileName}
+          </span>
+        ) : (
+          <>
+            <span className="dz-hint">Klik atau tarik file ke sini</span>
+            <span className="dz-sub">Pilih file dari perangkat Anda</span>
+          </>
+        )}
+      </span>
+      {loaded && infoText && <span className="dz-rows">{infoText}</span>}
     </div>
   );
 }

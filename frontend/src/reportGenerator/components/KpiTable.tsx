@@ -75,7 +75,12 @@ export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded
     !visibleRows.length && !totalRow ? (
       <div className="empty-note">{emptyMessage || 'Tidak ada data.'}</div>
     ) : (
-      <table className="kpi-table">
+      // .tbl-scroll: .sec-block clips at overflow:hidden, so without a
+      // scroller of its own a table wider than the card loses its right-hand
+      // columns outright — and the right-hand column is the delta, the whole
+      // point of the report. Released again during PNG/PDF capture.
+      <div className="tbl-scroll">
+      <table className="kpi-table kpi-compact">
         <thead>
           <tr>
             <th></th>
@@ -148,6 +153,7 @@ export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded
           )}
         </tbody>
       </table>
+      </div>
     );
 
   return (

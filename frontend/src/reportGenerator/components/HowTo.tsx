@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from 'react';
 
 export function HowTo({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(true);
+  // Collapsed by default — the step rail + colored upload cards carry the
+  // flow now; this is reference material the user opens only when stuck.
+  const [open, setOpen] = useState(false);
   return (
-    <div className="howto">
+    <div className={`howto${open ? ' open' : ''}`}>
       <div className="howto-header" onClick={() => setOpen((o) => !o)}>
         <div className="howto-title">Cara penggunaan</div>
         <div className={`howto-chevron${open ? ' open' : ''}`}>▼</div>

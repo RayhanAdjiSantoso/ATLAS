@@ -1,4 +1,5 @@
 import { sanitizeFilename } from './exportImage';
+import { handleStaleChunk } from './staleChunk';
 
 // ══════════════════════════════════════════════════════
 // PER-SECTION EXCEL EXPORT — the wide "add metric columns to the side"
@@ -54,6 +55,7 @@ export async function downloadSectionExcel(block: HTMLElement): Promise<void> {
     XLSX.writeFile(wb, `${base}.xlsx`);
   } catch (err) {
     console.error(err);
+    if (handleStaleChunk(err)) return;
     alert('Gagal membuat Excel: ' + (err as Error).message);
   }
 }

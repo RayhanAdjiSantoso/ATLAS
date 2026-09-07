@@ -214,29 +214,34 @@ export interface FunnelTreeDef {
   key: keyof FunnelMetrics;
   label: string;
   prefix: string;
+  // Nesting level for the redesigned tree view (0 = root GMV).
+  depth: number;
+  fmt: PivotFmt;
   sentiment: Sentiment;
 }
 
 export const FUNNEL_TREE_DEFS: readonly FunnelTreeDef[] = [
-  { key: 'gmvAds', label: 'Gross Merchandise Value', prefix: '', sentiment: 'higher-better' },
-  { key: 'purchases', label: 'Transaction', prefix: '├─ ', sentiment: 'higher-better' },
-  { key: 'clicks', label: 'Traffic', prefix: '│  ├─ ', sentiment: 'higher-better' },
-  { key: 'impressions', label: 'Impressions', prefix: '│  │  ├─ ', sentiment: 'higher-better' },
-  { key: 'spend', label: 'Spending', prefix: '│  │  │  ├─ ', sentiment: 'neutral' },
-  { key: 'cpm', label: 'CPM', prefix: '│  │  │  └─ ', sentiment: 'lower-better' },
-  { key: 'ctr', label: 'CTR', prefix: '│  │  └─ ', sentiment: 'higher-better' },
-  { key: 'cvr', label: 'Conversion Rate', prefix: '│  └─ ', sentiment: 'higher-better' },
-  { key: 'clicksToAtcRate', label: 'Clicks → ATC Rate', prefix: '│     ├─ ', sentiment: 'higher-better' },
-  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', prefix: '│     └─ ', sentiment: 'higher-better' },
-  { key: 'aov', label: 'Average Order Value', prefix: '└─ ', sentiment: 'higher-better' },
-  { key: 'abs', label: 'Average Basket Size', prefix: '   ├─ ', sentiment: 'higher-better' },
-  { key: 'aur', label: 'Average Unit Retail', prefix: '   └─ ', sentiment: 'higher-better' },
+  { key: 'gmvAds', label: 'Gross Merchandise Value', prefix: '', depth: 0, fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'purchases', label: 'Transaction', prefix: '├─ ', depth: 1, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'clicks', label: 'Traffic', prefix: '│  ├─ ', depth: 2, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'impressions', label: 'Impressions', prefix: '│  │  ├─ ', depth: 3, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'spend', label: 'Spending', prefix: '│  │  │  ├─ ', depth: 4, fmt: 'rp', sentiment: 'neutral' },
+  { key: 'cpm', label: 'CPM', prefix: '│  │  │  └─ ', depth: 4, fmt: 'rp', sentiment: 'lower-better' },
+  { key: 'ctr', label: 'CTR', prefix: '│  │  └─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'cvr', label: 'Conversion Rate', prefix: '│  └─ ', depth: 2, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'clicksToAtcRate', label: 'Clicks → ATC Rate', prefix: '│     ├─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', prefix: '│     └─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'aov', label: 'Average Order Value', prefix: '└─ ', depth: 1, fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'abs', label: 'Average Basket Size', prefix: '   ├─ ', depth: 2, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'aur', label: 'Average Unit Retail', prefix: '   └─ ', depth: 2, fmt: 'rp', sentiment: 'higher-better' },
 ];
 
 export interface FunnelTreeRow {
   key: string;
   label: string;
   prefix: string;
+  depth: number;
+  fmt: PivotFmt;
   oldNum: number;
   curNum: number;
   deltaNum: number | null;
@@ -253,6 +258,8 @@ export function buildFunnelTree(mOld: FunnelMetrics, mCur: FunnelMetrics): Funne
       key: def.key,
       label: def.label,
       prefix: def.prefix,
+      depth: def.depth,
+      fmt: def.fmt,
       oldNum,
       curNum,
       deltaNum,
