@@ -9,6 +9,7 @@ import { PeriodInputRow } from '../../components/PeriodInputRow';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
+import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { SlotSourceTabs, SavedSlotCard, type SlotSource } from '../../components/SlotSourceTabs';
 import { usePeriodLabel } from '../../hooks/usePeriodLabel';
 import { fromISODate, toISODate } from '../../lib/dateFmt';
@@ -137,6 +138,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   const ready = Boolean(files['tiktok-old'] && files['tiktok-cur'] && clientId);
 
   const autoSave = useAutoSave('tiktok');
+  const armReportScroll = useScrollAfterGenerate('report-tiktok', report);
 
   function generate() {
     const r = buildTiktokReport(periodOld.label, periodCur.label, periodOldDays, periodCurDays, files['tiktok-old']?.rows ?? [], files['tiktok-cur']?.rows ?? []);
@@ -281,7 +283,13 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
       {ready && (
         <div id="cta" style={{ marginTop: '1rem' }}>
           <div className="action-row">
-            <button className="btn btn-primary" onClick={generate}>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                generate();
+                armReportScroll();
+              }}
+            >
               ✦ Generate Laporan
             </button>
             <button className="btn btn-ghost" onClick={reset}>

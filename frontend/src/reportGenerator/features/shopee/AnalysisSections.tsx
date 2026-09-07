@@ -1,11 +1,11 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { DeltaPill } from '../../components/DeltaPill';
-import { KpiTable, type KpiRowDisplay } from '../../components/KpiTable';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
 import { useInlineMetricEditor } from '../../hooks/useInlineMetricEditor';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { FunnelTreeRow, FunnelValueRow } from '../../lib/shopeeFunnel';
+import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import type { ParetoRow, ProductMetricRanking } from '../../lib/shopeeProductAnalysis';
 
 // ══════════════════════════════════════════════════════
@@ -162,63 +162,191 @@ function DataTable<T>({
 }
 
 // ── Fundamental Analysis ─────────────────────────────────────────────────
-// Two panels shown side by side, exactly as in the reference workbook:
-//   • Values — the full flat metric list, old vs cur vs %Change.
-//   • Symptom Analysis — the 13 funnel nodes as an indented tree, each row
-//     showing ONLY its %Change (the numbers live in the Values panel).
+// The flat "Values" list, old vs cur vs %Change (same shape as the reference
+// workbook's left-hand pivot), split into two draggable groups — the metrics
+// an ads strategist works from vs. the ones a client cares about. Drag a row
+// (or tap ⇄) to move it between groups; the choice is session-only.
 
-function SymptomTree({ rows }: { rows: FunnelTreeRow[] }) {
+// The three headline numbers, pulled straight from the funnel values (no new
+// maths) into a fixed table above the editable groups — a quick read before
+// anyone rearranges the detail.
+const FA_OVERALL_KEYS = ['spend', 'purchases', 'roas'] as const;
+
+function OverallAdsTable({ values, p1, p2 }: { values: FunnelValueRow[]; p1: string; p2: string }) {
+  const rows = FA_OVERALL_KEYS.map((k) => values.find((v) => v.key === k)).filter((v): v is FunnelValueRow => Boolean(v));
+  if (!rows.length) return null;
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table className="kpi-table">
+    <div className="fa-overall">
+      <div className="fa-overall-head">
+        Overall Ads <span className="sec-badge">3 metrik utama</span>
+      </div>
+      <div className="tbl-scroll">
+      <table className="kpi-table fa-overall-table">
         <thead>
           <tr>
-            <th style={{ width: 'auto', textAlign: 'left', whiteSpace: 'nowrap' }}>Node</th>
-            <th style={NUM_TH}>%Chg</th>
+            <th></th>
+            <th>{p1}</th>
+            <th>{p2}</th>
+            <th>Changes</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.key}>
-              <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'pre', color: 'var(--muted)' }}>{r.prefix}</span>
-                <span style={{ fontWeight: r.prefix === '' ? 700 : 500 }}>{r.label}</span>
-              </td>
-              <td style={NUM_TD}>
-                <DeltaPill cls={r.cls}>{r.delta}</DeltaPill>
+          {rows.map((v) => (
+            <tr key={v.key}>
+              <td>{v.label}</td>
+              <td className="num">{fmtPivotVal(v.oldNum, v.fmt)}</td>
+              <td className="num">{fmtPivotVal(v.curNum, v.fmt)}</td>
+              <td>
+                <DeltaPill cls={v.cls}>{v.delta}</DeltaPill>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
+    </div>
+  );
+}
+
+type FgGroup = 'strategist' | 'client';
+
+const FG_DEFAULT: Record<string, FgGroup> = {
+  gmvOverall: 'client', gmvAds: 'client', adContribution: 'client', roas: 'client',
+  purchases: 'client', itemsSold: 'client', aov: 'client', abs: 'client', aur: 'client',
+  spend: 'strategist', impressions: 'strategist', cpm: 'strategist', clicks: 'strategist',
+  ctr: 'strategist', cpc: 'strategist', addToCart: 'strategist', clicksToAtcRate: 'strategist',
+  cpAtc: 'strategist', atcToPurchaseRate: 'strategist', cpp: 'strategist', cvr: 'strategist',
+};
+
+const FG_GROUPS: { id: FgGroup; title: string; sub: string }[] = [
+  { id: 'strategist', title: 'Metrik Ads Strategist', sub: 'lever operasional — media, biaya, funnel' },
+  { id: 'client', title: 'Metrik Client', sub: 'hasil bisnis — omzet, ROAS, order' },
+];
+
+function FundamentalGroupedValues({ values, p1, p2 }: { values: FunnelValueRow[]; p1: string; p2: string }) {
+  const [group, setGroup] = useState<Record<string, FgGroup>>(() => ({ ...FG_DEFAULT }));
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<FgGroup | null>(null);
+  const [moved, setMoved] = useState<string | null>(null);
+
+  const groupOf = (key: string): FgGroup => group[key] ?? FG_DEFAULT[key] ?? 'client';
+  const rowsIn = (g: FgGroup) => values.filter((v) => groupOf(v.key) === g);
+
+  function move(key: string, to: FgGroup) {
+    if (groupOf(key) === to) return;
+    setGroup((prev) => ({ ...prev, [key]: to }));
+    setMoved(key);
+    window.setTimeout(() => setMoved((k) => (k === key ? null : k)), 800);
+  }
+
+  return (
+    <div className="fg-wrap">
+      {FG_GROUPS.map((grp) => {
+        const rows = rowsIn(grp.id);
+        const other: FgGroup = grp.id === 'strategist' ? 'client' : 'strategist';
+        return (
+          <div
+            key={grp.id}
+            data-grp={grp.id}
+            className={`fg-group${dropTarget === grp.id && dragKey && groupOf(dragKey) !== grp.id ? ' fg-drop' : ''}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDropTarget(grp.id);
+            }}
+            onDragLeave={() => setDropTarget((d) => (d === grp.id ? null : d))}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragKey) move(dragKey, grp.id);
+              setDragKey(null);
+              setDropTarget(null);
+            }}
+          >
+            <div className="fg-group-head">
+              <span className="fg-group-title">{grp.title}</span>
+              <span className="fg-group-sub">{grp.sub}</span>
+              <span className="fg-group-count">{rows.length}</span>
+            </div>
+            <div className="fg-scroll">
+            <table className="kpi-table fg-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>{p1}</th>
+                  <th>{p2}</th>
+                  <th>Changes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((v) => (
+                  <tr
+                    key={v.key}
+                    className={`fg-row${dragKey === v.key ? ' fg-dragging' : ''}${moved === v.key ? ' fg-moved' : ''}`}
+                    draggable
+                    onDragStart={(e) => {
+                      setDragKey(v.key);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragEnd={() => {
+                      setDragKey(null);
+                      setDropTarget(null);
+                    }}
+                  >
+                    <td>
+                      <span className="fg-row-label">
+                        <span className="fg-handle" aria-hidden>
+                          ⠿
+                        </span>
+                        {v.label}
+                        <button type="button" className="fg-move" title={`Pindahkan ke ${other === 'strategist' ? 'Ads Strategist' : 'Client'}`} onClick={() => move(v.key, other)}>
+                          ⇄
+                        </button>
+                      </span>
+                    </td>
+                    <td className="num">{fmtPivotVal(v.oldNum, v.fmt)}</td>
+                    <td className="num">{fmtPivotVal(v.curNum, v.fmt)}</td>
+                    <td>
+                      <DeltaPill cls={v.cls}>{v.delta}</DeltaPill>
+                    </td>
+                  </tr>
+                ))}
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="fg-empty">
+                      Tarik metrik ke sini
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            </div>
+          </div>
+        );
+      })}
+      <div className="empty-note fg-hint">
+        Tarik baris metrik antar kotak (atau ketuk <strong>⇄</strong>) untuk mengatur mana yang tampil untuk <strong>ads strategist</strong> dan mana untuk <strong>client</strong>. Berlaku sesi ini.
+      </div>
     </div>
   );
 }
 
 export function FundamentalAnalysisSection({
   values,
-  tree,
   liveGmv,
+  tree,
+  symptom,
   p1,
   p2,
 }: {
   values: FunnelValueRow[];
-  tree: FunnelTreeRow[];
   liveGmv: { old: number; cur: number; hasData: boolean };
+  // The account-level funnel tree + its plain-language read. Both used to be
+  // their own "Symptom Analysis" section; they belong next to the numbers
+  // they explain, and the narrow table leaves room for exactly that.
+  tree?: FunnelTreeRow[];
+  symptom?: SymptomSummary;
   p1: string;
   p2: string;
 }) {
-  const kpiRows: KpiRowDisplay[] = values.map((r) => ({
-    id: r.key,
-    label: r.label,
-    old: fmtPivotVal(r.oldNum, r.fmt),
-    cur: fmtPivotVal(r.curNum, r.fmt),
-    delta: r.delta,
-    cls: r.cls,
-  }));
-
-  const panelLabel: CSSProperties = { fontSize: '.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '.5rem' };
-
   return (
     <div className="sec-block">
       <div className="sec-heading shopee-heading">
@@ -226,18 +354,18 @@ export function FundamentalAnalysisSection({
         <SectionExcelButton />
         <SectionDownloadButton />
       </div>
-      <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start', padding: '1.1rem 1.4rem 0' }}>
-        <div style={{ flex: '2 1 440px', minWidth: 0 }}>
-          <div style={panelLabel}>Values</div>
-          <div style={{ overflowX: 'auto' }}>
-            <KpiTable rows={kpiRows} p1={p1} p2={p2} />
+      <div style={{ padding: '1.1rem 1.4rem 0' }}>
+        <div className="sec-split">
+          <div className="sec-split-main">
+            <OverallAdsTable values={values} p1={p1} p2={p2} />
           </div>
+          {symptom && <SymptomSummaryPanel summary={symptom} />}
         </div>
-        <div style={{ flex: '1 1 300px', minWidth: 0 }}>
-          <div style={panelLabel}>
-            Symptom Analysis <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· {p1} → {p2}</span>
+        <div className="sec-split">
+          <div className="sec-split-main">
+            <FundamentalGroupedValues values={values} p1={p1} p2={p2} />
           </div>
-          <SymptomTree rows={tree} />
+          {tree && <SymptomTreePanel tree={tree} p1={p1} p2={p2} title="Symptom Analysis" badge={`${p1} → ${p2}`} />}
         </div>
       </div>
       <div className="empty-note" style={{ padding: '.9rem 1.4rem 0' }}>
@@ -253,6 +381,125 @@ export function FundamentalAnalysisSection({
       ) : (
         <div style={{ paddingBottom: '1rem' }} />
       )}
+    </div>
+  );
+}
+
+// ── Symptom Analysis ─────────────────────────────────────────────────────
+// Its own section: a plain-language read of what moved GMV, then the funnel
+// drawn as a real nested tree (root GMV at the top, each child indented under
+// its parent with a connector) instead of monospace box-drawing glyphs.
+
+interface SymptomNode extends FunnelTreeRow {
+  children: SymptomNode[];
+}
+
+// Flat FUNNEL_TREE_DEFS (each row carries its `depth`) → real nested tree, so
+// the connector rails can be drawn per subtree instead of faked with prefixes.
+function nestFunnelRows(rows: FunnelTreeRow[]): SymptomNode[] {
+  const roots: SymptomNode[] = [];
+  const stack: SymptomNode[] = [];
+  for (const r of rows) {
+    const node: SymptomNode = { ...r, children: [] };
+    while (stack.length && stack[stack.length - 1].depth >= node.depth) stack.pop();
+    (stack.length ? stack[stack.length - 1].children : roots).push(node);
+    stack.push(node);
+  }
+  return roots;
+}
+
+function SymptomTreeNode({ node, seq }: { node: SymptomNode; seq: { i: number } }) {
+  const i = seq.i++;
+  return (
+    <li className="st-item">
+      <div className={`st-node${node.depth === 0 ? ' st-root' : ''}`} data-depth={node.depth} style={{ '--i': i } as CSSProperties}>
+        <span className="st-label">{node.label}</span>
+        <span className="st-vals num">
+          {fmtPivotVal(node.oldNum, node.fmt)} <span className="st-arrow">→</span> {fmtPivotVal(node.curNum, node.fmt)}
+        </span>
+        <DeltaPill cls={node.cls}>{node.delta}</DeltaPill>
+      </div>
+      {node.children.length > 0 && (
+        <ul className="st-children">
+          {node.children.map((c) => (
+            <SymptomTreeNode key={c.key} node={c} seq={seq} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function SymptomTree({ rows, p1, p2 }: { rows: FunnelTreeRow[]; p1: string; p2: string }) {
+  const tree = nestFunnelRows(rows);
+  const seq = { i: 0 };
+  return (
+    <div className="symptom-tree">
+      <div className="symptom-tree-head">
+        <span>Node</span>
+        <span>
+          {p1} → {p2}
+        </span>
+      </div>
+      <ul className="st-root-list">
+        {tree.map((n) => (
+          <SymptomTreeNode key={n.key} node={n} seq={seq} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// The funnel tree on its own — rendered to the right of a metrics table so
+// the empty half of a narrow table earns its keep.
+export function SymptomTreePanel({ tree, p1, p2, title, badge }: { tree: FunnelTreeRow[]; p1: string; p2: string; title?: string; badge?: string }) {
+  return (
+    <div className="sympt-panel">
+      {title && (
+        <div className="sympt-panel-head">
+          <span className="sympt-panel-title">{title}</span>
+          {badge && <span className="sec-badge">{badge}</span>}
+        </div>
+      )}
+      <SymptomTree rows={tree} p1={p1} p2={p2} />
+    </div>
+  );
+}
+
+// The plain-language read (headline + points + verdict) on its own.
+export function SymptomSummaryPanel({ summary }: { summary: SymptomSummary }) {
+  return (
+    <div className={`sympt-summary sympt-summary-${summary.gmvDir}`}>
+      <div className="sympt-summary-headline">{summary.headline}</div>
+      <ul className="sympt-summary-points">
+        {summary.points.map((pt, i) => (
+          <li key={i}>{pt}</li>
+        ))}
+      </ul>
+      <div className="sympt-summary-verdict">Kesimpulan: {summary.verdict}</div>
+    </div>
+  );
+}
+
+export function SymptomAnalysisSection({ tree, summary, p1, p2 }: { tree: FunnelTreeRow[]; summary: SymptomSummary; p1: string; p2: string }) {
+  return (
+    <div className="sec-block">
+      <div className="sec-heading shopee-heading">
+        Symptom Analysis <span className="sec-badge">pembacaan funnel · {p1} → {p2}</span>
+        <SectionDownloadButton />
+      </div>
+      <div style={{ padding: '1.1rem 1.4rem 1.4rem' }}>
+        <div className={`sympt-summary sympt-summary-${summary.gmvDir}`}>
+          <div className="sympt-summary-headline">{summary.headline}</div>
+          <ul className="sympt-summary-points">
+            {summary.points.map((pt, i) => (
+              <li key={i}>{pt}</li>
+            ))}
+          </ul>
+          <div className="sympt-summary-verdict">Kesimpulan: {summary.verdict}</div>
+        </div>
+        <SymptomTree rows={tree} p1={p1} p2={p2} />
+      </div>
     </div>
   );
 }

@@ -82,7 +82,9 @@ export const OVERVIEW_METRIC_DEFS: OverviewMetricDef[] = [
 ];
 
 // Derived ratio metrics — computed purely from the 7 metrics above, not from
-// any new raw column.
+// any new raw column. Kept in a separate defs array (and rendered in its own
+// "Conversion & Ratio Metrics" sub-section) so it's visually obvious to a
+// non-technical reader that these are calculated, not raw export data.
 export interface OverviewCalcMetricDef {
   key: string;
   label: string;

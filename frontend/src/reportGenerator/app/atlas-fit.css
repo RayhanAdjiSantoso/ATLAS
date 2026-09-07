@@ -1,0 +1,49 @@
+/* The seam between MRG's page chrome and ATLAS's.
+
+   index.css / shell.css / login.css are generated verbatim from MRG by
+   frontend/scripts/scope-css.py, so nothing ATLAS-specific may live in them —
+   a re-sync would wipe it. Everything that only makes sense because these
+   pages sit inside ATLAS's AppLayout goes here instead. */
+
+/* MRG had a floating site header ~78px tall and parked its sticky report tab
+   bar under it. ATLAS's chrome is the left sidebar — there is nothing above
+   the content — so the bar sticks to the top of the viewport instead. Set on
+   the wrapper (specificity 0,2,0) so it beats the .mil-ui{--nav-h:78px} the
+   generated file declares, whatever order the bundler emits the two in. */
+.mil-ui.report-generator-app,
+.mil-ui.atlas-home { --nav-h: 0px; }
+
+/* ATLAS's `.main-content{padding:2rem}` is right for a page of cards, wrong
+   for these two: the report-type rail and the home masthead are full-width
+   bands, and a band inset by 2rem reads as a card that failed to line up.
+   Both pages carry their own edge padding (.bleed) at a width that matches
+   their content, so the frame hands them the full column.
+
+   `overflow-x:clip` replaces ATLAS's `overflow-x:auto` because `auto` makes
+   .main-content a scroll container, which neutralizes `position:sticky` on
+   the report tab bar (it would scroll away with the page instead of pinning).
+   `clip` does not create a scroll container, so sticky keeps working, yet it
+   still clips horizontal overflow so the page width stays identical before
+   and after a report is generated. The `clip`/`visible` pair is the one
+   combination that stays as authored instead of both axes computing to
+   `auto`. `min-width:0` is the crucial half: without it this flex item
+   (.main-content is flex:1 inside .layout) keeps its content-based automatic
+   minimum width, so one wide table still stretches the whole page no matter
+   what `overflow` says. */
+.main-content:has(> .report-generator-app),
+.main-content:has(> .atlas-home) {
+  padding: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  min-width: 0;
+}
+
+/* MRG's brand lockup was <img src="/mil-logo.png"> — a blue tile with a white
+   mark baked into the file. ATLAS ships no logo asset, so the same lockup is
+   built from the inline MilMark glyph instead: the tile is this rule (accent
+   ground, white glyph, padding to inset it), the mark is the SVG. */
+.mil-ui .login-brand-logo {
+  background: var(--acc);
+  color: #fff;
+  padding: 7px;
+}

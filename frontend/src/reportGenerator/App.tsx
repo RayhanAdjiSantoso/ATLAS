@@ -1,13 +1,6 @@
 import { useRef, useState } from 'react';
-import { Header } from './components/Header';
-import { PlatformTabs, type TabKey } from './components/PlatformTabs';
-import { MetaTab } from './features/meta/MetaTab';
-import { ShopeeTab } from './features/shopee/ShopeeTab';
-import { TiktokTab } from './features/tiktok/TiktokTab';
-import { BusinessTab } from './features/business/BusinessTab';
-import { SummaryTab } from './features/summary/SummaryTab';
-import { ClientPicker } from './features/reports/ClientPicker';
-import { ReportsTab } from './features/reports/ReportsTab';
+import { GeneratorShell } from './app/GeneratorShell';
+import type { ReportKey } from './app/reports';
 import { BIZ_INPUT_CHANNELS, bizBadgeLabel, emptyBizChannel, type BizChannelMetrics, type BizMetricKey, type BizPeriod, type BizRow } from './lib/business';
 import { PLATFORM_CONFIG, emptyPlatformState, emptyPlatformStateMap, type PlatformKey, type PlatformResultData } from './lib/summary';
 
@@ -15,11 +8,20 @@ function defaultChannelData(): Record<string, BizChannelMetrics> {
   return Object.fromEntries(BIZ_INPUT_CHANNELS.map((c) => [c.key, emptyBizChannel()]));
 }
 
+// Holds the state every report type shares and hands it to GeneratorShell,
+// which decides what to show from the :platform URL param.
+//
+// This component is mounted by the /report-generator/:platform route, so it
+// stays mounted as you move between report types — only the param changes —
+// and an upload in progress or an already-generated report survives the move.
+// Leaving the generator for another ATLAS page does reset it, same as every
+// other page in the app.
+//
+// Ported from MRG's App.tsx minus its router, auth provider and site shell:
+// ATLAS supplies all three (App.jsx, AuthContext, AppLayout).
 function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>('meta');
   const [clientId, setClientId] = useState<number | null>(null);
 
-  // ── Cross-tab shared state ──
   // platformState feeds the Summary Overview tab (Meta/Shopee/TikTok each
   // report their last-generated result here); the Business Overview state
   // (channelData/offlineStores/otherChannels) is shared between the Business
@@ -39,7 +41,6 @@ function App() {
   function invalidatePlatform(key: PlatformKey) {
     setPlatformState((prev) => (prev[key].done || prev[key].error ? { ...prev, [key]: emptyPlatformState() } : prev));
   }
-
   function handleChannelDataChange(chKey: string, metric: BizMetricKey, period: BizPeriod, v: number | null) {
     setChannelData((prev) => ({ ...prev, [chKey]: { ...prev[chKey], [metric]: { ...prev[chKey][metric], [period]: v } } }));
   }
@@ -47,12 +48,7 @@ function App() {
   const bizState = { channelData, offlineStores, otherChannels, shopeeOmzet: { old: omzetOld, cur: omzetCur } };
 
   const doneCount = PLATFORM_CONFIG.filter((p) => platformState[p.key].done).length;
-  const badges: Record<TabKey, string> = {
-    // Meta/Shopee/TikTok badges are a simplified approximation of the
-    // original (which turned "✓" the moment a file was uploaded, before
-    // Generate) — here they turn "✓" once that platform has generated a
-    // report, which is simpler to track precisely and still communicates
-    // the same thing ("this platform is ready to show up in Summary").
+  const badges: Record<ReportKey, string> = {
     meta: platformState.meta.done ? '✓' : '—',
     shopee: platformState.shopee.done ? '✓' : '—',
     tiktok: platformState.tiktok.done ? '✓' : '—',
@@ -62,39 +58,32 @@ function App() {
   };
 
   return (
-    // Was <div id="app"> — renamed to a class so its CSS (index.css in this
-    // folder) can be scoped under .report-generator-app instead of leaking
-    // globally now that this shares a document with the rest of ATLAS.
-    <div className="report-generator-app">
-      <Header />
-      <ClientPicker clientId={clientId} onChange={setClientId} />
-      <PlatformTabs activeTab={activeTab} onChange={setActiveTab} badges={badges} />
-
-      <MetaTab isActive={activeTab === 'meta'} clientId={clientId} onGenerated={(data) => setPlatformResult('meta', data)} onInvalidate={() => invalidatePlatform('meta')} />
-      <ShopeeTab
-        isActive={activeTab === 'shopee'}
+    // Two classes, two jobs. `.mil-ui` is what index.css / shell.css scope
+    // every rule under, so it carries this app's design tokens and styles
+    // without them leaking onto the rest of ATLAS. `.report-generator-app` is
+    // the handle DOM logic reaches for: exportImage.ts toggles pdf-export-mode
+    // on it and portalTarget.ts renders popups into it.
+    <div className="mil-ui report-generator-app">
+      <GeneratorShell
         clientId={clientId}
+        setClientId={setClientId}
+        badges={badges}
+        platformState={platformState}
+        bizState={bizState}
+        setPlatformResult={setPlatformResult}
+        invalidatePlatform={invalidatePlatform}
         omzetOld={omzetOld}
         omzetCur={omzetCur}
-        onOmzetOldChange={setOmzetOld}
-        onOmzetCurChange={setOmzetCur}
-        onGenerated={(data) => setPlatformResult('shopee', data)}
-        onInvalidate={() => invalidatePlatform('shopee')}
-      />
-      <TiktokTab isActive={activeTab === 'tiktok'} clientId={clientId} onGenerated={(data) => setPlatformResult('tiktok', data)} onInvalidate={() => invalidatePlatform('tiktok')} />
-      <ReportsTab isActive={activeTab === 'reports'} clientId={clientId} />
-      <BusinessTab
-        isActive={activeTab === 'business'}
+        setOmzetOld={setOmzetOld}
+        setOmzetCur={setOmzetCur}
         channelData={channelData}
         offlineStores={offlineStores}
         otherChannels={otherChannels}
-        shopeeOmzet={{ old: omzetOld, cur: omzetCur }}
         onChannelDataChange={handleChannelDataChange}
-        onOfflineStoresChange={setOfflineStores}
-        onOtherChannelsChange={setOtherChannels}
+        setOfflineStores={setOfflineStores}
+        setOtherChannels={setOtherChannels}
         nextRowId={() => bizRowSeq.current++}
       />
-      <SummaryTab isActive={activeTab === 'summary'} platformState={platformState} bizState={bizState} />
     </div>
   );
 }

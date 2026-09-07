@@ -50,6 +50,30 @@ export interface ProductPerfRecord {
   conversionRate: number; // Tingkat Konversi (Pesanan Siap Dikirim) — percentage
   visitToAtcRate: number; // Pengunjung Produk (ATC) / Produk Diklik — percentage
   atcToPurchaseRate: number; // Pesanan Siap Dikirim / Pengunjung Produk (ATC) — percentage (iferror→0)
+  // Raw counts the Product Analysis charts plot directly. `visitors` is the
+  // plain "Pengunjung Produk" column, which is NOT the denominator of
+  // visitToAtcRate above (that one divides by Produk Diklik) — the rate is
+  // left exactly as the existing Traffic/Conversion tables compute it, so
+  // nothing already on screen moves. 0 when the export has no such column;
+  // hasVisitorsCol() reports that separately so a section can say so instead
+  // of drawing a chart of zeros.
+  visitors: number;
+  atc: number; // Pengunjung Produk (Masuk Keranjang) — the raw ATC count
+}
+
+// Whether the export carries a plain "Pengunjung Produk" column, separate
+// from "Pengunjung Produk (Masuk Keranjang)".
+export function hasVisitorsCol(rows: SheetRow[]): boolean {
+  if (!rows.length) return false;
+  return pickVisitorsCol(Object.keys(rows[0])) !== null;
+}
+
+function pickVisitorsCol(h: string[]): string | null {
+  return pickCol(h, {
+    exact: ['pengunjung produk', 'pengunjung produk (kunjungan)'],
+    includes: [['pengunjung produk']],
+    excludes: ['keranjang', 'atc', 'masuk'],
+  });
 }
 
 // Reads the "Produk dengan Performa Terbaik" sheet rows, keeping only the
@@ -72,6 +96,7 @@ export function parseProductPerfRows(rows: SheetRow[]): ProductPerfRecord[] {
     conversionRate: pickCol(h, { exact: ['tingkat konversi (pesanan siap dikirim)'] }),
     confirmedOrder: pickCol(h, { exact: ['pesanan siap dikirim'] }),
     visitorsAtc: pickCol(h, { includes: [['pengunjung produk', 'keranjang']] }),
+    visitors: pickVisitorsCol(h),
   };
   const n = (row: SheetRow, c: string | null) => (c ? parseOverviewNum(row[c]) : 0);
   const out: ProductPerfRecord[] = [];
@@ -94,6 +119,8 @@ export function parseProductPerfRows(rows: SheetRow[]): ProductPerfRecord[] {
       conversionRate: n(r, col.conversionRate),
       visitToAtcRate: clicks > 0 ? (visitorsAtc / clicks) * 100 : 0,
       atcToPurchaseRate: visitorsAtc > 0 ? (confirmedOrder / visitorsAtc) * 100 : 0,
+      visitors: n(r, col.visitors),
+      atc: visitorsAtc,
     });
   }
   return out;
@@ -122,7 +149,16 @@ export function buildPareto(records: ProductPerfRecord[]): ParetoRow[] {
 
 // ── Traffic / Conversion metric rankings ─────────────────────────────────
 
-export type ProductMetricKey = 'clicks' | 'impressions' | 'ctr' | 'conversionRate' | 'visitToAtcRate' | 'atcToPurchaseRate';
+export type ProductMetricKey =
+  | 'clicks'
+  | 'impressions'
+  | 'ctr'
+  | 'conversionRate'
+  | 'visitToAtcRate'
+  | 'atcToPurchaseRate'
+  | 'visitors'
+  | 'atc'
+  | 'salesConfirmed';
 
 export interface ProductMetricDef {
   key: ProductMetricKey;
@@ -201,4 +237,109 @@ export function buildProductRankings(
     fmt: def.fmt,
     rows: buildProductRanking(oldRecords, curRecords, def.key, def.sentiment),
   }));
+}
+
+// ── Product Analysis charts — metric pairs and their %Change series ───────
+//
+// The three "Lowest & Highest" charts each plot ONE pair of metrics as
+// grouped bars, one group per product. What the bars carry is the %Change
+// between the two uploaded periods, not the absolute value: the pairs mix
+// units (Impressions in the tens of thousands next to a CTR of 5%), so a
+// shared axis only works once both are expressed as change. It also makes
+// the Highest/Lowest toggle mean something — which products moved most.
+//
+// Pareto and Produk Potensial are single-period by design and live below.
+
+export interface ProductChartPairDef {
+  id: 'traffic' | 'visit-atc' | 'atc-purchase';
+  title: string;
+  a: ProductMetricDef;
+  b: ProductMetricDef;
+}
+
+const M = {
+  impressions: { key: 'impressions', label: 'Impressions', fmt: 'num', sentiment: 'higher-better' },
+  ctr: { key: 'ctr', label: 'CTR', fmt: 'pct', sentiment: 'higher-better' },
+  visitors: { key: 'visitors', label: 'Visitor', fmt: 'num', sentiment: 'higher-better' },
+  visitToAtcRate: { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', sentiment: 'higher-better' },
+  atc: { key: 'atc', label: 'ATC', fmt: 'num', sentiment: 'higher-better' },
+  atcToPurchaseRate: { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', sentiment: 'higher-better' },
+  revenue: { key: 'salesConfirmed', label: 'Revenue', fmt: 'rp', sentiment: 'higher-better' },
+  conversionRate: { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better' },
+} as const satisfies Record<string, ProductMetricDef>;
+
+export const PRODUCT_CHART_PAIRS: readonly ProductChartPairDef[] = [
+  { id: 'traffic', title: 'Traffic Analysis', a: M.impressions, b: M.ctr },
+  { id: 'visit-atc', title: 'Visit → ATC Rate', a: M.visitors, b: M.visitToAtcRate },
+  { id: 'atc-purchase', title: 'ATC → Purchase Rate', a: M.atc, b: M.atcToPurchaseRate },
+];
+
+export const POTENTIAL_METRICS = { revenue: M.revenue, conversionRate: M.conversionRate };
+
+export interface ProductPairPoint {
+  key: string;
+  produk: string;
+  aPct: number | null; // %Change of metric A — null when the product is new
+  bPct: number | null;
+  aOld: number | null;
+  aCur: number | null;
+  bOld: number | null;
+  bCur: number | null;
+}
+
+// Joins the two metrics' per-product rankings by product key so one chart can
+// draw both bars. Products missing from the older period have a null %Change
+// and are dropped by the chart rather than shown as a 0% bar, which would
+// read as "did not move" when the truth is "no comparison exists".
+export function buildProductPairChange(
+  oldRecords: ProductPerfRecord[],
+  curRecords: ProductPerfRecord[],
+  pair: ProductChartPairDef,
+): ProductPairPoint[] {
+  const aRows = buildProductRanking(oldRecords, curRecords, pair.a.key, pair.a.sentiment);
+  const bByKey = new Map(buildProductRanking(oldRecords, curRecords, pair.b.key, pair.b.sentiment).map((r) => [r.key, r]));
+  return aRows.map((a) => {
+    const b = bByKey.get(a.key);
+    return {
+      key: a.key,
+      produk: a.produk,
+      aPct: a.deltaNum,
+      bPct: b?.deltaNum ?? null,
+      aOld: a.old,
+      aCur: a.cur,
+      bOld: b?.old ?? null,
+      bCur: b?.cur ?? null,
+    };
+  });
+}
+
+export type ChartDirection = 'highest' | 'lowest';
+
+// Sorts by the chosen metric's %Change and takes the top N. Products with no
+// %Change for that metric are excluded from the ranking entirely.
+export function rankProductPairs(points: ProductPairPoint[], sortBy: 'a' | 'b', direction: ChartDirection, count: number): ProductPairPoint[] {
+  const pick = (p: ProductPairPoint) => (sortBy === 'a' ? p.aPct : p.bPct);
+  return points
+    .filter((p) => pick(p) !== null)
+    .sort((x, y) => (direction === 'highest' ? (pick(y) as number) - (pick(x) as number) : (pick(x) as number) - (pick(y) as number)))
+    .slice(0, count);
+}
+
+// ── Produk Potensial ─────────────────────────────────────────────────────
+export interface PotentialProduct {
+  key: string;
+  produk: string;
+  revenue: number;
+  conversionRate: number;
+}
+
+// Top N by revenue in the newest period. "Potensial" is read as "already
+// earning" — revenue leads the sort, conversion rate rides alongside so a
+// high-revenue product converting badly is visible as a headroom case.
+export function buildPotentialProducts(curRecords: ProductPerfRecord[], count = 5): PotentialProduct[] {
+  return [...curRecords]
+    .filter((r) => r.salesConfirmed > 0)
+    .sort((a, b) => b.salesConfirmed - a.salesConfirmed)
+    .slice(0, count)
+    .map((r) => ({ key: r.key, produk: r.produk, revenue: r.salesConfirmed, conversionRate: r.conversionRate }));
 }

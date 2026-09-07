@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Dropzone } from '../../components/Dropzone';
-import { SectionNav } from '../../components/SectionNav';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -12,6 +11,7 @@ import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import { SlotSourceTabs, SavedSlotCard, type SlotSource } from '../../components/SlotSourceTabs';
 import { usePeriodLabel } from '../../hooks/usePeriodLabel';
+import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { fromISODate, toISODate } from '../../lib/dateFmt';
 import { parseShopeeCSV } from '../../lib/shopeeAds';
 import { categorizeProdukRows, mergeProdukOtomatis, mergeProductMaster, parseProductMasterRows, type ProductMasterEntry } from '../../lib/shopeeDeepDive';
@@ -196,6 +196,10 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const [customMetrics, setCustomMetrics] = useState<MetricSelection[]>([]);
   const [dailyTrendSelections, setDailyTrendSelections] = useState<DailyTrendMetricSelection[] | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // "Data tambahan (opsional)" — the 7 optional upload cards collapse into one
+  // <details> so the page isn't a wall of dropzones. Auto-opens the moment any
+  // optional slot actually has data (uploaded or filled from a saved report).
+  const [optOpen, setOptOpen] = useState(false);
 
   async function handleAdsFile(file: File, key: AdsFileKey) {
     const basics = validateFileBasics(file, ['.csv', '.xlsx', '.xls']);
@@ -414,6 +418,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const uploadPeriodWarning = comparePeriodDays(periodOldDays, periodCurDays);
 
   const autoSave = useAutoSave('shopee');
+  const armReportScroll = useScrollAfterGenerate('report-shopee', report);
 
   function generate() {
     const r = buildShopeeReport({
@@ -617,6 +622,19 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     { label: 'Lihat & unduh PDF', status: report ? 'current' : 'todo' },
   ];
 
+  const optionalCount = [
+    adsFiles['produk-otomatis-old'] || adsFiles['produk-otomatis-cur'],
+    productMasterRef,
+    adsFiles['toko-old'] || adsFiles['toko-cur'],
+    adsFiles['toko-keyword-old'] || adsFiles['toko-keyword-cur'],
+    adsFiles['live-old'] || adsFiles['live-cur'],
+    overviewFiles['overview-old'] || overviewFiles['overview-cur'],
+    productPerfFiles.old || productPerfFiles.cur,
+  ].filter(Boolean).length;
+  useEffect(() => {
+    if (optionalCount > 0) setOptOpen(true);
+  }, [optionalCount]);
+
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
       <HowTo>
@@ -634,7 +652,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         </HowToStep>
       </HowTo>
 
-      <StepIndicator steps={steps} accent="var(--shopee)" />
+      <StepIndicator steps={steps} accent="var(--shopee-700)" />
 
       <PeriodInputRow
         colorClass="shopee-period"
@@ -738,6 +756,21 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           {adsDropzone('produk-cur', 'Periode Ini')}
         </div>
       </div>
+
+      <details className="opt-group" open={optOpen} onToggle={(e) => setOptOpen((e.target as HTMLDetailsElement).open)}>
+        <summary className="opt-group-head">
+          <span className="opt-group-title">
+            Data tambahan <span className="opt-group-tag">opsional</span>
+            {optionalCount > 0 && <span className="opt-group-count">{optionalCount} terisi</span>}
+          </span>
+          <span className="opt-group-sub">
+            Iklan Produk Otomatis, Toko, Keyword, Live, Referensi Kategori, Product Overview &amp; Performance — untuk analisis lebih dalam. Laporan tetap bisa dibuat tanpanya.
+          </span>
+          <span className="opt-group-chevron" aria-hidden>
+            ▾
+          </span>
+        </summary>
+        <div className="opt-group-body">
 
       <div className="source-block">
         <div className="source-header">
@@ -860,10 +893,19 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         </div>
       </div>
 
+        </div>
+      </details>
+
       {ready && (
         <div id="cta" style={{ marginTop: '1rem' }}>
           <div className="action-row">
-            <button className="btn btn-primary" onClick={generate}>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                generate();
+                armReportScroll();
+              }}
+            >
               ✦ Generate Laporan
             </button>
             <button className="btn btn-ghost" onClick={reset}>
@@ -882,7 +924,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
             </div>
             <div className="report-meta num">Generated {generatedAt}</div>
           </div>
-          <SectionNav bodyRef={bodyRef} scanKey={report} accent="var(--shopee)" />
+          {/* SectionNav removed — ShopeeReportSections now pages the report into
+              its own tab bar, so a sticky scroll-to-anchor nav is redundant. */}
           <div data-role="r-body" ref={bodyRef}>
             {deepDive && (
               <ShopeeReportSections

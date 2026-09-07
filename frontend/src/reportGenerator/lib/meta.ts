@@ -158,6 +158,14 @@ export const COST_PER_MAP: { cost: string; denom: string }[] = [
   // generic path, which strips the prefix to "ig visit (idr)", finds no
   // matching count column, and shows "—".
   { cost: 'cost per ig visit', denom: 'instagram profile visit' },
+  // Meta's own export names this column "Cost per Instagram Follows (IDR)",
+  // which contains neither 'cost per follow' (the rule below) nor any other
+  // entry in this map. It then fell through to agg()'s last-resort weighted
+  // average of Meta's per-row cost values — Rp1.582 on a month where Spend ÷
+  // Follows is Rp3.213. Every other cost-per in the same table was right,
+  // because each of those does hit a rule here.
+  { cost: 'cost per instagram follow', denom: 'instagram follow' },
+  { cost: 'cost per ig follow', denom: 'instagram follow' },
   { cost: 'cost per follow', denom: 'instagram follow' },
   { cost: 'cost per messaging conversation', denom: 'messaging conversation' },
   { cost: 'cost per total message', denom: 'total message' },
@@ -1180,23 +1188,28 @@ export type MetaIndustry = 'b2b' | 'retail' | 'custom' | null;
 // Overview metric definitions per industry. `customResultsCol` is passed in
 // explicitly (the original read a module-level global set by the industry
 // picker UI) since this module has no DOM/UI state of its own.
-export function getOverviewDefs(industry: MetaIndustry, allCols: string[], customResultsCol: string | null): OverviewDefs {
-  // Same noise-word guard as findDenomCol: never match a "Cost per X",
-  // ratio, or rate column as if it were the raw metric being searched for
-  // (unless a keyword itself is asking for that, e.g. "conversion value"),
-  // so e.g. `find(['purchases'])` can't pick "Purchases conversion value"
-  // as a purchase *count* — verified against a real export with no bare
-  // "Purchases" column: that produced a nonsense "Cost per Purchase" of
-  // Rp2 (Spend ÷ a summed dollar-value column) in the Overview row instead
-  // of failing safely to no Cost-per-Purchase pair at all.
-  const find = (kws: string[]) => {
+// Column finder with a noise-word guard: never match a "Cost per X", ratio,
+// or rate column as if it were the raw metric being searched for (unless a
+// keyword itself is asking for that, e.g. "conversion value"), so e.g.
+// `find(['purchases'])` can't pick "Purchases conversion value" as a
+// purchase *count* — verified against a real export with no bare "Purchases"
+// column: that produced a nonsense "Cost per Purchase" of Rp2 (Spend ÷ a
+// summed dollar-value column) instead of failing safely to no pair at all.
+export function makeMetaColFinder(allCols: string[]) {
+  return (kws: string[]): string | null => {
     const noiseWords = ['ratio', 'rate', 'value', 'cost per'].filter((w) => !kws.some((k) => k.includes(w)));
-    return allCols.find((c) => {
-      const lc = c.toLowerCase();
-      if (!kws.some((k) => lc.includes(k.toLowerCase()))) return false;
-      return !noiseWords.some((w) => lc.includes(w));
-    }) || null;
+    return (
+      allCols.find((c) => {
+        const lc = c.toLowerCase();
+        if (!kws.some((k) => lc.includes(k.toLowerCase()))) return false;
+        return !noiseWords.some((w) => lc.includes(w));
+      }) || null
+    );
   };
+}
+
+export function getOverviewDefs(industry: MetaIndustry, allCols: string[], customResultsCol: string | null): OverviewDefs {
+  const find = makeMetaColFinder(allCols);
   const defs: OverviewDefs = {
     boost: {
       cols: [find(['amount spent']), find(['profile visit', 'instagram profile visit'])].filter((c): c is string => Boolean(c)),
@@ -1230,4 +1243,215 @@ export function getOverviewDefs(industry: MetaIndustry, allCols: string[], custo
     cprPair: null,
   };
   return defs;
+}
+
+// ══════════════════════════════════════════════════════
+// PER-OBJECTIVE SPLIT — one ad account often runs several objectives at once
+// (Sales + Leads + Traffic …). Summing the whole Non-Boost lane into one
+// "Cost per X" mixes every objective's spend into the numerator.
+//
+// The split is driven by the export's "Objective" column (always filled, one
+// value per row). Values follow Meta's campaign-objective enums — the current
+// ODAX names (OUTCOME_SALES, OUTCOME_LEADS…) and the pre-2022 names
+// (CONVERSIONS, LINK_CLICKS…), both mapped here. When the file has no
+// Objective column the campaign names are keyword-matched as a fallback.
+//
+// (The separate "Result type" column — "Website purchases", "Adds to cart",
+// "Instagram profile visits"… — is per-event detail and only partly filled,
+// so it is NOT used for the split. It could later drive a breakdown *within*
+// one objective, but that's out of scope here.)
+// ══════════════════════════════════════════════════════
+
+export type MetaObjectiveKey = 'sales' | 'leads' | 'traffic' | 'engagement' | 'awareness' | 'app' | 'other';
+
+// The six pickable objectives (Meta's ODAX set), for the Objective dropdown.
+export const META_OBJECTIVE_CHOICES: { key: Exclude<MetaObjectiveKey, 'other'>; label: string }[] = [
+  { key: 'awareness', label: 'Awareness' },
+  { key: 'traffic', label: 'Traffic' },
+  { key: 'engagement', label: 'Engagement' },
+  { key: 'leads', label: 'Leads' },
+  { key: 'app', label: 'App Promotion' },
+  { key: 'sales', label: 'Sales' },
+];
+
+interface MetaObjectiveDef {
+  label: string;
+  // Meta objective-enum values that map to this key (matched case-insensitively,
+  // exact or as a prefix so "OUTCOME_SALES" and "OUTCOME_SALES_..." both hit).
+  enums: string[];
+  // Headline columns to show, one keyword-set per slot (first hit wins).
+  headline: string[][];
+  cprLabel: string;
+  // Denominator for the "Cost per X" row; empty = no cost-per row.
+  cprDenom: string[];
+}
+
+export const META_OBJECTIVE_DEFS: Record<MetaObjectiveKey, MetaObjectiveDef> = {
+  sales: {
+    label: 'Sales',
+    enums: ['OUTCOME_SALES', 'CONVERSIONS', 'PRODUCT_CATALOG_SALES'],
+    headline: [['purchases'], ['purchases conversion value', 'conversion value'], ['purchase roas', 'roas']],
+    cprLabel: 'Cost per Purchase',
+    cprDenom: ['purchases'],
+  },
+  leads: {
+    label: 'Leads',
+    enums: ['OUTCOME_LEADS', 'LEAD_GENERATION'],
+    headline: [['leads', 'results']],
+    cprLabel: 'Cost per Lead',
+    cprDenom: ['leads', 'results'],
+  },
+  traffic: {
+    label: 'Traffic',
+    enums: ['OUTCOME_TRAFFIC', 'LINK_CLICKS'],
+    headline: [['link clicks', 'outbound clicks', 'clicks (all)'], ['landing page views']],
+    cprLabel: 'Cost per Link Click',
+    cprDenom: ['link clicks', 'outbound clicks', 'clicks (all)'],
+  },
+  engagement: {
+    label: 'Engagement',
+    enums: ['OUTCOME_ENGAGEMENT', 'POST_ENGAGEMENT', 'VIDEO_VIEWS', 'PAGE_LIKES', 'EVENT_RESPONSES', 'MESSAGES'],
+    headline: [['post engagements', 'page engagement', 'post reactions'], ['thruplays', 'video plays', 'video views']],
+    cprLabel: 'Cost per Engagement',
+    cprDenom: ['post engagements', 'page engagement'],
+  },
+  awareness: {
+    label: 'Awareness',
+    enums: ['OUTCOME_AWARENESS', 'BRAND_AWARENESS', 'REACH'],
+    headline: [['reach'], ['impressions']],
+    cprLabel: 'Cost per Result',
+    cprDenom: [],
+  },
+  app: {
+    label: 'App Promotion',
+    enums: ['OUTCOME_APP_PROMOTION', 'APP_INSTALLS', 'MOBILE_APP_INSTALLS', 'MOBILE_APP_ENGAGEMENT'],
+    headline: [['app installs', 'mobile app installs']],
+    cprLabel: 'Cost per App Install',
+    cprDenom: ['app installs', 'mobile app installs'],
+  },
+  other: {
+    label: 'Objective Lain',
+    enums: [],
+    headline: [['results']],
+    cprLabel: 'Cost per Result',
+    cprDenom: ['results'],
+  },
+};
+
+// The order sub-sections render in (independent of Map insertion order).
+export const META_OBJECTIVE_ORDER: MetaObjectiveKey[] = ['sales', 'leads', 'traffic', 'engagement', 'app', 'awareness', 'other'];
+
+// The "Objective" column, if the export has one. Matches "Objective" /
+// "Campaign objective" exactly (not "Result type" — see the block comment).
+export function detectMetaObjectiveCol(headers: string[]): string | null {
+  return (
+    headers.find((h) => {
+      const lc = h.trim().toLowerCase();
+      return lc === 'objective' || lc === 'campaign objective' || lc === 'campaign objectives';
+    }) ?? null
+  );
+}
+
+// Maps a raw "Objective" cell value (Meta enum or human label), or a campaign
+// name, to a known objective key.
+export function classifyMetaObjective(raw: string): MetaObjectiveKey {
+  const s = (raw || '').trim();
+  if (!s) return 'other';
+  const up = s.toUpperCase().replace(/[\s-]+/g, '_');
+  for (const key of META_OBJECTIVE_ORDER) {
+    if (META_OBJECTIVE_DEFS[key].enums.some((e) => up === e || up.startsWith(e + '_'))) return key;
+  }
+  // Human labels / campaign-name keywords.
+  const lc = s.toLowerCase();
+  if (/\blead|leadgen|lead gen|instant_form|\bcpl\b/.test(lc)) return 'leads';
+  if (/purchase|checkout|\bsales\b|catalog[_ ]sales|conversions?\b|\broas\b/.test(lc)) return 'sales';
+  if (/link[_ ]click|outbound[_ ]click|landing[_ ]page|\btraffic\b|\blpv\b/.test(lc)) return 'traffic';
+  if (/app[_ ]install|mobile[_ ]app|app promotion/.test(lc)) return 'app';
+  if (/reach|impression|awareness|\bbrand\b/.test(lc)) return 'awareness';
+  if (/engagement|post[_ ]reaction|video[_ ]view|thruplay|messag|conversation|page[_ ]like/.test(lc)) return 'engagement';
+  return 'other';
+}
+
+// The objective that spent the most in a set of rows — used to pre-fill the
+// Objective dropdown when the file carries an Objective column.
+export function dominantMetaObjective(rows: SheetRow[], objCol: string, spentCol: string | null): MetaObjectiveKey | null {
+  if (!rows.length) return null;
+  const spend = new Map<MetaObjectiveKey, number>();
+  for (const r of rows) {
+    const k = classifyMetaObjective(String(r[objCol] ?? ''));
+    const s = spentCol ? Number(String(r[spentCol] ?? '0').replace(/[^0-9.-]/g, '')) || 0 : 1;
+    spend.set(k, (spend.get(k) ?? 0) + s);
+  }
+  let best: MetaObjectiveKey | null = null;
+  let bestVal = -1;
+  for (const [k, v] of spend) {
+    if (v > bestVal) {
+      best = k;
+      bestVal = v;
+    }
+  }
+  return best;
+}
+
+// A metric row with a caller-supplied label (not derived from the column
+// name) — used for the "Amount Spent · Sales / · Leads / …" split rows on the
+// blended card.
+export interface LabeledMetricRow {
+  label: string;
+  old: string;
+  cur: string;
+  delta: string;
+  cls: DeltaClassName;
+}
+
+export function buildLabeledAggRow(label: string, col: string | null, old: SheetRow[], cur: SheetRow[]): LabeledMetricRow | null {
+  if (!col) return null;
+  const v1 = agg(old, col);
+  const v2 = agg(cur, col);
+  const { deltaNum, deltaStr } = v1 !== null && v2 !== null ? computeDelta(v1, v2) : { deltaNum: null, deltaStr: '—' };
+  return { label, old: fmt(v1, col), cur: fmt(v2, col), delta: formatDeltaID(deltaNum, deltaStr), cls: metaDeltaClass(deltaNum, col) };
+}
+
+export interface ObjectiveOverviewDef {
+  label: string;
+  cols: string[];
+  cprPair: CprPair | null;
+}
+
+// Headline + cost-per definition for one objective, against the columns the
+// file actually has. `spentCol` is passed so a caller can reuse the same
+// "Amount Spent" match everywhere.
+export function buildObjectiveOverviewDef(key: MetaObjectiveKey, allCols: string[], label?: string): ObjectiveOverviewDef {
+  const find = makeMetaColFinder(allCols);
+  // Try each keyword in priority order (a dedicated "Leads" column beats the
+  // generic "Results" column), rather than "any keyword, first column".
+  const findOrdered = (kws: string[]) => {
+    for (const k of kws) {
+      const c = find([k]);
+      if (c) return c;
+    }
+    return null;
+  };
+  const spent = find(['amount spent']);
+  const def = META_OBJECTIVE_DEFS[key];
+  const headlineCols = def.headline.map((kws) => findOrdered(kws)).filter((c): c is string => Boolean(c));
+  const denom = def.cprDenom.length ? findOrdered(def.cprDenom) : null;
+  return {
+    label: label || def.label,
+    cols: [spent, ...headlineCols].filter((c): c is string => Boolean(c)),
+    cprPair: spent && denom ? { spent, denom, label: def.cprLabel } : null,
+  };
+}
+
+// Blended headline for the whole Non-Boost lane — total spend ÷ total
+// "Results" (each campaign's own objective result), shown above the split.
+export function buildBlendedNonBoostDef(allCols: string[]): ObjectiveOverviewDef {
+  const find = makeMetaColFinder(allCols);
+  const spent = find(['amount spent']);
+  const results = find(['results']);
+  return {
+    label: 'Blended',
+    cols: [spent, results].filter((c): c is string => Boolean(c)),
+    cprPair: spent && results ? { spent, denom: results, label: 'Cost per Result (blended)' } : null,
+  };
 }

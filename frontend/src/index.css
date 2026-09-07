@@ -142,28 +142,99 @@ tr:hover td { background: var(--primary-light); }
 .auth-card .subtitle { color: var(--text-muted); margin-bottom: 1.5rem; }
 
 .layout { display: flex; min-height: 100vh; }
-.sidebar {
+
+/* The sidebar collapses to an icon rail so a page of wide tables and charts
+   gets the width back. Three ideas hold it together:
+
+   1. .sidebar-spacer is the flex item — the only thing holding the column open
+      in the row. .sidebar itself is fixed, so hovering a collapsed rail can
+      float it back to full width without moving the page underneath.
+
+   2. .sidebar-nav is a FIXED 216px wide, whatever the rail is doing. That is
+      what makes the motion smooth: the labels inside are laid out once and
+      never re-wrap, so widening the rail only reveals more of a picture that
+      is already settled. Let the nav track the rail instead and every frame
+      of the slide re-wraps "Dashboard Business Overview", which reads as a
+      stutter no easing can hide.
+
+   3. Nothing inside the rail changes its own padding on collapse. The icons
+      sit 24px in from the rail edge either way, which is dead centre of the
+      66px rail, so they simply stay put while the panel moves around them. */
+.sidebar-spacer {
   width: 240px;
   flex-shrink: 0;
+}
+.sidebar-spacer.collapsed { width: 66px; }
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 240px;
+  /* Above the page, below the modals (which sit at 1000+). */
+  z-index: 50;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border);
-  padding: 1.5rem 1rem;
+  /* Constant — animating this too would shift everything inside the rail
+     against the rail's own movement. */
+  padding: 1.5rem 0.75rem;
   display: flex;
   flex-direction: column;
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
-  height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
 }
-.sidebar-brand { font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; padding: 0 0.5rem; color: var(--text); }
-.sidebar-brand span { color: var(--primary); }
-.sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+.sidebar.collapsed { width: 66px; }
+.sidebar.collapsed.peek { width: 240px; box-shadow: var(--shadow-md); }
+
+/* Motion. A transition is read off whichever rule matches AFTER the class
+   changes, so each direction can be tuned on its own:
+
+     .sidebar            -> opening (the .collapsed rule just stopped matching)
+     .sidebar.collapsed  -> closing, and the end of a hover peek
+     .peek               -> opening on hover
+
+   Closing runs longest. It is the direction with nothing to look at — the
+   labels are already gone — so a quick one just reads as a snap. */
+.sidebar,
+.sidebar-spacer {
+  transition: width 0.44s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.44s ease;
+}
+.sidebar.collapsed,
+.sidebar-spacer.collapsed {
+  transition: width 0.56s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.4s ease;
+}
+.sidebar.collapsed.peek {
+  transition: width 0.38s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.38s ease;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: baseline;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  padding: 0 0.75rem;
+  color: var(--text);
+}
+/* The wordmark collapses to "A." rather than vanishing — the rail keeps an
+   identity, and the dot stays put as the accent it already was. */
+.sidebar-brand:hover { color: var(--text); text-decoration: none; }
+.sidebar-brand-dot { color: var(--primary); }
+
+.sidebar-nav {
+  flex: 1;
+  /* 240px rail - 2 x 0.75rem padding. Fixed on purpose — see (2) above. */
+  width: 216px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 .sidebar-link {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem;
   border-radius: var(--radius);
   color: var(--text-muted);
   text-decoration: none;
@@ -171,9 +242,60 @@ tr:hover td { background: var(--primary-light); }
 }
 .sidebar-link:hover { background: var(--primary-light); color: var(--primary); text-decoration: none; }
 .sidebar-link.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+.sidebar-ico { flex-shrink: 0; }
+
+/* Nav labels fade rather than unmount, so they keep their place in the fixed
+   216px layout and the rail only has to reveal them. Fading in waits for the
+   panel to be most of the way open; fading out goes first, so no half-clipped
+   word is ever caught by the closing edge. */
+.sidebar-nav .sidebar-label {
+  opacity: 1;
+  transition: opacity 0.26s ease 0.16s;
+}
+.sidebar.collapsed:not(.peek) .sidebar-nav .sidebar-label {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-toggle:hover { background: var(--primary-light); color: var(--primary); }
+.sidebar-logout { width: 100%; justify-content: center; }
+
 .sidebar-footer { padding-top: 1rem; border-top: 1px solid var(--border); }
 .user-info { font-size: 0.85rem; color: var(--text-muted); padding: 0.5rem; margin-bottom: 0.5rem; }
 .user-info strong { display: block; color: var(--text); }
+
+/* The footer is the one part that does track the rail: its two buttons are
+   real boxes with a border, and a 216px button clipped to 42px would show
+   three sides and a cut edge. They shrink to icon squares instead, which
+   their short labels allow — nothing here can re-wrap. */
+.sidebar.collapsed:not(.peek) .sidebar-brand .sidebar-label,
+.sidebar.collapsed:not(.peek) .sidebar-footer .sidebar-label { display: none; }
+.sidebar.collapsed:not(.peek) .sidebar-toggle,
+.sidebar.collapsed:not(.peek) .sidebar-logout { justify-content: center; gap: 0; }
+/* .btn ships 1.25rem of side padding — 40px of it inside a 42px button, which
+   crushed the logout icon to a 2px sliver and read as an empty box. */
+.sidebar.collapsed:not(.peek) .sidebar-logout { padding-left: 0; padding-right: 0; }
+/* Nothing in the rail may be squeezed by its own container. */
+.sidebar svg { flex-shrink: 0; }
+/* Hidden outright rather than clipped: a name and an email in a 66px rail
+   wrap into an unreadable stack, and neither is worth the rail's width. */
+.sidebar.collapsed:not(.peek) .user-info { display: none; }
 
 .main-content { flex: 1; padding: 2rem; overflow-x: auto; background: var(--bg); }
 
@@ -206,13 +328,29 @@ tr:hover td { background: var(--primary-light); }
 }
 
 @media (max-width: 768px) {
+  /* Stacked, and never collapsed: on a phone the sidebar is a full-width strip
+     at the top, so there is no side column to win back. The toggle and the
+     spacer both go away, and .collapsed / .peek are overridden rather than
+     left to fight these rules. */
   .layout { flex-direction: column; }
-  .sidebar {
+  .sidebar,
+  .sidebar.collapsed,
+  .sidebar.collapsed.peek {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--border);
     position: static;
     height: auto;
     overflow-y: visible;
+    box-shadow: none;
+    transition: none;
   }
+  .sidebar-spacer { display: none; }
+  .sidebar-toggle { display: none; }
+  .sidebar-nav { width: auto; }
+  .sidebar.collapsed:not(.peek) .sidebar-nav .sidebar-label { opacity: 1; }
+  .sidebar.collapsed:not(.peek) .sidebar-brand .sidebar-label,
+  .sidebar.collapsed:not(.peek) .sidebar-footer .sidebar-label { display: inline; }
+  .sidebar.collapsed:not(.peek) .user-info { display: block; }
+  .sidebar.collapsed:not(.peek) .sidebar-logout { justify-content: center; gap: 0.5rem; }
 }

@@ -9,7 +9,10 @@ import { validateFormula } from '../../lib/formula';
 import { DAILY_TREND_BUILTIN_METRICS, dailyTrendSelectionId, dailyTrendSelectionLabel, type DailyTrendMetricSelection, type DailyTrendPivotRow, type ProductPerformanceRow } from '../../lib/shopeeDeepDiveInsights';
 import { ITEM_BUILTIN_METRICS, metricSelectionId, metricSelectionLabel, type KeywordPivotRow, type MetricSelection, type ProdukPivotRow } from '../../lib/shopeeDeepDiveItemPivot';
 import { fmtPivotVal, type PivotFmt, type PivotRow } from '../../lib/shopeeDeepDivePivot';
+import type { FunnelTreeRow } from '../../lib/shopeeFunnel';
+import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import type { SheetRow } from '../../lib/types';
+import { SymptomSummaryPanel, SymptomTreePanel } from './AnalysisSections';
 
 // ══════════════════════════════════════════════════════
 // FASE 3 — SHOPEE DEEP-DIVE UI building blocks. Kept separate from
@@ -20,15 +23,51 @@ import type { SheetRow } from '../../lib/types';
 // Rename/reorder/show-hide-and-readd for every metric row is handled
 // entirely by KpiTable now (rows all default visible, matching the previous
 // behavior of this section) — no local picker state needed here anymore.
-export function ChannelPivotSection({ title, badge, rows, p1, p2 }: { title: string; badge: string; rows: PivotRow[]; p1: string; p2: string }) {
+export function ChannelPivotSection({
+  title,
+  badge,
+  rows,
+  p1,
+  p2,
+  tree,
+  symptom,
+}: {
+  title: string;
+  badge: string;
+  rows: PivotRow[];
+  p1: string;
+  p2: string;
+  // This channel's own funnel tree + read. The table is capped narrow, so the
+  // right half shows which stage moved *this* channel — the account-level
+  // tree can't tell you whether a drop came from Produk or Toko.
+  tree?: FunnelTreeRow[];
+  symptom?: SymptomSummary;
+}) {
   const kpiRows: KpiRowDisplay[] = rows.map((r) => ({ id: r.key, label: r.label, old: r.old, cur: r.cur, delta: r.delta, cls: r.cls }));
+  const table = (
+    <KpiTable rows={kpiRows} p1={p1} p2={p2} emptyMessage="Semua metrik disembunyikan — pilih dari '+ Tambah metrik' untuk menampilkannya kembali." padded />
+  );
   return (
     <div className="sec-block">
       <div className="sec-heading shopee-heading">
         {title} <span className="sec-badge">{badge}</span>
         <SectionDownloadButton />
       </div>
-      <KpiTable rows={kpiRows} p1={p1} p2={p2} emptyMessage="Semua metrik disembunyikan — pilih dari '+ Tambah metrik' untuk menampilkannya kembali." padded />
+      {tree ? (
+        <>
+          <div className="sec-split sec-split-padded">
+            <div className="sec-split-main">{table}</div>
+            <SymptomTreePanel tree={tree} p1={p1} p2={p2} title="Symptom Analysis" badge={title} />
+          </div>
+          {symptom && (
+            <div style={{ padding: '0 1.4rem 1.2rem' }}>
+              <SymptomSummaryPanel summary={symptom} />
+            </div>
+          )}
+        </>
+      ) : (
+        table
+      )}
     </div>
   );
 }
@@ -117,6 +156,8 @@ function MultiMetricTable<T extends { metrics: GenericMetricCell[] }>({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
     function measure() {
       const table = scrollRef.current?.querySelector('table');
       const head = table?.tHead;
@@ -127,12 +168,22 @@ function MultiMetricTable<T extends { metrics: GenericMetricCell[] }>({
         return;
       }
       let h = head.getBoundingClientRect().height;
+      // While this table lives in an inactive report tab (display:none) every
+      // rect measures 0 — don't cap the scroll area to ~1px and hide it; wait
+      // for the ResizeObserver below to fire once the panel becomes visible.
+      if (h === 0) return;
       for (let i = 0; i < VISIBLE_ROWS; i++) h += body.rows[i].getBoundingClientRect().height;
       setMaxHeight(Math.ceil(h) + 1);
     }
     measure();
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
+    const table = container.querySelector('table');
+    if (ro && table) ro.observe(table);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro?.disconnect();
+    };
   }, [rows]);
 
   if (!rows.length) return <div className="empty-note">{emptyMessage}</div>;
@@ -734,7 +785,25 @@ export function DailyTrendSection({
   p2: string;
 }) {
   const [overrides, setOverrides] = useState<Record<string, string>>({});
-  if (!rows.length) return null;
+  // Without Product Overview there is no daily series to pivot. Say that
+  // instead of returning null — this section owns a whole report tab, and an
+  // empty tab reads as a broken app rather than a missing file. No export
+  // buttons here either: an empty section must not be downloadable into a
+  // client deck.
+  if (!rows.length) {
+    return (
+      <div className="sec-block">
+        <div className="sec-heading shopee-heading">
+          Tren Harian Toko <span className="sec-badge">Product Overview</span>
+        </div>
+        <div style={{ padding: '.6rem 1.4rem 1.4rem' }}>
+          <div className="empty-note">
+            Belum ada data harian. Upload file <strong>Product Overview</strong> pada bagian “Data tambahan” di form di atas untuk melihat tren per hari.
+          </div>
+        </div>
+      </div>
+    );
+  }
   const allSelections: DailyTrendMetricSelection[] = DAILY_TREND_BUILTIN_METRICS.map((m) => ({ kind: 'builtin', key: m.key }));
   const byId = new Map(allSelections.map((s) => [dailyTrendSelectionId(s), s]));
 

@@ -24,6 +24,8 @@
 // re-tested against that change, so the flag is left as-is.)
 // ══════════════════════════════════════════════════════
 
+import { handleStaleChunk } from './staleChunk';
+
 export function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
 }
@@ -38,12 +40,14 @@ function getReportBlocks(rootEl: HTMLElement): HTMLElement[] {
   const blocks: HTMLElement[] = [];
   const top = rootEl.querySelector(':scope > .report-top');
   if (top) blocks.push(top as HTMLElement);
-  [...body.children].forEach((child) => {
-    // .period-warning (Fase 1) is captured alongside .sec-block so the
-    // "periods aren't the same length" warning survives into the export —
-    // the whole point of the warning is to travel with a shared report.
-    if (child.classList.contains('sec-block') || child.classList.contains('period-warning')) blocks.push(child as HTMLElement);
-  });
+  // .sec-block / .period-warning cards, whether they sit directly under the
+  // report body (Meta / TikTok) or inside a .report-tab-panel wrapper (the
+  // Shopee report is paged — every page is force-shown during pdf-export-mode).
+  // .period-warning (Fase 1) is captured alongside .sec-block so the "periods
+  // aren't the same length" warning survives into the export.
+  body
+    .querySelectorAll<HTMLElement>(':scope > .sec-block, :scope > .period-warning, :scope > .report-tab-panel > .sec-block, :scope > .report-tab-panel > .period-warning')
+    .forEach((el) => blocks.push(el));
   return blocks;
 }
 
@@ -55,10 +59,10 @@ export async function exportElementToPDF(rootEl: HTMLElement | null, filename: s
     return;
   }
 
-  // Was document.body.classList — toggled on the nearest .report-generator-app
-  // ancestor instead, now that this app is one page inside ATLAS rather than
-  // owning the whole document (index.css's &.pdf-export-mode rules expect
-  // the class on this element, not on <body>).
+  // Was document.body.classList. This app is one page inside ATLAS now rather
+  // than the whole document: index.css scopes its &.pdf-export-mode and
+  // &.png-fit-content rules under .report-generator-app, so the class has to
+  // land on that element — on <body> it would match nothing at all.
   const scopeEl = rootEl.closest<HTMLElement>('.report-generator-app') ?? document.body;
   scopeEl.classList.add('pdf-export-mode');
   try {
@@ -115,6 +119,7 @@ export async function exportElementToPDF(rootEl: HTMLElement | null, filename: s
     doc.save(filename);
   } catch (err) {
     console.error(err);
+    if (handleStaleChunk(err)) return;
     alert('Gagal membuat PDF: ' + (err as Error).message);
   } finally {
     scopeEl.classList.remove('pdf-export-mode');
@@ -127,13 +132,13 @@ export async function downloadSectionPNG(block: HTMLElement): Promise<void> {
   const badge = heading?.querySelector('.sec-badge')?.textContent?.trim();
   const filename = sanitizeFilename(`${title || 'Section'}${badge ? ' - ' + badge : ''}`) + '.png';
 
-  // See exportElementToPDF's comment above on why this isn't document.body.
-  const scopeEl = block.closest<HTMLElement>('.report-generator-app') ?? document.body;
   // `png-fit-content` (see index.css) is added only for the section-PNG path:
   // it lets every table shrink-wrap to its content and each horizontal-scroll
   // wrapper widen to fit, so the exported image sizes each column to its
   // content instead of clipping/squeezing the on-screen scroll view. Vertical
   // row caps are deliberately left untouched.
+  // See exportElementToPDF above on why this is not document.body.
+  const scopeEl = block.closest<HTMLElement>('.report-generator-app') ?? document.body;
   scopeEl.classList.add('pdf-export-mode');
   scopeEl.classList.add('png-fit-content');
   try {
@@ -152,6 +157,7 @@ export async function downloadSectionPNG(block: HTMLElement): Promise<void> {
     link.click();
   } catch (err) {
     console.error(err);
+    if (handleStaleChunk(err)) return;
     alert('Gagal membuat gambar: ' + (err as Error).message);
   } finally {
     scopeEl.classList.remove('pdf-export-mode');

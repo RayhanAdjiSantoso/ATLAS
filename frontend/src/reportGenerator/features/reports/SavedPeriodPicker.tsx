@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { InlineNotice } from '../../components/InlineNotice';
 import { getPortalContainer } from '../../utils/portalTarget';
+import { InlineNotice } from '../../components/InlineNotice';
 import { getSavedPeriods } from './api';
 import { formatChannelCoverage, formatSavedAt, PLATFORM_LABEL } from './savedPeriodLabels';
 import type { Platform, SavedPeriod } from './types';

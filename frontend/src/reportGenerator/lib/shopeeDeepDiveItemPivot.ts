@@ -31,6 +31,7 @@ export interface ItemMetricVars {
   cpp: number;
   roas: number;
   kontribusi: number;
+  conversionRate: number;
 }
 
 export const ITEM_BUILTIN_METRICS: readonly { key: keyof ItemMetricVars; label: string; fmt: PivotFmt; sentiment: 'higher-better' | 'lower-better' | 'neutral' }[] = [
@@ -43,6 +44,7 @@ export const ITEM_BUILTIN_METRICS: readonly { key: keyof ItemMetricVars; label: 
   { key: 'cpp', label: 'Cost per Purchase', fmt: 'rp', sentiment: 'lower-better' },
   { key: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better' },
   { key: 'kontribusi', label: 'Kontribusi Iklan', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better' },
 ];
 
 // The 5 original spec candidates — kept as their own subset since
@@ -90,6 +92,7 @@ function deriveVars(biaya: number, pesanan: number, produkTerjual: number, penju
     cpp: pesanan > 0 ? biaya / pesanan : 0,
     roas: biaya > 0 ? penjualan / biaya : 0,
     kontribusi: omzetTotal > 0 ? (penjualan / omzetTotal) * 100 : 0,
+    conversionRate: klik > 0 ? (pesanan / klik) * 100 : 0,
   };
 }
 
