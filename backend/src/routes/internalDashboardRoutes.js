@@ -8,6 +8,8 @@ import {
   monthlyMetricsBodyValidation,
   channelSalesBodyValidation,
   platformSpendBodyValidation,
+  salesChannelsBodyValidation,
+  adAccountBodyValidation,
   overviewQueryValidation,
   categoriesQueryValidation,
   industriesQueryValidation,
@@ -61,6 +63,15 @@ router.delete('/channel-sales/:id', idParamValidation, ctrl.deleteChannelSale);
 router.get('/platform-spend', brandQueryValidation, ctrl.listPlatformSpend);
 router.post('/platform-spend', platformSpendBodyValidation, ctrl.savePlatformSpend);
 router.delete('/platform-spend/:id', idParamValidation, ctrl.deletePlatformSpend);
+
+// §2.2 — client_sales_channels (brand-level, not period-scoped)
+router.get('/sales-channels', brandQueryValidation, ctrl.listSalesChannels);
+router.post('/sales-channels', salesChannelsBodyValidation, ctrl.saveSalesChannels);
+
+// brand_ad_accounts (brand-level, 1:many)
+router.get('/ad-accounts', brandQueryValidation, ctrl.listAdAccounts);
+router.post('/ad-accounts', adAccountBodyValidation, ctrl.saveAdAccount);
+router.delete('/ad-accounts/:id', idParamValidation, ctrl.deleteAdAccount);
 
 // §2.7 — data_ingestion_log (read-only feed)
 router.get('/ingestion-log', ingestionLogQueryValidation, ctrl.listIngestionLog);

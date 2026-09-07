@@ -102,6 +102,54 @@ export const deletePlatformSpend = asyncHandler(async (req, res) => {
   res.json({ message: 'Data platform spend dihapus' });
 });
 
+// --- §2.2 client_sales_channels ---------------------------------
+export const listSalesChannels = asyncHandler(async (req, res) => {
+  validate(req);
+  const entries = await service.listSalesChannels(Number(req.query.brand_id));
+  res.json({ entries });
+});
+
+export const saveSalesChannels = asyncHandler(async (req, res) => {
+  validate(req);
+  const b = req.body;
+  const result = await service.saveSalesChannels({
+    brandId: Number(b.brand_id),
+    channels: (b.channels || []).map((c) => ({ channel: c.channel, isUsed: c.is_used === true || c.is_used === 'true' })),
+    note: b.note?.trim() || null,
+    pic: b.pic?.trim() || null,
+    userId: req.user.userId,
+  });
+  res.json(result);
+});
+
+// --- brand_ad_accounts -----------------------------------------
+export const listAdAccounts = asyncHandler(async (req, res) => {
+  validate(req);
+  const entries = await service.listAdAccounts(Number(req.query.brand_id));
+  res.json({ entries });
+});
+
+export const saveAdAccount = asyncHandler(async (req, res) => {
+  validate(req);
+  const b = req.body;
+  const result = await service.saveAdAccount({
+    id: b.id ? Number(b.id) : null,
+    brandId: Number(b.brand_id),
+    adAccountId: b.ad_account_id,
+    accountName: b.account_name,
+    isPrimary: b.is_primary === true || b.is_primary === 'true',
+    pic: b.pic?.trim() || null,
+    userId: req.user.userId,
+  });
+  res.status(result.wasInsert ? 201 : 200).json(result);
+});
+
+export const deleteAdAccount = asyncHandler(async (req, res) => {
+  validate(req);
+  await service.deleteAdAccount(Number(req.params.id), req.user.userId);
+  res.json({ message: 'Ad account dihapus' });
+});
+
 // --- S1 Executive Overview -------------------------------------
 export const getOverview = asyncHandler(async (req, res) => {
   validate(req);

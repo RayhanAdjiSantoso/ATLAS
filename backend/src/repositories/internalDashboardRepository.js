@@ -157,6 +157,93 @@ export async function deletePlatformSpend(id, db = pool) {
 }
 
 // ---------------------------------------------------------------------
+// §2.2 client_sales_channels — per-brand, per-channel used/not-used.
+// One row per (brand, channel); the manual form always writes source='manual'.
+// ---------------------------------------------------------------------
+export async function listSalesChannels(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT client_sales_channel_id AS id, brand_id, channel::text AS channel,
+            is_used, source, note, created_at, updated_at
+     FROM client_sales_channels WHERE brand_id = $1 ORDER BY channel`,
+    [brandId],
+  );
+  return rows;
+}
+
+export async function upsertSalesChannel(v, db = pool) {
+  const { rows } = await db.query(
+    `INSERT INTO client_sales_channels (brand_id, channel, is_used, source, note, created_by)
+     VALUES ($1, $2::sales_channel, $3, 'manual', $4, $5)
+     ON CONFLICT (brand_id, channel) DO UPDATE SET
+       is_used = EXCLUDED.is_used, source = 'manual', note = EXCLUDED.note
+     RETURNING client_sales_channel_id AS id, (xmax::text = '0') AS was_insert`,
+    [v.brandId, v.channel, v.isUsed, v.note ?? null, v.userId],
+  );
+  return rows[0];
+}
+
+// ---------------------------------------------------------------------
+// brand_ad_accounts — Meta ad-account list per client (1 : many).
+// Partial unique index ux_brand_ad_accounts_primary => at most one primary
+// per brand; the service clears the old primary before setting a new one.
+// ---------------------------------------------------------------------
+export async function listAdAccounts(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT brand_ad_account_id AS id, brand_id, ad_account_id, account_name, is_primary, created_at
+     FROM brand_ad_accounts WHERE brand_id = $1
+     ORDER BY is_primary DESC, ad_account_id`,
+    [brandId],
+  );
+  return rows;
+}
+
+export async function clearPrimaryAdAccount(brandId, exceptId, db = pool) {
+  await db.query(
+    `UPDATE brand_ad_accounts SET is_primary = false
+     WHERE brand_id = $1 AND is_primary = true AND ($2::int IS NULL OR brand_ad_account_id <> $2)`,
+    [brandId, exceptId ?? null],
+  );
+}
+
+export async function insertAdAccount(v, db = pool) {
+  const { rows } = await db.query(
+    `INSERT INTO brand_ad_accounts (brand_id, ad_account_id, account_name, is_primary)
+     VALUES ($1, $2, $3, $4)
+     RETURNING brand_ad_account_id AS id, brand_id, ad_account_id, account_name, is_primary`,
+    [v.brandId, v.adAccountId, v.accountName ?? null, v.isPrimary ?? false],
+  );
+  return rows[0];
+}
+
+export async function updateAdAccount(v, db = pool) {
+  const { rows } = await db.query(
+    `UPDATE brand_ad_accounts
+     SET ad_account_id = $2, account_name = $3, is_primary = $4
+     WHERE brand_ad_account_id = $1
+     RETURNING brand_ad_account_id AS id, brand_id, ad_account_id, account_name, is_primary`,
+    [v.id, v.adAccountId, v.accountName ?? null, v.isPrimary ?? false],
+  );
+  return rows[0] ?? null;
+}
+
+export async function getAdAccount(id, db = pool) {
+  const { rows } = await db.query(
+    'SELECT brand_ad_account_id AS id, brand_id, ad_account_id, account_name, is_primary FROM brand_ad_accounts WHERE brand_ad_account_id = $1',
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+export async function deleteAdAccount(id, db = pool) {
+  const { rows } = await db.query(
+    `DELETE FROM brand_ad_accounts WHERE brand_ad_account_id = $1
+     RETURNING brand_ad_account_id AS id, brand_id, ad_account_id`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+// ---------------------------------------------------------------------
 // §2.7 data_ingestion_log
 // ---------------------------------------------------------------------
 export async function logIngestion(v, db = pool) {
