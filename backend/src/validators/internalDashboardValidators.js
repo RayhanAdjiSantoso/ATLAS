@@ -23,6 +23,8 @@ export const ingestionLogQueryValidation = [
     'client_monthly_metrics',
     'client_channel_sales_monthly',
     'client_platform_spend_monthly',
+    'client_sales_channels',
+    'brand_ad_accounts',
   ]),
   query('limit').optional().isInt({ min: 1, max: 200 }),
 ];
@@ -144,6 +146,29 @@ export const platformSpendBodyValidation = [
   optNum(body('cost_per_atc')),
   optNum(body('cost_per_purchase')),
   optNum(body('roas')),
+];
+
+// --- §2.2 client_sales_channels ----------------------------------
+export const salesChannelsBodyValidation = [
+  body('brand_id').isInt({ min: 1 }).withMessage('Client wajib dipilih'),
+  body('channels').isArray({ min: 1 }).withMessage('Minimal satu channel'),
+  body('channels.*.channel').isIn(SALES_CHANNELS).withMessage('Channel tidak valid'),
+  body('channels.*.is_used').isBoolean().withMessage('is_used harus boolean'),
+  body('note').optional({ nullable: true }).isString().isLength({ max: 500 }),
+];
+
+// --- brand_ad_accounts -------------------------------------------
+// Loose format check — there is no confirmed official rule yet. Accept
+// `act_<digits>`, bare digits, or a plain identifier; just no spaces /
+// exotic characters, and a sane length.
+export const adAccountBodyValidation = [
+  body('brand_id').isInt({ min: 1 }).withMessage('Client wajib dipilih'),
+  body('id').optional({ nullable: true }).isInt({ min: 1 }),
+  body('ad_account_id').trim().notEmpty().withMessage('Ad account ID wajib diisi')
+    .bail()
+    .matches(/^[A-Za-z0-9_.:-]{1,64}$/).withMessage('Format ad account ID tidak wajar (biasanya "act_1234567890")'),
+  body('account_name').optional({ nullable: true }).isString().isLength({ max: 200 }),
+  body('is_primary').optional().isBoolean().withMessage('is_primary harus boolean'),
 ];
 
 export const constants = { SALES_CHANNELS, AD_PLATFORMS };

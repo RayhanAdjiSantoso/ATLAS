@@ -194,6 +194,100 @@ export async function deletePlatformSpend(id, userId) {
   return deleted;
 }
 
+// --- §2.2 client_sales_channels -----------------------------------
+export async function listSalesChannels(brandId) {
+  await assertBrand(brandId);
+  return repo.listSalesChannels(brandId);
+}
+
+export async function saveSalesChannels(input) {
+  await assertBrand(input.brandId);
+  // dedupe (last wins) so a malformed payload can't double-write a channel
+  const byChannel = new Map();
+  for (const c of input.channels) byChannel.set(c.channel, c.isUsed);
+
+  return inTransaction(async (db) => {
+    let inserted = 0;
+    let updated = 0;
+    for (const [channel, isUsed] of byChannel) {
+      const res = await repo.upsertSalesChannel({
+        brandId: input.brandId, channel, isUsed, note: input.note ?? null, userId: input.userId,
+      }, db);
+      if (res.was_insert) inserted += 1; else updated += 1;
+    }
+    await repo.logIngestion({
+      brandId: input.brandId,
+      targetTable: 'client_sales_channels',
+      period: null, // brand-level config, not period-scoped
+      method: `set ${byChannel.size} channel (${inserted} baru, ${updated} edit)`,
+      rowCount: byChannel.size,
+      status: 'success',
+      pic: input.pic ?? null,
+      userId: input.userId,
+    }, db);
+    return { inserted, updated, channels: byChannel.size };
+  });
+}
+
+// --- brand_ad_accounts -------------------------------------------
+export async function listAdAccounts(brandId) {
+  await assertBrand(brandId);
+  return repo.listAdAccounts(brandId);
+}
+
+export async function saveAdAccount(input) {
+  await assertBrand(input.brandId);
+  const adAccountId = input.adAccountId.trim();
+  const accountName = input.accountName?.trim() || null;
+  const isPrimary = input.isPrimary === true;
+
+  return inTransaction(async (db) => {
+    let row;
+    let wasInsert;
+    if (input.id) {
+      const existing = await repo.getAdAccount(input.id);
+      if (!existing || existing.brand_id !== input.brandId) throw new AppError('Ad account tidak ditemukan', 404);
+      if (isPrimary) await repo.clearPrimaryAdAccount(input.brandId, input.id, db);
+      row = await repo.updateAdAccount({ id: input.id, adAccountId, accountName, isPrimary }, db);
+      wasInsert = false;
+    } else {
+      if (isPrimary) await repo.clearPrimaryAdAccount(input.brandId, null, db);
+      row = await repo.insertAdAccount({ brandId: input.brandId, adAccountId, accountName, isPrimary }, db);
+      wasInsert = true;
+    }
+    await repo.logIngestion({
+      brandId: input.brandId,
+      targetTable: 'brand_ad_accounts',
+      period: null,
+      method: `${wasInsert ? 'add' : 'edit'} ${adAccountId}${isPrimary ? ' (primary)' : ''}`,
+      rowCount: 1,
+      status: 'success',
+      pic: input.pic ?? null,
+      userId: input.userId,
+    }, db);
+    return { ...row, wasInsert };
+  }).catch((err) => {
+    // unique (brand_id, ad_account_id)
+    if (err.code === '23505') throw new AppError('Ad account ID itu sudah terdaftar untuk client ini', 409);
+    throw err;
+  });
+}
+
+export async function deleteAdAccount(id, userId) {
+  const deleted = await repo.deleteAdAccount(id);
+  if (!deleted) throw new AppError('Ad account tidak ditemukan', 404);
+  await repo.logIngestion({
+    brandId: deleted.brand_id,
+    targetTable: 'brand_ad_accounts',
+    period: null,
+    method: `delete ${deleted.ad_account_id}`,
+    rowCount: 1,
+    status: 'success',
+    userId,
+  });
+  return deleted;
+}
+
 // --- §2.7 -----------------------------------------------------------
 export async function listIngestionLog(params) {
   return repo.listIngestionLog(params);
