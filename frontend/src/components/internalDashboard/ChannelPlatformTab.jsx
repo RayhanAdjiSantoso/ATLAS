@@ -62,6 +62,8 @@ export default function ChannelPlatformTab() {
               note={`termasuk ${data.sales_channels.filter((c) => c.is_other).length} channel non-standar`} />
             <KpiCard title="Platform Terpakai" value={activePlatforms.length} type="number"
               note={`dari ${data.ad_platforms.length} platform`} />
+            <KpiCard title="Share Spend Meta" value={data.meta_spend_share} type="percentage"
+              note="Meta (Non-boost + Boost Post + CPAS) ÷ total ad spend semua platform." />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>

@@ -304,17 +304,23 @@ async function loadMonthlyGrid({ status, kategoriBesar, period, compare }) {
   ]);
 
   const revByBP = new Map();
+  const trxByBP = new Map();
   const targetByBP = new Map();
+  const partialByBP = new Set(); // `${brandId}|${YYYY-MM}` with a partial business-data row
   for (const r of revRows) {
     if (r.revenue != null) revByBP.set(`${r.brand_id}|${r.period}`, Number(r.revenue));
+    if (r.transaksi != null) trxByBP.set(`${r.brand_id}|${r.period}`, Number(r.transaksi));
     if (r.target_sales != null) targetByBP.set(`${r.brand_id}|${r.period}`, Number(r.target_sales));
+    if (r.is_partial_month) partialByBP.add(`${r.brand_id}|${r.period}`);
   }
   const spendByBP = new Map();
   for (const s of spendRows) if (s.spend != null) spendByBP.set(`${s.brand_id}|${s.period}`, Number(s.spend));
 
   const revAt = (id, p) => (revByBP.has(`${id}|${p}`) ? revByBP.get(`${id}|${p}`) : null);
+  const trxAt = (id, p) => (trxByBP.has(`${id}|${p}`) ? trxByBP.get(`${id}|${p}`) : null);
   const spendAt = (id, p) => (spendByBP.has(`${id}|${p}`) ? spendByBP.get(`${id}|${p}`) : null);
   const targetAt = (id, p) => (targetByBP.has(`${id}|${p}`) ? targetByBP.get(`${id}|${p}`) : null);
+  const isPartialAt = (id, p) => partialByBP.has(`${id}|${p}`);
 
   const months = [];
   for (let i = -(S1_CONFIG.trendWindowMonths - 1); i <= 0; i += 1) months.push(shiftMonth(period, i));
@@ -329,7 +335,7 @@ async function loadMonthlyGrid({ status, kategoriBesar, period, compare }) {
     return has ? total : null;
   };
 
-  return { brands, brandIds, brandById, comparePeriod, months, revAt, spendAt, targetAt, sumFor };
+  return { brands, brandIds, brandById, comparePeriod, months, revAt, trxAt, spendAt, targetAt, isPartialAt, sumFor };
 }
 
 export async function getOverview(params) {
@@ -342,7 +348,7 @@ export async function getOverview(params) {
   const kategoriBesar = category === 'all' ? null : (CATEGORY_MAP[category] ?? null);
 
   const grid = await loadMonthlyGrid({ status, kategoriBesar, period, compare });
-  const { brands, brandIds, brandById, comparePeriod, months, revAt, spendAt, targetAt } = grid;
+  const { brands, brandIds, brandById, comparePeriod, months, revAt, trxAt, spendAt, targetAt, isPartialAt } = grid;
   const sumAt = (p, at) => grid.sumFor(brandIds, p, at);
 
   // ---- trend: 13 months ending at `period` (null, never 0, for gaps) ----
@@ -400,6 +406,32 @@ export async function getOverview(params) {
   // 33+ clients, so this stays useful indefinitely.
   const withSales = brandIds.filter((id) => revAt(id, period) != null);
   const withSalesAndSpend = withSales.filter((id) => spendAt(id, period) != null);
+  const withSalesCmp = compare === 'target'
+    ? brandIds.filter((id) => targetAt(id, period) != null)
+    : brandIds.filter((id) => revAt(id, comparePeriod) != null);
+
+  // Ad Cost Ratio = spend / sales (blended). Ratio-of-two-accessors, so it
+  // can't go through deltaPct() — computed from the summed sides directly.
+  // Null (not 0) when there's no spend, same as blended_roas — "0%" would
+  // read as flawless efficiency rather than "spend not entered".
+  const acrNow = salesNow > 0 && spendNow > 0 ? spendNow / salesNow : null;
+  const acrCmp = salesCmp != null && salesCmp > 0 && spendCmp != null && spendCmp > 0 ? spendCmp / salesCmp : null;
+
+  // Total Transaksi (client_monthly_metrics.transaksi). Nullable per client
+  // even when revenue is present, so the sum only covers clients who entered
+  // it. delta respects the like-for-like / all-clients basis like revenue.
+  const trxNow = sumAt(period, trxAt);
+  const trxCmp = compare === 'target' ? null : sumAt(comparePeriod, trxAt);
+
+  const avgSalesNow = withSales.length ? salesNow / withSales.length : null;
+  const avgSalesCmp = salesCmp != null && withSalesCmp.length ? salesCmp / withSalesCmp.length : null;
+
+  // Client Tumbuh: of the like-for-like clients (data in BOTH periods), how
+  // many grew. `null` when compare === 'target' (revCohort not built).
+  const growingOf = revCohort ? revCohort.both.filter((c) => c.prior > 0).length : null;
+  const growingCount = revCohort
+    ? revCohort.both.filter((c) => c.prior > 0 && c.current / c.prior - 1 > 0).length
+    : null;
 
   const kpi = {
     total_sales: { value: salesNow, compare: salesCmp, delta_pct: deltaPct(revAt) },
@@ -408,6 +440,27 @@ export async function getOverview(params) {
       value: roasNow,
       compare: roasCmp,
       delta_pct: roasNow != null && roasCmp != null && roasCmp !== 0 ? roasNow / roasCmp - 1 : null,
+    },
+    ad_cost_ratio: {
+      value: acrNow,
+      compare: acrCmp,
+      delta_pct: acrNow != null && acrCmp != null && acrCmp !== 0 ? acrNow / acrCmp - 1 : null,
+    },
+    avg_sales_per_client: {
+      value: avgSalesNow,
+      compare: avgSalesCmp,
+      delta_pct: avgSalesNow != null && avgSalesCmp != null && avgSalesCmp !== 0 ? avgSalesNow / avgSalesCmp - 1 : null,
+      of: withSales.length,
+    },
+    total_transaksi: {
+      value: trxNow,
+      compare: trxCmp,
+      delta_pct: compare === 'target' ? null : deltaPct(trxAt),
+    },
+    clients_growing: {
+      value: growingCount,
+      of: growingOf,
+      pct: growingOf ? growingCount / growingOf : null,
     },
     active_clients: { value: brands.filter((b) => b.status === 'active').length },
     clients_with_data: { value: withSales.length, of: brandIds.length },
@@ -491,7 +544,10 @@ export async function getOverview(params) {
     })),
   };
 
-  // ---- perlu perhatian (vs sub-industry peer average) ----
+  // ---- perlu perhatian — FOUR independent signals (see config note) ----
+  const nameOf = (id) => brandById.get(id).brand_name;
+
+  // (a) peer-relative: growth well below the sub-industry peer AVERAGE.
   const bySub = new Map();
   for (const x of perBrandGrowth) {
     const sub = brandById.get(x.brandId).sub_industry;
@@ -499,15 +555,15 @@ export async function getOverview(params) {
     if (!bySub.has(sub)) bySub.set(sub, []);
     bySub.get(sub).push(x);
   }
-  const perlu_perhatian = [];
+  const peerRelative = [];
   for (const [sub, members] of bySub) {
     const subAvg = avg(members.map((m) => m.g));
     for (const m of members) {
       const gap = m.g - subAvg;
       if (gap <= -S1_CONFIG.perluPerhatianGrowthGap) {
-        perlu_perhatian.push({
+        peerRelative.push({
           brand_id: m.brandId,
-          brand_name: brandById.get(m.brandId).brand_name,
+          brand_name: nameOf(m.brandId),
           sub_industry: sub,
           growth: m.g,
           sub_industry_avg_growth: subAvg,
@@ -517,13 +573,76 @@ export async function getOverview(params) {
       }
     }
   }
-  perlu_perhatian.sort((a, b) => a.gap - b.gap);
+  peerRelative.sort((a, b) => a.gap - b.gap);
+
+  // (b) overspend anomaly: spend growth above the threshold while sales
+  //     growth is negative — belanja naik, penjualan tidak ikut. Uses the
+  //     like-for-like cohort (needs both periods on both metrics).
+  const overspend = [];
+  for (const c of cohort.both) {
+    const salesG = growth(c.current, c.prior);
+    const spendG = growth(spendAt(c.brandId, period), spendAt(c.brandId, comparePeriod));
+    if (spendG != null && salesG != null
+      && spendG > S1_CONFIG.perluPerhatianOverspendSpendGrowth && salesG < 0) {
+      overspend.push({
+        brand_id: c.brandId,
+        brand_name: nameOf(c.brandId),
+        sub_industry: brandById.get(c.brandId).sub_industry || null,
+        sales_growth: salesG,
+        spend_growth: spendG,
+      });
+    }
+  }
+  overspend.sort((a, b) => a.sales_growth - b.sales_growth);
+
+  // (c) absolute ROAS floor: blended ROAS (revenue/spend) below the config
+  //     floor. All clients with revenue AND spend this period (not LFL).
+  const lowRoas = [];
+  for (const id of brandIds) {
+    const rev = revAt(id, period);
+    const spend = spendAt(id, period);
+    if (rev == null || spend == null || spend <= 0) continue;
+    const roas = rev / spend;
+    if (roas < S1_CONFIG.perluPerhatianRoasFloor) {
+      lowRoas.push({
+        brand_id: id,
+        brand_name: nameOf(id),
+        sub_industry: brandById.get(id).sub_industry || null,
+        blended_roas: roas,
+      });
+    }
+  }
+  lowRoas.sort((a, b) => a.blended_roas - b.blended_roas);
+
+  // (d) info only: clients whose business-data row for this month is flagged
+  //     partial — the same rows S5 drops from benchmarking.
+  const benchmarkExcluded = brandIds
+    .filter((id) => revAt(id, period) != null && isPartialAt(id, period))
+    .map((id) => ({ brand_id: id, brand_name: nameOf(id) }));
+
+  const perlu_perhatian = {
+    peer_relative: peerRelative,
+    overspend,
+    low_roas: lowRoas,
+    benchmark_excluded: { count: benchmarkExcluded.length, clients: benchmarkExcluded },
+    thresholds: {
+      growth_gap: S1_CONFIG.perluPerhatianGrowthGap,
+      overspend_spend_growth: S1_CONFIG.perluPerhatianOverspendSpendGrowth,
+      roas_floor: S1_CONFIG.perluPerhatianRoasFloor,
+      provisional: true,
+    },
+  };
 
   return {
     period,
     compare_period: comparePeriod,
     filters: { compare, category, status, basis },
-    thresholds: { perlu_perhatian_growth_gap: S1_CONFIG.perluPerhatianGrowthGap, provisional: true },
+    thresholds: {
+      perlu_perhatian_growth_gap: S1_CONFIG.perluPerhatianGrowthGap,
+      perlu_perhatian_overspend_spend_growth: S1_CONFIG.perluPerhatianOverspendSpendGrowth,
+      perlu_perhatian_roas_floor: S1_CONFIG.perluPerhatianRoasFloor,
+      provisional: true,
+    },
     kpi,
     trend,
     category_composition,
@@ -867,6 +986,13 @@ export async function getChannels(params) {
     };
   });
 
+  // Share of ad spend going to Meta (Non-boost + Boost Post + CPAS), of the
+  // total across all platforms — the mockup's "Share spend Meta" KPI.
+  const metaSpendNow = AD_PLATFORMS
+    .filter((pl) => pl.startsWith('meta_'))
+    .reduce((s, pl) => s + (platAgg.get(`${period}|${pl}`)?.spend || 0), 0);
+  const meta_spend_share = spendNow > 0 ? metaSpendNow / spendNow : null;
+
   // --- trends (13 months) --------------------------------------
   const channel_trend = months.map((mo) => {
     const row = { period: mo };
@@ -920,6 +1046,7 @@ export async function getChannels(params) {
     portfolio_sales,
     ad_platforms,
     total_platform_spend: spendNow || null,
+    meta_spend_share,
     channel_trend,
     spend_trend,
     client_coverage,
