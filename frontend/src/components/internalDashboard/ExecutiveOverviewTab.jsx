@@ -6,6 +6,7 @@ import DonutChart from '../dashboard/DonutChart.jsx';
 import ParetoChart from '../dashboard/ParetoChart.jsx';
 import OverviewFilterBar from './OverviewFilterBar.jsx';
 import SingleMetricTrendChart from './SingleMetricTrendChart.jsx';
+import StackedShareArea from './StackedShareArea.jsx';
 import GrowthDistribution from './GrowthDistribution.jsx';
 import PerluPerhatianPanel from './PerluPerhatianPanel.jsx';
 
@@ -93,6 +94,10 @@ export default function ExecutiveOverviewTab() {
               valueFormatter={(v) => `Rp${money(v)}`} />
             <GrowthDistribution data={data.growth_distribution} />
           </div>
+
+          <StackedShareArea data={data.category_trend || []} series={['Retail', 'B2B/Service', 'F&B']}
+            title="Pergeseran Komposisi Portfolio — 13 bulan"
+            subtitle="Share sales per kategori, tiap bulan dinormalkan ke 100% — supaya pergeseran komposisi kelihatan, bukan cuma total." />
 
           {paretoData.length > 0 && (
             <ParetoChart data={paretoData} title="Kontribusi Client (Top 12) — Pareto" />

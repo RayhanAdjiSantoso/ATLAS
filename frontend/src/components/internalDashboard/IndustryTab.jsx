@@ -90,12 +90,19 @@ export default function IndustryTab() {
                     <th>Kategori</th><th>N</th><th>Ada data</th><th>Ada spend</th>
                     <th>Sales</th><th>Median sales/client</th>
                     <th>Growth agregat</th><th>Median growth/client</th><th>Median ROAS/client</th>
+                    <th>Median CPM/client</th><th>Median CTR/client</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.groups.map((g) => (
                     <tr key={g.key}>
-                      <td>{g.key}</td>
+                      <td>
+                        {g.key}
+                        {g.n_clients < 3 && (
+                          <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: '0.58rem' }}
+                            title="N < 3 — ditampilkan tapi kurang bermakna secara statistik, bukan dasar benchmark">n&lt;3</span>
+                        )}
+                      </td>
                       <td>{g.kategori_besar || '-'}</td>
                       <td>{g.n_clients}</td>
                       <td>{g.n_with_data}</td>
@@ -105,6 +112,8 @@ export default function IndustryTab() {
                       <td>{pct(g.aggregate_growth)}</td>
                       <td>{pct(g.median_client_growth)}</td>
                       <td>{g.median_client_roas?.toFixed(2) ?? '-'}</td>
+                      <td>{g.median_client_cpm != null ? money(g.median_client_cpm) : '-'}</td>
+                      <td>{g.median_client_ctr != null ? formatPercent(g.median_client_ctr * 100, 2) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
