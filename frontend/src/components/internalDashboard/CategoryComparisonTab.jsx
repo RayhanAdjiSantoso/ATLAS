@@ -5,6 +5,7 @@ import { formatPercent } from '../../utils/format.js';
 import KpiCard from '../dashboard/KpiCard.jsx';
 import OverviewFilterBar from './OverviewFilterBar.jsx';
 import MultiLineTrend from './MultiLineTrend.jsx';
+import StackedShareArea from './StackedShareArea.jsx';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const DEFAULTS = { period: thisMonth(), compare: 'mom', status: 'active', basis: 'like_for_like' };
@@ -62,8 +63,10 @@ export default function CategoryComparisonTab() {
                 <thead>
                   <tr>
                     <th>Kategori</th>
-                    <th>Sales agregat</th><th>Growth agregat</th><th>ROAS agregat</th>
+                    <th>Sales agregat</th><th>Ad Spend agregat</th><th>Growth agregat</th>
+                    <th>ROAS agregat</th><th>ACoS agregat</th>
                     <th>Median sales/client</th><th>Median growth/client</th><th>Median ROAS/client</th>
+                    <th>Median CPM/client</th><th>Median CTR/client</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -71,17 +74,25 @@ export default function CategoryComparisonTab() {
                     <tr key={c.kategori_besar}>
                       <td>{c.kategori_besar}</td>
                       <td>{money(c.aggregate.sales)}</td>
+                      <td>{money(c.aggregate.spend)}</td>
                       <td>{pct(c.aggregate.delta_pct)}</td>
                       <td>{c.aggregate.blended_roas?.toFixed(2) ?? '-'}</td>
+                      <td>{pct(c.aggregate.ad_cost_ratio)}</td>
                       <td>{money(c.median.client_sales)}</td>
                       <td>{pct(c.median.client_growth)}</td>
                       <td>{c.median.client_roas?.toFixed(2) ?? '-'}</td>
+                      <td>{c.median.client_cpm != null ? money(c.median.client_cpm) : '-'}</td>
+                      <td>{c.median.client_ctr != null ? formatPercent(c.median.client_ctr * 100, 2) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
+
+          <StackedShareArea data={data.trend} series={KATS}
+            title="Pergeseran Komposisi Portfolio — 13 bulan"
+            subtitle="Tiap bulan dinormalkan ke 100% — melihat pergeseran share antar kategori, bukan besaran absolut." />
 
           <MultiLineTrend data={data.trend} series={KATS} title="Tren Sales per Kategori — 13 bulan" />
 

@@ -203,7 +203,7 @@ export async function listBrandsForOverview({ status, kategoriBesar }, db = pool
   // status IS NOT NULL excludes the handful of pre-migration report-generator
   // brand rows that never went through the "Client info" import.
   const { rows } = await db.query(
-    `SELECT brand_id, brand_name, industry, sub_industry, kategori_besar,
+    `SELECT brand_id, brand_name, industry, sub_industry, kategori_besar, pic,
             status::text AS status, join_date::text AS join_date
      FROM brands_with_category
      WHERE status IS NOT NULL
@@ -225,16 +225,8 @@ export async function monthlyRevenueByBrand(brandIds, startPeriod, endPeriod, db
   return rows;
 }
 
-export async function monthlySpendByBrand(brandIds, startPeriod, endPeriod, db = pool) {
-  const { rows } = await db.query(
-    `SELECT brand_id, to_char(period, 'YYYY-MM') AS period, SUM(amount_spent) AS spend
-     FROM client_platform_spend_monthly
-     WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date
-     GROUP BY brand_id, period`,
-    [brandIds, `${startPeriod}-01`, `${endPeriod}-01`],
-  );
-  return rows;
-}
+// (monthlySpendByBrand removed — loadMonthlyGrid now uses
+// monthlyAdTotalsByBrand so S3/S4 can recompute per-client CPM/CTR.)
 
 // S6 — per-channel sales grid (one row per brand/month/channel).
 export async function channelSalesGrid(brandIds, startPeriod, endPeriod, db = pool) {

@@ -298,9 +298,9 @@ async function loadMonthlyGrid({ status, kategoriBesar, period, compare }) {
   const trendStart = shiftMonth(period, -(S1_CONFIG.trendWindowMonths - 1));
   const windowStart = comparePeriod && comparePeriod < trendStart ? comparePeriod : trendStart;
 
-  const [revRows, spendRows] = await Promise.all([
+  const [revRows, adRows] = await Promise.all([
     repo.monthlyRevenueByBrand(brandIds, windowStart, period),
-    repo.monthlySpendByBrand(brandIds, windowStart, period),
+    repo.monthlyAdTotalsByBrand(brandIds, windowStart, period),
   ]);
 
   const revByBP = new Map();
@@ -313,12 +313,18 @@ async function loadMonthlyGrid({ status, kategoriBesar, period, compare }) {
     if (r.target_sales != null) targetByBP.set(`${r.brand_id}|${r.period}`, Number(r.target_sales));
     if (r.is_partial_month) partialByBP.add(`${r.brand_id}|${r.period}`);
   }
-  const spendByBP = new Map();
-  for (const s of spendRows) if (s.spend != null) spendByBP.set(`${s.brand_id}|${s.period}`, Number(s.spend));
+  // Ad side comes from monthlyAdTotalsByBrand now (raw summable columns) so
+  // S3/S4 can recompute per-client CPM/CTR — spend is still SUM(amount_spent).
+  const adByBP = new Map();
+  for (const r of adRows) {
+    adByBP.set(`${r.brand_id}|${r.period}`, adRowObj(r));
+    if (r.any_partial_spend) partialByBP.add(`${r.brand_id}|${r.period}`);
+  }
 
   const revAt = (id, p) => (revByBP.has(`${id}|${p}`) ? revByBP.get(`${id}|${p}`) : null);
   const trxAt = (id, p) => (trxByBP.has(`${id}|${p}`) ? trxByBP.get(`${id}|${p}`) : null);
-  const spendAt = (id, p) => (spendByBP.has(`${id}|${p}`) ? spendByBP.get(`${id}|${p}`) : null);
+  const adAt = (id, p) => adByBP.get(`${id}|${p}`) || null;
+  const spendAt = (id, p) => { const a = adByBP.get(`${id}|${p}`); return a ? a.spend : null; };
   const targetAt = (id, p) => (targetByBP.has(`${id}|${p}`) ? targetByBP.get(`${id}|${p}`) : null);
   const isPartialAt = (id, p) => partialByBP.has(`${id}|${p}`);
 
@@ -335,7 +341,7 @@ async function loadMonthlyGrid({ status, kategoriBesar, period, compare }) {
     return has ? total : null;
   };
 
-  return { brands, brandIds, brandById, comparePeriod, months, revAt, trxAt, spendAt, targetAt, isPartialAt, sumFor };
+  return { brands, brandIds, brandById, comparePeriod, months, revAt, trxAt, adAt, spendAt, targetAt, isPartialAt, sumFor };
 }
 
 export async function getOverview(params) {
@@ -481,6 +487,21 @@ export async function getOverview(params) {
   const category_composition = [...catAgg.values()]
     .map((c) => ({ ...c, share_pct: salesNow > 0 ? c.sales / salesNow : null }))
     .sort((a, b) => b.sales - a.sales);
+
+  // ---- category share over time (13 months, for the stacked-100% area) ----
+  // Absolute per-kategori sums per month; the frontend normalises each month
+  // to 100% so the shift in composition is visible, not just the totals.
+  const KATS_S1 = ['Retail', 'B2B/Service', 'F&B'];
+  const catByKey = new Map(KATS_S1.map((k) => [k, []]));
+  for (const id of brandIds) {
+    const k = brandById.get(id).kategori_besar;
+    if (catByKey.has(k)) catByKey.get(k).push(id);
+  }
+  const category_trend = months.map((mo) => {
+    const row = { period: mo };
+    for (const k of KATS_S1) row[k] = grid.sumFor(catByKey.get(k), mo, revAt);
+    return row;
+  });
 
   // ---- client contribution (Pareto) ----
   const contribRows = brandIds
@@ -646,6 +667,7 @@ export async function getOverview(params) {
     kpi,
     trend,
     category_composition,
+    category_trend,
     client_contribution,
     growth_distribution,
     perlu_perhatian,
@@ -662,17 +684,22 @@ export async function getOverview(params) {
 
 // Per-client figures for one period + its compare, within a set of brands.
 function clientFigures(ids, grid, period, comparePeriod, compare) {
-  const { revAt, spendAt, targetAt } = grid;
+  const { revAt, spendAt, adAt, targetAt } = grid;
   return ids.map((id) => {
     const rev = revAt(id, period);
     const spend = spendAt(id, period);
     const prior = compare === 'target' ? targetAt(id, period) : revAt(id, comparePeriod);
+    // CPM/CTR recomputed per client from raw ad sums (adMetrics), so a group
+    // median is a median-of-clients, never a ratio-of-sums.
+    const m = adMetrics(rev, adAt ? adAt(id, period) : null);
     return {
       brandId: id,
       revenue: rev,
       spend,
       roas: rev != null && spend != null && spend > 0 ? rev / spend : null,
       growth: rev != null ? growth(rev, prior) : null,
+      cpm: m?.cpm ?? null,
+      ctr: m?.ctr ?? null,
     };
   });
 }
@@ -710,10 +737,15 @@ function groupBlock(ids, grid, period, comparePeriod, compare, basis) {
     sales,
     spend: spendVals.length ? spend : null,
     blended_roas: spendVals.length && spend > 0 ? sales / spend : null,
+    // aggregate Ad Cost Ratio = summed spend / summed sales (sum-of-sums,
+    // labelled aggregate — the median-per-client story is the columns below)
+    ad_cost_ratio: spendVals.length && sales > 0 ? spend / sales : null,
     aggregate_growth: aggGrowth,
     median_client_sales: median(withRev.map((f) => f.revenue)),
     median_client_growth: median(growthPool),
     median_client_roas: median(figs.map((f) => f.roas).filter((r) => r != null)),
+    median_client_cpm: median(figs.map((f) => f.cpm).filter((v) => v != null)),
+    median_client_ctr: median(figs.map((f) => f.ctr).filter((v) => v != null)),
   };
 }
 
@@ -754,6 +786,7 @@ export async function getCategories(params) {
         sales: block.sales,
         spend: block.spend,
         blended_roas: block.blended_roas,
+        ad_cost_ratio: block.ad_cost_ratio,
         client_count: block.n_with_data,
         spend_coverage: { value: block.n_with_spend, of: block.n_with_data },
         delta_pct: block.aggregate_growth,
@@ -762,6 +795,8 @@ export async function getCategories(params) {
         client_sales: block.median_client_sales,
         client_growth: block.median_client_growth,
         client_roas: block.median_client_roas,
+        client_cpm: block.median_client_cpm,
+        client_ctr: block.median_client_ctr,
       },
       composition: {
         share_now: shareNow,
@@ -827,10 +862,13 @@ export async function getIndustries(params) {
       sales: block.sales,
       spend: block.spend,
       blended_roas: block.blended_roas,
+      ad_cost_ratio: block.ad_cost_ratio,
       aggregate_growth: block.aggregate_growth,
       median_client_sales: block.median_client_sales,
       median_client_growth: block.median_client_growth,
       median_client_roas: block.median_client_roas,
+      median_client_cpm: block.median_client_cpm,
+      median_client_ctr: block.median_client_ctr,
     };
   }).sort((a, b) => b.sales - a.sales);
 
@@ -1676,12 +1714,29 @@ export async function getClientRanking(params) {
       brand_name: b.brand_name,
       sub_industry: b.sub_industry,
       kategori_besar: b.kategori_besar,
+      pic: b.pic || null,
       value,
       revenue: rev,
       spend: ad ? ad.spend : null,
       blended_roas: m?.blended_roas ?? null,
+      cpm: m?.cpm ?? null,
+      ctr: m?.ctr ?? null,
     };
   });
+
+  // ROAS percentile within each client's own sub-industry (mockup's
+  // "Percentile ROAS" column) — position of its blended ROAS among peers
+  // that also have one. Null when the client has no ROAS or no such peers.
+  const roasBySub = new Map();
+  for (const r of rows) {
+    if (r.blended_roas == null || !r.sub_industry) continue;
+    if (!roasBySub.has(r.sub_industry)) roasBySub.set(r.sub_industry, []);
+    roasBySub.get(r.sub_industry).push(r.blended_roas);
+  }
+  for (const r of rows) {
+    const pool = r.blended_roas != null && r.sub_industry ? roasBySub.get(r.sub_industry) : null;
+    r.roas_percentile = pool && pool.length ? percentileRank(pool, r.blended_roas) : null;
+  }
 
   const withVal = rows.filter((r) => r.value != null);
   const noVal = rows.filter((r) => r.value == null);
@@ -1737,6 +1792,9 @@ export async function getDataQuality(params) {
         source: flag ? flag.source : null,
       };
     });
+    // Rollup of the 3 fact-table cells: complete = all 3, empty = none,
+    // partial = some. The granular cells stay below for drill-down.
+    const nFacts = [s.has_monthly_metrics, s.has_channel_sales, s.has_platform_spend].filter(Boolean).length;
     return {
       brand_id: s.brand_id,
       brand_name: s.brand_name,
@@ -1746,6 +1804,7 @@ export async function getDataQuality(params) {
       has_monthly_metrics: s.has_monthly_metrics,
       has_channel_sales: s.has_channel_sales,
       has_platform_spend: s.has_platform_spend,
+      data_state: nFacts === 3 ? 'complete' : nFacts === 0 ? 'empty' : 'partial',
       revenue: s.revenue == null ? null : Number(s.revenue),
       channel_sales_total: Number(s.channel_sales_total),
       platform_spend_total: Number(s.platform_spend_total),
@@ -1754,6 +1813,11 @@ export async function getDataQuality(params) {
   });
 
   const active = clients.filter((c) => c.status === 'active');
+  // Cell-level completeness: of active clients * 3 fact cells, how many present.
+  const activeCells = active.length * 3;
+  const activeCellsFilled = active.reduce(
+    (n, c) => n + [c.has_monthly_metrics, c.has_channel_sales, c.has_platform_spend].filter(Boolean).length, 0,
+  );
   const completeness_matrix = {
     clients,
     summary: {
@@ -1763,9 +1827,15 @@ export async function getDataQuality(params) {
       active_with_channel_sales: active.filter((c) => c.has_channel_sales).length,
       active_with_platform_spend: active.filter((c) => c.has_platform_spend).length,
       active_with_all_three: active.filter((c) => c.has_monthly_metrics && c.has_channel_sales && c.has_platform_spend).length,
+      // 3-state rollup counts
+      complete: active.filter((c) => c.data_state === 'complete').length,
+      partial: active.filter((c) => c.data_state === 'partial').length,
+      empty: active.filter((c) => c.data_state === 'empty').length,
+      // headline % — filled fact cells / (active clients * 3)
+      completeness_pct: activeCells > 0 ? activeCellsFilled / activeCells : null,
       channels_assessed: csc.length, // client_sales_channels rows
     },
-    note: 'is_used null = channel belum dinilai (belum ada di client_sales_channels), bukan "tidak dipakai".',
+    note: 'data_state = rollup 3 sel fact-table (complete/partial/empty). completeness_pct = sel terisi / (client aktif * 3). is_used null = channel belum dinilai (belum ada di client_sales_channels), bukan "tidak dipakai".',
   };
 
   // --- 2. Ad account belum ter-mapping (2 tier) ------------------
@@ -1818,12 +1888,54 @@ export async function getDataQuality(params) {
     },
   };
 
+  // --- Daftar Tindakan — consolidated, severity-ranked ------------
+  // One flat list the team works top-down: critical (spend untracked /
+  // reconciliation broken) before warnings (mapping backlog / anomalies).
+  const SEV_RANK = { critical: 0, warning: 1, info: 2 };
+  const rp = (v) => (v == null ? '-' : `Rp${new Intl.NumberFormat('id-ID').format(Math.round(v))}`);
+  const action_items = [
+    ...ad_accounts_unmapped.hard.map((a) => ({
+      severity: 'critical', type: 'ad_account_unmapped_hard', brand_id: a.brand_id, brand_name: a.brand_name,
+      label: `${a.brand_name}: spend Meta tanpa BM ID`,
+      detail: `${rp(a.meta_spend_total)} spend Meta di ${a.months} bulan tidak terikat ke Business Manager mana pun.`,
+    })),
+    ...channel_sales_vs_revenue.filter((r) => r.status === 'mismatch').map((r) => ({
+      severity: 'critical', type: 'reconciliation_mismatch', brand_id: r.brand_id, brand_name: r.brand_name,
+      label: `${r.brand_name}: channel sales ≠ revenue`,
+      detail: `Selisih ${rp(r.diff)} (${(r.diff_pct * 100).toFixed(1)}%) antara total channel sales dan revenue bulan ${period}.`,
+    })),
+    ...reconciliation.spend.anomalies.map((a) => ({
+      severity: 'warning', type: 'spend_anomaly', brand_id: a.brand_id, brand_name: a.brand_name,
+      label: `${a.brand_name}: ${a.issue === 'spend rows exist but sum to 0' ? 'baris spend jumlah 0' : 'spend > revenue'}`,
+      detail: a.issue === 'spend rows exist but sum to 0'
+        ? 'Ada baris platform spend tapi total 0 — kemungkinan input belum lengkap.'
+        : `Spend ${rp(a.platform_spend_total)} melebihi revenue ${rp(a.revenue)} (ROAS < 1) — perlu ditinjau.`,
+    })),
+    ...ad_accounts_unmapped.soft.map((a) => ({
+      severity: 'warning', type: 'ad_account_unmapped_soft', brand_id: a.brand_id, brand_name: a.brand_name,
+      label: `${a.brand_name}: daftar ad account belum diisi`,
+      detail: `BM ID ada tapi belum ada baris brand_ad_accounts (act_ ID). ${rp(a.meta_spend_total)} spend Meta.`,
+    })),
+    ...completeness_matrix.clients
+      .filter((c) => c.status === 'active' && c.data_state === 'partial')
+      .map((c) => ({
+        severity: 'info', type: 'partial_data', brand_id: c.brand_id, brand_name: c.brand_name,
+        label: `${c.brand_name}: data ${period} belum lengkap`,
+        detail: [
+          !c.has_monthly_metrics && 'metrik bulanan',
+          !c.has_channel_sales && 'channel sales',
+          !c.has_platform_spend && 'platform spend',
+        ].filter(Boolean).join(', ') + ' belum masuk.',
+      })),
+  ].sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]);
+
   return {
     period,
     completeness_matrix,
     ad_accounts_unmapped,
     campaign_classification,
     reconciliation,
+    action_items,
     ingestion_log: log,
   };
 }
