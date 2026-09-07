@@ -15,3 +15,16 @@ dist/
 
 # OS/editor cruft
 .DS_Store
+
+# Impeccable — local design tooling, not app code. 14MB of skill + a native
+# binary, reinstalled rather than committed:
+#   npx impeccable install -y --providers=claude --scope=project
+.claude/skills/impeccable/
+.claude/agents/impeccable-*
+.claude/settings.local.json
+# Its critique log is per-run scratch. DESIGN.md and .impeccable/design.json
+# are the durable outputs and DO belong in the repo once they exist.
+.impeccable/critique/
+
+# Local UI/UX skill pack (ui-ux-pro-max) — reference data, not app code.
+frontend/.claude/skills/
