@@ -197,8 +197,20 @@ function cellState(merged, month) {
 // berbeda, dan perbedaan itu yang dulu disembunyikan status "Lengkap".
 const DASHBOARD_CHANNELS = new Set(['order', 'performance_overview', 'product_performance']);
 
-function failedImports(parts) {
-  return (parts ?? []).filter((p) => p.import_status === 'failed' || (p.dashboard_upload_id == null && p.import_status !== 'not_applicable'));
+// Satu predikat untuk semuanya — chip status, catatan merah, tombol "Impor
+// ulang", dan label per file. Sebelumnya catatan dan tombol memakai syarat
+// berbeda: catatan muncul kalau dashboard_upload_id kosong, tombol hanya
+// kalau import_status === 'failed'. File yang diunggah sebelum kolom itu ada
+// (import_status NULL) lolos syarat pertama dan gagal syarat kedua, jadi
+// catatannya menyuruh mengklik tombol yang tidak pernah dirender.
+function needsImport(channel, file) {
+  if (!DASHBOARD_CHANNELS.has(channel)) return false;
+  if (file.import_status === 'success') return false;
+  return file.import_status === 'failed' || file.dashboard_upload_id == null;
+}
+
+function failedImports(channel, parts) {
+  return (parts ?? []).filter((file) => needsImport(channel, file));
 }
 
 function datasetStatus(dataset, months, lookup, platformId) {
@@ -214,7 +226,7 @@ function datasetStatus(dataset, months, lookup, platformId) {
   // Menampilkan "Lengkap" di keadaan itu adalah kebohongan yang membuat
   // orang berhenti mencari masalah.
   if (DASHBOARD_CHANNELS.has(dataset.channel)) {
-    const stuck = months.flatMap((m) => failedImports(lookup.get(fileKey(platformId, dataset.channel, m.key))));
+    const stuck = months.flatMap((m) => failedImports(dataset.channel, lookup.get(fileKey(platformId, dataset.channel, m.key))));
     if (stuck.length) return { label: 'Belum diimpor', tone: 'warn' };
   }
 
@@ -503,12 +515,12 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                     ))}
                   </div>
                 )}
-              {months.flatMap((m) => failedImports(lookup.get(fileKey(platform.id, dataset.channel, m.key)))).slice(0, 1).map((f) => (
+              {months.flatMap((m) => failedImports(dataset.channel, lookup.get(fileKey(platform.id, dataset.channel, m.key)))).slice(0, 1).map((f) => (
                 <p className="brand-ds-failnote" key={f.id}>
                   <CircleAlert size={14} />
                   <span>
                     <strong>File tersimpan, tetapi datanya belum masuk Dashboard.</strong>{' '}
-                    {f.import_error || 'Impor sebelumnya tidak selesai.'} Byte filenya sudah ada di server, jadi cukup klik
+                    {f.import_error || 'Impor sebelumnya tidak pernah selesai — kemungkinan terputus sebelum sempat mencatat alasannya.'} Byte filenya sudah ada di server, jadi cukup klik
                     “Impor ulang” di bawah — tidak perlu mengunggah ulang.
                   </span>
                 </p>
@@ -530,12 +542,15 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                       {file.original_filename}
                       {file.row_count ? ` · ${file.row_count.toLocaleString('id-ID')} baris` : ''}
                       {file.period_source ? ` · ${PERIOD_SOURCE_LABEL[file.period_source] ?? file.period_source}` : ''}
-                      {file.import_status === 'success' ? ` · terbaca Dashboard${file.import_rows ? ` (${file.import_rows.toLocaleString('id-ID')} baris)` : ''}` : ''}
-                      {file.import_status === 'failed' ? ' · BELUM masuk Dashboard' : ''}
+                      {needsImport(dataset.channel, file)
+                        ? ' · BELUM masuk Dashboard'
+                        : file.dashboard_upload_id || file.import_status === 'success'
+                          ? ` · terbaca Dashboard${file.import_rows ? ` (${file.import_rows.toLocaleString('id-ID')} baris)` : ''}`
+                          : ''}
                       {` · ${new Date(file.uploaded_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`}
                     </span>
                     <span className="brand-ds-fileacts">
-                      {file.import_status === 'failed' && (
+                      {needsImport(dataset.channel, file) && (
                         <button type="button" className="is-retry" onClick={() => onReimport(file)} disabled={busyKey === `import-${file.id}`}>
                           {busyKey === `import-${file.id}` ? 'Mengimpor…' : <><RefreshCw size={14} /> Impor ulang</>}
                         </button>
@@ -946,7 +961,14 @@ export default function BrandSettingsPage() {
       const { data } = await api.post(`/brands/${brand.brand_id}/library/${file.id}/import`);
       await loadBrand(brand.brand_id);
       setError(null);
-      setNotice(`${file.original_filename}: ${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard.`);
+      // 0 baris bukan kegagalan: importer melewati baris yang sudah ada
+      // (ON CONFLICT DO NOTHING), jadi periode yang datanya sudah lengkap
+      // memang tidak menambah apa pun. Mengatakan "0 baris" tanpa penjelasan
+      // membuat orang mengira impornya tidak jalan.
+      const n = data.imported.rowsInserted;
+      setNotice(n > 0
+        ? `${file.original_filename}: ${n.toLocaleString('id-ID')} baris masuk ke Dashboard.`
+        : `${file.original_filename}: tidak ada baris baru — datanya memang sudah ada di Dashboard. Status sekarang tercatat benar.`);
     } catch (err) {
       setNotice(describeError(err, `Impor ulang ${file.original_filename} gagal`));
     } finally {
