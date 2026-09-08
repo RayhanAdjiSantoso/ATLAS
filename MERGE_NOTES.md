@@ -20,6 +20,10 @@ memakai sumber yang sama (belum di commit ini).
 |---|---|
 | `migrations/015_brand_library.sql` | **baru** — `public.brand_profiles` + `ads_reports.brand_library_files` |
 | `migrations/016_brand_library_parts.sql` | **baru** — satu bulan boleh punya beberapa file (ekspor Shopee yang terbagi) |
+| `migrations/017_ai_summaries.sql` | **baru** — `ads_reports.ai_summaries`, cache + riwayat AI Summary per periode |
+| `backend/src/services/aiSummaryService.js` | **baru** — perakitan konteks + panggilan Gemini |
+| `backend/src/routes/reportGenerator/aiSummary.js` | **baru** — endpoint `/api/report-generator/ai-summary` |
+| `frontend/src/reportGenerator/features/ai/` | **baru** — kartu AI Summary di bawah tiap laporan platform |
 | `backend/src/services/brandLibraryService.js` | **baru** — deteksi periode, simpan, coverage per hari |
 | `backend/src/controllers/brandLibraryController.js` | **baru** — endpoint upload/list/hapus/unduh |
 | `backend/scripts/importLibraryToDashboard.js` | **baru** — backfill (lihat bagian 4) |
@@ -50,8 +54,15 @@ git push origin main
 cd backend
 npm run migrate             # jalankan sekali; aman diulang
 
-# 3. Deploy backend, lalu frontend
+# 3. Environment — tambahkan satu variabel baru di server
+#    GEMINI_API_KEY=<key dari Google AI Studio>
+#    (opsional) GEMINI_MODEL=gemini-flash-latest
+
+# 4. Deploy backend, lalu frontend
 ```
+
+Tanpa `GEMINI_API_KEY`, seluruh aplikasi tetap jalan normal — hanya tombol
+"Generate AI Summary" yang menjawab dengan pesan bahwa key belum diset.
 
 **Urutannya penting:** migrate dulu, baru deploy backend. Backend versi baru
 menulis ke kolom yang belum ada kalau migration belum jalan.
@@ -68,6 +79,14 @@ berurutan setiap kali, tanpa tabel pencatat. Itu memang desainnya: setiap file
 ditulis idempotent (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`,
 `CREATE INDEX IF NOT EXISTS`), jadi menjalankan ulang di database yang sudah
 terisi bukan masalah dan tidak menyentuh data.
+
+Satu catatan yang sudah dibuktikan, bukan asumsi: `015` sempat **tidak**
+idempotent karena `016` menghapus lalu mengganti salah satu indeksnya, jadi
+menjalankan migrate untuk kedua kalinya gagal di tengah jalan. Sudah
+diperbaiki (indeks lama hanya dibuat kalau kolom `part_index` belum ada), dan
+sudah diverifikasi dengan menjalankan `npm run migrate` dua kali berturut-turut
+sampai 17 file lolos tanpa error. Kalau kamu pernah menarik branch ini sebelum
+perbaikan itu, tarik ulang dulu.
 
 Skrip memakai `DATABASE_URL` dari `backend/.env`. Untuk Neon, pakai connection
 string **unpooled** saat migrate (butuh sesi sungguhan):
@@ -91,6 +110,9 @@ WHERE table_schema='ads_reports' AND table_name='brand_library_files';
 -- harus ada (lihat bagian 5)
 SELECT column_name FROM information_schema.columns
 WHERE table_schema='public' AND table_name='uploads' AND column_name='raw_file';
+
+-- AI Summary
+SELECT to_regclass('ads_reports.ai_summaries');
 ```
 
 ---
@@ -156,6 +178,9 @@ yang perlu disiapkan, tapi ukuran database akan tumbuh seiring jumlah file.
    harus menyebut jumlah hari terdeteksi **dan** jumlah baris yang masuk ke Dashboard.
 3. Buka **Dashboard Business Overview** → brand dan bulan yang sama → KPI terisi.
 4. Isi satu field di tab **Brand context** → Simpan → refresh → nilainya bertahan.
+5. Report Generator → generate satu laporan → di bawahnya ada kartu **AI Summary** →
+   klik Generate. Kalau Gemini sedang sibuk (503), pesannya muncul di kartu itu saja
+   dan laporan di atasnya tetap utuh — itu perilaku yang benar, bukan kegagalan deploy.
 
 ## 8. Kalau harus mundur
 

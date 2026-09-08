@@ -144,3 +144,69 @@ export async function replaceProductMaster(brandId: number, entries: ProductMast
     unwrap(err);
   }
 }
+
+// ── AI Summary ────────────────────────────────────────────────────────
+// Ringkasan analisis per brand + platform + periode. Panggilan ke Gemini
+// terjadi di backend (key-nya tidak pernah menyeberang ke browser); di sini
+// hanya endpoint ATLAS sendiri.
+
+export interface AiSummaryContent {
+  diagnosis: string;
+  winning: string[];
+  challenge: string[];
+  strategic_direction: string[];
+  action_items: string[];
+}
+
+export interface AiSummaryRecord {
+  id: number;
+  platform: Platform;
+  period_old_label: string | null;
+  period_cur_label: string | null;
+  summary: AiSummaryContent;
+  edited_summary: AiSummaryContent | null;
+  model: string;
+  created_at: string;
+  updated_at: string;
+  edited_at: string | null;
+  generated_by_name: string | null;
+  edited_by_name: string | null;
+}
+
+export interface AiSummaryPerformance {
+  period: { old: string; cur: string };
+  kpis: { label: string; old: string; cur: string; delta: string }[];
+  cpasKpis?: { label: string; old: string; cur: string; delta: string }[];
+  periodWarning?: string | null;
+  notes?: string[];
+}
+
+export async function generateAiSummary(input: {
+  clientId: number;
+  platform: Platform;
+  period: { oldLabel: string; curLabel: string; oldStart?: string | null; oldEnd?: string | null; curStart?: string | null; curEnd?: string | null };
+  performance: AiSummaryPerformance;
+  refresh?: boolean;
+}): Promise<{ summary: AiSummaryRecord; cached: boolean }> {
+  try {
+    const res = await api.post('/report-generator/ai-summary', {
+      client_id: input.clientId,
+      platform: input.platform,
+      period: input.period,
+      performance: input.performance,
+      refresh: input.refresh ?? false,
+    });
+    return res.data;
+  } catch (err) {
+    unwrap(err);
+  }
+}
+
+export async function saveAiSummaryEdit(id: number, clientId: number, summary: AiSummaryContent): Promise<AiSummaryRecord> {
+  try {
+    const res = await api.put(`/report-generator/ai-summary/${id}`, { client_id: clientId, summary });
+    return res.data.summary;
+  } catch (err) {
+    unwrap(err);
+  }
+}

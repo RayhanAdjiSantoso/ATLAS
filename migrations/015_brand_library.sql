@@ -83,9 +83,21 @@ CREATE TABLE IF NOT EXISTS ads_reports.brand_library_files (
 -- Two partial indexes rather than one constraint: NULLs never collide in a
 -- UNIQUE constraint, so reference files (period_month IS NULL) would be
 -- free to duplicate without the second one.
-CREATE UNIQUE INDEX IF NOT EXISTS ux_brand_library_month
-    ON ads_reports.brand_library_files (brand_id, platform, channel, period_month)
-    WHERE period_month IS NOT NULL;
+-- Guarded because migrate.js re-runs every file on every run, and 016 later
+-- replaces this index with a part-aware one after dropping it. Without the
+-- guard a second run would try to re-create the one-file-per-month rule over
+-- a table that now legitimately holds several parts per month, and fail —
+-- taking the whole migration with it.
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'ads_reports' AND table_name = 'brand_library_files' AND column_name = 'part_index'
+    ) THEN
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_brand_library_month
+            ON ads_reports.brand_library_files (brand_id, platform, channel, period_month)
+            WHERE period_month IS NOT NULL;
+    END IF;
+END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_brand_library_reference
     ON ads_reports.brand_library_files (brand_id, platform, channel)
     WHERE period_month IS NULL;

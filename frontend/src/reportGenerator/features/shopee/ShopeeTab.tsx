@@ -21,6 +21,7 @@ import type { SheetRow } from '../../lib/types';
 import { requireColumns, validateFileBasics } from '../../lib/validation';
 import { readSpreadsheetFile } from '../../lib/xlsxUtils';
 import type { PlatformResultData } from '../../lib/summary';
+import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { getProductMaster, getSavedPeriod, replaceProductMaster, saveProductMasterEntry } from '../reports/api';
@@ -946,6 +947,14 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
               />
             )}
           </div>
+          <AiSummarySection
+              clientId={clientId}
+              platform="shopee"
+              period={{ old: report.p1, cur: report.p2 }}
+              kpis={report.summary.kpis}
+              
+              periodWarning={report.periodWarning}
+            />
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
             <DownloadPdfButton targetId="report-shopee" filename="Performance Report - Shopee Ads.pdf" />
             <button className="btn btn-ghost" onClick={reset}>

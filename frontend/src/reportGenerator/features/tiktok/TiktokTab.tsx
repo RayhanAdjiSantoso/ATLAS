@@ -18,6 +18,7 @@ import { parseTiktokXLSX, periodFromTiktokFilename } from '../../lib/tiktok';
 import type { SheetRow } from '../../lib/types';
 import { requireColumns, validateFileBasics } from '../../lib/validation';
 import type { PlatformResultData } from '../../lib/summary';
+import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapTiktokRows } from '../reports/rowMapping';
@@ -320,6 +321,14 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
               </div>
             </div>
           </div>
+          <AiSummarySection
+              clientId={clientId}
+              platform="tiktok"
+              period={{ old: report.p1, cur: report.p2 }}
+              kpis={report.summary.kpis}
+              
+              periodWarning={report.periodWarning}
+            />
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
             <DownloadPdfButton targetId="report-tiktok" filename="Performance Report - TikTok GMV Max.pdf" />
             <button className="btn btn-ghost" onClick={reset}>

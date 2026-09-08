@@ -28,6 +28,7 @@ import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import { SlotSourceTabs, SavedSlotCard, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PlatformResultData } from '../../lib/summary';
+import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { getReportDetail } from '../reports/api';
@@ -759,6 +760,16 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               ]}
             />
           </div>
+          <AiSummarySection
+              clientId={clientId}
+              platform="meta"
+              period={{ old: report.p1, cur: report.p2 }}
+              periodDates={{ oldStart: report.periodOldStart, oldEnd: report.periodOldEnd, curStart: report.periodCurStart, curEnd: report.periodCurEnd }}
+              kpis={report.summary.kpis}
+              cpasKpis={report.summary.cpasKpis}
+              periodWarning={report.periodWarning}
+              notes={[report.reachWarning, report.reachApproxNote].filter(Boolean) as string[]}
+            />
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
             <DownloadPdfButton targetId="report-meta" filename="Performance Report - Meta Ads.pdf" />
             <button className="btn btn-ghost" onClick={reset}>

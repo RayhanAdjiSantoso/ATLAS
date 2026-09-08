@@ -47,3 +47,48 @@
   color: #fff;
   padding: 7px;
 }
+
+/* ── AI Summary ─────────────────────────────────────────────────────────
+   Kartu terakhir di tiap laporan platform. Memakai .sec-block milik design
+   system supaya bentuk dan animasinya sama dengan section lain; yang di
+   bawah ini hanya isinya. */
+.mil-ui .ai-sum-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.mil-ui .ai-sum-tools { display: inline-flex; gap: .4rem; }
+.mil-ui .ai-sum-btn { padding: .32rem .7rem; font-size: .78rem; }
+.mil-ui .ai-sum-body { padding: 1.1rem 1.4rem 1.4rem; }
+
+.mil-ui .ai-sum-empty { display: grid; gap: .8rem; justify-items: start; max-width: 62ch; }
+.mil-ui .ai-sum-empty p { font-size: .86rem; line-height: 1.6; color: var(--muted); }
+.mil-ui .ai-sum-warn { color: var(--warn, #b45309); font-weight: 600; }
+.mil-ui .ai-sum-cta { font-size: .88rem; }
+
+.mil-ui .ai-sum-error { display: grid; gap: .45rem; justify-items: start; padding: .9rem 1rem; border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--bad) 6%, transparent); }
+.mil-ui .ai-sum-error strong { color: var(--bad); font-size: .88rem; }
+.mil-ui .ai-sum-error span { font-size: .82rem; line-height: 1.55; color: var(--text); }
+.mil-ui .ai-sum-error small { font-size: .75rem; color: var(--muted); }
+
+.mil-ui .ai-sum-diagnosis h4 { font-size: .78rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.mil-ui .ai-sum-diagnosis p { margin-top: .4rem; font-size: .92rem; line-height: 1.65; max-width: 78ch; }
+
+.mil-ui .ai-sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .8rem; margin-top: 1.2rem; }
+.mil-ui .ai-sum-card { padding: .85rem 1rem 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.mil-ui .ai-sum-card h4 { font-size: .82rem; font-weight: 750; }
+.mil-ui .ai-sum-card h4 small { margin-left: .4rem; font-size: .68rem; font-weight: 500; color: var(--muted2); }
+.mil-ui .ai-sum-card ul { margin: .55rem 0 0; padding-left: 1.05rem; display: grid; gap: .4rem; }
+.mil-ui .ai-sum-card li { font-size: .84rem; line-height: 1.55; }
+.mil-ui .ai-sum-none { margin-top: .5rem; font-size: .8rem; color: var(--muted2); }
+
+.mil-ui .ai-sum-edit { display: grid; gap: .8rem; }
+.mil-ui .ai-sum-edit label { display: grid; gap: .3rem; }
+.mil-ui .ai-sum-edit label > span { font-size: .8rem; font-weight: 700; }
+.mil-ui .ai-sum-edit label > span small { margin-left: .35rem; font-weight: 500; color: var(--muted2); }
+.mil-ui .ai-sum-edit textarea { width: 100%; padding: .6rem .7rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font: inherit; font-size: .84rem; line-height: 1.55; resize: vertical; }
+.mil-ui .ai-sum-edit textarea:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 14%, transparent); }
+
+.mil-ui .ai-sum-foot { display: flex; flex-wrap: wrap; gap: .3rem 1rem; justify-content: space-between; margin-top: 1.1rem; padding-top: .7rem; border-top: 1px solid var(--border); font-size: .74rem; color: var(--muted2); }
+.mil-ui .ai-sum-disclaimer { font-style: italic; }
+
+/* Ekspor PDF menyertakan ringkasannya, tapi tidak tombol-tombolnya. */
+.mil-ui.pdf-export-mode .ai-sum-tools,
+.mil-ui.pdf-export-mode .ai-sum-empty,
+.mil-ui.pdf-export-mode .ai-sum-error { display: none !important; }
