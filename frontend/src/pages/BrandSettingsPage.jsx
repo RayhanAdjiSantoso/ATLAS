@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
   Archive, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
-  CloudUpload, Database, Download, FileSpreadsheet, Layers3, Loader2, Plus, Save,
+  CloudUpload, Database, Download, FileSpreadsheet, Layers3, Loader2, Plus, RefreshCw, Save,
   Search, Sparkles, Trash2, Upload,
 } from 'lucide-react';
 import api from '../api/client';
@@ -192,6 +192,15 @@ function cellState(merged, month) {
   return 'snapshot';
 }
 
+// Tiga dataset ini dibaca Dashboard Business Overview dari tabel fakta, bukan
+// dari byte filenya. Untuk ketiganya "tersimpan" dan "terbaca" adalah dua hal
+// berbeda, dan perbedaan itu yang dulu disembunyikan status "Lengkap".
+const DASHBOARD_CHANNELS = new Set(['order', 'performance_overview', 'product_performance']);
+
+function failedImports(parts) {
+  return (parts ?? []).filter((p) => p.import_status === 'failed' || (p.dashboard_upload_id == null && p.import_status !== 'not_applicable'));
+}
+
 function datasetStatus(dataset, months, lookup, platformId) {
   if (dataset.kind === 'reference') {
     return lookup.get(fileKey(platformId, dataset.channel, null))
@@ -200,6 +209,15 @@ function datasetStatus(dataset, months, lookup, platformId) {
   }
   const present = months.filter((m) => lookup.has(fileKey(platformId, dataset.channel, m.key)));
   if (!present.length) return dataset.kind === 'extra' ? { label: 'Opsional', tone: 'idle' } : { label: 'Belum ada', tone: 'warn' };
+
+  // File ada, tapi untuk dataset Dashboard belum tentu datanya terbaca.
+  // Menampilkan "Lengkap" di keadaan itu adalah kebohongan yang membuat
+  // orang berhenti mencari masalah.
+  if (DASHBOARD_CHANNELS.has(dataset.channel)) {
+    const stuck = months.flatMap((m) => failedImports(lookup.get(fileKey(platformId, dataset.channel, m.key))));
+    if (stuck.length) return { label: 'Belum diimpor', tone: 'warn' };
+  }
+
   if (present.length === months.length) return { label: 'Lengkap', tone: 'ok' };
   return { label: `${present.length}/${months.length} bulan`, tone: 'partial' };
 }
@@ -381,7 +399,7 @@ function DayStrip({ merged, month, wash }) {
   );
 }
 
-function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick, onDelete, busyKey, targetMonth }) {
+function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick, onDelete, onReimport, busyKey, targetMonth }) {
   const [open, setOpen] = useState(false);
   const isReference = dataset.kind === 'reference';
   const status = datasetStatus(dataset, months, lookup, platform.id);
@@ -485,6 +503,16 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                     ))}
                   </div>
                 )}
+              {months.flatMap((m) => failedImports(lookup.get(fileKey(platform.id, dataset.channel, m.key)))).slice(0, 1).map((f) => (
+                <p className="brand-ds-failnote" key={f.id}>
+                  <CircleAlert size={14} />
+                  <span>
+                    <strong>File tersimpan, tetapi datanya belum masuk Dashboard.</strong>{' '}
+                    {f.import_error || 'Impor sebelumnya tidak selesai.'} Byte filenya sudah ada di server, jadi cukup klik
+                    “Impor ulang” di bawah — tidak perlu mengunggah ulang.
+                  </span>
+                </p>
+              ))}
               <div className="brand-ds-files">
                 {(isReference
                   ? (refFile ? [[null, refFile]] : [])
@@ -502,10 +530,16 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                       {file.original_filename}
                       {file.row_count ? ` · ${file.row_count.toLocaleString('id-ID')} baris` : ''}
                       {file.period_source ? ` · ${PERIOD_SOURCE_LABEL[file.period_source] ?? file.period_source}` : ''}
-                      {file.dashboard_upload_id ? ' · terbaca Dashboard' : ''}
+                      {file.import_status === 'success' ? ` · terbaca Dashboard${file.import_rows ? ` (${file.import_rows.toLocaleString('id-ID')} baris)` : ''}` : ''}
+                      {file.import_status === 'failed' ? ' · BELUM masuk Dashboard' : ''}
                       {` · ${new Date(file.uploaded_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`}
                     </span>
                     <span className="brand-ds-fileacts">
+                      {file.import_status === 'failed' && (
+                        <button type="button" className="is-retry" onClick={() => onReimport(file)} disabled={busyKey === `import-${file.id}`}>
+                          {busyKey === `import-${file.id}` ? 'Mengimpor…' : <><RefreshCw size={14} /> Impor ulang</>}
+                        </button>
+                      )}
                       <button type="button" onClick={() => onPick(dataset, month)}><Upload size={14} /> Ganti</button>
                       <a href={`/api/brands/${file.brand_id}/library/${file.id}/download`} download><Download size={14} /> Unduh</a>
                       <button type="button" className="is-danger" onClick={() => onDelete(file)}><Trash2 size={14} /> Hapus</button>
@@ -576,7 +610,7 @@ function MonthRail({ axis, windowStart, setWindowStart, focus, setFocus, lookup,
   );
 }
 
-function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, busyKey, focusMonth }) {
+function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, onReimport, busyKey, focusMonth }) {
   const summary = useMemo(() => platformSummary(platform, months, lookup), [platform, months, lookup]);
   const target = focusMonth ?? months[months.length - 1];
 
@@ -625,7 +659,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, bu
         {platform.datasets.map((dataset, index) => (
           <DatasetRow
             key={dataset.channel} platform={platform} dataset={dataset} months={months} lookup={lookup}
-            index={index} reduced={reduced} onPick={onPick} onDelete={onDelete} busyKey={busyKey}
+            index={index} reduced={reduced} onPick={onPick} onDelete={onDelete} onReimport={onReimport} busyKey={busyKey}
             targetMonth={focusMonth ?? months[months.length - 1]}
           />
         ))}
@@ -645,7 +679,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, bu
   );
 }
 
-function DataView({ brand, files, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, busyKey, marketId, setMarketId }) {
+function DataView({ brand, files, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, busyKey, marketId, setMarketId }) {
   const platform = PLATFORMS.find((p) => p.id === marketId) ?? PLATFORMS[0];
   const focusMonth = focus ? months.find((m) => m.key === focus) : null;
 
@@ -735,7 +769,7 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
         <AnimatePresence mode="wait">
           <PlatformPanel
             key={platform.id} platform={platform} months={months} lookup={lookup} reduced={reduced}
-            onPick={onPick} onDelete={onDelete} busyKey={busyKey} focusMonth={focusMonth}
+            onPick={onPick} onDelete={onDelete} onReimport={onReimport} busyKey={busyKey} focusMonth={focusMonth}
           />
         </AnimatePresence>
       </div>
@@ -899,6 +933,24 @@ export default function BrandSettingsPage() {
     } finally {
       setBusyKey(null);
       pending.current = null;
+    }
+  };
+
+  // Impor ulang memakai byte yang sudah tersimpan di server — tidak menuntut
+  // pengguna mengunggah file yang sama untuk kedua kalinya.
+  const reimportFile = async (file) => {
+    if (!brand) return;
+    setBusyKey(`import-${file.id}`);
+    setNotice(null);
+    try {
+      const { data } = await api.post(`/brands/${brand.brand_id}/library/${file.id}/import`);
+      await loadBrand(brand.brand_id);
+      setError(null);
+      setNotice(`${file.original_filename}: ${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard.`);
+    } catch (err) {
+      setNotice(describeError(err, `Impor ulang ${file.original_filename} gagal`));
+    } finally {
+      setBusyKey(null);
     }
   };
 
@@ -1079,7 +1131,7 @@ export default function BrandSettingsPage() {
               brand={brand} files={files} months={months} axis={axis}
               windowStart={windowStart} setWindowStart={(next) => { setWindowStart(next); setFocus(null); }}
               focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
-              onPick={pickFile} onDelete={removeFile} busyKey={busyKey}
+              onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}
               marketId={marketId} setMarketId={setMarketId}
             />
           </ViewShell>

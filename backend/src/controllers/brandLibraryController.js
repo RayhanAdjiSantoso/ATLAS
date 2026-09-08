@@ -159,6 +159,8 @@ async function storeOnePart({ req, brandId, platform, channel, month, isReferenc
       });
       const result = await processUpload({ uploadId, fileType, filepath: file.buffer, brandId });
       await library.setDashboardUpload(saved.id, uploadId);
+      await library.setImportResult(saved.id, { status: 'success', rows: result.rowsInserted, uploadId });
+      Object.assign(saved, { import_status: 'success', import_error: null, import_rows: result.rowsInserted, dashboard_upload_id: uploadId });
       imported = { rowsInserted: result.rowsInserted };
 
       // The imported rows outrank whatever the filename claimed: a name is
@@ -174,13 +176,68 @@ async function storeOnePart({ req, brandId, platform, channel, month, isReferenc
         });
       }
     } catch (err) {
+      // Filenya tetap tersimpan — byte-nya berguna untuk impor ulang — tapi
+      // barisnya ditandai gagal supaya UI tidak menampilkan "Lengkap" untuk
+      // periode yang tabel faktanya kosong.
+      await library.setImportResult(saved.id, { status: 'failed', error: err.message });
+      Object.assign(saved, { import_status: 'failed', import_error: err.message, import_rows: null, dashboard_upload_id: null });
       imported = { error: err.message };
       console.warn('[brand-library] import ke dashboard gagal', { brandId, channel, month, file: file.originalname, reason: err.message });
     }
+  } else {
+    await library.setImportResult(saved.id, { status: 'not_applicable' });
+    Object.assign(saved, { import_status: 'not_applicable' });
   }
 
   return { file: saved, warning, imported };
 }
+
+// Impor ulang satu file yang sudah ada di perpustakaan. Dipakai saat impor
+// pertamanya gagal (paling sering: function serverless kehabisan waktu), dan
+// menghindari kewajiban mengunggah ulang file yang byte-nya sudah tersimpan.
+export const reimportLibraryFile = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req);
+  const fileId = Number(req.params.fileId);
+  if (!Number.isInteger(fileId)) throw new AppError('fileId tidak valid', 400);
+
+  const file = await library.getFileForImport(brandId, fileId);
+  if (!file) throw new AppError('File tidak ditemukan', 404);
+
+  const fileType = library.DASHBOARD_FILE_TYPES[file.channel];
+  if (!fileType) throw new AppError('Dataset ini tidak dibaca Dashboard, jadi tidak perlu diimpor', 400);
+  if (!file.raw_file) throw new AppError('Byte file tidak tersimpan, unggah ulang filenya', 400);
+
+  // Impor sebelumnya (kalau ada) dihapus dulu supaya tabel fakta tidak
+  // menggandakan periode yang sama.
+  if (file.dashboard_upload_id) {
+    try {
+      await uploadService.deleteUpload(file.dashboard_upload_id);
+    } catch (err) {
+      console.warn('[brand-library] gagal menghapus import lama', { id: file.dashboard_upload_id, reason: err.message });
+    }
+  }
+
+  const uploadId = uuidv4();
+  try {
+    await uploadService.createUploadRecord({
+      uploadId,
+      userId: req.user?.userId ?? file.uploaded_by,
+      brandId,
+      fileType,
+      filename: file.original_filename,
+      rawFile: file.raw_file,
+    });
+    const result = await processUpload({ uploadId, fileType, filepath: file.raw_file, brandId });
+    await library.setDashboardUpload(fileId, uploadId);
+    await library.setImportResult(fileId, { status: 'success', rows: result.rowsInserted, uploadId });
+    const synced = await library.syncCoverageFromImport(fileId, result.period, file.period_month?.slice(0, 7));
+    res.json({ imported: { rowsInserted: result.rowsInserted, period: result.period, coverage: synced } });
+  } catch (err) {
+    await library.setImportResult(fileId, { status: 'failed', error: err.message });
+    console.warn('[brand-library] impor ulang gagal', { brandId, fileId, reason: err.message });
+    throw new AppError(`Impor ulang gagal: ${err.message}`, 422);
+  }
+});
 
 export const deleteLibraryFile = asyncHandler(async (req, res) => {
   const brandId = parseBrandId(req);
