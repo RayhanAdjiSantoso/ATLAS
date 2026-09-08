@@ -6,6 +6,7 @@ import {
   CreditCard,
   ShoppingBasket,
   Package,
+  ListTree,
 } from 'lucide-react';
 import { formatPercent } from '../../utils/format.js';
 
@@ -74,6 +75,21 @@ export const DOMAINS = [
     Icon: Package,
     endpoint: '/dashboard/product-performance',
     question: 'Produk mana yang menjadi pendorong pertumbuhan, dan mana yang mulai melemah?',
+  },
+  {
+    // Root Cause Analysis is not a Data Mapping v1 domain — it's the v2
+    // decomposition tree (GMV -> Orders/Traffic/CR/AOV). It renders full
+    // width like a focused domain but drives its own period comparison
+    // (per-node delta) instead of the side-by-side split the others use, and
+    // it stays out of the idle prefetch (`prefetch: false`) since one open
+    // costs 4 queries per period.
+    key: 'Root Cause Analysis',
+    label: 'Root Cause Analysis',
+    short: 'Root Cause',
+    Icon: ListTree,
+    endpoint: '/dashboard/root-cause',
+    question: 'Komponen mana dalam rantai GMV yang paling menggerakkan kenaikan/penurunan periode ini?',
+    prefetch: false,
   },
 ];
 
@@ -180,6 +196,18 @@ export const HEADLINES = {
       value: idrShort(top.revenue),
       caption: `Kontributor revenue teratas: ${top.label}.`,
       delta: null,
+    };
+  },
+
+  'Root Cause Analysis': (d) => {
+    const gmv = d?.tree?.value;
+    if (gmv == null) return absent('Data GMV belum tersedia untuk periode ini.');
+    const prev = d?.compare?.tree?.value;
+    const delta = prev != null && prev !== 0 ? ((gmv - prev) / Math.abs(prev)) * 100 : null;
+    return {
+      value: idrShort(gmv),
+      caption: 'Akar analisis: dekomposisi GMV → Orders, Traffic, Conversion Rate, AOV.',
+      delta,
     };
   },
 };

@@ -182,6 +182,41 @@ export const getBasketAnalysis = asyncHandler(async (req, res) => {
   res.json(data);
 });
 
+// GET /api/dashboard/root-cause
+//
+// Interactive GMV-decomposition tree. Like getExecutiveSnapshot, it runs the
+// service once per period and returns the comparison tree under `compare`
+// (null when no comparison range) — the frontend zips the two trees by node
+// id to draw a per-node delta, rather than the side-by-side split render the
+// other tabs use.
+export const getRootCauseAnalysis = asyncHandler(async (req, res) => {
+  const { brandId, startDate, endDate, compareStartDate, compareEndDate } = req.query;
+
+  if (!brandId) {
+    throw new AppError('Brand ID wajib disertakan', 400);
+  }
+  if (!startDate || !endDate) {
+    throw new AppError('Tanggal awal dan akhir wajib disertakan', 400);
+  }
+
+  const data = await dashboardService.getRootCauseAnalysis({
+    brandId: Number(brandId),
+    startDate,
+    endDate,
+  });
+
+  let compare = null;
+  if (compareStartDate && compareEndDate) {
+    compare = await dashboardService.getRootCauseAnalysis({
+      brandId: Number(brandId),
+      startDate: compareStartDate,
+      endDate: compareEndDate,
+    });
+  }
+
+  res.json({ ...data, compare });
+});
+
 // GET /api/dashboard/product-performance
 export const getProductPerformance = asyncHandler(async (req, res) => {
   const { brandId, startDate, endDate, compareStartDate, compareEndDate, level } = req.query;

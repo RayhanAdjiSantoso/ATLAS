@@ -2,6 +2,11 @@ import * as dashboardRepo from '../repositories/dashboardRepository.js';
 import { computeRfmAnalysis, RFM_SEGMENTS, SEGMENT_ACTIONS } from './rfm/rfmAnalysis.js';
 import { computeProductPerformance } from './productPerformance/productPerformanceAnalysis.js';
 
+// Root Cause Analysis tab — GMV decomposition tree. Kept in its own module
+// (the tree layout + traffic-source section mapping is sizeable); re-exported
+// here so the controller keeps importing one dashboard service.
+export { getRootCauseAnalysis } from './rootCause/rootCauseTree.js';
+
 // Helper to calculate growth percentage
 function calculateGrowth(current, previous) {
   const currNum = Number(current || 0);

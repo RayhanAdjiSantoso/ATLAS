@@ -7,6 +7,7 @@ import FunnelChart from './FunnelChart.jsx';
 import CalendarHeatmap from './CalendarHeatmap.jsx';
 import ProductTransitionTable from './ProductTransitionTable.jsx';
 import ParetoChart from './ParetoChart.jsx';
+import RootCauseTree from './RootCauseTree.jsx';
 import { formatPercent } from '../../utils/format.js';
 
 function HorizontalBarChart({ data = [], nameKey = 'name', valueKey = 'value', title = 'Top 10' }) {
@@ -1825,6 +1826,40 @@ function ProductTrendTable({ title, rows = [], accentColor, emptyMessage }) {
   );
 }
 
+// ROOT CAUSE ANALYSIS — GMV decomposition tree (Data Mapping v2).
+//
+// Not a Data Mapping v1 domain and not part of the side-by-side compare
+// render — it drives its own per-node period delta, so DashboardTab routes it
+// past the split branch and hands it `compareData` directly.
+function renderRootCause(data, { startDate, endDate, compareStartDate, compareEndDate, compareData = null } = {}) {
+  const tree = data?.tree || null;
+  const compareTree = compareData?.tree || null;
+  const hasCompare = Boolean(compareTree);
+
+  if (!tree) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="card" style={{ padding: '1.5rem', color: 'var(--text-muted)' }}>
+          Data GMV belum tersedia untuk periode ini. Unggah data Shopee melalui Pengaturan Brand.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <RootCauseTree
+        tree={tree}
+        compareTree={compareTree}
+        hasCompare={hasCompare}
+        mainRange={`${formatDateLabel(startDate)} - ${formatDateLabel(endDate)}`}
+        compareRange={hasCompare ? `${formatDateLabel(compareStartDate)} - ${formatDateLabel(compareEndDate)}` : null}
+        meta={data?.meta}
+      />
+    </div>
+  );
+}
+
 // TAB 7: PRODUCT PERFORMANCE
 function renderProductPerformance(data, { productPerformanceLevel = 'category', setProductPerformanceLevel } = {}) {
     const {
@@ -1917,7 +1952,12 @@ const TAB_RENDERERS = {
   'Transaction Behavior': renderTransactionBehavior,
   'Basket Analysis': renderBasketAnalysis,
   'Product Performance': renderProductPerformance,
+  'Root Cause Analysis': renderRootCause,
 };
+
+// Tabs that render their own period comparison internally (per-node delta)
+// instead of the generic main | compare split render below.
+const SELF_COMPARE_TABS = new Set(['Root Cause Analysis']);
 
 // Loading shows the shape of what is coming rather than the word "Memuat".
 // The console keeps the rail, the strip and every summary on screen while
@@ -2008,8 +2048,19 @@ export default function DashboardTab({
     // in-range/out-of-range cell distinction) -- every other renderer
     // ignores these two extra fields.
     startDate: filters.startDate, endDate: filters.endDate,
+    compareStartDate: filters.compareStartDate, compareEndDate: filters.compareEndDate,
   };
   const showCompare = filters.compare && data.compare;
+
+  // Root Cause Analysis owns its comparison rendering (per-node delta down the
+  // tree) — hand it both periods and skip the split render entirely.
+  if (SELF_COMPARE_TABS.has(activeTab)) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {renderer(data, { ...rendererExtra, compareData: showCompare ? data.compare : null })}
+      </div>
+    );
+  }
 
   if (!showCompare) {
     return (
