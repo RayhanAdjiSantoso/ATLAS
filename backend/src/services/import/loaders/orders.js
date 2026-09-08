@@ -64,6 +64,20 @@ export async function loadOrders(client, resolver, filepath, brandId, uploadId) 
 
   const headers = [...grouped.values()].map((group) => group[0]);
 
+  // Shopee's order export sometimes returns the literal string "err" in the
+  // money columns (Total Pembayaran, the voucher/fee breakdown) when the
+  // export job failed to compute them -- a known Shopee-side glitch, usually
+  // fixed by re-exporting. Loading it would silently zero out every revenue,
+  // AOV, RFM and customer figure for the month, so stop here with a message
+  // that says what actually happened rather than a raw NOT NULL violation.
+  const errPoisoned = headers.filter((h) => String(h['Total Pembayaran'] ?? '').trim().toLowerCase() === 'err').length;
+  if (errPoisoned > 0) {
+    throw new Error(
+      `File pesanan rusak dari Shopee: kolom "Total Pembayaran" berisi nilai "err" pada ${errPoisoned} dari ${headers.length} pesanan. `
+      + 'Ekspor ulang "Semua Pesanan" untuk periode ini dari Shopee Seller Center, lalu unggah kembali.',
+    );
+  }
+
   // Resolve every lookup the file needs in a handful of statements, so the
   // per-order calls below are all cache hits.
   await resolver.warmSingle('order_statuses', 'order_status_id', 'status_name', headers.map((h) => h['Status Pesanan']));
