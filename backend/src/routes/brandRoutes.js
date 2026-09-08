@@ -19,6 +19,7 @@ router.get('/:brandId/library', brandLibraryController.listLibrary);
 // .array, not .single: a month whose export Shopee split into parts is
 // filed in one action (see migration 016).
 router.post('/:brandId/library', uploadDataFile.array('file', 12), brandLibraryController.uploadLibraryFile);
+router.post('/:brandId/library/:fileId/import', brandLibraryController.reimportLibraryFile);
 router.delete('/:brandId/library/:fileId', brandLibraryController.deleteLibraryFile);
 router.get('/:brandId/library/:fileId/download', brandLibraryController.downloadLibraryFile);
 

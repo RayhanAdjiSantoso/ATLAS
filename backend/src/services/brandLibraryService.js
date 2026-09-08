@@ -91,6 +91,7 @@ const LIBRARY_COLUMNS = `
   f.period_start::text AS period_start,
   f.period_end::text AS period_end,
   f.covered_days, f.day_bitmap, f.row_count, f.period_source, f.dashboard_upload_id, f.part_index,
+  f.import_status, f.import_error, f.import_rows,
   f.original_filename, f.byte_size, f.uploaded_at, f.updated_at,
   u.full_name AS uploaded_by_name
 `;
@@ -186,6 +187,33 @@ export async function setDashboardUpload(fileId, uploadId) {
     'UPDATE ads_reports.brand_library_files SET dashboard_upload_id = $1 WHERE id = $2',
     [uploadId, fileId],
   );
+}
+
+// Hasil impor disimpan eksplisit, bukan disimpulkan dari ada-tidaknya
+// dashboard_upload_id: "gagal" dan "bukan dataset Dashboard" sama-sama
+// membuat kolom itu NULL, dan membedakan keduanya justru yang dibutuhkan UI.
+export async function setImportResult(fileId, { status, error = null, rows = null, uploadId = null }) {
+  await pool.query(
+    `UPDATE ads_reports.brand_library_files
+     SET import_status = $2, import_error = $3, import_rows = $4,
+         dashboard_upload_id = COALESCE($5, CASE WHEN $2 = 'failed' THEN NULL ELSE dashboard_upload_id END),
+         updated_at = now()
+     WHERE id = $1`,
+    [fileId, status, error, rows, uploadId],
+  );
+}
+
+// Byte file untuk impor ulang — supaya percobaan kedua tidak menuntut
+// pengguna mengunggah file yang sama sekali lagi.
+export async function getFileForImport(brandId, fileId) {
+  const result = await pool.query(
+    `SELECT id, brand_id, platform, channel, period_month::text AS period_month,
+            original_filename, raw_file, dashboard_upload_id, uploaded_by
+     FROM ads_reports.brand_library_files
+     WHERE brand_id = $1 AND id = $2`,
+    [brandId, fileId],
+  );
+  return result.rows[0] ?? null;
 }
 
 // Every part already filed under one month slot, oldest part first.

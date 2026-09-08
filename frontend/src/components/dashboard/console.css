@@ -332,7 +332,7 @@
 .brand-cov-legend-hint { margin-left:auto; font-style:italic; }
 
 /* ── Data & file: platform panel ──────────────────────────────────── */
-.brand-market-panel { margin-top:.55rem; --ds-cols:minmax(180px,1.3fr) repeat(var(--ds-months),minmax(52px,70px)) minmax(150px,1fr) 112px 40px; }
+.brand-market-panel { margin-top:.55rem; --ds-cols:minmax(180px,1.3fr) repeat(var(--ds-months),minmax(52px,70px)) minmax(140px,1fr) 128px 40px; }
 .brand-market-banner { position:relative; isolation:isolate; overflow:hidden; display:flex; align-items:center; gap:1rem; padding:.95rem 1.1rem; border:1px solid color-mix(in srgb,var(--mk-accent) 22%,var(--border)); border-radius:16px 16px 0 0; background:linear-gradient(110deg,var(--mk-tint),rgba(255,255,255,.9) 62%); }
 .brand-market-banner-glow { position:absolute; z-index:-1; inset:-120% 55% -120% -20%; background:radial-gradient(closest-side,color-mix(in srgb,var(--mk-wash,var(--mk-accent)) 30%,transparent),transparent); filter:blur(10px); animation:brand-aurora 13s ease-in-out infinite alternate; pointer-events:none; }
 .brand-market-mark { display:grid; place-items:center; flex:0 0 auto; width:40px; height:40px; border-radius:13px; color:#fff; background:linear-gradient(145deg,color-mix(in srgb,var(--mk-accent) 78%,#fff),var(--mk-accent)); font-size:1rem; font-weight:840; box-shadow:0 8px 20px color-mix(in srgb,var(--mk-accent) 34%,transparent); }

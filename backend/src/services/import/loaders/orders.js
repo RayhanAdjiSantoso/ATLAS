@@ -1,4 +1,4 @@
-import { buildBulkInsert } from '../../../utils/sqlHelpers.js';
+import { insertChunked } from '../bulk.js';
 import {
   blankToNone,
   parseIdr,
@@ -21,11 +21,6 @@ export function detectOrderPeriod(filepath) {
   return { start: toDateString(dates[0]), end: toDateString(dates[dates.length - 1]) };
 }
 
-// One statement per few hundred rows instead of one per row. Every insert
-// here used to be its own round trip to Neon: an August file of ~5.700
-// orders and ~17.000 items meant ~23.000 sequential round trips, plus two
-// more per new customer — minutes of waiting that were almost entirely
-// network latency, not database work.
 const ORDER_COLUMNS = [
   'order_id', 'order_type', 'order_status_id', 'cancellation_reason',
   'cancellation_return_status', 'tracking_number', 'shipping_option_id',
@@ -54,17 +49,6 @@ const ITEM_COLUMNS = [
 // never push a batch over the edge.
 const ORDER_CHUNK = 250;
 const ITEM_CHUNK = 700;
-
-async function insertChunked(client, table, columns, rows, conflictSql, chunkSize) {
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    const statement = buildBulkInsert(table, columns, rows.slice(i, i + chunkSize));
-    if (!statement) continue;
-    const result = await client.query(`${statement.text} ${conflictSql}`, statement.values);
-    inserted += result.rowCount;
-  }
-  return inserted;
-}
 
 export async function loadOrders(client, resolver, filepath, brandId, uploadId) {
   const wb = readWorkbook(filepath);

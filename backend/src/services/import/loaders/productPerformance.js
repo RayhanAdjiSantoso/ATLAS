@@ -1,3 +1,4 @@
+import { insertChunked, dedupeBy } from '../bulk.js';
 import {
   blankToNone,
   parseIdr,
@@ -47,6 +48,32 @@ async function upsertProduct(client, resolver, brandId, productId, productName, 
   );
 }
 
+const SUMMARY_COLUMNS = [
+  'period_id', 'product_id', 'product_status_id',
+  'product_views', 'product_clicks', 'click_percentage',
+  'orders_created', 'orders_ready_to_ship',
+  'sales_created_idr', 'sales_ready_to_ship_idr',
+  'unique_viewers', 'unique_clickers', 'product_page_visitors', 'product_page_views',
+  'visitors_no_purchase', 'no_purchase_rate', 'search_clicks', 'likes',
+  'cart_visitors', 'cart_adds', 'cart_conversion_rate',
+  'products_ordered_created', 'products_ordered_ready_to_ship',
+  'buyers_created', 'buyers_ready_to_ship',
+  'created_order_conversion_rate', 'ready_to_ship_conversion_rate',
+  'sales_per_order_created', 'sales_per_order_ready_to_ship',
+  'repeat_order_rate_created', 'repeat_purchase_pct_ready_to_ship',
+  'avg_days_repeat_order_created', 'avg_days_repeat_purchase_ready_to_ship',
+  'brand_id', 'upload_id',
+];
+
+const VARIANT_COLUMNS = [
+  'period_id', 'variant_id', 'variant_status_id',
+  'orders_created', 'orders_ready_to_ship',
+  'buyers_created', 'buyers_ready_to_ship',
+  'sales_created_idr', 'sales_ready_to_ship_idr',
+  'products_ordered_ready_to_ship',
+  'brand_id', 'upload_id',
+];
+
 export async function loadProductPerformance(client, resolver, filepath, brandId, uploadId, periodId) {
   const wb = readWorkbook(filepath);
   const rows = readSheetAsStrings(wb, 'Produk dengan Performa Terbaik').filter((row) => {
@@ -54,40 +81,25 @@ export async function loadProductPerformance(client, resolver, filepath, brandId
     return variant == null;
   });
 
-  let inserted = 0;
+  // Semua status di-resolve sekali di depan, jadi getOrCreateOne di bawah
+  // tidak lagi menembak database per baris.
+  await resolver.warmSingle('product_statuses', 'status_id', 'status_name',
+    rows.map((r) => blankToNone(r['Status Produk Saat Ini'])));
+
+  const productRows = [];
+  const summaryRows = [];
 
   for (const row of rows) {
     const productId = parseIntValue(row['Kode Produk']);
     if (!productId) continue;
 
-    await upsertProduct(client, resolver, brandId, productId, row['Produk'], row['Status Produk Saat Ini']);
-
     const statusId = await resolver.getOrCreateOne(
       'product_statuses', 'status_id', 'status_name', blankToNone(row['Status Produk Saat Ini']),
     );
 
-    const result = await client.query(
-      `INSERT INTO product_performance_summary (
-        period_id, product_id, product_status_id,
-        product_views, product_clicks, click_percentage,
-        orders_created, orders_ready_to_ship,
-        sales_created_idr, sales_ready_to_ship_idr,
-        unique_viewers, unique_clickers, product_page_visitors, product_page_views,
-        visitors_no_purchase, no_purchase_rate, search_clicks, likes,
-        cart_visitors, cart_adds, cart_conversion_rate,
-        products_ordered_created, products_ordered_ready_to_ship,
-        buyers_created, buyers_ready_to_ship,
-        created_order_conversion_rate, ready_to_ship_conversion_rate,
-        sales_per_order_created, sales_per_order_ready_to_ship,
-        repeat_order_rate_created, repeat_purchase_pct_ready_to_ship,
-        avg_days_repeat_order_created, avg_days_repeat_purchase_ready_to_ship,
-        brand_id, upload_id
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
-      ) ON CONFLICT (brand_id, period_id, product_id) DO NOTHING RETURNING id`,
-      [
-        periodId, productId, statusId,
+    productRows.push([productId, row['Produk'], statusId, brandId]);
+    summaryRows.push([
+      periodId, productId, statusId,
         parseIntValue(row['Jumlah Produk Dilihat']) ?? 0,
         parseIntValue(row['Produk Diklik']) ?? 0,
         parsePct(row['Persentase Klik']),
@@ -119,12 +131,25 @@ export async function loadProductPerformance(client, resolver, filepath, brandId
         parseIdr(row['Rata-rata hari Pesanan Berulang (Pesanan Dibuat)']),
         parseIdr(row['Rata-rata Hari Pembelian Terulang (Pesanan Siap Dikirim)']),
         brandId, uploadId,
-      ],
-    );
-    if (result.rowCount > 0) inserted += 1;
+    ]);
   }
 
-  return inserted;
+  // brand_id: COALESCE mempertahankan pemilik pertama, sama seperti
+  // upsertProduct versi per-baris sebelumnya.
+  await insertChunked(
+    client, 'products', ['product_id', 'product_name', 'product_status_id', 'brand_id'],
+    dedupeBy(productRows, 0),
+    `ON CONFLICT (product_id) DO UPDATE
+       SET product_name = EXCLUDED.product_name,
+           product_status_id = EXCLUDED.product_status_id,
+           brand_id = COALESCE(products.brand_id, EXCLUDED.brand_id)`,
+    500,
+  );
+
+  return insertChunked(
+    client, 'product_performance_summary', SUMMARY_COLUMNS, summaryRows,
+    'ON CONFLICT (brand_id, period_id, product_id) DO NOTHING RETURNING id', 150,
+  );
 }
 
 async function upsertProductVariant(client, resolver, brandId, variantId, productId, variantName, statusName) {
@@ -165,92 +190,87 @@ export async function loadProductVariantPerformance(client, resolver, filepath, 
     return variant != null;
   });
 
-  let inserted = 0;
+  await resolver.warmSingle('product_statuses', 'status_id', 'status_name',
+    rows.map((r) => blankToNone(r['Status Variasi Saat Ini'])));
+
+  const variantRows = [];
+  const perfRows = [];
 
   for (const row of rows) {
     const productId = parseIntValue(row['Kode Produk']);
     const variantId = parseIntValue(row['Kode Variasi']);
     if (!productId || !variantId) continue;
 
-    await upsertProductVariant(
-      client, resolver, brandId, variantId, productId,
-      row['Nama Variasi'] ?? '', row['Status Variasi Saat Ini'],
-    );
     const statusId = await resolver.getOrCreateOne(
       'product_statuses', 'status_id', 'status_name', blankToNone(row['Status Variasi Saat Ini']),
     );
 
-    const result = await client.query(
-      `INSERT INTO product_variant_performance (
-        period_id, variant_id, variant_status_id,
-        orders_created, orders_ready_to_ship,
-        buyers_created, buyers_ready_to_ship,
-        sales_created_idr, sales_ready_to_ship_idr,
-        products_ordered_ready_to_ship,
-        brand_id, upload_id
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
-      ) ON CONFLICT (brand_id, period_id, variant_id) DO NOTHING RETURNING id`,
-      [
-        periodId, variantId, statusId,
-        parseIntValue(row['Pesanan Dibuat']) ?? 0,
-        parseIntValue(row['Pesanan Siap Dikirim']) ?? 0,
-        parseIntValue(row['Total Pembeli (Pesanan Dibuat)']) ?? 0,
-        parseIntValue(row['Total Pembeli (Pesanan Siap Dikirim)']) ?? 0,
-        parseIdr(row['Total Penjualan (Pesanan Dibuat) (IDR)']) ?? 0,
-        parseIdr(row['Penjualan (Pesanan Siap Dikirim) (IDR)']) ?? 0,
-        parseIntValue(row['Produk (Pesanan Siap Dikirim)']) ?? 0,
-        brandId, uploadId,
-      ],
-    );
-    if (result.rowCount > 0) inserted += 1;
+    // variant_sku sengaja dibiarkan NULL: kolom "SKU Induk" di sheet adalah
+    // SKU produk induk (dipakai bersama semua variannya), bukan SKU per
+    // varian, jadi menulisnya di sini akan bertabrakan dengan partial unique
+    // index variant_sku antar varian bersaudara.
+    variantRows.push([variantId, productId, row['Nama Variasi'] ?? '', statusId, brandId]);
+    perfRows.push([
+      periodId, variantId, statusId,
+      parseIntValue(row['Pesanan Dibuat']) ?? 0,
+      parseIntValue(row['Pesanan Siap Dikirim']) ?? 0,
+      parseIntValue(row['Total Pembeli (Pesanan Dibuat)']) ?? 0,
+      parseIntValue(row['Total Pembeli (Pesanan Siap Dikirim)']) ?? 0,
+      parseIdr(row['Total Penjualan (Pesanan Dibuat) (IDR)']) ?? 0,
+      parseIdr(row['Penjualan (Pesanan Siap Dikirim) (IDR)']) ?? 0,
+      parseIntValue(row['Produk (Pesanan Siap Dikirim)']) ?? 0,
+      brandId, uploadId,
+    ]);
   }
 
-  return inserted;
+  await insertChunked(
+    client, 'product_variants', ['variant_id', 'product_id', 'variant_name', 'variant_status_id', 'brand_id'],
+    dedupeBy(variantRows, 0),
+    `ON CONFLICT (variant_id) DO UPDATE
+       SET product_id = EXCLUDED.product_id,
+           variant_name = EXCLUDED.variant_name,
+           variant_status_id = EXCLUDED.variant_status_id,
+           brand_id = COALESCE(product_variants.brand_id, EXCLUDED.brand_id)`,
+    500,
+  );
+
+  return insertChunked(
+    client, 'product_variant_performance', VARIANT_COLUMNS, perfRows,
+    'ON CONFLICT (brand_id, period_id, variant_id) DO NOTHING RETURNING id', 400,
+  );
+}
+
+// Kedua fungsi di bawah dulu menembakkan satu UPDATE per produk. Kolom yang
+// ditulis sama untuk seluruh sheet, jadi seluruh sheet muat dalam satu
+// statement lewat = ANY(array).
+async function tagProducts(client, filepath, sheetName, brandId, periodId, column, valueId) {
+  const wb = readWorkbook(filepath);
+  const ids = readSheetAsStrings(wb, sheetName)
+    .map((row) => parseIntValue(row['Kode Produk']))
+    .filter(Boolean);
+  if (!ids.length) return 0;
+
+  const result = await client.query(
+    `UPDATE product_performance_summary
+     SET ${column} = $1
+     WHERE brand_id = $2 AND period_id = $3 AND product_id = ANY($4::bigint[])`,
+    [valueId, brandId, periodId, ids],
+  );
+  return result.rowCount;
 }
 
 export async function applyPriceCompetitiveness(client, resolver, filepath, brandId, periodId, sheetName) {
-  const wb = readWorkbook(filepath);
-  const rows = readSheetAsStrings(wb, sheetName);
   const statusId = await resolver.getOrCreateOne(
     'price_competitiveness_statuses', 'status_id', 'status_name', sheetName,
   );
-
-  let updated = 0;
-  for (const row of rows) {
-    const productId = parseIntValue(row['Kode Produk']);
-    if (!productId) continue;
-    const result = await client.query(
-      `UPDATE product_performance_summary
-       SET price_competitiveness_status_id = $1
-       WHERE brand_id = $2 AND period_id = $3 AND product_id = $4`,
-      [statusId, brandId, periodId, productId],
-    );
-    updated += result.rowCount;
-  }
-  return updated;
+  return tagProducts(client, filepath, sheetName, brandId, periodId, 'price_competitiveness_status_id', statusId);
 }
 
 export async function applyAdsRecommendation(client, resolver, filepath, brandId, periodId, sheetName) {
-  const wb = readWorkbook(filepath);
-  const rows = readSheetAsStrings(wb, sheetName);
   const stageId = await resolver.getOrCreateOne(
     'ads_recommendation_stages', 'stage_id', 'stage_name', sheetName,
   );
-
-  let updated = 0;
-  for (const row of rows) {
-    const productId = parseIntValue(row['Kode Produk']);
-    if (!productId) continue;
-    const result = await client.query(
-      `UPDATE product_performance_summary
-       SET ads_recommendation_stage_id = $1
-       WHERE brand_id = $2 AND period_id = $3 AND product_id = $4`,
-      [stageId, brandId, periodId, productId],
-    );
-    updated += result.rowCount;
-  }
-  return updated;
+  return tagProducts(client, filepath, sheetName, brandId, periodId, 'ads_recommendation_stage_id', stageId);
 }
 
 export async function resolvePeriodId(client, resolver, filepath, brandId) {
