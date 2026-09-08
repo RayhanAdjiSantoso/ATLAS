@@ -8,6 +8,7 @@ import CalendarHeatmap from './CalendarHeatmap.jsx';
 import ProductTransitionTable from './ProductTransitionTable.jsx';
 import ParetoChart from './ParetoChart.jsx';
 import RootCauseTree from './RootCauseTree.jsx';
+import GrainWarning from './GrainWarning.jsx';
 import { formatPercent } from '../../utils/format.js';
 
 function HorizontalBarChart({ data = [], nameKey = 'name', valueKey = 'value', title = 'Top 10' }) {
@@ -265,6 +266,7 @@ function renderExecutiveSnapshot(data, { onNavigateTab, stripOwnsKpis = false } 
       topProduct = null,
       bottomProduct = null,
       trends = [],
+      productGrainWarning = null,
     } = data || {};
 
     const formatNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0);
@@ -386,6 +388,8 @@ function renderExecutiveSnapshot(data, { onNavigateTab, stripOwnsKpis = false } 
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Ranking lengkap ada di tab Product Performance.</div>
           </div>
         </div>
+
+        <GrainWarning warning={productGrainWarning} />
 
         {/* Business Health Analysis */}
         <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
@@ -897,7 +901,7 @@ function InsightCard({ tone, label, detail }) {
 function renderTrafficFunnel(data, { startDate, endDate } = {}) {
     const {
       kpis = {}, trafficOverview = {}, trafficSources = {}, funnel = [], funnelRates = {},
-      comparePeriod = null, insights = {},
+      comparePeriod = null, insights = {}, funnelGrainWarning = null,
     } = data || {};
 
     const growthDriver = insights.trafficGrowthDriver;
@@ -948,8 +952,9 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
             the data doesn't support -- labeled explicitly instead. */}
         <div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            Funnel di bawah merepresentasikan <strong>total seluruh traffic</strong> (Organic + Ads gabungan) — data pada tahap Kunjungan Produk/Tambah Keranjang/Pesanan tidak tersedia terpecah per sumber traffic. Data berbasis laporan bulanan (monthly report) — tidak merepresentasikan performa harian dalam sub-rentang tanggal yang dipilih.
+            Funnel di bawah merepresentasikan <strong>total seluruh traffic</strong> (Organic + Ads gabungan) — data pada tahap Kunjungan Produk/Tambah Keranjang/Pesanan tidak tersedia terpecah per sumber traffic. Angka funnel bersumber dari laporan Product Performance <strong>bulanan</strong>.
           </div>
+          <GrainWarning warning={funnelGrainWarning} />
           {comparePeriod ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
               <FunnelChart data={funnel} title="Analisis Corong Konversi (Funnel)" />
@@ -1864,7 +1869,7 @@ function renderRootCause(data, { startDate, endDate, compareStartDate, compareEn
 function renderProductPerformance(data, { productPerformanceLevel = 'category', setProductPerformanceLevel } = {}) {
     const {
       topByQuantity = [], topByRevenue = [], pareto = { total: 0, items: [] },
-      contributions = [], growthDrivers = [], declining = [],
+      contributions = [], growthDrivers = [], declining = [], grainWarning = null,
     } = data || {};
 
     const levelNoun = productPerformanceLevel === 'variant' ? 'Variasi Produk' : 'Produk';
@@ -1874,8 +1879,8 @@ function renderProductPerformance(data, { productPerformanceLevel = 'category', 
 
         {/* Global level dropdown -- drives every visualization on this tab */}
         <div className="card" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'help' }} title="Seluruh angka pada tab ini bersumber dari laporan produk bulanan (monthly report). Data tidak tersedia untuk sub-rentang tanggal di dalam bulan yang sama, sehingga tidak merepresentasikan performa harian.">
-            ⓘ Data berbasis laporan bulanan — tidak merepresentasikan performa harian dalam sub-rentang tanggal yang dipilih.
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'help' }} title="Seluruh angka pada tab ini bersumber dari laporan produk bulanan (monthly report), sama seperti file Product Performance dari Shopee.">
+            ⓘ Angka bersumber dari laporan produk <strong>bulanan</strong> (cocok dengan file Product Performance Shopee).
           </div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600' }}>Tingkat Analisis Produk</label>
           <select
@@ -1896,6 +1901,8 @@ function renderProductPerformance(data, { productPerformanceLevel = 'category', 
             ))}
           </select>
         </div>
+
+        <GrainWarning warning={grainWarning} />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
           <HorizontalBarChart

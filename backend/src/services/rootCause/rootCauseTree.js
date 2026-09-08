@@ -1,4 +1,5 @@
 import * as dashboardRepo from '../../repositories/dashboardRepository.js';
+import { snapshotGrainWarning } from '../../utils/dateGrain.js';
 
 // ===========================================================================
 // Root Cause Analysis — GMV decomposition tree
@@ -418,10 +419,12 @@ export async function getRootCauseAnalysis({ brandId, startDate, endDate }) {
     tree: gmvNode,
     meta: {
       range: { startDate, endDate },
-      // Monthly-grain sources (Conversion Rate branch) are matched by period
-      // overlap, same as the Traffic & Funnel tab — surfaced so the UI can
-      // warn when the selected range isn't a whole calendar month.
-      conversionRateGrain: 'monthly-snapshot (period overlap)',
+      // Conversion Rate branch (Visitor / ATC / Purchase) reads the monthly
+      // Product Performance snapshot, matched by period overlap. Null when the
+      // range is one clean calendar month; otherwise a caveat the UI renders.
+      conversionRateGrain: snapshotGrainWarning(
+        startDate, endDate, 'Cabang Conversion Rate (Visitor / ATC / Purchase)',
+      ),
     },
   };
 }

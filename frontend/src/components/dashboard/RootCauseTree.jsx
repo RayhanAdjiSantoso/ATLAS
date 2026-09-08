@@ -292,11 +292,10 @@ export default function RootCauseTree({ tree, compareTree = null, hasCompare = f
         </div>
       </div>
 
-      {meta?.conversionRateGrain && (
+      {meta?.conversionRateGrain?.message && (
         <p className="rca-grain">
           <TriangleAlert size={12} strokeWidth={2.4} />
-          Cabang Conversion Rate (Visitor / ATC / Purchase) memakai snapshot bulanan Product Performance —
-          dicocokkan berdasarkan irisan periode. Pilih rentang satu bulan penuh agar angkanya paling akurat.
+          {meta.conversionRateGrain.message}
         </p>
       )}
 

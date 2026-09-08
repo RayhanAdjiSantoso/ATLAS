@@ -1289,10 +1289,10 @@ html:has(.con-bar) {
 .rca-periods { display:flex; flex-direction:column; gap:.25rem; font-size:.75rem; color:var(--text-muted); white-space:nowrap; }
 .rca-periods b { color:var(--text); font-weight:700; }
 
-.rca-grain { display:flex; align-items:flex-start; gap:.4rem; margin:0; padding:.55rem .75rem;
+.rca-grain, .grain-warn { display:flex; align-items:flex-start; gap:.4rem; margin:0; padding:.55rem .75rem;
   font-size:.75rem; line-height:1.5; color:var(--warning); background:var(--warning-bg);
   border:1px solid #f6d999; border-radius:10px; }
-.rca-grain svg { flex:0 0 auto; margin-top:1px; }
+.rca-grain svg, .grain-warn svg { flex:0 0 auto; margin-top:1px; }
 
 .rca-movers { border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-card); padding:.9rem 1rem; box-shadow:var(--shadow-sm); }
 .rca-movers-title { font-size:.7rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--text-muted); margin-bottom:.55rem; }
