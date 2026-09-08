@@ -119,7 +119,11 @@ function KpiStrip({ entry }) {
 }
 
 function ModuleCard({ domain, entry, onOpen, index = 0 }) {
-  const loading = entry.status === 'loading' || entry.status === 'idle';
+  // Domains kept out of the idle prefetch (e.g. Root Cause Analysis, which
+  // costs several queries per period) sit at status 'idle' until opened —
+  // that must read as "open to load", not a skeleton that never resolves.
+  const deferred = domain.prefetch === false && entry.status === 'idle';
+  const loading = !deferred && (entry.status === 'loading' || entry.status === 'idle');
   const failed = entry.status === 'error';
   const headline = entry.status === 'ready' ? HEADLINES[domain.key](entry.data) : null;
 
@@ -130,12 +134,14 @@ function ModuleCard({ domain, entry, onOpen, index = 0 }) {
       <div className="con-mod-val">
         {loading && <span className="con-skel is-wide" />}
         {failed && <span className="con-null" title={entry.error}>&mdash;</span>}
+        {deferred && <span className="con-null" title="Belum dimuat">&mdash;</span>}
         {headline && <Figure text={headline.value} absentReason={headline.caption} />}
       </div>
 
       <div className="con-mod-cap">
         {loading && <span className="con-skel is-narrow" style={{ height: '.7rem' }} />}
         {failed && 'Gagal dimuat. Buka domain ini untuk mencoba lagi.'}
+        {deferred && domain.question}
         {headline && headline.caption}
       </div>
 

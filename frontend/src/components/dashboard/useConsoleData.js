@@ -123,6 +123,7 @@ export function useConsoleData({ filters, activeKey, productLevel }) {
     let timer;
 
     const pending = () => DOMAINS
+      .filter((d) => d.prefetch !== false)
       .map((d) => d.key)
       .filter((k) => read(k).status === 'idle');
 
