@@ -162,7 +162,6 @@
 .brand-settings {
   --brand-ease: cubic-bezier(.16,1,.3,1);
   --ds-months: 6;
-  --ds-cols: minmax(190px,1.5fr) repeat(var(--ds-months),minmax(46px,62px)) minmax(0,1fr) 118px 40px;
   max-width: 1280px; margin: 0 auto;
   padding-top: clamp(1rem,2.4vw,2.2rem); padding-bottom: 4.5rem;
 }
@@ -333,7 +332,7 @@
 .brand-cov-legend-hint { margin-left:auto; font-style:italic; }
 
 /* ── Data & file: platform panel ──────────────────────────────────── */
-.brand-market-panel { margin-top:.55rem; }
+.brand-market-panel { margin-top:.55rem; --ds-cols:minmax(180px,1.3fr) repeat(var(--ds-months),minmax(52px,70px)) minmax(150px,1fr) 112px 40px; }
 .brand-market-banner { position:relative; isolation:isolate; overflow:hidden; display:flex; align-items:center; gap:1rem; padding:.95rem 1.1rem; border:1px solid color-mix(in srgb,var(--mk-accent) 22%,var(--border)); border-radius:16px 16px 0 0; background:linear-gradient(110deg,var(--mk-tint),rgba(255,255,255,.9) 62%); }
 .brand-market-banner-glow { position:absolute; z-index:-1; inset:-120% 55% -120% -20%; background:radial-gradient(closest-side,color-mix(in srgb,var(--mk-wash,var(--mk-accent)) 30%,transparent),transparent); filter:blur(10px); animation:brand-aurora 13s ease-in-out infinite alternate; pointer-events:none; }
 .brand-market-mark { display:grid; place-items:center; flex:0 0 auto; width:40px; height:40px; border-radius:13px; color:#fff; background:linear-gradient(145deg,color-mix(in srgb,var(--mk-accent) 78%,#fff),var(--mk-accent)); font-size:1rem; font-weight:840; box-shadow:0 8px 20px color-mix(in srgb,var(--mk-accent) 34%,transparent); }
@@ -392,9 +391,14 @@
 .brand-cov.is-empty b { color:#b3bdd2; font-weight:700; }
 .brand-cov.is-empty:hover b { color:var(--cov-accent,var(--acc)); }
 .brand-cov.is-busy { opacity:.6; }
-/* A month assembled from several parts says so, so "31" from two files is
-   never mistaken for one complete export. */
-.brand-cov-parts { position:absolute; top:1px; right:2px; font-size:.5rem; font-style:normal; font-weight:800; line-height:1; padding:1px 2px; border-radius:3px; color:var(--cov-accent); background:color-mix(in srgb,var(--cov-accent) 12%,#fff); }
+/* The column beside Status was dead space; it now carries the month's parts
+   and the button that adds one, so a split export is handled in the row it
+   belongs to instead of through a badge nobody can read. */
+.brand-ds-parts { display:flex; align-items:center; flex-wrap:wrap; gap:.28rem; min-width:0; }
+.brand-ds-parts em { flex:0 0 auto; padding:.16rem .34rem; border-radius:5px; color:var(--cov-accent,var(--mk-accent)); background:color-mix(in srgb,var(--mk-accent) 10%,#fff); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mk-accent) 20%,transparent); font-size:.6rem; font-style:normal; font-weight:750; font-variant-numeric:tabular-nums lining-nums; white-space:nowrap; }
+.brand-ds-addpart { display:inline-flex; align-items:center; gap:.2rem; flex:0 0 auto; padding:.2rem .4rem; color:var(--text-muted); border:1px dashed var(--border); border-radius:6px; background:transparent; font:inherit; font-size:.63rem; font-weight:700; cursor:pointer; transition:color .16s ease,border-color .16s ease,background .16s ease; }
+.brand-ds-addpart:hover { color:var(--mk-accent); border-color:color-mix(in srgb,var(--mk-accent) 45%,transparent); background:color-mix(in srgb,var(--mk-accent) 7%,#fff); border-style:solid; }
+.brand-ds-head-parts small { margin-left:.25rem; font-size:.52rem; font-weight:700; opacity:.7; letter-spacing:0; text-transform:none; }
 .brand-cov.is-ref { justify-self:stretch; justify-content:flex-start; padding:0 .6rem; color:var(--text-muted); background:repeating-linear-gradient(135deg,#f8fafd,#f8fafd 5px,#f2f5fb 5px,#f2f5fb 10px); font-size:.66rem; font-weight:650; cursor:default; }
 .brand-cov.is-ref:hover { transform:none; box-shadow:inset 0 0 0 1px #e3e9f5; }
 
@@ -455,7 +459,7 @@
   .brand-data-summary>div:nth-child(-n+2) { border-bottom:1px solid var(--rule); }
   .brand-market-months { order:3; width:100%; margin-left:0; }
   .brand-market-banner { flex-wrap:wrap; }
-  .brand-settings { --ds-cols:minmax(150px,1.2fr) repeat(var(--ds-months),minmax(38px,52px)) minmax(0,1fr) 104px 36px; }
+  .brand-market-panel { --ds-cols:minmax(140px,1.1fr) repeat(var(--ds-months),minmax(42px,58px)) minmax(110px,1fr) 100px 36px; }
 }
 @media (max-width:900px) {
   .brand-hero-main { flex-direction:column; align-items:flex-start; }
@@ -464,7 +468,7 @@
   .brand-direction-grid .brand-field:last-child { grid-column:span 2; border-right:0; }
 }
 @media (max-width:760px) {
-  .brand-settings { --ds-cols:minmax(0,1fr) 0 108px 40px; }
+  .brand-market-panel { --ds-cols:minmax(0,1fr) auto 104px 40px; }
   .brand-cov,.brand-ds-head-month { display:none; }
   .brand-cov.is-ref { display:none; }
   .brand-ds-detail-inner { padding-left:.85rem; }

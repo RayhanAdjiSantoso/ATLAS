@@ -381,13 +381,18 @@ function DayStrip({ merged, month, wash }) {
   );
 }
 
-function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick, onDelete, busyKey }) {
+function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick, onDelete, busyKey, targetMonth }) {
   const [open, setOpen] = useState(false);
   const isReference = dataset.kind === 'reference';
   const status = datasetStatus(dataset, months, lookup, platform.id);
   const detailMonths = isReference ? [] : months;
   const refFile = isReference ? lookup.get(fileKey(platform.id, dataset.channel, null))?.[0] : null;
   const lastMonth = months[months.length - 1];
+  // Which month a "+ part" lands in: the one the panel is filtered to, or the
+  // most recent one on screen. Never ambiguous, and it is the same month the
+  // row's upload button uses.
+  const partMonth = targetMonth ?? lastMonth;
+  const targetParts = isReference ? [] : (lookup.get(fileKey(platform.id, dataset.channel, partMonth?.key)) ?? []);
 
   return (
     <motion.div
@@ -427,12 +432,28 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
               >
                 <i aria-hidden="true" />
                 <b>{busyKey === key ? '…' : state === 'empty' ? '+' : state === 'snapshot' ? '✓' : merged.coveredDays}</b>
-                {merged?.parts.length > 1 && <em className="brand-cov-parts">{merged.parts.length}</em>}
               </button>
             );
           })}
 
-        <span />
+        <span className="brand-ds-parts">
+          {targetParts.map((part) => (
+            <em key={part.id} title={`${part.original_filename}${part.row_count ? ` · ${part.row_count.toLocaleString('id-ID')} baris` : ''}`}>
+              {part.period_start && part.period_end
+                ? `${Number(part.period_start.slice(8, 10))}–${Number(part.period_end.slice(8, 10))}`
+                : 'snapshot'}
+            </em>
+          ))}
+          {!isReference && targetMonth && (
+            <button
+              type="button" className="brand-ds-addpart"
+              onClick={() => onPick(dataset, targetMonth)}
+              title={`Tambah file untuk ${targetMonth.full} — opsional, isi jika ekspor Shopee terbagi (part 1 of 2)`}
+            >
+              <Plus size={12} /> {targetParts.length ? 'part' : 'file'}
+            </button>
+          )}
+        </span>
         <span className={`brand-ds-status is-${status.tone}`}>
           {status.tone === 'ok' && <Check size={12} />}{status.label}
         </span>
@@ -597,7 +618,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, bu
           {months.map((month) => (
             <span key={month.key} className="brand-ds-head-month">{month.label}<small>{String(month.year).slice(2)}</small></span>
           ))}
-          <span />
+          <span className="brand-ds-head-parts">Part <small>opsional</small></span>
           <span>Status</span>
           <span />
         </div>
@@ -605,6 +626,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, bu
           <DatasetRow
             key={dataset.channel} platform={platform} dataset={dataset} months={months} lookup={lookup}
             index={index} reduced={reduced} onPick={onPick} onDelete={onDelete} busyKey={busyKey}
+            targetMonth={focusMonth ?? months[months.length - 1]}
           />
         ))}
       </div>
