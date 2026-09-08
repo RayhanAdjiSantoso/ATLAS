@@ -16,7 +16,9 @@ router.post('/', brandController.createBrand);
 router.get('/:brandId/profile', brandLibraryController.getProfile);
 router.put('/:brandId/profile', brandLibraryController.saveProfile);
 router.get('/:brandId/library', brandLibraryController.listLibrary);
-router.post('/:brandId/library', uploadDataFile.single('file'), brandLibraryController.uploadLibraryFile);
+// .array, not .single: a month whose export Shopee split into parts is
+// filed in one action (see migration 016).
+router.post('/:brandId/library', uploadDataFile.array('file', 12), brandLibraryController.uploadLibraryFile);
 router.delete('/:brandId/library/:fileId', brandLibraryController.deleteLibraryFile);
 router.get('/:brandId/library/:fileId/download', brandLibraryController.downloadLibraryFile);
 

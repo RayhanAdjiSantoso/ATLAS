@@ -90,7 +90,7 @@ const LIBRARY_COLUMNS = `
   f.period_month::text AS period_month,
   f.period_start::text AS period_start,
   f.period_end::text AS period_end,
-  f.covered_days, f.day_bitmap, f.row_count, f.period_source, f.dashboard_upload_id,
+  f.covered_days, f.day_bitmap, f.row_count, f.period_source, f.dashboard_upload_id, f.part_index,
   f.original_filename, f.byte_size, f.uploaded_at, f.updated_at,
   u.full_name AS uploaded_by_name
 `;
@@ -101,7 +101,7 @@ export async function listLibrary(brandId) {
      FROM ads_reports.brand_library_files f
      LEFT JOIN public.users u ON u.user_id = f.uploaded_by
      WHERE f.brand_id = $1
-     ORDER BY f.platform, f.channel, f.period_month NULLS FIRST`,
+     ORDER BY f.platform, f.channel, f.period_month NULLS FIRST, f.part_index`,
     [brandId],
   );
   return result.rows;
@@ -109,19 +109,19 @@ export async function listLibrary(brandId) {
 
 export async function upsertLibraryFile({
   brandId, platform, channel, periodMonth, periodStart, periodEnd,
-  coveredDays, dayBitmap, rowCount, periodSource, filename, buffer, userId,
+  coveredDays, dayBitmap, rowCount, periodSource, partIndex = 1, filename, buffer, userId,
 }) {
   // Two upsert targets because the uniqueness of a reference file (no
   // month) is expressed by a different partial index than a monthly one.
   const conflict = periodMonth
-    ? '(brand_id, platform, channel, period_month) WHERE period_month IS NOT NULL'
+    ? '(brand_id, platform, channel, period_month, part_index) WHERE period_month IS NOT NULL'
     : '(brand_id, platform, channel) WHERE period_month IS NULL';
 
   const result = await pool.query(
     `INSERT INTO ads_reports.brand_library_files
        (brand_id, platform, channel, period_month, period_start, period_end,
-        covered_days, day_bitmap, row_count, period_source, original_filename, byte_size, raw_file, uploaded_by)
-     VALUES ($1, $2::ads_reports.platform_enum, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        covered_days, day_bitmap, row_count, period_source, part_index, original_filename, byte_size, raw_file, uploaded_by)
+     VALUES ($1, $2::ads_reports.platform_enum, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      ON CONFLICT ${conflict} DO UPDATE SET
        period_start = EXCLUDED.period_start,
        period_end = EXCLUDED.period_end,
@@ -129,6 +129,7 @@ export async function upsertLibraryFile({
        day_bitmap = EXCLUDED.day_bitmap,
        row_count = EXCLUDED.row_count,
        period_source = EXCLUDED.period_source,
+       part_index = EXCLUDED.part_index,
        original_filename = EXCLUDED.original_filename,
        byte_size = EXCLUDED.byte_size,
        raw_file = EXCLUDED.raw_file,
@@ -137,7 +138,7 @@ export async function upsertLibraryFile({
      RETURNING id`,
     [
       brandId, platform, channel, periodMonth, periodStart, periodEnd,
-      coveredDays, dayBitmap, rowCount, periodSource ?? null, filename, buffer?.length ?? null, buffer ?? null, userId ?? null,
+      coveredDays, dayBitmap, rowCount, periodSource ?? null, partIndex, filename, buffer?.length ?? null, buffer ?? null, userId ?? null,
     ],
   );
 
@@ -187,14 +188,27 @@ export async function setDashboardUpload(fileId, uploadId) {
   );
 }
 
-export async function findLibraryFile(brandId, platform, channel, periodMonth) {
+// Every part already filed under one month slot, oldest part first.
+export async function listSlotParts(brandId, platform, channel, periodMonth) {
   const result = await pool.query(
-    `SELECT id, dashboard_upload_id FROM ads_reports.brand_library_files
+    `SELECT id, part_index, original_filename, dashboard_upload_id
+     FROM ads_reports.brand_library_files
      WHERE brand_id = $1 AND platform = $2::ads_reports.platform_enum AND channel = $3
-       AND period_month IS NOT DISTINCT FROM $4`,
+       AND period_month IS NOT DISTINCT FROM $4
+     ORDER BY part_index`,
     [brandId, platform, channel, periodMonth],
   );
-  return result.rows[0] ?? null;
+  return result.rows;
+}
+
+// Where a newly uploaded file belongs in the slot. Re-uploading a file with
+// the same name replaces that part rather than adding a duplicate of it —
+// picking the same export twice is a slip, not a request for two copies.
+export function placePart(existingParts, filename) {
+  const sameName = existingParts.find((part) => part.original_filename === filename);
+  if (sameName) return { partIndex: sameName.part_index, previousUploadId: sameName.dashboard_upload_id, replaced: true };
+  const next = existingParts.reduce((max, part) => Math.max(max, part.part_index), 0) + 1;
+  return { partIndex: next, previousUploadId: null, replaced: false };
 }
 
 export async function deleteLibraryFile(brandId, fileId) {

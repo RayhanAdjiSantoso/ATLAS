@@ -3,7 +3,7 @@ import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-m
 import {
   Archive, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
   CloudUpload, Database, Download, FileSpreadsheet, Layers3, Loader2, Plus, Save,
-  Sparkles, Trash2, Upload,
+  Search, Sparkles, Trash2, Upload,
 } from 'lucide-react';
 import api from '../api/client';
 import atlasIcon from '../assets/atlas-icon.png';
@@ -157,12 +157,36 @@ function buildMonthAxis(files) {
 
 const fileKey = (platform, channel, month) => `${platform}:${channel}:${month ?? 'ref'}`;
 
-function cellState(file, month) {
-  if (!file) return 'empty';
+// Shopee splits a big month's export into parts, so a slot holds a list.
+// The month's coverage is their union: part 1 stopping on the 24th and part 2
+// running from the 24th is a complete month, not two partial ones.
+function mergeParts(parts, month) {
+  if (!parts?.length) return null;
+  const days = month?.days ?? 0;
+  let bitmap = null;
+  if (days) {
+    const merged = Array(days).fill('0');
+    for (const part of parts) {
+      const bits = part.day_bitmap ?? '';
+      for (let i = 0; i < days; i += 1) if (bits[i] === '1') merged[i] = '1';
+    }
+    bitmap = merged.join('');
+  }
+  return {
+    parts,
+    dayBitmap: bitmap,
+    coveredDays: bitmap ? [...bitmap].filter((c) => c === '1').length : 0,
+    rowCount: parts.reduce((total, part) => total + (part.row_count ?? 0), 0),
+    inDashboard: parts.some((part) => part.dashboard_upload_id),
+  };
+}
+
+function cellState(merged, month) {
+  if (!merged) return 'empty';
   if (!month) return 'ref';
-  if (file.covered_days >= month.days) return 'full';
-  if (file.covered_days > 0) return 'partial';
-  // A file is there but no date column could be read — a monthly snapshot
+  if (merged.coveredDays >= month.days) return 'full';
+  if (merged.coveredDays > 0) return 'partial';
+  // Files are there but no date column could be read — a monthly snapshot
   // export (Product Performance, some ad exports). Saying "belum ada" would
   // be a lie; saying "30 hari" would be a bigger one.
   return 'snapshot';
@@ -188,7 +212,7 @@ function platformSummary(platform, months, lookup) {
     ? lookup.has(fileKey(platform.id, d.channel, null))
     : months.some((m) => lookup.has(fileKey(platform.id, d.channel, m.key))))).length;
   const monthStates = months.map((month) => {
-    const states = core.map((d) => cellState(lookup.get(fileKey(platform.id, d.channel, month.key)), month));
+    const states = core.map((d) => cellState(mergeParts(lookup.get(fileKey(platform.id, d.channel, month.key)), month), month));
     if (states.length && states.every((s) => s !== 'empty')) return { ...month, state: 'full' };
     if (states.some((s) => s !== 'empty')) return { ...month, state: 'partial' };
     return { ...month, state: 'empty' };
@@ -200,6 +224,7 @@ function platformSummary(platform, months, lookup) {
 
 function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const wrap = useRef(null);
 
   useEffect(() => {
@@ -211,10 +236,23 @@ function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
+  // 141 brands is past the point where scrolling is a reasonable way to find
+  // one; typing two letters is not.
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return brands;
+    return brands
+      .filter((item) => item.brand_name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aStarts = a.brand_name.toLowerCase().startsWith(q);
+        const bStarts = b.brand_name.toLowerCase().startsWith(q);
+        return aStarts === bStarts ? 0 : aStarts ? -1 : 1;
+      });
+  }, [brands, query]);
+
   return (
     <div className="brand-picker" ref={wrap}>
-      <button type="button" className={`brand-picker-btn ${open ? 'is-open' : ''}`} onClick={() => setOpen((v) => !v)} aria-haspopup="listbox" aria-expanded={open}>
-        <span className="brand-picker-mark" aria-hidden="true">{(brand?.brand_name ?? '?').slice(0, 1)}</span>
+      <button type="button" className={`brand-picker-btn ${open ? 'is-open' : ''}`} onClick={() => { setQuery(''); setOpen((v) => !v); }} aria-haspopup="listbox" aria-expanded={open}>
         <span className="brand-picker-text">
           <strong>{brand?.brand_name ?? 'Pilih brand'}</strong>
           <small>{sector || `${brands.length} brand terdaftar`}</small>
@@ -223,27 +261,36 @@ function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
       </button>
       <AnimatePresence>
         {open && (
-          <motion.ul
-            className="brand-picker-menu" role="listbox"
+          <motion.div
+            className="brand-picker-menu"
             initial={reduced ? { opacity: 0 } : { opacity: 0, y: -6, scale: .98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4, scale: .99 }}
             transition={{ duration: .16, ease: EASE }}
           >
-            {brands.map((item) => (
-              <li key={item.brand_id}>
-                <button
-                  type="button" role="option" aria-selected={item.brand_id === brand?.brand_id}
-                  className={item.brand_id === brand?.brand_id ? 'is-active' : ''}
-                  onClick={() => { onSelect(item); setOpen(false); }}
-                >
-                  <span className="brand-picker-mark" aria-hidden="true">{item.brand_name.slice(0, 1)}</span>
-                  <span className="brand-picker-text"><strong>{item.brand_name}</strong></span>
-                  {item.brand_id === brand?.brand_id && <Check size={15} />}
-                </button>
-              </li>
-            ))}
-          </motion.ul>
+            <label className="brand-picker-search">
+              <Search size={14} aria-hidden="true" />
+              <input
+                value={query} onChange={(event) => setQuery(event.target.value)}
+                placeholder="Cari brand…" autoFocus aria-label="Cari brand"
+              />
+            </label>
+            <ul role="listbox">
+              {shown.map((item) => (
+                <li key={item.brand_id}>
+                  <button
+                    type="button" role="option" aria-selected={item.brand_id === brand?.brand_id}
+                    className={item.brand_id === brand?.brand_id ? 'is-active' : ''}
+                    onClick={() => { onSelect(item); setOpen(false); }}
+                  >
+                    <span>{item.brand_name}</span>
+                    {item.brand_id === brand?.brand_id && <Check size={14} />}
+                  </button>
+                </li>
+              ))}
+              {!shown.length && <li className="brand-picker-empty">Tidak ada brand cocok dengan "{query}".</li>}
+            </ul>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -314,14 +361,15 @@ function SaveBar({ profile, saving, dirty, onSave }) {
 
 /* ── Data & file ────────────────────────────────────────────────────────── */
 
-function DayStrip({ file, month, wash }) {
-  const bitmap = file?.day_bitmap ?? '';
+function DayStrip({ merged, month, wash }) {
+  const bitmap = merged?.dayBitmap ?? '';
+  const parts = merged?.parts?.length ?? 0;
   return (
     <div className="brand-daygrid-month">
       <div className="brand-daygrid-head">
         <strong>{month.full}</strong>
-        <span className={!file ? 'is-empty' : file.covered_days >= month.days ? 'is-full' : file.covered_days > 0 ? 'is-partial' : 'is-empty'}>
-          {file ? (file.covered_days > 0 ? `${file.covered_days} / ${month.days} hari` : 'snapshot bulanan') : 'belum ada'}
+        <span className={!merged ? 'is-empty' : merged.coveredDays >= month.days ? 'is-full' : merged.coveredDays > 0 ? 'is-partial' : 'is-empty'}>
+          {merged ? (merged.coveredDays > 0 ? `${merged.coveredDays} / ${month.days} hari${parts > 1 ? ` · ${parts} part` : ''}` : 'snapshot bulanan') : 'belum ada'}
         </span>
       </div>
       <div className="brand-daygrid-pips" style={{ '--pip-accent': wash }}>
@@ -338,7 +386,7 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
   const isReference = dataset.kind === 'reference';
   const status = datasetStatus(dataset, months, lookup, platform.id);
   const detailMonths = isReference ? [] : months;
-  const refFile = isReference ? lookup.get(fileKey(platform.id, dataset.channel, null)) : null;
+  const refFile = isReference ? lookup.get(fileKey(platform.id, dataset.channel, null))?.[0] : null;
   const lastMonth = months[months.length - 1];
 
   return (
@@ -363,22 +411,23 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
               {refFile ? refFile.original_filename : 'Tanpa periode — berlaku untuk semua bulan'}
             </span>
           : months.map((month) => {
-            const file = lookup.get(fileKey(platform.id, dataset.channel, month.key));
-            const state = cellState(file, month);
-            const pct = file && file.covered_days ? Math.round((file.covered_days / month.days) * 100) : state === 'snapshot' ? 100 : 0;
             const key = fileKey(platform.id, dataset.channel, month.key);
+            const merged = mergeParts(lookup.get(key), month);
+            const state = cellState(merged, month);
+            const pct = merged?.coveredDays ? Math.round((merged.coveredDays / month.days) * 100) : state === 'snapshot' ? 100 : 0;
             return (
               <button
                 key={month.key} type="button"
                 className={`brand-cov is-${state} ${busyKey === key ? 'is-busy' : ''}`}
                 style={{ '--cov-accent': platform.accent, '--cov-wash': platform.wash, '--cov-fill': `${pct}%` }}
                 onClick={() => onPick(dataset, month)}
-                title={file
-                  ? `${month.full} · ${file.covered_days > 0 ? `${file.covered_days} dari ${month.days} hari` : 'snapshot bulanan'} · ${file.original_filename} (klik untuk ganti)`
+                title={merged
+                  ? `${month.full} · ${merged.coveredDays > 0 ? `${merged.coveredDays} dari ${month.days} hari` : 'snapshot bulanan'} · ${merged.parts.length} file (klik untuk menambah part)`
                   : `${month.full} · belum ada file (klik untuk upload)`}
               >
                 <i aria-hidden="true" />
-                <b>{busyKey === key ? '…' : state === 'empty' ? '+' : state === 'snapshot' ? '✓' : file.covered_days}</b>
+                <b>{busyKey === key ? '…' : state === 'empty' ? '+' : state === 'snapshot' ? '✓' : merged.coveredDays}</b>
+                {merged?.parts.length > 1 && <em className="brand-cov-parts">{merged.parts.length}</em>}
               </button>
             );
           })}
@@ -411,16 +460,24 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                 : (
                   <div className="brand-daygrid">
                     {detailMonths.map((month) => (
-                      <DayStrip key={month.key} month={month} wash={platform.wash} file={lookup.get(fileKey(platform.id, dataset.channel, month.key))} />
+                      <DayStrip key={month.key} month={month} wash={platform.wash} merged={mergeParts(lookup.get(fileKey(platform.id, dataset.channel, month.key)), month)} />
                     ))}
                   </div>
                 )}
               <div className="brand-ds-files">
-                {(isReference ? (refFile ? [[null, refFile]] : []) : months.map((m) => [m, lookup.get(fileKey(platform.id, dataset.channel, m.key))]).filter(([, f]) => f)).map(([month, file]) => (
+                {(isReference
+                  ? (refFile ? [[null, refFile]] : [])
+                  : months.flatMap((m) => (lookup.get(fileKey(platform.id, dataset.channel, m.key)) ?? []).map((f) => [m, f]))
+                ).map(([month, file]) => (
                   <div className="brand-ds-file" key={file.id}>
                     <span className="brand-ds-fileinfo">
                       <FileSpreadsheet size={14} />
-                      <strong>{month ? month.full : 'Referensi'}</strong>
+                      <strong>
+                        {month ? month.full : 'Referensi'}
+                        {file.period_start && file.period_end && (lookup.get(fileKey(platform.id, dataset.channel, month?.key))?.length ?? 0) > 1
+                          ? ` · ${Number(file.period_start.slice(8, 10))}–${Number(file.period_end.slice(8, 10))}`
+                          : ''}
+                      </strong>
                       {file.original_filename}
                       {file.row_count ? ` · ${file.row_count.toLocaleString('id-ID')} baris` : ''}
                       {file.period_source ? ` · ${PERIOD_SOURCE_LABEL[file.period_source] ?? file.period_source}` : ''}
@@ -434,6 +491,12 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                     </span>
                   </div>
                 ))}
+                {!isReference && (
+                  <p className="brand-ds-note">
+                    <CircleAlert size={14} />
+                    Ekspor yang terbagi (part 1 of 2) boleh diunggah ke bulan yang sama — ATLAS menggabungkan harinya dan tidak menghitung ganda baris yang tumpang tindih.
+                  </p>
+                )}
                 {!isReference && !months.some((m) => lookup.has(fileKey(platform.id, dataset.channel, m.key))) && (
                   <p className="brand-ds-note"><CircleAlert size={14} /> Belum ada file untuk dataset ini pada rentang bulan yang sedang ditampilkan.</p>
                 )}
@@ -551,7 +614,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, bu
         <span className="brand-drop-copy">
           <strong>Upload file {platform.label} · {target?.full}</strong>
           <small>
-            Klik sel bulan pada tabel di atas untuk menaruh file tepat di bulan itu—atau pilih bulan di rail untuk mengunci semua upload ke satu periode.
+            Klik sel bulan pada tabel di atas untuk menaruh file tepat di bulan itu. Ekspor yang Shopee bagi jadi beberapa part bisa dipilih sekaligus—harinya digabung, baris yang tumpang tindih tidak dihitung dua kali.
           </small>
         </span>
         <span className="brand-drop-cta">{focusMonth ? `Terkunci ke ${focusMonth.full}` : 'Bulan mengikuti sel'}</span>
@@ -736,7 +799,15 @@ export default function BrandSettingsPage() {
 
   const lookup = useMemo(() => {
     const map = new Map();
-    for (const file of files) map.set(fileKey(file.platform, file.channel, file.period_month?.slice(0, 7) ?? null), file);
+    for (const file of files) {
+      const key = fileKey(file.platform, file.channel, file.period_month?.slice(0, 7) ?? null);
+      const parts = map.get(key) ?? [];
+      parts.push(file);
+      map.set(key, parts);
+    }
+    for (const parts of map.values()) {
+      parts.sort((a, b) => (a.period_start ?? '').localeCompare(b.period_start ?? '') || a.part_index - b.part_index);
+    }
     return map;
   }, [files]);
 
@@ -774,32 +845,35 @@ export default function BrandSettingsPage() {
   };
 
   const handleFile = async (event) => {
-    const file = event.target.files?.[0];
+    const picked = [...(event.target.files ?? [])];
     const target = pending.current;
-    if (!file || !target || !brand) return;
+    if (!picked.length || !target || !brand) return;
 
     const key = fileKey(marketId, target.dataset.channel, target.month?.key ?? null);
     setBusyKey(key);
     setNotice(null);
     try {
       const form = new FormData();
-      form.append('file', file);
+      // One field name, several files: a split month is filed in one action.
+      for (const item of picked) form.append('file', item);
       form.append('platform', marketId);
       form.append('channel', target.dataset.channel);
       if (target.month) form.append('month', target.month.key);
       const { data } = await api.post(`/brands/${brand.brand_id}/library`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setFiles((current) => [...current.filter((f) => f.id !== data.file.id), data.file]);
+      const saved = data.files ?? [data.file];
+      const savedIds = new Set(saved.map((f) => f.id));
+      setFiles((current) => [...current.filter((f) => !savedIds.has(f.id)), ...saved]);
       setError(null);
       const where = `${target.dataset.name} · ${target.month ? target.month.full : 'referensi'}`;
-      const parts = [data.warning ?? `${data.file.covered_days} hari terdeteksi`];
+      const parts = [data.warnings?.length ? data.warnings.join(' ') : `${saved.length} file · ${saved.reduce((t, f) => t + (f.covered_days ?? 0), 0)} hari terdeteksi`];
       // The three Dashboard datasets are also parsed into the fact tables
       // Business Overview reads; say so, because "tersimpan" alone left the
       // dashboard's zeros unexplained.
-      if (data.imported?.rowsInserted != null) parts.push(`${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard`);
-      if (data.imported?.error) parts.push(`gagal masuk ke Dashboard: ${data.imported.error}`);
+      if (data.imported?.rowsInserted) parts.push(`${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard`);
+      if (data.imported?.errors?.length) parts.push(`gagal masuk ke Dashboard: ${data.imported.errors.join('; ')}`);
       setNotice(`${where} tersimpan — ${parts.join(' · ')}.`);
     } catch (err) {
-      setNotice(describeError(err, `Gagal mengunggah ${file.name}`));
+      setNotice(describeError(err, `Gagal mengunggah ${picked.map((f) => f.name).join(', ')}`));
     } finally {
       setBusyKey(null);
       pending.current = null;
@@ -840,7 +914,7 @@ export default function BrandSettingsPage() {
 
   return (
     <div className="con brand-settings">
-      <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" hidden onChange={handleFile} />
+      <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" multiple hidden onChange={handleFile} />
 
       <header className="brand-hero">
         <span className="brand-hero-fx" aria-hidden="true"><i className="brand-hero-aurora" /><i className="brand-hero-grid" /></span>
