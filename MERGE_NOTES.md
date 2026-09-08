@@ -64,6 +64,14 @@ npm run migrate             # jalankan sekali; aman diulang
 Tanpa `GEMINI_API_KEY`, seluruh aplikasi tetap jalan normal — hanya tombol
 "Generate AI Summary" yang menjawab dengan pesan bahwa key belum diset.
 
+**Batas kuota yang perlu diketahui sebelum tim memakainya rutin.** Key free
+tier Google dibatasi **20 request per hari per model** (`GenerateRequests
+PerDayPerProjectPerModel-FreeTier`). Satu klik Generate = satu request; hasil
+yang sama tidak memanggil model lagi karena di-cache per isi payload. Kalau
+satu model kehabisan jatah, tiap model punya bucket sendiri — ganti lewat
+`GEMINI_MODEL` tanpa menyentuh kode. Untuk pemakaian harian oleh beberapa
+orang, aktifkan billing di project Google-nya.
+
 **Urutannya penting:** migrate dulu, baru deploy backend. Backend versi baru
 menulis ke kolom yang belum ada kalau migration belum jalan.
 
