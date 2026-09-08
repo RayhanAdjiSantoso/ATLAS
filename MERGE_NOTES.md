@@ -74,19 +74,17 @@ versi lama — tabel dan kolom baru tidak disentuh olehnya.
 
 ## 3. Soal `npm run migrate`
 
-`backend/scripts/migrate.js` menjalankan **semua** file di `migrations/`
-berurutan setiap kali, tanpa tabel pencatat. Itu memang desainnya: setiap file
-ditulis idempotent (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`,
-`CREATE INDEX IF NOT EXISTS`), jadi menjalankan ulang di database yang sudah
-terisi bukan masalah dan tidak menyentuh data.
+Setiap file dijalankan **sekali**, dicatat di `public.schema_migrations`, lalu
+dilewati selamanya. Menjalankan ulang perintahnya aman dan tidak melakukan
+apa-apa kalau tidak ada file baru.
 
-Satu catatan yang sudah dibuktikan, bukan asumsi: `015` sempat **tidak**
-idempotent karena `016` menghapus lalu mengganti salah satu indeksnya, jadi
-menjalankan migrate untuk kedua kalinya gagal di tengah jalan. Sudah
-diperbaiki (indeks lama hanya dibuat kalau kolom `part_index` belum ada), dan
-sudah diverifikasi dengan menjalankan `npm run migrate` dua kali berturut-turut
-sampai 17 file lolos tanpa error. Kalau kamu pernah menarik branch ini sebelum
-perbaikan itu, tarik ulang dulu.
+```bash
+cd backend
+npm run migrate                  # jalankan yang belum pernah dijalankan
+npm run migrate -- --status      # daftar file + sudah/belum
+npm run migrate -- --baseline    # tandai semua sudah dijalankan, TANPA eksekusi
+npm run migrate -- --redo 015_brand_library.sql   # paksa jalankan ulang satu file
+```
 
 Skrip memakai `DATABASE_URL` dari `backend/.env`. Untuk Neon, pakai connection
 string **unpooled** saat migrate (butuh sesi sungguhan):
@@ -94,6 +92,30 @@ string **unpooled** saat migrate (butuh sesi sungguhan):
 ```bash
 DATABASE_URL="$DATABASE_URL_UNPOOLED" node scripts/migrate.js
 ```
+
+**Yang berubah dan kenapa.** Sebelumnya skrip ini menjalankan ulang *semua*
+file pada setiap run tanpa catatan apa pun, dan keamanannya bersandar pada
+setiap file ditulis idempotent. Itu bertahan sampai ada migration yang
+mengubah hasil migration lain: `016` menghapus lalu mengganti indeks milik
+`015`, jadi run kedua mencoba membuat ulang aturan "satu file per bulan" di
+atas tabel yang sekarang sah berisi beberapa part — gagal, dan membawa
+seluruh migrasi ikut gagal. Ini bukan kasus khusus; kelas masalahnya akan
+terulang setiap kali ada migration yang menyentuh objek buatan migration
+sebelumnya.
+
+Pola tabel pencatat ini bukan hal baru di repo — report generator versi
+standalone memakainya (`ads_reports.schema_migrations`, isinya masih ada dari
+Agustus 2026); pola itu hanya hilang saat skripnya ditulis ulang untuk ATLAS.
+
+**Transisi tidak butuh langkah khusus.** Pada run pertama tabel pencatatnya
+masih kosong, jadi semua file dijalankan sekali lagi (semuanya idempotent,
+jadi aman) lalu tercatat. Kalau kamu yakin database produksi sudah mutakhir
+dan tidak mau file lama disentuh sama sekali, jalankan `--baseline` dulu, baru
+`npm run migrate` seperti biasa.
+
+**File migration yang diubah setelah dijalankan** tidak dijalankan ulang
+diam-diam. Skrip menyimpan checksum tiap file dan memberi peringatan berisi
+perintah `--redo`-nya, supaya keputusannya ada di tangan manusia.
 
 Sesudahnya, cek cepat:
 
@@ -114,8 +136,6 @@ WHERE table_schema='public' AND table_name='uploads' AND column_name='raw_file';
 -- AI Summary
 SELECT to_regclass('ads_reports.ai_summaries');
 ```
-
----
 
 ## 4. Backfill — kemungkinan besar TIDAK perlu
 
