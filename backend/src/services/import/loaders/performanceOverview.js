@@ -1,3 +1,4 @@
+import { insertChunked } from '../bulk.js';
 import {
   parseIdr,
   parseIntValue,
@@ -29,53 +30,57 @@ export function detectPerformanceOverviewPeriod(filepath) {
   return { start: toDateString(dates[0]), end: toDateString(dates[dates.length - 1]) };
 }
 
+const DAILY_ORDER_COLUMNS = [
+  'report_date', 'stage_id', 'total_sales_idr', 'total_orders', 'sales_per_order',
+  'products_clicked', 'total_visitors', 'order_conversion_rate',
+  'cancelled_orders', 'cancelled_sales_idr', 'returned_orders', 'returned_sales_idr',
+  'total_buyers', 'new_buyers', 'existing_buyers', 'potential_buyers',
+  'repeat_purchase_rate', 'brand_id', 'upload_id',
+];
+
+const DAILY_CHANNEL_COLUMNS = [
+  'report_date', 'stage_id', 'channel_id', 'sub_source_id',
+  'sales_idr', 'sales_ratio', 'products_viewed', 'products_clicked',
+  'total_orders', 'products_ordered', 'click_percentage', 'conversion_rate',
+  'sales_per_order', 'total_buyers', 'unique_products_viewed', 'unique_products_clicked',
+  'brand_id', 'upload_id',
+];
+
 export async function loadDailyOrderPerformance(client, resolver, filepath, brandId, uploadId) {
-  let inserted = 0;
+  const wb = readWorkbook(filepath);
+  const batch = [];
 
   for (const sheetName of STAGE_SHEETS) {
-    const wb = readWorkbook(filepath);
-    const rows = readSheetAsStrings(wb, sheetName).filter((row) => {
-      const d = parseTs(row['Tanggal'], '%d-%m-%Y');
-      return d != null;
-    });
-
+    const rows = readSheetAsStrings(wb, sheetName).filter((row) => parseTs(row['Tanggal'], '%d-%m-%Y') != null);
     const stageId = await resolver.getOrCreateOne(
       'order_pipeline_stages', 'stage_id', 'stage_name', sheetName,
     );
 
     for (const row of rows) {
-      const result = await client.query(
-        `INSERT INTO daily_order_performance (
-          report_date, stage_id, total_sales_idr, total_orders, sales_per_order,
-          products_clicked, total_visitors, order_conversion_rate,
-          cancelled_orders, cancelled_sales_idr, returned_orders, returned_sales_idr,
-          total_buyers, new_buyers, existing_buyers, potential_buyers,
-          repeat_purchase_rate, brand_id, upload_id
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-        ON CONFLICT (brand_id, report_date, stage_id) DO NOTHING RETURNING id`,
-        [
-          parseTs(row['Tanggal'], '%d-%m-%Y'), stageId,
-          parseIdr(row['Total Penjualan (IDR)']) ?? 0, parseIntValue(row['Total Pesanan']) ?? 0,
-          parseIdr(row['Penjualan per Pesanan']), parseIntValue(row['Produk Diklik']) ?? 0,
-          parseIntValue(row['Total Pengunjung']) ?? 0, parsePct(row['Tingkat Konversi Pesanan']),
-          parseIntValue(row['Pesanan Dibatalkan']) ?? 0, parseIdr(row['Penjualan Dibatalkan']) ?? 0,
-          parseIntValue(row['Pesanan Dikembalikan']) ?? 0, parseIdr(row['Penjualan Dikembalikan']) ?? 0,
-          parseIntValue(row['Pembeli']) ?? 0, parseIntValue(row['Total Pembeli Baru']) ?? 0,
-          parseIntValue(row['Total Pembeli Saat Ini']) ?? 0, parseIntValue(row['Total Potensi Pembeli']) ?? 0,
-          parsePct(row['Tingkat Pembelian Berulang']),
-          brandId, uploadId,
-        ],
-      );
-      if (result.rowCount > 0) inserted += 1;
+      batch.push([
+        parseTs(row['Tanggal'], '%d-%m-%Y'), stageId,
+        parseIdr(row['Total Penjualan (IDR)']) ?? 0, parseIntValue(row['Total Pesanan']) ?? 0,
+        parseIdr(row['Penjualan per Pesanan']), parseIntValue(row['Produk Diklik']) ?? 0,
+        parseIntValue(row['Total Pengunjung']) ?? 0, parsePct(row['Tingkat Konversi Pesanan']),
+        parseIntValue(row['Pesanan Dibatalkan']) ?? 0, parseIdr(row['Penjualan Dibatalkan']) ?? 0,
+        parseIntValue(row['Pesanan Dikembalikan']) ?? 0, parseIdr(row['Penjualan Dikembalikan']) ?? 0,
+        parseIntValue(row['Pembeli']) ?? 0, parseIntValue(row['Total Pembeli Baru']) ?? 0,
+        parseIntValue(row['Total Pembeli Saat Ini']) ?? 0, parseIntValue(row['Total Potensi Pembeli']) ?? 0,
+        parsePct(row['Tingkat Pembelian Berulang']),
+        brandId, uploadId,
+      ]);
     }
   }
 
-  return inserted;
+  return insertChunked(
+    client, 'daily_order_performance', DAILY_ORDER_COLUMNS, batch,
+    'ON CONFLICT (brand_id, report_date, stage_id) DO NOTHING RETURNING id', 300,
+  );
 }
 
 export async function loadDailyChannelPerformance(client, resolver, filepath, brandId, uploadId) {
+  const batch = [];
   const wb = readWorkbook(filepath);
-  let inserted = 0;
 
   const stageAsalSheets = {
     'Pesanan Dibuat': '(pesanan dibuat)Asal',
@@ -131,24 +136,13 @@ export async function loadDailyChannelPerformance(client, resolver, filepath, br
 
         const reportDate = parseTs(col0, '%d-%m-%Y');
         
-        const result = await client.query(
-          `INSERT INTO daily_channel_performance (
-            report_date, stage_id, channel_id, sub_source_id,
-            sales_idr, sales_ratio, products_viewed, products_clicked,
-            total_orders, products_ordered, click_percentage, conversion_rate,
-            sales_per_order, total_buyers, unique_products_viewed, unique_products_clicked,
-            brand_id, upload_id
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-          ON CONFLICT (brand_id, report_date, stage_id, channel_id, sub_source_id) DO NOTHING RETURNING id`,
-          [
+        batch.push([
             reportDate, stageId, channelId, subSourceId,
             parseIdr(row[2]) ?? 0, parsePct(row[1]), parseIntValue(row[3]) ?? 0, parseIntValue(row[4]) ?? 0,
             parseIdr(row[5]) ?? 0, parseIdr(row[6]) ?? 0, parsePct(row[7]), parsePct(row[8]),
             parseIdr(row[9]), parseIntValue(row[10]) ?? 0, parseIntValue(row[11]) ?? 0, parseIntValue(row[12]) ?? 0,
-            brandId, uploadId
-          ]
-        );
-        if (result.rowCount > 0) inserted += 1;
+            brandId, uploadId,
+        ]);
       } else {
         // If it's not a channel name and not a date, it defines a new SubSource
         // (unless it's the total row for the channel itself: row[0] === currentChannel)
@@ -159,7 +153,10 @@ export async function loadDailyChannelPerformance(client, resolver, filepath, br
     }
   }
 
-  return inserted;
+  return insertChunked(
+    client, 'daily_channel_performance', DAILY_CHANNEL_COLUMNS, batch,
+    'ON CONFLICT (brand_id, report_date, stage_id, channel_id, sub_source_id) DO NOTHING RETURNING id', 300,
+  );
 }
 
 export async function deriveReportPeriod(client, resolver, filepath, stageSheet = 'Pesanan Dibuat') {
