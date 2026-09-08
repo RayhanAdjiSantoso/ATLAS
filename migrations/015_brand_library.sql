@@ -100,3 +100,12 @@ CREATE INDEX IF NOT EXISTS ix_brand_library_scope ON ads_reports.brand_library_f
 -- dates, not the reporting period — and showing which rule won is what makes
 -- a surprising coverage bar explainable instead of suspicious.
 ALTER TABLE ads_reports.brand_library_files ADD COLUMN IF NOT EXISTS period_source TEXT;
+
+-- Link to the public.uploads row created when a Dashboard-shaped file
+-- (order / performance_overview / product_performance) is imported into the
+-- shopee.* fact tables. Storing the bytes is not enough for those three:
+-- Dashboard Business Overview reads the fact tables, not the library, so the
+-- library upload has to run the same importer the old Upload Data tab ran.
+-- Keeping the id lets a re-upload of the same month delete the previous
+-- import (which cascades its fact rows) instead of double-counting it.
+ALTER TABLE ads_reports.brand_library_files ADD COLUMN IF NOT EXISTS dashboard_upload_id UUID;

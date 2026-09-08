@@ -90,7 +90,7 @@ const LIBRARY_COLUMNS = `
   f.period_month::text AS period_month,
   f.period_start::text AS period_start,
   f.period_end::text AS period_end,
-  f.covered_days, f.day_bitmap, f.row_count, f.period_source,
+  f.covered_days, f.day_bitmap, f.row_count, f.period_source, f.dashboard_upload_id,
   f.original_filename, f.byte_size, f.uploaded_at, f.updated_at,
   u.full_name AS uploaded_by_name
 `;
@@ -151,12 +151,58 @@ export async function upsertLibraryFile({
   return saved.rows[0];
 }
 
+// The three exports Dashboard Business Overview is built on. Everything else
+// in the library is read by the Report Generator straight from its bytes;
+// these three have to be parsed into shopee.* fact tables as well, because
+// that is what the dashboard queries.
+export const DASHBOARD_FILE_TYPES = {
+  order: 'order',
+  performance_overview: 'performance_overview',
+  product_performance: 'product_performance',
+};
+
+// Once a Dashboard file has actually been parsed, the rows that landed in
+// the fact tables are the truth about what it covers — more reliable than
+// the filename, which is a request parameter Shopee echoes back, not a
+// description of the contents. "Order.all.20260801_20260831_part_1_of_2"
+// names the whole month and holds three weeks of it; without this the
+// library would report a complete August that the dashboard cannot back up.
+export async function syncCoverageFromImport(fileId, range, monthKey) {
+  if (!range?.start || !range?.end) return null;
+  const summary = summariseRange(range, monthKey);
+  const result = await pool.query(
+    `UPDATE ads_reports.brand_library_files
+     SET period_start = $2, period_end = $3, covered_days = $4, day_bitmap = $5, period_source = 'import', updated_at = now()
+     WHERE id = $1
+     RETURNING id`,
+    [fileId, summary.periodStart, summary.periodEnd, summary.coveredDays, summary.dayBitmap],
+  );
+  return result.rowCount ? summary : null;
+}
+
+export async function setDashboardUpload(fileId, uploadId) {
+  await pool.query(
+    'UPDATE ads_reports.brand_library_files SET dashboard_upload_id = $1 WHERE id = $2',
+    [uploadId, fileId],
+  );
+}
+
+export async function findLibraryFile(brandId, platform, channel, periodMonth) {
+  const result = await pool.query(
+    `SELECT id, dashboard_upload_id FROM ads_reports.brand_library_files
+     WHERE brand_id = $1 AND platform = $2::ads_reports.platform_enum AND channel = $3
+       AND period_month IS NOT DISTINCT FROM $4`,
+    [brandId, platform, channel, periodMonth],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function deleteLibraryFile(brandId, fileId) {
   const result = await pool.query(
-    'DELETE FROM ads_reports.brand_library_files WHERE brand_id = $1 AND id = $2 RETURNING id',
+    'DELETE FROM ads_reports.brand_library_files WHERE brand_id = $1 AND id = $2 RETURNING id, dashboard_upload_id',
     [brandId, fileId],
   );
-  return result.rowCount > 0;
+  return result.rows[0] ?? null;
 }
 
 export async function getLibraryFileBytes(brandId, fileId) {

@@ -424,6 +424,7 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                       {file.original_filename}
                       {file.row_count ? ` · ${file.row_count.toLocaleString('id-ID')} baris` : ''}
                       {file.period_source ? ` · ${PERIOD_SOURCE_LABEL[file.period_source] ?? file.period_source}` : ''}
+                      {file.dashboard_upload_id ? ' · terbaca Dashboard' : ''}
                       {` · ${new Date(file.uploaded_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`}
                     </span>
                     <span className="brand-ds-fileacts">
@@ -790,9 +791,13 @@ export default function BrandSettingsPage() {
       setFiles((current) => [...current.filter((f) => f.id !== data.file.id), data.file]);
       setError(null);
       const where = `${target.dataset.name} · ${target.month ? target.month.full : 'referensi'}`;
-      setNotice(data.warning
-        ? `${where} tersimpan. ${data.warning}`
-        : `${where} tersimpan (${data.file.covered_days} hari terdeteksi).`);
+      const parts = [data.warning ?? `${data.file.covered_days} hari terdeteksi`];
+      // The three Dashboard datasets are also parsed into the fact tables
+      // Business Overview reads; say so, because "tersimpan" alone left the
+      // dashboard's zeros unexplained.
+      if (data.imported?.rowsInserted != null) parts.push(`${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard`);
+      if (data.imported?.error) parts.push(`gagal masuk ke Dashboard: ${data.imported.error}`);
+      setNotice(`${where} tersimpan — ${parts.join(' · ')}.`);
     } catch (err) {
       setNotice(describeError(err, `Gagal mengunggah ${file.name}`));
     } finally {

@@ -1,4 +1,7 @@
+import { v4 as uuidv4 } from 'uuid';
 import { AppError, asyncHandler } from '../utils/errors.js';
+import * as uploadService from '../services/uploadService.js';
+import { processUpload } from '../services/import/importService.js';
 import * as brandService from '../services/brandService.js';
 import * as library from '../services/brandLibraryService.js';
 
@@ -84,6 +87,9 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
     }
   }
 
+  const existing = await library.findLibraryFile(brandId, platform, channel, summary.periodMonth ?? null);
+  const previousUploadId = existing?.dashboard_upload_id ?? null;
+
   const saved = await library.upsertLibraryFile({
     brandId,
     platform,
@@ -100,7 +106,66 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
     userId: req.user?.userId,
   });
 
-  res.status(201).json({ file: saved, warning });
+  // Storing the bytes is the whole job for Report Generator channels. For
+  // the three the Dashboard is built on it is only half: Business Overview
+  // reads shopee.* fact tables, so the file has to go through the same
+  // importer the old Upload Data tab used, or the dashboard stays at zero
+  // while this page reports "100% siap" — exactly the contradiction that
+  // sent this page's own hint text ("Data masuk lewat Pengaturan Brand")
+  // ahead of what the backend actually did.
+  let imported = null;
+  const fileType = library.DASHBOARD_FILE_TYPES[channel];
+  if (fileType) {
+    // A re-upload of the same month replaces the library row; its previous
+    // import has to go with it or the fact tables double-count the month.
+    if (previousUploadId) {
+      try {
+        await uploadService.deleteUpload(previousUploadId);
+      } catch (err) {
+        console.warn('[brand-library] gagal menghapus import lama', { previousUploadId, reason: err.message });
+      }
+    }
+
+    const uploadId = uuidv4();
+    try {
+      await uploadService.createUploadRecord({
+        uploadId,
+        userId: req.user?.userId,
+        brandId,
+        fileType,
+        filename: req.file.originalname,
+        rawFile: req.file.buffer,
+      });
+      const result = await processUpload({ uploadId, fileType, filepath: req.file.buffer, brandId });
+      await library.setDashboardUpload(saved.id, uploadId);
+      imported = { rowsInserted: result.rowsInserted, period: result.period };
+
+      // The imported rows outrank whatever the filename claimed.
+      const synced = await library.syncCoverageFromImport(saved.id, result.period, month);
+      if (synced) {
+        Object.assign(saved, {
+          period_start: synced.periodStart,
+          period_end: synced.periodEnd,
+          covered_days: synced.coveredDays,
+          day_bitmap: synced.dayBitmap,
+          period_source: 'import',
+        });
+        const monthDays = synced.dayBitmap?.length ?? 0;
+        if (synced.coveredDays < monthDays) {
+          warning = `Isi file hanya mencakup ${synced.periodStart} – ${synced.periodEnd} (${synced.coveredDays} dari ${monthDays} hari). Jika ekspornya terbagi (part 1 of 2), unggah bagian berikutnya ke bulan yang sama.`;
+        }
+      }
+    } catch (err) {
+      // The file stays in the library either way — it is still the source of
+      // truth for the Report Generator — but the dashboard will not show it,
+      // and saying so is the difference between a fixable problem and a
+      // mystery.
+      imported = { error: err.message };
+      console.warn('[brand-library] import ke dashboard gagal', { brandId, channel, month, reason: err.message });
+    }
+  }
+
+  res.status(201).json({ file: { ...saved, dashboard_upload_id: imported?.error ? null : saved.dashboard_upload_id }, warning, imported });
 });
 
 export const deleteLibraryFile = asyncHandler(async (req, res) => {
@@ -109,6 +174,16 @@ export const deleteLibraryFile = asyncHandler(async (req, res) => {
   if (!Number.isInteger(fileId)) throw new AppError('fileId tidak valid', 400);
   const deleted = await library.deleteLibraryFile(brandId, fileId);
   if (!deleted) throw new AppError('File tidak ditemukan', 404);
+  // Whatever this file put into the dashboard's fact tables goes with it,
+  // otherwise removing a file from the library silently leaves its numbers
+  // behind on the dashboard.
+  if (deleted.dashboard_upload_id) {
+    try {
+      await uploadService.deleteUpload(deleted.dashboard_upload_id);
+    } catch (err) {
+      console.warn('[brand-library] gagal menghapus import terkait', { uploadId: deleted.dashboard_upload_id, reason: err.message });
+    }
+  }
   res.json({ deleted: true });
 });
 
