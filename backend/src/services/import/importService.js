@@ -33,8 +33,8 @@ const FILE_TYPE_HANDLERS = {
   },
   product_performance: {
     detectPeriod: detectProductPerformancePeriod,
-    import: async (client, resolver, filepath, brandId, uploadId) => {
-      let periodId = await resolvePeriodId(client, resolver, filepath, brandId);
+    import: async (client, resolver, filepath, brandId, uploadId, detectedPeriod) => {
+      let periodId = await resolvePeriodId(client, resolver, filepath, brandId, detectedPeriod);
       if (!periodId) {
         throw new Error(
           'Periode data tidak dapat ditentukan. Unggah Performance Overview terlebih dahulu atau pastikan file Product Performance memiliki tanggal.',
@@ -63,13 +63,13 @@ const FILE_TYPE_HANDLERS = {
   },
 };
 
-export function detectPeriod(fileType, filepath) {
+export function detectPeriod(fileType, filepath, filename) {
   const handler = FILE_TYPE_HANDLERS[fileType];
   if (!handler) throw new Error(`Tipe file tidak dikenal: ${fileType}`);
-  return handler.detectPeriod(filepath);
+  return handler.detectPeriod(filepath, filename);
 }
 
-export async function processUpload({ uploadId, fileType, filepath, brandId }) {
+export async function processUpload({ uploadId, fileType, filepath, brandId, filename }) {
   const handler = FILE_TYPE_HANDLERS[fileType];
   if (!handler) throw new Error(`Tipe file tidak dikenal: ${fileType}`);
 
@@ -84,14 +84,14 @@ export async function processUpload({ uploadId, fileType, filepath, brandId }) {
       [uploadId],
     );
 
-    const period = handler.detectPeriod(filepath);
+    const period = handler.detectPeriod(filepath, filename);
     await client.query(
       `UPDATE uploads SET period_start = $1, period_end = $2 WHERE upload_id = $3`,
       [period.start, period.end, uploadId],
     );
 
     const resolver = new LookupResolver(client);
-    const rowsInserted = await handler.import(client, resolver, filepath, brandId, uploadId);
+    const rowsInserted = await handler.import(client, resolver, filepath, brandId, uploadId, period);
 
     await client.query(
       `UPDATE uploads SET status = 'success', rows_inserted = $1, completed_at = now(), error_message = NULL

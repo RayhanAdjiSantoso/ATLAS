@@ -49,6 +49,7 @@ export const uploadFile = asyncHandler(async (req, res) => {
       fileType,
       filepath: rawFile,
       brandId: brand.brand_id,
+      filename: req.file.originalname,
     });
 
     res.status(201).json({

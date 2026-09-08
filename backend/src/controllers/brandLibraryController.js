@@ -157,7 +157,9 @@ async function storeOnePart({ req, brandId, platform, channel, month, isReferenc
         filename: file.originalname,
         rawFile: file.buffer,
       });
-      const result = await processUpload({ uploadId, fileType, filepath: file.buffer, brandId });
+      const result = await processUpload({
+        uploadId, fileType, filepath: file.buffer, brandId, filename: file.originalname,
+      });
       await library.setDashboardUpload(saved.id, uploadId);
       await library.setImportResult(saved.id, { status: 'success', rows: result.rowsInserted, uploadId });
       Object.assign(saved, { import_status: 'success', import_error: null, import_rows: result.rowsInserted, dashboard_upload_id: uploadId });
