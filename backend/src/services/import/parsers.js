@@ -63,6 +63,30 @@ export function parseTs(raw, fmt = null) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// Shopee/TikTok stamp the reporting range into the download name:
+// "parentskudetail.20260701_20260731.xlsx",
+// "...-01_07_2026-31_07_2026.csv". Pulled out here because some exports
+// (the "parentskudetail" Product Performance variant) carry no parseable
+// date anywhere in their contents -- the filename is the only period signal.
+export function parseFilenamePeriod(filename = '') {
+  const name = String(filename);
+  let m = name.match(/(\d{4})(\d{2})(\d{2})\D{1,3}(\d{4})(\d{2})(\d{2})/);
+  if (m) {
+    const [y1, mo1, d1, y2, mo2, d2] = m.slice(1).map(Number);
+    return { start: `${y1}-${pad2(mo1)}-${pad2(d1)}`, end: `${y2}-${pad2(mo2)}-${pad2(d2)}` };
+  }
+  m = name.match(/(\d{2})[_-](\d{2})[_-](\d{4})\D{1,3}(\d{2})[_-](\d{2})[_-](\d{4})/);
+  if (m) {
+    const [d1, mo1, y1, d2, mo2, y2] = m.slice(1).map(Number);
+    return { start: `${y1}-${pad2(mo1)}-${pad2(d1)}`, end: `${y2}-${pad2(mo2)}-${pad2(d2)}` };
+  }
+  return null;
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
 export function toDateString(date) {
   if (!date) return null;
   const d = date instanceof Date ? date : new Date(date);
