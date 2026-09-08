@@ -1,8 +1,13 @@
 # Dependencies
 node_modules/
 
-# Environment secrets (backend/.env, backend/standalone/.env — never commit)
+# Environment secrets (backend/.env, backend/standalone/.env — never commit).
+# Pola .env saja hanya cocok dengan file bernama persis itu; varian seperti
+# .env.production (mis. hasil `vercel env pull`) lolos dan ikut ter-commit.
+# .env.example sengaja dikecualikan karena isinya memang template kosong.
 .env
+.env.*
+!.env.example
 
 # Build output
 dist/
