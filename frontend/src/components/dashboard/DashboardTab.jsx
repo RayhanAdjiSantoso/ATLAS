@@ -7,6 +7,8 @@ import FunnelChart from './FunnelChart.jsx';
 import CalendarHeatmap from './CalendarHeatmap.jsx';
 import ProductTransitionTable from './ProductTransitionTable.jsx';
 import ParetoChart from './ParetoChart.jsx';
+import RootCauseTree from './RootCauseTree.jsx';
+import GrainWarning from './GrainWarning.jsx';
 import { formatPercent } from '../../utils/format.js';
 
 function HorizontalBarChart({ data = [], nameKey = 'name', valueKey = 'value', title = 'Top 10' }) {
@@ -264,6 +266,7 @@ function renderExecutiveSnapshot(data, { onNavigateTab, stripOwnsKpis = false } 
       topProduct = null,
       bottomProduct = null,
       trends = [],
+      productGrainWarning = null,
     } = data || {};
 
     const formatNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0);
@@ -385,6 +388,8 @@ function renderExecutiveSnapshot(data, { onNavigateTab, stripOwnsKpis = false } 
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Ranking lengkap ada di tab Product Performance.</div>
           </div>
         </div>
+
+        <GrainWarning warning={productGrainWarning} />
 
         {/* Business Health Analysis */}
         <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
@@ -896,7 +901,7 @@ function InsightCard({ tone, label, detail }) {
 function renderTrafficFunnel(data, { startDate, endDate } = {}) {
     const {
       kpis = {}, trafficOverview = {}, trafficSources = {}, funnel = [], funnelRates = {},
-      comparePeriod = null, insights = {},
+      comparePeriod = null, insights = {}, funnelGrainWarning = null,
     } = data || {};
 
     const growthDriver = insights.trafficGrowthDriver;
@@ -947,8 +952,9 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
             the data doesn't support -- labeled explicitly instead. */}
         <div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            Funnel di bawah merepresentasikan <strong>total seluruh traffic</strong> (Organic + Ads gabungan) — data pada tahap Kunjungan Produk/Tambah Keranjang/Pesanan tidak tersedia terpecah per sumber traffic. Data berbasis laporan bulanan (monthly report) — tidak merepresentasikan performa harian dalam sub-rentang tanggal yang dipilih.
+            Funnel di bawah merepresentasikan <strong>total seluruh traffic</strong> (Organic + Ads gabungan) — data pada tahap Kunjungan Produk/Tambah Keranjang/Pesanan tidak tersedia terpecah per sumber traffic. Angka funnel bersumber dari laporan Product Performance <strong>bulanan</strong>.
           </div>
+          <GrainWarning warning={funnelGrainWarning} />
           {comparePeriod ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
               <FunnelChart data={funnel} title="Analisis Corong Konversi (Funnel)" />
@@ -1825,11 +1831,45 @@ function ProductTrendTable({ title, rows = [], accentColor, emptyMessage }) {
   );
 }
 
+// ROOT CAUSE ANALYSIS — GMV decomposition tree (Data Mapping v2).
+//
+// Not a Data Mapping v1 domain and not part of the side-by-side compare
+// render — it drives its own per-node period delta, so DashboardTab routes it
+// past the split branch and hands it `compareData` directly.
+function renderRootCause(data, { startDate, endDate, compareStartDate, compareEndDate, compareData = null } = {}) {
+  const tree = data?.tree || null;
+  const compareTree = compareData?.tree || null;
+  const hasCompare = Boolean(compareTree);
+
+  if (!tree) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="card" style={{ padding: '1.5rem', color: 'var(--text-muted)' }}>
+          Data GMV belum tersedia untuk periode ini. Unggah data Shopee melalui Pengaturan Brand.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <RootCauseTree
+        tree={tree}
+        compareTree={compareTree}
+        hasCompare={hasCompare}
+        mainRange={`${formatDateLabel(startDate)} - ${formatDateLabel(endDate)}`}
+        compareRange={hasCompare ? `${formatDateLabel(compareStartDate)} - ${formatDateLabel(compareEndDate)}` : null}
+        meta={data?.meta}
+      />
+    </div>
+  );
+}
+
 // TAB 7: PRODUCT PERFORMANCE
 function renderProductPerformance(data, { productPerformanceLevel = 'category', setProductPerformanceLevel } = {}) {
     const {
       topByQuantity = [], topByRevenue = [], pareto = { total: 0, items: [] },
-      contributions = [], growthDrivers = [], declining = [],
+      contributions = [], growthDrivers = [], declining = [], grainWarning = null,
     } = data || {};
 
     const levelNoun = productPerformanceLevel === 'variant' ? 'Variasi Produk' : 'Produk';
@@ -1839,8 +1879,8 @@ function renderProductPerformance(data, { productPerformanceLevel = 'category', 
 
         {/* Global level dropdown -- drives every visualization on this tab */}
         <div className="card" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'help' }} title="Seluruh angka pada tab ini bersumber dari laporan produk bulanan (monthly report). Data tidak tersedia untuk sub-rentang tanggal di dalam bulan yang sama, sehingga tidak merepresentasikan performa harian.">
-            ⓘ Data berbasis laporan bulanan — tidak merepresentasikan performa harian dalam sub-rentang tanggal yang dipilih.
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'help' }} title="Seluruh angka pada tab ini bersumber dari laporan produk bulanan (monthly report), sama seperti file Product Performance dari Shopee.">
+            ⓘ Angka bersumber dari laporan produk <strong>bulanan</strong> (cocok dengan file Product Performance Shopee).
           </div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600' }}>Tingkat Analisis Produk</label>
           <select
@@ -1861,6 +1901,8 @@ function renderProductPerformance(data, { productPerformanceLevel = 'category', 
             ))}
           </select>
         </div>
+
+        <GrainWarning warning={grainWarning} />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
           <HorizontalBarChart
@@ -1917,7 +1959,12 @@ const TAB_RENDERERS = {
   'Transaction Behavior': renderTransactionBehavior,
   'Basket Analysis': renderBasketAnalysis,
   'Product Performance': renderProductPerformance,
+  'Root Cause Analysis': renderRootCause,
 };
+
+// Tabs that render their own period comparison internally (per-node delta)
+// instead of the generic main | compare split render below.
+const SELF_COMPARE_TABS = new Set(['Root Cause Analysis']);
 
 // Loading shows the shape of what is coming rather than the word "Memuat".
 // The console keeps the rail, the strip and every summary on screen while
@@ -2008,8 +2055,19 @@ export default function DashboardTab({
     // in-range/out-of-range cell distinction) -- every other renderer
     // ignores these two extra fields.
     startDate: filters.startDate, endDate: filters.endDate,
+    compareStartDate: filters.compareStartDate, compareEndDate: filters.compareEndDate,
   };
   const showCompare = filters.compare && data.compare;
+
+  // Root Cause Analysis owns its comparison rendering (per-node delta down the
+  // tree) — hand it both periods and skip the split render entirely.
+  if (SELF_COMPARE_TABS.has(activeTab)) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {renderer(data, { ...rendererExtra, compareData: showCompare ? data.compare : null })}
+      </div>
+    );
+  }
 
   if (!showCompare) {
     return (

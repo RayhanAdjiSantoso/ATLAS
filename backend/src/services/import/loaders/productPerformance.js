@@ -1,6 +1,7 @@
 import { insertChunked, dedupeBy } from '../bulk.js';
 import {
   blankToNone,
+  parseFilenamePeriod,
   parseIdr,
   parseIntValue,
   parsePct,
@@ -11,7 +12,14 @@ import {
 } from '../parsers.js';
 import { deriveReportPeriod } from './performanceOverview.js';
 
-export function detectProductPerformancePeriod(filepath) {
+export function detectProductPerformancePeriod(filepath, filename = '') {
+  // The filename range is the most reliable signal for this export: the
+  // "parentskudetail" variant has no parseable date in its sheets at all
+  // ("Tanggal Dibuat" is YYYYMMDD text and lists newly-added products, not
+  // the reporting month).
+  const fromName = parseFilenamePeriod(filename);
+  if (fromName) return { start: fromName.start, end: fromName.end };
+
   const wb = readWorkbook(filepath);
 
   // Try "Produk yang Baru Ditambahkan" dates
@@ -245,6 +253,11 @@ export async function loadProductVariantPerformance(client, resolver, filepath, 
 // statement lewat = ANY(array).
 async function tagProducts(client, filepath, sheetName, brandId, periodId, column, valueId) {
   const wb = readWorkbook(filepath);
+  // Optional sheet: Shopee's "parentskudetail" export variant omits the
+  // price-competitiveness / ads-recommendation sheets entirely. A missing
+  // sheet just means there is nothing to tag -- it must not abort the whole
+  // import (readSheetAsStrings throws on an unknown sheet name).
+  if (!wb.SheetNames.includes(sheetName)) return 0;
   const ids = readSheetAsStrings(wb, sheetName)
     .map((row) => parseIntValue(row['Kode Produk']))
     .filter(Boolean);
@@ -273,8 +286,19 @@ export async function applyAdsRecommendation(client, resolver, filepath, brandId
   return tagProducts(client, filepath, sheetName, brandId, periodId, 'ads_recommendation_stage_id', stageId);
 }
 
-export async function resolvePeriodId(client, resolver, filepath, brandId) {
-  // Prefer deriving from linked performance overview upload for same brand
+export async function resolvePeriodId(client, resolver, filepath, brandId, detectedPeriod = null) {
+  // The file's own reporting range (from its filename) wins: it is specific
+  // to THIS month, whereas the performance-overview fallback below always
+  // points at the brand's most recent overview upload -- which pins every
+  // Product Performance file to the same month when several are backfilled.
+  if (detectedPeriod?.start && detectedPeriod?.end) {
+    return resolver.getOrCreate(
+      'report_periods', 'period_id', ['period_start', 'period_end'],
+      [detectedPeriod.start, detectedPeriod.end],
+    );
+  }
+
+  // Otherwise, derive from linked performance overview upload for same brand
   const recent = await client.query(
     `SELECT period_start, period_end FROM uploads
      WHERE brand_id = $1 AND file_type = 'performance_overview'

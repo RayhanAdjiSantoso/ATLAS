@@ -826,3 +826,71 @@ export async function getProductPerformanceRawMetrics(brandId, startDate, endDat
   const res = await pool.query(query, [brandId, startDate, endDate]);
   return res.rows;
 }
+
+// ---------------------------------------------------------------------------
+// Root Cause Analysis (GMV decomposition tree). Deliberately built on the
+// SAME source tables/stage filters the existing tabs already read, so a node
+// in the tree agrees with the KPI/chart that shows the same figure elsewhere:
+//  - GMV / Orders / Traffic (Total Pengunjung) / Units Sold  -> getExecutiveMetrics
+//  - Visitor / ATC / Purchase (Conversion Rate branch)       -> getFunnelSnapshot
+//  - per channel x sub-source Impressions / Clicks           -> this query,
+//    same daily_channel_performance + stage 'Pesanan Siap Dikirim' the
+//    Traffic & Funnel fishbone donuts use (getTrafficAndFunnelMetrics),
+//    just also selecting products_viewed (Impressions), not clicks alone.
+//  - ABS / AUR (AOV branch)                                  -> getBasketUnitMetrics
+
+// Impressions (products_viewed) + clicks (products_clicked) per channel and
+// sub-source, at the 'Pesanan Siap Dikirim' stage. The 'Semua' sub-source is
+// the source file's pre-aggregated per-channel total row -- excluded so a
+// caller summing sub-sources can't double-count (same rule
+// buildTrafficFunnelSnapshot already applies for its click totals).
+export async function getChannelTrafficBreakdown(brandId, startDate, endDate) {
+  const query = `
+    SELECT
+      tc.channel_name AS channel,
+      tss.sub_source_name AS sub_source,
+      COALESCE(SUM(dcp.products_viewed), 0)::bigint  AS impressions,
+      COALESCE(SUM(dcp.products_clicked), 0)::bigint AS clicks
+    FROM shopee.daily_channel_performance dcp
+    JOIN shopee.order_pipeline_stages ops ON ops.stage_id = dcp.stage_id
+    JOIN shopee.traffic_channels tc ON tc.channel_id = dcp.channel_id
+    JOIN shopee.traffic_sub_sources tss ON tss.sub_source_id = dcp.sub_source_id
+    WHERE dcp.brand_id = $1
+      AND dcp.report_date >= $2
+      AND dcp.report_date <= $3
+      AND ops.stage_name = 'Pesanan Siap Dikirim'
+      AND tss.sub_source_name <> 'Semua'
+    GROUP BY tc.channel_name, tss.sub_source_name
+  `;
+  const res = await pool.query(query, [brandId, startDate, endDate]);
+  return res.rows;
+}
+
+// ABS (Average Basket Size, units/order) and AUR (Average Unit Retail,
+// net-of-discount price per unit) for the AOV branch. Filter is IDENTICAL to
+// getBasketAnalysisMetrics (status 'Selesai' + order_completed_at in range)
+// so these tie out to the Basket Analysis tab rather than quietly using a
+// wider order population. AUR basis = SUM(Harga Setelah Diskon x Jumlah) /
+// SUM(Jumlah) over order_items (confirmed formula choice).
+export async function getBasketUnitMetrics(brandId, startDate, endDate) {
+  const query = `
+    WITH scoped_orders AS (
+      SELECT o.order_id
+      FROM shopee.orders o
+      JOIN shopee.order_statuses os ON os.order_status_id = o.order_status_id
+      WHERE o.brand_id = $1
+        AND os.status_name = 'Selesai'
+        AND o.order_completed_at >= $2
+        AND o.order_completed_at < ($3::date + INTERVAL '1 day')
+    )
+    SELECT
+      (SELECT COUNT(*) FROM scoped_orders)::bigint AS orders_count,
+      COALESCE(SUM(oi.quantity), 0)::bigint AS total_units,
+      COALESCE(SUM(oi.discounted_price * oi.quantity), 0)::numeric AS discounted_revenue
+    FROM shopee.order_items oi
+    JOIN scoped_orders so ON so.order_id = oi.order_id
+    WHERE oi.brand_id = $1
+  `;
+  const res = await pool.query(query, [brandId, startDate, endDate]);
+  return res.rows[0] || { orders_count: 0, total_units: 0, discounted_revenue: 0 };
+}

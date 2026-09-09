@@ -13,6 +13,7 @@ router.get('/traffic-funnel', dashboardController.getTrafficAndFunnel);
 router.get('/rfm', dashboardController.getRfmAnalysis);
 router.get('/transaction-behavior', dashboardController.getTransactionBehavior);
 router.get('/basket-analysis', dashboardController.getBasketAnalysis);
+router.get('/root-cause', dashboardController.getRootCauseAnalysis);
 router.get('/product-performance', dashboardController.getProductPerformance);
 
 export default router;

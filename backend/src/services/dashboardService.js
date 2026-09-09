@@ -1,6 +1,12 @@
 import * as dashboardRepo from '../repositories/dashboardRepository.js';
 import { computeRfmAnalysis, RFM_SEGMENTS, SEGMENT_ACTIONS } from './rfm/rfmAnalysis.js';
 import { computeProductPerformance } from './productPerformance/productPerformanceAnalysis.js';
+import { snapshotGrainWarning } from '../utils/dateGrain.js';
+
+// Root Cause Analysis tab — GMV decomposition tree. Kept in its own module
+// (the tree layout + traffic-source section mapping is sizeable); re-exported
+// here so the controller keeps importing one dashboard service.
+export { getRootCauseAnalysis } from './rootCause/rootCauseTree.js';
 
 // Helper to calculate growth percentage
 function calculateGrowth(current, previous) {
@@ -233,6 +239,10 @@ export async function getExecutiveSnapshot({ brandId, startDate, endDate, compar
       revenue: Number(bottomProductRow.revenue || 0),
       quantity: Number(bottomProductRow.quantity || 0),
     } : null,
+    // Top/Bottom product highlight is the one figure here read from the
+    // monthly Product Performance snapshot -- warn when the range isn't a
+    // clean calendar month (see utils/dateGrain.js).
+    productGrainWarning: snapshotGrainWarning(startDate, endDate, 'Highlight Produk Teratas/Terbawah'),
     trends,
     health: {
       score: healthScore,
@@ -555,6 +565,13 @@ export async function getTrafficAndFunnel({ brandId, startDate, endDate, compare
     trafficSources: snapshot.trafficSources,
     funnel: snapshot.funnel,
     funnelRates: snapshot.funnelRates,
+    // Impressions + traffic-source clicks re-aggregate from daily_channel_
+    // performance (range-exact). The funnel stages/rates are the exception --
+    // product_performance_summary is monthly-only. Warn when the range isn't
+    // one whole calendar month.
+    funnelGrainWarning: snapshotGrainWarning(
+      startDate, endDate, 'Corong konversi (Kunjungan Produk → Tambah Keranjang → Pesanan) beserta rasionya',
+    ),
     comparePeriod,
     insights: {
       trafficGrowthDriver,
@@ -946,6 +963,10 @@ export async function getProductPerformance({ brandId, startDate, endDate, level
   return {
     level: data.level,
     months: data.months,
+    // Whole domain is sourced from the monthly Product Performance snapshot
+    // (deliberately -- it matches Shopee's own export figure). Warn whenever
+    // the range spans more than / less than one clean calendar month.
+    grainWarning: snapshotGrainWarning(startDate, endDate, `Seluruh angka ${data.level === 'variant' ? 'Variasi Produk' : 'Produk'} pada tab ini`),
     topByQuantity: data.topByQuantity.map(i => ({
       label: i.label,
       quantity: Number(i.quantity || 0),
