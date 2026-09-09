@@ -91,16 +91,22 @@ export async function processUpload({ uploadId, fileType, filepath, brandId }) {
     );
 
     const resolver = new LookupResolver(client);
-    const rowsInserted = await handler.import(client, resolver, filepath, brandId, uploadId);
+    // Loader boleh mengembalikan angka, atau {inserted, note} saat ada baris
+    // yang sengaja dilewati. Catatannya disimpan di uploads.error_message
+    // supaya terlihat di History Upload — status tetap 'success', karena
+    // filenya memang berhasil diimpor, hanya tidak seluruhnya.
+    const outcome = await handler.import(client, resolver, filepath, brandId, uploadId);
+    const rowsInserted = typeof outcome === 'number' ? outcome : outcome.inserted;
+    const note = typeof outcome === 'number' ? null : outcome.note;
 
     await client.query(
-      `UPDATE uploads SET status = 'success', rows_inserted = $1, completed_at = now(), error_message = NULL
+      `UPDATE uploads SET status = 'success', rows_inserted = $1, completed_at = now(), error_message = $3
        WHERE upload_id = $2`,
-      [rowsInserted, uploadId],
+      [rowsInserted, uploadId, note],
     );
 
     await client.query('COMMIT');
-    return { rowsInserted, period };
+    return { rowsInserted, period, note };
   } catch (err) {
     await client.query('ROLLBACK');
     await pool.query(

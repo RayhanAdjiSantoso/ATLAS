@@ -105,6 +105,8 @@ const PERIOD_SOURCE_LABEL = {
   filename: 'periode dari nama file',
   rows: 'periode dari isi baris',
   none: 'periode mengikuti slot bulan',
+  import: 'periode dari hasil impor',
+  mismatch: '⚠ periode file DI LUAR bulan ini',
 };
 
 const VIEWS = [
@@ -471,7 +473,7 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
             <em key={part.id} title={`${part.original_filename}${part.row_count ? ` · ${part.row_count.toLocaleString('id-ID')} baris` : ''}`}>
               {part.period_start && part.period_end
                 ? `${Number(part.period_start.slice(8, 10))}–${Number(part.period_end.slice(8, 10))}`
-                : 'snapshot'}
+                : part.period_source === 'mismatch' ? '⚠ bulan lain' : 'snapshot'}
             </em>
           ))}
           {!isReference && targetMonth && (

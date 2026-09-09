@@ -75,13 +75,25 @@ export async function loadOrders(client, resolver, filepath, brandId, uploadId) 
 
   const orderRows = [];
   const itemRows = [];
+  // Baris yang tidak bisa ditempatkan tetap dihitung, tidak dibuang diam-diam.
+  const skipped = { tanpaTanggal: 0, tanpaStatus: 0 };
 
   for (const [orderId, group] of grouped) {
     const header = group[0];
 
+    // Setiap metrik dashboard dibatasi rentang tanggal, jadi pesanan tanpa
+    // waktu dibuat tidak akan pernah muncul di query mana pun. Menyimpannya
+    // hanya menambah baris yang tak terlihat; melewatinya lebih jujur —
+    // asalkan jumlahnya dilaporkan, bukan disembunyikan.
+    const createdAt = parseTs(header['Waktu Pesanan Dibuat'], '%Y-%m-%d %H:%M');
+    if (!createdAt) { skipped.tanpaTanggal += 1; continue; }
+
     const orderStatusId = await resolver.getOrCreateOne(
       'order_statuses', 'order_status_id', 'status_name', header['Status Pesanan'],
     );
+    // Status memutuskan apakah pesanan dihitung atau dikecualikan ("Batal"),
+    // jadi tanpa status pesanan tidak bisa diperlakukan dengan benar.
+    if (orderStatusId == null) { skipped.tanpaStatus += 1; continue; }
     const paymentMethodId = await resolver.getOrCreateOne(
       'payment_methods', 'payment_method_id', 'method_name', blankToNone(header['Metode Pembayaran']),
     );
@@ -104,7 +116,7 @@ export async function loadOrders(client, resolver, filepath, brandId, uploadId) 
       blankToNone(header['Antar ke counter/ pick-up']),
       parseTs(header['Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)'], '%Y-%m-%d %H:%M'),
       parseTs(header['Waktu Pengiriman Diatur'], '%Y-%m-%d %H:%M'),
-      parseTs(header['Waktu Pesanan Dibuat'], '%Y-%m-%d %H:%M'),
+      createdAt,
       parseTs(header['Waktu Pembayaran Dilakukan'], '%Y-%m-%d %H:%M'),
       paymentMethodId, customerId, blankToNone(header['Nama Penerima']),
       blankToNone(header['No. Telepon']), blankToNone(header['Alamat Pengiriman']),
@@ -151,5 +163,9 @@ export async function loadOrders(client, resolver, filepath, brandId, uploadId) 
     'ON CONFLICT (brand_id, order_id, sku_reference) DO NOTHING RETURNING order_item_id', ITEM_CHUNK,
   );
 
-  return insertedOrders + insertedItems;
+  const catatan = [];
+  if (skipped.tanpaTanggal) catatan.push(`${skipped.tanpaTanggal} pesanan dilewati karena tidak punya Waktu Pesanan Dibuat`);
+  if (skipped.tanpaStatus) catatan.push(`${skipped.tanpaStatus} pesanan dilewati karena tidak punya Status Pesanan`);
+
+  return { inserted: insertedOrders + insertedItems, note: catatan.join('; ') || null };
 }

@@ -98,6 +98,13 @@ async function storeOnePart({ req, brandId, platform, channel, month, isReferenc
       rowCount = analysis.rowCount;
       periodSource = analysis.source;
 
+      // File yang periodenya jelas-jelas di luar bulan pilihan diberi tanda
+      // permanen, bukan hanya peringatan sekali lewat. Tanpa itu keadaannya
+      // hanya tampil sebagai "snapshot" — sama seperti file yang tanggalnya
+      // memang tidak terbaca — dan pengguna tidak punya cara tahu bahwa
+      // sebenarnya filenya salah slot bulan.
+      if (analysis.declaredRange && !analysis.coveredDays) periodSource = 'mismatch';
+
       if (analysis.declaredRange && !analysis.coveredDays) {
         warning = `${file.originalname}: file menyatakan periode ${analysis.declaredRange.start} – ${analysis.declaredRange.end}, di luar bulan yang dipilih. Tersimpan sebagai snapshot — periksa apakah slot bulannya sudah benar.`;
       } else if (!analysis.coveredDays) {
@@ -172,7 +179,7 @@ async function storeOnePart({ req, brandId, platform, channel, month, isReferenc
           period_end: synced.periodEnd,
           covered_days: synced.coveredDays,
           day_bitmap: synced.dayBitmap,
-          period_source: 'import',
+          period_source: synced.source,
         });
       }
     } catch (err) {
