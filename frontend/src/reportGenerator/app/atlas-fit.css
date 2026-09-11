@@ -38,6 +38,89 @@
   min-width: 0;
 }
 
+/* ── Report Generator workspace ─────────────────────────────────────
+   A compact sibling of the Brand Settings and Dashboard heroes. */
+.mil-ui.report-generator-app .gen-wrap.bleed {
+  max-width: calc(1280px + 2 * clamp(16px, 2.4vw, 32px));
+  padding-inline: clamp(16px, 2.4vw, 32px);
+  padding-block: clamp(1rem, 2.4vw, 2.2rem) 4.5rem;
+}
+.mil-ui .rg-hero {
+  position: relative;
+  z-index: 45;
+  border: 1px solid rgba(190, 203, 244, .72);
+  border-radius: 24px;
+  background: linear-gradient(140deg, #fff 4%, #f7f9ff 46%, #eef2ff 100%);
+  box-shadow: 0 18px 48px rgba(21, 43, 108, .09), 0 2px 4px rgba(21, 43, 108, .04), inset 0 1px rgba(255, 255, 255, .95);
+}
+.mil-ui .rg-hero-fx { position: absolute; inset: 0; overflow: hidden; border-radius: 24px; pointer-events: none; }
+.mil-ui .rg-hero-aurora { position: absolute; inset: -80% -10% auto -20%; height: 250%; background: radial-gradient(38% 44% at 22% 42%, rgba(88, 124, 255, .28), transparent 70%), radial-gradient(30% 38% at 68% 30%, rgba(0, 194, 224, .18), transparent 72%); filter: blur(18px); animation: rg-aurora 15s ease-in-out infinite alternate; }
+.mil-ui .rg-hero-grid { position: absolute; inset: 0; opacity: .45; background-image: linear-gradient(rgba(30, 62, 184, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(30, 62, 184, .05) 1px, transparent 1px); background-size: 46px 46px; -webkit-mask-image: radial-gradient(72% 90% at 78% 22%, #000, transparent 72%); mask-image: radial-gradient(72% 90% at 78% 22%, #000, transparent 72%); }
+.mil-ui .rg-hero-main { position: relative; z-index: 1; overflow: hidden; display: flex; min-height: 178px; align-items: center; justify-content: space-between; gap: 2rem; padding: clamp(1.15rem, 2vw, 1.7rem) clamp(1.2rem, 2.7vw, 2.2rem) clamp(1rem, 1.8vw, 1.45rem); border-radius: 24px 24px 0 0; }
+.mil-ui .rg-hero-copy { max-width: 660px; }
+.mil-ui .rg-hero-eye { display: inline-flex; align-items: center; gap: .4rem; color: var(--acc); font-size: .655rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.mil-ui .rg-hero h1 { margin: .4rem 0 .3rem; color: var(--text); font-size: clamp(1.5rem, 2.2vw, 2rem); font-weight: 820; letter-spacing: -.045em; line-height: 1.04; }
+.mil-ui .rg-hero-copy > p { max-width: 58ch; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+.mil-ui .rg-hero-stats { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+.mil-ui .rg-hero-stats span { display: inline-flex; align-items: center; gap: .3rem; padding: .28rem .52rem; color: var(--muted); border: 1px solid rgba(198, 209, 241, .85); border-radius: 99px; background: rgba(255, 255, 255, .66); font-size: .64rem; font-weight: 620; }
+.mil-ui .rg-hero-stats strong { color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui .rg-hero-badge { position: relative; display: grid; place-items: center; flex: 0 0 auto; gap: .38rem; width: 190px; padding: .8rem .9rem .7rem; border: 1px solid rgba(255, 255, 255, .9); border-radius: 16px; background: linear-gradient(150deg, rgba(255, 255, 255, .92), rgba(255, 255, 255, .62)); box-shadow: 0 12px 30px rgba(21, 43, 108, .11), inset 0 1px #fff; animation: rg-badge-in .45s var(--ease-out) both; }
+.mil-ui .rg-hero-mark { position: relative; z-index: 1; display: block; width: 42px; height: 42px; filter: drop-shadow(0 6px 14px rgba(21, 43, 108, .2)); animation: rg-float 6s ease-in-out infinite alternate; }
+.mil-ui .rg-hero-logo { position: relative; z-index: 1; display: block; width: 100%; max-width: 132px; height: auto; opacity: .95; }
+.mil-ui .rg-hero-badge small { position: relative; z-index: 1; color: var(--muted); font-size: .56rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.mil-ui .rg-hero-ring { position: absolute; inset: -26% -14%; border: 1px solid rgba(30, 62, 184, .16); border-radius: 50%; animation: rg-spin 22s linear infinite; }
+.mil-ui .rg-hero-ring-b { inset: -8% 12%; border-color: rgba(0, 194, 224, .22); animation-duration: 16s; animation-direction: reverse; }
+.mil-ui .rg-dock { position: relative; z-index: 2; padding: .72rem clamp(1.2rem, 2.7vw, 2.2rem); border-top: 1px solid rgba(255, 255, 255, .9); border-radius: 0 0 24px 24px; background: linear-gradient(180deg, rgba(255, 255, 255, .52), rgba(255, 255, 255, .86)); box-shadow: inset 0 1px rgba(255, 255, 255, .95); }
+.mil-ui .rg-dock-copy { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; }
+.mil-ui .rg-dock-copy > span { display: inline-flex; align-items: center; gap: .4rem; color: var(--text); font-size: .78rem; font-weight: 780; }
+.mil-ui .rg-dock-copy > span svg { color: var(--acc); }
+.mil-ui .rg-dock-copy small { color: var(--muted); font-size: .67rem; }
+.mil-ui .rg-dock .client-bar { margin: .55rem 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.mil-ui .rg-dock .client-bar-label { order: 0; }
+.mil-ui .rg-dock .ssel { order: 1; min-width: 260px; max-width: 340px; }
+.mil-ui .rg-dock .mpill-add { order: 2; }
+.mil-ui .rg-dock .brand-status-filter { order: 3; flex-basis: 100%; padding-top: .55rem; border-top: 1px solid rgba(211, 219, 238, .82); }
+.mil-ui .rg-dock .client-bar-error { order: 4; }
+
+.mil-ui.report-generator-app .gen-rail { margin: 1.3rem 0 .7rem; overflow: hidden; border: 1px solid rgba(206, 215, 236, .9); border-radius: 16px; background: rgba(237, 240, 248, .7); box-shadow: 0 6px 24px rgba(15, 26, 58, .07), inset 0 1px rgba(255, 255, 255, .8); backdrop-filter: blur(16px) saturate(160%); }
+.mil-ui.report-generator-app .gen-rail-inner.bleed { max-width: none; height: auto; gap: 3px; padding: 5px; }
+.mil-ui.report-generator-app .gen-rail-item { flex: 1 0 150px; }
+.mil-ui.report-generator-app .gen-rail-link { justify-content: center; min-height: 42px; padding: .45rem .62rem; }
+.mil-ui .rg-active-caption { display: flex; align-items: center; gap: .5rem; min-height: 25px; padding: 0 .3rem; color: var(--muted); animation: rg-caption-in .3s var(--ease-out) both; }
+.mil-ui .rg-active-caption strong { color: var(--rg-accent, var(--acc)); font-size: .72rem; }
+.mil-ui .rg-active-caption span { font-size: .68rem; font-weight: 650; }
+.mil-ui .rg-active-caption i { width: 22px; height: 1px; flex: 0 0 auto; background: var(--border); }
+.mil-ui .rg-active-caption p { margin-left: auto; overflow: hidden; max-width: 62%; color: var(--muted); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+.mil-ui .rg-active-caption + .panel.active { margin-top: .8rem; }
+
+@keyframes rg-aurora { to { transform: translate3d(4%, 2%, 0) scale(1.04); } }
+@keyframes rg-spin { to { transform: rotate(360deg); } }
+@keyframes rg-float { to { transform: translateY(-3px); } }
+@keyframes rg-badge-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes rg-caption-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 900px) {
+  .mil-ui.report-generator-app .gen-wrap.bleed { padding-inline: 1rem; }
+  .mil-ui .rg-hero-main { min-height: 0; }
+  .mil-ui .rg-dock-copy { align-items: flex-start; flex-direction: column; gap: .15rem; }
+}
+@media (max-width: 760px) {
+  .mil-ui .rg-hero-main { align-items: flex-start; flex-direction: column; }
+  .mil-ui .rg-hero-badge { width: 100%; max-width: 190px; }
+  .mil-ui .rg-active-caption p, .mil-ui .rg-active-caption i { display: none; }
+  .mil-ui .rg-active-caption span { margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .mil-ui .rg-hero, .mil-ui .rg-hero-fx { border-radius: 18px; }
+  .mil-ui .rg-hero-main { border-radius: 18px 18px 0 0; }
+  .mil-ui .rg-dock { border-radius: 0 0 18px 18px; }
+  .mil-ui .rg-dock .ssel { min-width: 0; max-width: none; width: 100%; }
+  .mil-ui.report-generator-app .gen-rail { margin-top: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mil-ui .rg-hero-aurora, .mil-ui .rg-hero-ring, .mil-ui .rg-hero-mark, .mil-ui .rg-hero-badge, .mil-ui .rg-active-caption { animation: none; }
+}
+
 /* MRG's brand lockup was <img src="/mil-logo.png"> — a blue tile with a white
    mark baked into the file. ATLAS ships no logo asset, so the same lockup is
    built from the inline MilMark glyph instead: the tile is this rule (accent

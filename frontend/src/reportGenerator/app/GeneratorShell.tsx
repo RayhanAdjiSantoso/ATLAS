@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { clearLibraryCatalog } from '../features/reports/LibraryFileSlot';
 import { Navigate, useParams } from 'react-router-dom';
 import { MetaTab } from '../features/meta/MetaTab';
@@ -9,11 +9,13 @@ import { SummaryTab } from '../features/summary/SummaryTab';
 import { ClientPicker } from '../features/reports/ClientPicker';
 import { ReportsTab } from '../features/reports/ReportsTab';
 import { Reveal } from '../components/Reveal';
-import { HeaderIllustration } from '../components/HeaderIllustration';
 import { GenTopNav } from './GenTopNav';
-import { isReportKey, reportByKey, type ReportKey } from './reports';
+import { isReportKey, REPORT_NAV, reportByKey, type ReportKey } from './reports';
 import type { BizChannelMetrics, BizMetricKey, BizPeriod, BizRow, BizState } from '../lib/business';
 import type { PlatformKey, PlatformResultData, PlatformStateMap } from '../lib/summary';
+import { Database, Sparkles } from 'lucide-react';
+import atlasIcon from '../../assets/atlas-icon.png';
+import atlasWordmark from '../../assets/atlas-wordmark.png';
 
 export interface GeneratorShellProps {
   clientId: number | null;
@@ -54,27 +56,50 @@ export function GeneratorShell(props: GeneratorShellProps) {
   if (!isReportKey(platform)) return <Navigate to="/report-generator/meta" replace />;
   const activeTab: ReportKey = platform;
   const active = reportByKey(activeTab);
+  const generatedCount = (['meta', 'shopee', 'tiktok'] as ReportKey[]).filter((key) => props.badges[key] === '✓').length;
 
   return (
-    <>
-      <GenTopNav badges={props.badges} />
-
-      <div className="gen-wrap bleed">
-        <div className="gen-main" id="app">
-          <Reveal className="gen-head" key={activeTab}>
-            <div className="gen-head-text">
-              <span className="gen-head-eyebrow" style={{ color: active.accent }}>
-                {active.tagline}
-              </span>
-              <h1 className="gen-head-title">{active.label}</h1>
-              <p className="gen-head-desc">{active.desc}</p>
+    <div className="gen-wrap bleed">
+      <div className="gen-main" id="app">
+        <header className="rg-hero">
+          <span className="rg-hero-fx" aria-hidden="true"><i className="rg-hero-aurora" /><i className="rg-hero-grid" /></span>
+          <div className="rg-hero-main">
+            <Reveal className="rg-hero-copy">
+              <span className="rg-hero-eye"><Sparkles size={13} /> Performance reporting workspace</span>
+              <h1>Report Generator</h1>
+              <p>Bandingkan performa lintas platform, susun insight berbasis konteks brand, lalu hasilkan laporan yang siap dipresentasikan.</p>
+              <div className="rg-hero-stats">
+                <span><strong>{REPORT_NAV.length}</strong> bagian laporan</span>
+                <span><strong>3</strong> platform utama</span>
+                <span><strong>{generatedCount}/3</strong> laporan tersusun</span>
+              </div>
+            </Reveal>
+            <div className="rg-hero-badge" aria-hidden="true">
+              <span className="rg-hero-ring" /><span className="rg-hero-ring rg-hero-ring-b" />
+              <img src={atlasIcon} alt="" className="rg-hero-mark" />
+              <img src={atlasWordmark} alt="" className="rg-hero-logo" />
+              <small>Consultant reporting</small>
             </div>
-            <HeaderIllustration report={activeTab} accent={active.accent} />
-          </Reveal>
+          </div>
 
-          <ClientPicker clientId={props.clientId} onChange={props.setClientId} />
+          <div className="rg-dock">
+            <div className="rg-dock-copy">
+              <span><Database size={14} /> Brand untuk laporan</span>
+              <small>Semua sumber, konteks, dan hasil laporan terikat pada brand yang dipilih.</small>
+            </div>
+            <ClientPicker clientId={props.clientId} onChange={props.setClientId} />
+          </div>
+        </header>
 
-          <MetaTab key={`${props.clientId}-MetaTab`}
+        <GenTopNav badges={props.badges} />
+        <div className="rg-active-caption" key={activeTab} style={{ '--rg-accent': active.accent } as CSSProperties}>
+          <strong>{active.label}</strong>
+          <span>{active.tagline}</span>
+          <i />
+          <p>{active.desc}</p>
+        </div>
+
+        <MetaTab key={`${props.clientId}-MetaTab`}
             isActive={activeTab === 'meta'}
             clientId={props.clientId}
             onGenerated={(data) => props.setPlatformResult('meta', data)}
@@ -108,9 +133,8 @@ export function GeneratorShell(props: GeneratorShellProps) {
             onOtherChannelsChange={props.setOtherChannels}
             nextRowId={props.nextRowId}
           />
-          <SummaryTab isActive={activeTab === 'summary'} platformState={props.platformState} bizState={props.bizState} />
-        </div>
+        <SummaryTab isActive={activeTab === 'summary'} platformState={props.platformState} bizState={props.bizState} />
       </div>
-    </>
+    </div>
   );
 }
