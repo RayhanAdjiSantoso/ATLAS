@@ -49,6 +49,7 @@ aiSummaryRouter.post('/', async (req, res) => {
   // mengubah objective di Pengaturan Brand memang harus menghasilkan
   // ringkasan yang berbeda walau angkanya sama.
   const cacheInput = {
+    prompt_version: ai.PROMPT_VERSION,
     platform,
     period,
     performance,
@@ -74,6 +75,7 @@ aiSummaryRouter.post('/', async (req, res) => {
   const prompt = ai.buildPrompt({
     brandName: brand.brand_name,
     platform,
+    period,
     profile,
     history,
     performance,

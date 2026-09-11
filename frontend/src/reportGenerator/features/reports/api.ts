@@ -152,10 +152,14 @@ export async function replaceProductMaster(brandId: number, entries: ProductMast
 
 export interface AiSummaryContent {
   diagnosis: string;
+  objective_alignment?: string;
   winning: string[];
   challenge: string[];
+  hypotheses?: string[];
   strategic_direction: string[];
   action_items: string[];
+  risks?: string[];
+  data_gaps?: string[];
 }
 
 export interface AiSummaryRecord {
@@ -175,8 +179,8 @@ export interface AiSummaryRecord {
 
 export interface AiSummaryPerformance {
   period: { old: string; cur: string };
-  kpis: { label: string; old: string; cur: string; delta: string }[];
-  cpasKpis?: { label: string; old: string; cur: string; delta: string }[];
+  kpis: { label: string; old: string; cur: string; delta: string; deltaNum?: number | null; signal?: string }[];
+  cpasKpis?: { label: string; old: string; cur: string; delta: string; deltaNum?: number | null; signal?: string }[];
   periodWarning?: string | null;
   notes?: string[];
 }

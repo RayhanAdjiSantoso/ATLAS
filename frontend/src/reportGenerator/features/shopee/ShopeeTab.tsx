@@ -795,8 +795,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
               clientId={clientId}
               platform="shopee"
               period={{ old: report.p1, cur: report.p2 }}
+              periodDates={{ oldStart: periodOldRange.start, oldEnd: periodOldRange.end, curStart: periodCurRange.start, curEnd: periodCurRange.end }}
               kpis={report.summary.kpis}
-              
               periodWarning={report.periodWarning}
             />
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>

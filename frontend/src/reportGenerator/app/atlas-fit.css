@@ -52,14 +52,21 @@
    Kartu terakhir di tiap laporan platform. Memakai .sec-block milik design
    system supaya bentuk dan animasinya sama dengan section lain; yang di
    bawah ini hanya isinya. */
+.mil-ui .ai-sum { overflow: hidden; }
 .mil-ui .ai-sum-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.mil-ui .ai-sum-title { display: inline-flex; align-items: center; gap: .5rem; }
 .mil-ui .ai-sum-tools { display: inline-flex; gap: .4rem; }
 .mil-ui .ai-sum-btn { padding: .32rem .7rem; font-size: .78rem; }
-.mil-ui .ai-sum-body { padding: 1.1rem 1.4rem 1.4rem; }
+.mil-ui .ai-sum-contextbar { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; padding: .68rem 1.4rem; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--acc) 4%, var(--surface)); }
+.mil-ui .ai-sum-contextbar > span:not(.ai-sum-context-note) { display: inline-flex; align-items: center; gap: .35rem; padding: .28rem .55rem; border: 1px solid color-mix(in srgb, var(--acc) 18%, var(--border)); border-radius: 999px; background: var(--surface); color: var(--acc); font-size: .7rem; font-weight: 700; }
+.mil-ui .ai-sum-context-note { margin-left: auto; color: var(--muted); font-size: .72rem; }
+.mil-ui .ai-sum-body { padding: 1.35rem 1.4rem 1.4rem; }
 
-.mil-ui .ai-sum-empty { display: grid; gap: .8rem; justify-items: start; max-width: 62ch; }
+.mil-ui .ai-sum-empty { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .9rem 1rem; }
+.mil-ui .ai-sum-empty-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: color-mix(in srgb, var(--acc) 10%, var(--surface)); color: var(--acc); }
+.mil-ui .ai-sum-empty h4 { margin-bottom: .22rem; font-size: .94rem; }
 .mil-ui .ai-sum-empty p { font-size: .86rem; line-height: 1.6; color: var(--muted); }
-.mil-ui .ai-sum-warn { color: var(--warn, #b45309); font-weight: 600; }
+.mil-ui .ai-sum-empty .ai-sum-warn { grid-column: 2 / -1; color: var(--warn, #b45309); font-weight: 600; }
 .mil-ui .ai-sum-cta { font-size: .88rem; }
 
 .mil-ui .ai-sum-error { display: grid; gap: .45rem; justify-items: start; padding: .9rem 1rem; border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--bad) 6%, transparent); }
@@ -67,16 +74,58 @@
 .mil-ui .ai-sum-error span { font-size: .82rem; line-height: 1.55; color: var(--text); }
 .mil-ui .ai-sum-error small { font-size: .75rem; color: var(--muted); }
 
-.mil-ui .ai-sum-diagnosis h4 { font-size: .78rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.mil-ui .ai-sum-diagnosis p { margin-top: .4rem; font-size: .92rem; line-height: 1.65; max-width: 78ch; }
+.mil-ui .ai-sum-lead-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr); gap: 1rem; }
+.mil-ui .ai-sum-diagnosis { padding: 1.15rem 1.2rem; border: 1px solid color-mix(in srgb, var(--acc) 16%, var(--border)); border-radius: 14px; background: linear-gradient(145deg, color-mix(in srgb, var(--acc) 5%, var(--surface)), var(--surface) 55%); }
+.mil-ui .ai-sum-eyebrow { display: inline-flex; align-items: center; gap: .38rem; font-size: .7rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--acc); }
+.mil-ui .ai-sum-diagnosis > p { margin-top: .55rem; font-size: .92rem; line-height: 1.7; }
+.mil-ui .ai-sum-alignment { margin-top: 1rem; padding-top: .85rem; border-top: 1px solid var(--border); }
+.mil-ui .ai-sum-alignment h4 { display: flex; align-items: center; gap: .4rem; color: var(--text); font-size: .77rem; }
+.mil-ui .ai-sum-alignment p { margin-top: .38rem; color: var(--muted); font-size: .84rem; line-height: 1.6; }
+.mil-ui .ai-sum-pulse { padding: 1rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.mil-ui .ai-sum-pulse-head { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin-bottom: .8rem; }
+.mil-ui .ai-sum-pulse-head span { font-size: .82rem; font-weight: 800; }
+.mil-ui .ai-sum-pulse-head small, .mil-ui .ai-sum-pulse-note { color: var(--muted2); font-size: .65rem; }
+.mil-ui .ai-sum-pulse-row { margin-top: .62rem; }
+.mil-ui .ai-sum-pulse-row > div:first-child { display: flex; justify-content: space-between; gap: .6rem; font-size: .71rem; }
+.mil-ui .ai-sum-pulse-row strong { white-space: nowrap; font-size: .7rem; }
+.mil-ui .ai-sum-pulse-track { height: 5px; margin-top: .28rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--muted2) 13%, transparent); }
+.mil-ui .ai-sum-pulse-track i { display: block; height: 100%; border-radius: inherit; background: var(--muted2); }
+.mil-ui .ai-sum-pulse-track i.delta-good { background: var(--good); }
+.mil-ui .ai-sum-pulse-track i.delta-bad { background: var(--bad); }
+.mil-ui .ai-sum-pulse-note { display: block; margin-top: .75rem; line-height: 1.4; }
 
-.mil-ui .ai-sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .8rem; margin-top: 1.2rem; }
-.mil-ui .ai-sum-card { padding: .85rem 1rem 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.mil-ui .ai-sum-card h4 { font-size: .82rem; font-weight: 750; }
-.mil-ui .ai-sum-card h4 small { margin-left: .4rem; font-size: .68rem; font-weight: 500; color: var(--muted2); }
+.mil-ui .ai-sum-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-top: .9rem; }
+.mil-ui .ai-sum-card { padding: .9rem 1rem 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.mil-ui .ai-sum-card-good h4 > svg { color: var(--good); }
+.mil-ui .ai-sum-card-warn h4 > svg, .mil-ui .ai-sum-card-risk h4 > svg { color: var(--bad); }
+.mil-ui .ai-sum-card-idea h4 > svg { color: var(--acc); }
+.mil-ui .ai-sum-card h4 { display: flex; align-items: flex-start; gap: .45rem; font-size: .81rem; font-weight: 750; }
+.mil-ui .ai-sum-card h4 > span { display: grid; gap: .1rem; }
+.mil-ui .ai-sum-card h4 small { font-size: .65rem; font-weight: 500; color: var(--muted2); }
 .mil-ui .ai-sum-card ul { margin: .55rem 0 0; padding-left: 1.05rem; display: grid; gap: .4rem; }
 .mil-ui .ai-sum-card li { font-size: .84rem; line-height: 1.55; }
 .mil-ui .ai-sum-none { margin-top: .5rem; font-size: .8rem; color: var(--muted2); }
+
+.mil-ui .ai-sum-decision-grid { display: grid; grid-template-columns: minmax(240px, .7fr) minmax(0, 1.3fr); gap: .8rem; margin-top: .9rem; }
+.mil-ui .ai-sum-direction, .mil-ui .ai-sum-actions { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--acc) 2%, var(--surface)); }
+.mil-ui .ai-sum-direction > h4, .mil-ui .ai-sum-actions > h4 { display: flex; align-items: center; gap: .45rem; font-size: .84rem; }
+.mil-ui .ai-sum-actions > h4 { justify-content: space-between; }
+.mil-ui .ai-sum-actions > h4 small { color: var(--muted2); font-size: .65rem; font-weight: 500; }
+.mil-ui .ai-sum-direction ol { display: grid; gap: .7rem; margin: .75rem 0 0; padding: 0; list-style: none; }
+.mil-ui .ai-sum-direction li { display: grid; grid-template-columns: auto 1fr; gap: .55rem; font-size: .82rem; line-height: 1.55; }
+.mil-ui .ai-sum-direction li b { color: var(--acc); font-size: .69rem; letter-spacing: .05em; }
+.mil-ui .ai-sum-action { display: grid; grid-template-columns: auto 1fr; gap: .7rem; padding: .75rem 0; border-bottom: 1px solid var(--border); }
+.mil-ui .ai-sum-action:last-child { padding-bottom: 0; border-bottom: 0; }
+.mil-ui .ai-sum-priority { display: grid; place-items: center; width: 30px; height: 24px; border-radius: 7px; background: color-mix(in srgb, var(--acc) 10%, var(--surface)); color: var(--acc); font-size: .68rem; font-weight: 850; }
+.mil-ui .ai-sum-priority.p1 { background: color-mix(in srgb, var(--bad) 10%, var(--surface)); color: var(--bad); }
+.mil-ui .ai-sum-priority.p2 { background: color-mix(in srgb, var(--warn, #b45309) 11%, var(--surface)); color: var(--warn, #b45309); }
+.mil-ui .ai-sum-action-head { display: flex; align-items: baseline; justify-content: space-between; gap: .7rem; }
+.mil-ui .ai-sum-action-head strong { font-size: .82rem; line-height: 1.45; }
+.mil-ui .ai-sum-action-head small { flex: none; color: var(--muted); font-size: .67rem; }
+.mil-ui .ai-sum-action p { margin-top: .25rem; color: var(--muted); font-size: .75rem; line-height: 1.5; }
+.mil-ui .ai-sum-gaps { display: flex; gap: .65rem; margin-top: .8rem; padding: .75rem .85rem; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); }
+.mil-ui .ai-sum-gaps strong { color: var(--text); font-size: .75rem; }
+.mil-ui .ai-sum-gaps ul { margin: .28rem 0 0; padding-left: 1rem; font-size: .74rem; line-height: 1.5; }
 
 .mil-ui .ai-sum-edit { display: grid; gap: .8rem; }
 .mil-ui .ai-sum-edit label { display: grid; gap: .3rem; }
@@ -92,3 +141,19 @@
 .mil-ui.pdf-export-mode .ai-sum-tools,
 .mil-ui.pdf-export-mode .ai-sum-empty,
 .mil-ui.pdf-export-mode .ai-sum-error { display: none !important; }
+
+@media (max-width: 860px) {
+  .mil-ui .ai-sum-context-note { width: 100%; margin-left: 0; }
+  .mil-ui .ai-sum-empty { grid-template-columns: auto 1fr; }
+  .mil-ui .ai-sum-empty .ai-sum-cta { grid-column: 2; justify-self: start; }
+  .mil-ui .ai-sum-lead-grid, .mil-ui .ai-sum-decision-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .mil-ui .ai-sum-heading { align-items: flex-start; }
+  .mil-ui .ai-sum-tools { flex-wrap: wrap; justify-content: flex-end; }
+  .mil-ui .ai-sum-body, .mil-ui .ai-sum-contextbar { padding-left: 1rem; padding-right: 1rem; }
+  .mil-ui .ai-sum-grid { grid-template-columns: 1fr; }
+  .mil-ui .ai-sum-empty { grid-template-columns: 1fr; }
+  .mil-ui .ai-sum-empty .ai-sum-cta, .mil-ui .ai-sum-empty .ai-sum-warn { grid-column: 1; }
+}

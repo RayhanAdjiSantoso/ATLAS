@@ -17,6 +17,7 @@ const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const TIMEOUT_MS = 60_000;
 const HISTORY_LIMIT = 3;
+export const PROMPT_VERSION = 'consultant-brief-v2';
 
 // Bentuk output dikunci di sisi API, bukan diminta lewat kalimat. Model yang
 // diminta "balas JSON saja" tetap sesekali membungkusnya dengan ```json atau
@@ -25,32 +26,42 @@ const RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
     diagnosis: { type: 'STRING' },
+    objective_alignment: { type: 'STRING' },
     winning: { type: 'ARRAY', items: { type: 'STRING' } },
     challenge: { type: 'ARRAY', items: { type: 'STRING' } },
+    hypotheses: { type: 'ARRAY', items: { type: 'STRING' } },
     strategic_direction: { type: 'ARRAY', items: { type: 'STRING' } },
     action_items: { type: 'ARRAY', items: { type: 'STRING' } },
+    risks: { type: 'ARRAY', items: { type: 'STRING' } },
+    data_gaps: { type: 'ARRAY', items: { type: 'STRING' } },
   },
-  required: ['diagnosis', 'winning', 'challenge', 'strategic_direction', 'action_items'],
-  propertyOrdering: ['diagnosis', 'winning', 'challenge', 'strategic_direction', 'action_items'],
+  required: ['diagnosis', 'objective_alignment', 'winning', 'challenge', 'hypotheses', 'strategic_direction', 'action_items', 'risks', 'data_gaps'],
+  propertyOrdering: ['diagnosis', 'objective_alignment', 'winning', 'challenge', 'hypotheses', 'strategic_direction', 'action_items', 'risks', 'data_gaps'],
 };
 
 const PLATFORM_LABEL = { meta: 'Meta Ads', shopee: 'Shopee Ads', tiktok: 'TikTok GMV Max' };
 
-const SYSTEM_RULES = `Kamu analis performance marketing di agensi yang menangani brand ini. Tulis dalam Bahasa Indonesia yang lugas dan spesifik, seperti catatan analis untuk tim internal — bukan bahasa marketing.
+const SYSTEM_RULES = `Kamu adalah senior business & growth consultant yang bertanggung jawab mengubah data performance menjadi arahan keputusan. Tulis dalam Bahasa Indonesia yang lugas, tajam, dan spesifik seperti decision brief untuk consultant dan pemilik brand. Jangan sekadar menceritakan angka yang sudah terlihat di tabel.
 
 Aturan yang mengikat:
-1. Jangan pernah merekomendasikan tindakan hanya karena sebuah metrik naik atau turun. Setiap rekomendasi harus terhubung ke objective brand, konteks bisnisnya, pelajaran periode sebelumnya, constraint yang ada, atau rencana ke depan. Kalau kaitan itu tidak ada di konteks yang diberikan, jangan buat rekomendasinya.
-2. Bedakan secara internal: FAKTA (angka yang tertulis di data), OBSERVASI (pola yang terlihat dari angka itu), HIPOTESIS (dugaan sebab yang belum terbukti), KEPUTUSAN (tindakan yang diusulkan). Jangan pernah menulis korelasi sebagai sebab-akibat. Kalau menduga penyebab, tandai dengan kata seperti "kemungkinan", "indikasi", atau "perlu dicek".
-3. Sebut angka yang relevan saat berargumen, tapi jangan menyalin ulang seluruh tabel — pembaca sudah melihat tabelnya di atas ringkasan ini.
-4. Kalau konteks brand kosong atau datanya terlalu tipis untuk menyimpulkan sesuatu, katakan itu apa adanya di diagnosis, dan biarkan array lain pendek. Lebih baik singkat daripada mengarang.
-5. Perubahan periode yang kecil (di bawah ±5%) diperlakukan sebagai stabil, bukan tren, kecuali ada konteks yang menjelaskan sebaliknya.
+1. Mulai dari Objective & Target, Strategic Priorities, Constraints & Concerns, lalu nilai apakah hasil periode utama mendekatkan brand ke arah tersebut. Gunakan juga karakter bisnis, positioning, produk/channel utama, dan historical learning yang relevan. Jika arah brand bertentangan dengan angka, sebutkan konflik itu secara eksplisit.
+2. Analisis hanya rentang waktu yang diberikan. Periksa apakah jumlah hari kedua periode sebanding. Jika tidak, prioritaskan rate/rasio dibanding total dan nyatakan batas perbandingannya.
+3. Lakukan triangulasi antarmetrik. Bedah hubungan skala vs efisiensi, volume vs conversion rate, biaya vs hasil, serta funnel/audience/product jika datanya tersedia. Jangan menarik keputusan dari satu metrik saja.
+4. Bedakan dengan tegas: FAKTA adalah angka yang tersedia; OBSERVASI adalah pola; HIPOTESIS adalah dugaan penyebab; KEPUTUSAN adalah tindakan. Korelasi bukan sebab-akibat. Dugaan wajib memakai "kemungkinan", "indikasi", atau "perlu divalidasi" dan disertai cara memeriksanya.
+5. Sebut angka paling material sebagai bukti, lalu jelaskan implikasi bisnisnya. Jangan menyalin seluruh tabel, membuat klaim di luar data, atau memberi saran generik seperti "optimalkan iklan" tanpa objek, alasan, ukuran berhasil, dan horizon waktu.
+6. Perubahan di bawah ±5% diperlakukan sebagai stabil, kecuali konteks menunjukkan ambang lain. Waspadai denominator kecil dan lonjakan persentase yang tidak disertai volume.
+7. Jika konteks atau data tidak cukup, tulis kekurangannya pada data_gaps. Jangan mengisi celah dengan asumsi.
 
 Isi tiap bagian:
-- diagnosis: satu paragraf. Apa yang sebenarnya terjadi pada periode ini dan mengapa itu penting bagi objective brand.
-- winning: yang terbukti bekerja, dengan bukti angkanya.
-- challenge: masalah nyata, dengan bukti angkanya. Bukan daftar semua yang turun.
-- strategic_direction: arah untuk periode berikutnya, terhubung ke objective dan constraint.
-- action_items: langkah konkret yang bisa dikerjakan, cukup spesifik untuk dieksekusi minggu depan.`;
+- diagnosis: 1 paragraf executive diagnosis (maksimal 180 kata): perubahan paling material, driver yang terlihat, trade-off, dan arti bisnisnya.
+- objective_alignment: 1 paragraf singkat yang menilai keselarasan hasil terhadap Objective & Target dan Current Direction. Sebutkan konteks brand yang dipakai.
+- winning: 2–4 poin yang benar-benar terbukti bekerja. Setiap poin berisi bukti angka + implikasi.
+- challenge: 2–4 masalah paling material. Setiap poin berisi bukti angka + dampak terhadap target/constraint.
+- hypotheses: 1–4 dugaan penyebab yang belum terbukti. Akhiri tiap poin dengan data atau pemeriksaan yang dibutuhkan untuk validasi.
+- strategic_direction: 2–4 keputusan arah, berurutan dari dampak terbesar, terhubung ke objective dan constraint.
+- action_items: 3–5 tindakan. Gunakan format persis "P1/P2/P3 · horizon waktu — tindakan spesifik | Alasan: ... | Ukur: ...". P1 paling mendesak.
+- risks: 1–3 risiko jika arah ini dijalankan atau jika masalah dibiarkan, berikut leading indicator yang perlu dipantau.
+- data_gaps: 0–4 kekurangan data/konteks yang membatasi keyakinan analisis. Jangan menulis poin generik.`;
 
 /* ── Perakitan konteks ──────────────────────────────────────────────── */
 
@@ -89,11 +100,23 @@ function historyBlock(rows) {
     const label = row.period_cur_label || row.created_at?.toISOString?.().slice(0, 10) || 'periode sebelumnya';
     const lines = [`### ${label}${row.edited_summary ? ' (sudah disunting tim)' : ''}`];
     if (s.diagnosis) lines.push(`Diagnosis: ${s.diagnosis}`);
+    if (s.objective_alignment) lines.push(`Keselarasan objective: ${s.objective_alignment}`);
     if (s.winning?.length) lines.push(`Winning: ${s.winning.join('; ')}`);
     if (s.challenge?.length) lines.push(`Challenge: ${s.challenge.join('; ')}`);
+    if (s.hypotheses?.length) lines.push(`Hipotesis yang pernah dicatat: ${s.hypotheses.join('; ')}`);
+    if (s.strategic_direction?.length) lines.push(`Arah strategis: ${s.strategic_direction.join('; ')}`);
     if (s.action_items?.length) lines.push(`Action items yang disepakati: ${s.action_items.join('; ')}`);
+    if (s.risks?.length) lines.push(`Risiko yang dipantau: ${s.risks.join('; ')}`);
     return lines.join('\n');
   });
+}
+
+function periodScopeBlock(period, performance) {
+  const value = (v) => v || 'tanggal tidak tersedia';
+  return [
+    `- Periode pembanding: ${period?.oldLabel ?? performance.period?.old ?? '—'} (${value(period?.oldStart)} s.d. ${value(period?.oldEnd)})`,
+    `- Periode utama: ${period?.curLabel ?? performance.period?.cur ?? '—'} (${value(period?.curStart)} s.d. ${value(period?.curEnd)})`,
+  ];
 }
 
 function performanceBlock(performance) {
@@ -102,7 +125,8 @@ function performanceBlock(performance) {
   if (performance.notes?.length) performance.notes.forEach((n) => lines.push(`CATATAN: ${n}`));
   lines.push('', `Perbandingan: ${performance.period?.old ?? '—'} → ${performance.period?.cur ?? '—'}`, '');
   for (const kpi of performance.kpis ?? []) {
-    lines.push(`- ${kpi.label}: ${kpi.old} → ${kpi.cur} (${kpi.delta})`);
+    const signal = kpi.signal ? `; interpretasi tampilan: ${kpi.signal}` : '';
+    lines.push(`- ${kpi.label}: ${kpi.old} → ${kpi.cur} (${kpi.delta}${signal})`);
   }
   if (performance.cpasKpis?.length) {
     lines.push('', 'CPAS:');
@@ -111,14 +135,15 @@ function performanceBlock(performance) {
   return lines;
 }
 
-export function buildPrompt({ brandName, platform, profile, history, performance }) {
+export function buildPrompt({ brandName, platform, period, profile, history, performance }) {
   const blocks = [
     `Brand: ${brandName}. Platform: ${PLATFORM_LABEL[platform] ?? platform}.`,
     section('A. Brand Context', brandContextBlock(profile)) ?? '## A. Brand Context\n(belum diisi di Pengaturan Brand)',
     section('B. Current Direction', currentDirectionBlock(profile)) ?? '## B. Current Direction\n(belum diisi di Pengaturan Brand)',
     section('C. Historical / Period Learning', historyBlock(history)) ?? '## C. Historical / Period Learning\n(belum ada ringkasan periode sebelumnya)',
-    section('D. Performance Data periode ini', performanceBlock(performance)),
-    performance.upcoming ? section('E. Rencana / konteks periode berikutnya', performance.upcoming) : null,
+    section('D. Scope perbandingan yang dipilih user', periodScopeBlock(period, performance)),
+    section('E. Performance Data dalam scope tersebut', performanceBlock(performance)),
+    performance.upcoming ? section('F. Rencana / konteks periode berikutnya', performance.upcoming) : null,
     SYSTEM_RULES,
   ].filter(Boolean);
   return blocks.join('\n\n');
@@ -155,7 +180,8 @@ export async function callGemini(prompt, { attempt = 0 } = {}) {
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.4,
+          temperature: 0.3,
+          maxOutputTokens: 8192,
           responseMimeType: 'application/json',
           responseSchema: RESPONSE_SCHEMA,
         },
@@ -197,23 +223,31 @@ export async function callGemini(prompt, { attempt = 0 } = {}) {
 
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    // responseMimeType biasanya memberi JSON murni. Fallback fence hanya
+    // mengakomodasi model alias lama yang kadang tetap membungkus hasilnya.
+    const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+    parsed = JSON.parse(cleaned);
   } catch {
-    throw new AiSummaryError('Jawaban Gemini bukan JSON yang valid.');
+    const reason = data?.candidates?.[0]?.finishReason;
+    throw new AiSummaryError(`Jawaban Gemini bukan JSON yang valid${reason ? ` (${reason})` : ''}.`);
   }
   return normaliseSummary(parsed);
 }
 
 // Bentuknya dijamin schema, isinya tidak: array bisa datang kosong atau
 // berisi string kosong, dan UI tidak boleh merender butir hampa.
-function normaliseSummary(raw) {
+export function normaliseSummary(raw) {
   const list = (v) => (Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : []);
   return {
     diagnosis: String(raw.diagnosis ?? '').trim(),
+    objective_alignment: String(raw.objective_alignment ?? '').trim(),
     winning: list(raw.winning),
     challenge: list(raw.challenge),
+    hypotheses: list(raw.hypotheses),
     strategic_direction: list(raw.strategic_direction),
     action_items: list(raw.action_items),
+    risks: list(raw.risks),
+    data_gaps: list(raw.data_gaps),
   };
 }
 
