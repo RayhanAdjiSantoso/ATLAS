@@ -180,7 +180,7 @@
 .brand-hero-main { position:relative; z-index:1; overflow:hidden; border-radius:24px 24px 0 0; display:flex; align-items:center; justify-content:space-between; gap:2.4rem; padding:clamp(1.5rem,3vw,2.6rem) clamp(1.35rem,3.4vw,2.9rem) clamp(1.35rem,2.6vw,2.1rem); }
 .brand-hero-copy { max-width: 660px; }
 .brand-hero-eye { display:inline-flex; align-items:center; gap:.4rem; color:var(--acc); font-size:.655rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
-.brand-hero h1 { margin:.5rem 0 .4rem; font-size:clamp(1.6rem,2.7vw,2.4rem); font-weight:820; letter-spacing:-.045em; line-height:1.03; background:linear-gradient(96deg,#0f1a3a 30%,#1e3eb8 96%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.brand-hero h1 { margin:.5rem 0 .4rem; font-size:clamp(1.6rem,2.7vw,2.4rem); font-weight:820; letter-spacing:-.045em; line-height:1.03; color:var(--text); }
 .brand-hero p { max-width:58ch; color:var(--text-muted); font-size:.85rem; line-height:1.6; }
 .brand-hero-stats { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1.05rem; }
 .brand-hero-stats span { display:inline-flex; align-items:center; gap:.32rem; padding:.35rem .62rem; color:var(--text-muted); border:1px solid rgba(198,209,241,.85); border-radius:99px; background:rgba(255,255,255,.66); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); font-size:.68rem; font-weight:620; }
@@ -1433,3 +1433,115 @@ html:has(.con-bar) {
 .brand-list-table .brand-status-value.is-off { background: #eef1f7; color: #52617c; }
 .brand-list-table .brand-status-value.is-freeze { background: #fef3c7; color: #92400e; }
 .brand-list-table .brand-status-value:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* ── Dashboard workspace shell ─────────────────────────────────────
+   Uses the same hero and glass navigation language as Pengaturan Brand,
+   while keeping the dashboard's existing analytic renderers untouched. */
+.con.dashboard-console {
+  --brand-ease: cubic-bezier(.16,1,.3,1);
+  width: 100%;
+  max-width: 1280px;
+  min-height: 100%;
+  margin: 0 auto;
+  padding: clamp(1rem,2.4vw,2.2rem) 0 4.5rem;
+  background: transparent;
+}
+.dashboard-hero { z-index: 35; }
+.dashboard-hero-main { min-height: 232px; }
+.dashboard-dock {
+  display: block;
+  padding-top: .9rem;
+  padding-bottom: 1rem;
+}
+.dashboard-dock-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .8rem;
+}
+.dashboard-dock-copy > span {
+  display: inline-flex;
+  align-items: center;
+  gap: .42rem;
+  color: var(--text);
+  font-size: .82rem;
+  font-weight: 780;
+}
+.dashboard-dock-copy > span svg { color: var(--acc); }
+.dashboard-dock-copy small { color: var(--text-muted); font-size: .69rem; }
+.dashboard-dock .con-controls { margin-top: .75rem; }
+.dashboard-dock .con-ctl-brand { max-width: 330px; }
+.dashboard-dock .con-controls > .brand-status-filter {
+  order: 2;
+  flex-basis: 100%;
+  padding-top: .65rem;
+  border-top: 1px solid rgba(211,219,238,.82);
+}
+
+.dashboard-domain-nav {
+  display: flex;
+  width: 100%;
+  margin: 1.3rem 0 .7rem;
+}
+.dashboard-domain-tab {
+  flex: 1 0 132px;
+  justify-content: center;
+  min-height: 42px;
+  padding: .58rem .72rem;
+}
+.dashboard-domain-tab > span:not(.brand-view-pill):not(.dashboard-domain-dot) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-domain-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border: 1px solid #cbd4e6;
+  border-radius: 50%;
+  background: transparent;
+}
+.dashboard-domain-dot.is-ready { border-color: var(--acc-300); background: var(--acc-300); }
+.dashboard-domain-tab.is-active .dashboard-domain-dot.is-ready { border-color: var(--acc); background: var(--acc); }
+.dashboard-domain-dot.is-loading { border-color: var(--acc); border-right-color: transparent; animation: con-spin .7s linear infinite; }
+.dashboard-domain-caption {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  min-height: 24px;
+  padding: 0 .3rem;
+  color: var(--text-muted);
+  font-size: .69rem;
+  font-weight: 620;
+}
+.dashboard-domain-caption > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-domain-caption a {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--acc);
+  text-decoration: none;
+}
+.con-body.dashboard-body { display: block; padding-top: .8rem; }
+
+@media (max-width: 900px) {
+  .con.dashboard-console { margin: 0 auto; padding: .75rem 0 3rem; }
+  .dashboard-hero-main { min-height: 0; }
+  .dashboard-dock-copy { align-items: flex-start; flex-direction: column; gap: .2rem; }
+  .dashboard-dock .con-ctl-brand { max-width: none; }
+  .con-body.dashboard-body { display: block; padding-top: .75rem; }
+}
+
+@media (max-width: 640px) {
+  .dashboard-domain-nav { margin-top: 1rem; }
+  .dashboard-domain-tab { flex-basis: 118px; justify-content: flex-start; }
+  .dashboard-domain-caption > span:first-child, .dashboard-domain-caption .brand-caption-rule { display: none; }
+  .dashboard-domain-caption a { margin-left: 0; }
+}

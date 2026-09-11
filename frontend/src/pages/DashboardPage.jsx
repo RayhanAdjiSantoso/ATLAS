@@ -1,8 +1,7 @@
 import useSessionState from '../hooks/useSessionState.js';
-import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowUp, ArrowDown, Minus, ArrowRight, Database } from 'lucide-react';
+import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
+import { ArrowUp, ArrowDown, Minus, ArrowRight, BarChart3, Database, Sparkles } from 'lucide-react';
 import FilterPanel from '../components/dashboard/FilterPanel.jsx';
 import DashboardTab from '../components/dashboard/DashboardTab.jsx';
 import { useConsoleData } from '../components/dashboard/useConsoleData.js';
@@ -14,6 +13,10 @@ import {
   formatStripValue,
 } from '../components/dashboard/domains.js';
 import '../components/dashboard/console.css';
+import atlasIcon from '../assets/atlas-icon.png';
+import atlasWordmark from '../assets/atlas-wordmark.png';
+
+const DASH_EASE = [0.16, 1, 0.3, 1];
 
 // Business Overview as a console rather than a tab strip.
 //
@@ -157,8 +160,6 @@ function ModuleCard({ domain, entry, onOpen, index = 0 }) {
 export default function DashboardPage() {
   const [activeKey, setActiveKey] = useSessionState('dashboard:section', 'Executive Snapshot');
   const [productLevel, setProductLevel] = useSessionState('dashboard:product-level', 'category');
-  const [stuck, setStuck] = useState(false);
-  const sentinelRef = useRef(null);
   const reduceMotion = useReducedMotion();
 
   const [filters, setFilters] = useSessionState('dashboard:filters', {
@@ -172,81 +173,96 @@ export default function DashboardPage() {
 
   const { read, retry } = useConsoleData({ filters, activeKey, productLevel });
 
-  // The control bar gains its edge and shadow only once it has actually left
-  // the flow, so a page scrolled to the top shows no seam at all.
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node || !('IntersectionObserver' in window)) return undefined;
-    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), { threshold: 1 });
-    io.observe(node);
-    return () => io.disconnect();
-  }, []);
-
   const active = DOMAIN_BY_KEY[activeKey];
   const activeEntry = read(activeKey);
   const others = DOMAINS.filter((d) => d.key !== activeKey);
 
   return (
-    <div className="con">
-      <header className="con-head">
-        <div>
-          <h1>Dashboard Business Overview</h1>
-          <p>
-            Tujuh sudut analisis atas satu brand dan satu periode. Pilih satu untuk dibuka penuh;
-            sisanya tetap terbaca sebagai ringkasan.
-          </p>
+    <div className="con dashboard-console">
+      <header className="brand-hero dashboard-hero">
+        <span className="brand-hero-fx" aria-hidden="true"><i className="brand-hero-aurora" /><i className="brand-hero-grid" /></span>
+
+        <div className="brand-hero-main dashboard-hero-main">
+          <motion.div
+            className="brand-hero-copy"
+            initial={reduceMotion ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: .4, ease: DASH_EASE }}
+          >
+            <span className="brand-hero-eye"><Sparkles size={13} /> Business intelligence workspace</span>
+            <h1>Dashboard Business Overview</h1>
+            <p>Delapan sudut analisis untuk membaca pertumbuhan, pelanggan, transaksi, produk, dan akar perubahan dalam satu ruang kerja.</p>
+            <div className="brand-hero-stats">
+              <span><strong>{DOMAINS.length}</strong> domain analisis</span>
+              <span><strong>{filters.compare ? '2' : '1'}</strong> periode dibaca</span>
+              <span><strong>Shopee</strong> sumber data</span>
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="brand-hero-badge" aria-hidden="true"
+            initial={reduceMotion ? false : { opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: .45, ease: DASH_EASE, delay: .06 }}
+          >
+            <span className="brand-hero-ring" /><span className="brand-hero-ring brand-hero-ring-b" />
+            <img src={atlasIcon} alt="" className="brand-hero-mark" />
+            <img src={atlasWordmark} alt="" className="brand-hero-logo" />
+            <small>Business intelligence</small>
+          </motion.div>
         </div>
-        <span className="con-head-scope">Sumber data Shopee</span>
+
+        <div className="brand-dock dashboard-dock">
+          <div className="dashboard-dock-copy">
+            <span><BarChart3 size={15} /> Ruang lingkup analisis</span>
+            <small>Brand dan periode berikut menjadi dasar seluruh angka di bawah.</small>
+          </div>
+          <FilterPanel filters={filters} onChange={setFilters} />
+        </div>
       </header>
 
-      <div className="con-bar-sentinel" ref={sentinelRef} />
-      <div className={`con-bar${stuck ? ' is-stuck' : ''}`}>
-        <FilterPanel filters={filters} onChange={setFilters} />
-      </div>
-
-      <div className="con-body">
-        <nav className="con-rail" aria-label="Domain analisis">
-          <div className="con-rail-title">Domain</div>
+      <LayoutGroup id="dashboard-domain-nav">
+        <nav className="brand-view-nav dashboard-domain-nav" aria-label="Domain analisis" role="tablist">
           {DOMAINS.map((d) => {
             const entry = read(d.key);
             const isActive = d.key === activeKey;
+            const Icon = d.Icon;
             return (
               <button
                 type="button"
+                role="tab"
                 key={d.key}
-                className={`con-rail-item${isActive ? ' is-active' : ''}`}
+                className={`brand-view-tab dashboard-domain-tab${isActive ? ' is-active' : ''}`}
                 onClick={() => setActiveKey(d.key)}
-                aria-current={isActive ? 'true' : undefined}
+                aria-selected={isActive}
                 title={d.label}
               >
                 {isActive && (
                   <motion.span
-                    className="con-rail-glow"
-                    layoutId="con-rail-glow"
+                    className="brand-view-pill"
+                    layoutId="dashboard-active-domain"
                     transition={reduceMotion
                       ? { duration: 0 }
-                      : { type: 'spring', stiffness: 520, damping: 42, mass: .8 }}
+                      : { type: 'spring', stiffness: 520, damping: 44, mass: .6 }}
                   />
                 )}
-                <span className="con-rail-label">{d.label}</span>
+                <Icon size={15} />
+                <span>{d.label}</span>
                 <span
-                  className={`con-rail-dot${entry.status === 'ready' ? ' is-ready' : ''}${entry.status === 'loading' ? ' is-loading' : ''}`}
+                  className={`dashboard-domain-dot${entry.status === 'ready' ? ' is-ready' : ''}${entry.status === 'loading' ? ' is-loading' : ''}`}
                   aria-hidden
                 />
               </button>
             );
           })}
-
-          {/* The rail column runs the height of a long page, so it ends with
-              the one thing worth saying there: where these numbers came from.
-              It also keeps the new ingest page one click away from the page
-              that reads it, now that uploading is no longer a tab here. */}
-          <Link to="/pengaturan-brand" className="con-rail-foot">
-            <Database size={13} strokeWidth={2} />
-            <span>Data masuk lewat <strong>Pengaturan Brand</strong></span>
-          </Link>
         </nav>
+      </LayoutGroup>
 
+      <div className="dashboard-domain-caption">
+        <span>{active.question}</span>
+        <span className="brand-caption-rule" />
+        <Link to="/pengaturan-brand"><Database size={13} /> Data bersumber dari <strong>Pengaturan Brand</strong></Link>
+      </div>
+
+      <div className="con-body dashboard-body">
         <div className="con-canvas">
           <KpiStrip entry={read('Executive Snapshot')} />
 
