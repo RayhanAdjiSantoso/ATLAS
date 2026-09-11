@@ -304,29 +304,50 @@ function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4, scale: .99 }}
             transition={{ duration: .16, ease: EASE }}
           >
-            <label className="brand-picker-search">
-              <Search size={14} aria-hidden="true" />
-              <input
-                value={query} onChange={(event) => setQuery(event.target.value)}
-                placeholder="Cari brand…" autoFocus aria-label="Cari brand"
-              />
-            </label>
-            <BrandStatusFilter value={status} onChange={setStatus} />
-            <ul role="listbox">
-              {shown.map((item) => (
-                <li key={item.brand_id}>
-                  <button
-                    type="button" role="option" aria-selected={item.brand_id === brand?.brand_id}
-                    className={item.brand_id === brand?.brand_id ? 'is-active' : ''}
-                    onClick={() => { onSelect(item); setOpen(false); }}
-                  >
-                    <span>{item.brand_name}</span>
-                    {item.brand_id === brand?.brand_id && <Check size={14} />}
-                  </button>
-                </li>
-              ))}
-              {!shown.length && <li className="brand-picker-empty">Tidak ada brand cocok dengan "{query}".</li>}
-            </ul>
+            <div className="brand-picker-menu-head">
+              <label className="brand-picker-search">
+                <Search size={16} aria-hidden="true" />
+                <input
+                  value={query} onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Cari nama brand…" autoFocus aria-label="Cari brand"
+                />
+              </label>
+              <span>{shown.length} brand ditemukan</span>
+            </div>
+            <div className="brand-picker-menu-body">
+              <aside className="brand-picker-filters">
+                <span className="brand-picker-section-label">Status klien</span>
+                <BrandStatusFilter value={status} onChange={setStatus} />
+              </aside>
+              <div className="brand-picker-results">
+                <div className="brand-picker-results-head">
+                  <span className="brand-picker-section-label">Daftar brand</span>
+                  <small>Pilih untuk membuka pengaturan</small>
+                </div>
+                <ul role="listbox">
+                  {shown.map((item) => {
+                    const itemStatus = item.status || 'unknown';
+                    return (
+                      <li key={item.brand_id}>
+                        <button
+                          type="button" role="option" aria-selected={item.brand_id === brand?.brand_id}
+                          className={item.brand_id === brand?.brand_id ? 'is-active' : ''}
+                          onClick={() => { onSelect(item); setOpen(false); }}
+                        >
+                          <span className={`brand-status-dot is-${itemStatus}`} aria-hidden="true" />
+                          <span className="brand-picker-result-copy">
+                            <strong>{item.brand_name}</strong>
+                            <small>{BRAND_STATUS_LABELS[itemStatus]}</small>
+                          </span>
+                          {item.brand_id === brand?.brand_id && <Check size={15} />}
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {!shown.length && <li className="brand-picker-empty">Tidak ada brand yang cocok. Coba ubah pencarian atau status.</li>}
+                </ul>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1035,7 +1056,7 @@ export default function BrandSettingsPage() {
   const setField = (key) => (value) => setDraft((current) => ({ ...current, [key]: value }));
 
   return (
-    <div className={`con brand-settings${activeView === 'brands' ? ' is-brand-list' : ''}`}>
+    <div className="con brand-settings">
       <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" multiple hidden onChange={handleFile} />
 
       <header className="brand-hero">
