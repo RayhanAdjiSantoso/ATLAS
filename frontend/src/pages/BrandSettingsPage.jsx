@@ -483,9 +483,9 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                 key={month.key} type="button"
                 className={`brand-cov is-${state} ${busyKey === key ? 'is-busy' : ''}`}
                 style={{ '--cov-accent': platform.accent, '--cov-wash': platform.wash, '--cov-fill': `${pct}%` }}
-                onClick={() => onPick(dataset, month)}
+                onClick={() => merged ? setOpen(true) : onPick(dataset, month)}
                 title={merged
-                  ? `${month.full} · ${merged.coveredDays > 0 ? `${merged.coveredDays} dari ${month.days} hari` : 'snapshot bulanan'} · ${merged.parts.length} file (klik untuk menambah part)`
+                  ? `${month.full} · ${merged.coveredDays > 0 ? `${merged.coveredDays} dari ${month.days} hari` : 'snapshot bulanan'} · ${merged.parts.length} file (klik untuk melihat detail)`
                   : `${month.full} · belum ada file (klik untuk upload)`}
               >
                 <i aria-hidden="true" />
@@ -515,13 +515,6 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
         <span className={`brand-ds-status is-${status.tone}`}>
           {status.tone === 'ok' && <Check size={12} />}{status.label}
         </span>
-        <button
-          type="button" className="brand-row-action"
-          onClick={() => onPick(dataset, isReference ? null : lastMonth)}
-          aria-label={`Upload ${dataset.name}`}
-        >
-          <CloudUpload size={16} />
-        </button>
       </div>
 
       <AnimatePresence initial={false}>
@@ -583,7 +576,7 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                           {busyKey === `import-${file.id}` ? 'Mengimpor…' : <><RefreshCw size={14} /> Impor ulang</>}
                         </button>
                       )}
-                      <button type="button" onClick={() => onPick(dataset, month)}><Upload size={14} /> Ganti</button>
+                      <button type="button" onClick={() => onPick(dataset, month, file)}><Upload size={14} /> Ganti</button>
                       <a href={`/api/brands/${file.brand_id}/library/${file.id}/download`} download><Download size={14} /> Unduh</a>
                       <button type="button" className="is-danger" onClick={() => onDelete(file)}><Trash2 size={14} /> Hapus</button>
                     </span>
@@ -592,7 +585,9 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                 {!isReference && (
                   <p className="brand-ds-note">
                     <CircleAlert size={14} />
-                    Ekspor yang terbagi (part 1 of 2) boleh diunggah ke bulan yang sama — ATLAS menggabungkan harinya dan tidak menghitung ganda baris yang tumpang tindih.
+                    {DASHBOARD_CHANNELS.has(dataset.channel)
+                      ? 'Ekspor yang terbagi (part 1 of 2) boleh diunggah ke bulan yang sama. ATLAS menggabungkan cakupan dan menyaring transaksi yang memiliki identitas sama.'
+                      : 'Ekspor yang terbagi boleh diunggah ke bulan yang sama. Pastikan rentang setiap part saling melanjutkan dan tidak tumpang tindih.'}
                   </p>
                 )}
                 {!isReference && !months.some((m) => lookup.has(fileKey(platform.id, dataset.channel, m.key))) && (
@@ -697,7 +692,6 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
           ))}
           <span className="brand-ds-head-parts">Part <small>opsional</small></span>
           <span>Status</span>
-          <span />
         </div>
         {platform.datasets.map((dataset, index) => (
           <DatasetRow
@@ -713,7 +707,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
         <span className="brand-drop-copy">
           <strong>Upload file {platform.label} · {target?.full}</strong>
           <small>
-            Klik sel bulan pada tabel di atas untuk menaruh file tepat di bulan itu. Ekspor yang Shopee bagi jadi beberapa part bisa dipilih sekaligus—harinya digabung, baris yang tumpang tindih tidak dihitung dua kali.
+            Klik sel bulan yang kosong untuk file pertama. Buka detail dataset lalu gunakan Ganti untuk pembaruan file, atau + part hanya jika ekspornya memang terbagi.
           </small>
         </span>
         <span className="brand-drop-cta">{focusMonth ? `Terkunci ke ${focusMonth.full}` : 'Bulan mengikuti sel'}</span>
@@ -762,6 +756,22 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
         </div>
       </div>
 
+      <div className="brand-data-guard" role="note" aria-label="Panduan aman memperbarui data">
+        <span className="brand-data-guard-icon"><CircleAlert size={18} /></span>
+        <span className="brand-data-guard-intro">
+          <strong>Satu pusat data untuk seluruh ATLAS</strong>
+          <small>Dashboard dan Report Generator membaca file dari halaman ini. Pastikan brand, dataset, dan bulan sudah tepat sebelum memilih file.</small>
+        </span>
+        <span>
+          <strong>File periode diperbarui?</strong>
+          <small>Buka detail dataset dan tekan <b>Ganti</b>. File serta hasil impor lama diganti, sehingga data lama tidak dijumlahkan dua kali.</small>
+        </span>
+        <span>
+          <strong>Ekspor memang terpecah?</strong>
+          <small>Gunakan <b>+ part</b> hanya untuk lanjutan file pada bulan yang sama dan pastikan tanggalnya tidak tumpang tindih. File revisi harus memakai Ganti.</small>
+        </span>
+      </div>
+
       <div className="brand-market-zone" style={{ '--mk-accent': platform.accent, '--mk-wash': platform.wash, '--mk-tint': platform.tint }}>
         <LayoutGroup id="brand-market">
           <nav className="brand-market-rail" aria-label="Sumber data marketplace">
@@ -806,7 +816,7 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
           <span><i className="is-partial" /> Sebagian</span>
           <span><i className="is-snapshot" /> Snapshot bulanan</span>
           <span><i className="is-empty" /> Belum ada</span>
-          <span className="brand-cov-legend-hint">Klik sel untuk upload ke bulan itu · klik nama dataset untuk detail hari.</span>
+          <span className="brand-cov-legend-hint">Sel kosong untuk upload · sel berisi atau nama dataset untuk melihat detail.</span>
         </div>
 
       <AnimatePresence mode="wait">
@@ -939,12 +949,12 @@ export default function BrandSettingsPage() {
   // whatever cell was clicked — or the focused month when the whole panel is
   // narrowed to one — so a file can never land in a period the user did not
   // choose.
-  const pickFile = (dataset, month) => {
+  const pickFile = (dataset, month, replaceFile = null) => {
     if (!brand) {
       setNotice('Pilih brand terlebih dahulu sebelum mengunggah file.');
       return;
     }
-    pending.current = { dataset, month: focus ? months[0] : month };
+    pending.current = { dataset, month: focus ? months[0] : month, replaceFile };
     fileInput.current.value = '';
     fileInput.current.click();
   };
@@ -964,6 +974,7 @@ export default function BrandSettingsPage() {
       form.append('platform', marketId);
       form.append('channel', target.dataset.channel);
       if (target.month) form.append('month', target.month.key);
+      if (target.replaceFile?.id) form.append('replaceFileId', String(target.replaceFile.id));
       const { data } = await api.post(`/brands/${brand.brand_id}/library`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
       const saved = data.files ?? [data.file];
       const savedIds = new Set(saved.map((f) => f.id));
@@ -976,7 +987,7 @@ export default function BrandSettingsPage() {
       // dashboard's zeros unexplained.
       if (data.imported?.rowsInserted) parts.push(`${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard`);
       if (data.imported?.errors?.length) parts.push(`gagal masuk ke Dashboard: ${data.imported.errors.join('; ')}`);
-      setNotice(`${where} tersimpan — ${parts.join(' · ')}.`);
+      setNotice(`${where} ${target.replaceFile ? 'diganti' : 'tersimpan'} — ${parts.join(' · ')}.`);
     } catch (err) {
       setNotice(describeError(err, `Gagal mengunggah ${picked.map((f) => f.name).join(', ')}`));
     } finally {

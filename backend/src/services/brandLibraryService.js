@@ -223,7 +223,7 @@ export async function getFileForImport(brandId, fileId) {
 // Every part already filed under one month slot, oldest part first.
 export async function listSlotParts(brandId, platform, channel, periodMonth) {
   const result = await pool.query(
-    `SELECT id, part_index, original_filename, dashboard_upload_id
+    `SELECT id, part_index, original_filename, dashboard_upload_id, day_bitmap
      FROM ads_reports.brand_library_files
      WHERE brand_id = $1 AND platform = $2::ads_reports.platform_enum AND channel = $3
        AND period_month IS NOT DISTINCT FROM $4
@@ -233,10 +233,20 @@ export async function listSlotParts(brandId, platform, channel, periodMonth) {
   return result.rows;
 }
 
+export function hasCoverageOverlap(existingParts, dayBitmap) {
+  if (!dayBitmap) return false;
+  return existingParts.some((part) => part.day_bitmap && [...dayBitmap].some((day, index) => day === '1' && part.day_bitmap[index] === '1'));
+}
+
 // Where a newly uploaded file belongs in the slot. Re-uploading a file with
 // the same name replaces that part rather than adding a duplicate of it —
 // picking the same export twice is a slip, not a request for two copies.
-export function placePart(existingParts, filename) {
+export function placePart(existingParts, filename, replaceFileId = null) {
+  if (replaceFileId != null) {
+    const target = existingParts.find((part) => part.id === replaceFileId);
+    if (!target) return null;
+    return { partIndex: target.part_index, previousUploadId: target.dashboard_upload_id, replaced: true };
+  }
   const sameName = existingParts.find((part) => part.original_filename === filename);
   if (sameName) return { partIndex: sameName.part_index, previousUploadId: sameName.dashboard_upload_id, replaced: true };
   const next = existingParts.reduce((max, part) => Math.max(max, part.part_index), 0) + 1;

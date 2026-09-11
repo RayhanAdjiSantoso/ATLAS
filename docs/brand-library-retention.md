@@ -14,6 +14,12 @@ Perubahan September 2026. Tidak memerlukan migrasi baru: status memakai
 - Pilih seluruh bagian ekspor untuk bulan yang sama. Meta dapat mengambil
   beberapa file untuk dua periode. File yang ditandai salah periode harus
   diperbaiki di perpustakaan. Mengganti brand membuang state laporan klien lama.
+- File pembaruan harus masuk melalui aksi **Ganti** pada detail dataset. ID file
+  lama dikirim bersama upload, sehingga file baru mengganti part yang tepat
+  walaupun nama filenya berubah; hasil impor lama dihapus sebelum file baru
+  dibaca. Tombol **+ part** hanya untuk ekspor yang memang terpecah. Upload
+  part dengan cakupan tanggal yang tumpang tindih ditolak, kecuali nama file
+  membawa penanda part dari platform.
 - Sumber dibedakan menurut platform/channel. Order dan Performance Overview
   adalah sumber dashboard; keduanya bukan pengganti Iklan Produk untuk laporan
   iklan Shopee. Product Performance tersedia pada sumber tambahan laporan.

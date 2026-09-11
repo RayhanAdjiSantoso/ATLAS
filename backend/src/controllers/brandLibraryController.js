@@ -55,16 +55,19 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
   if (!files.length) throw reject('File wajib diunggah');
 
   const month = typeof req.body.month === 'string' && /^\d{4}-\d{2}$/.test(req.body.month) ? req.body.month : null;
+  const replaceFileId = req.body.replaceFileId == null || req.body.replaceFileId === '' ? null : Number(req.body.replaceFileId);
   const isReference = library.REFERENCE_CHANNELS.has(channel);
   if (!isReference && !month) throw reject('Bulan periode wajib dipilih untuk dataset ini');
   if (isReference && files.length > 1) throw reject('Dataset referensi hanya menerima satu file');
+  if (replaceFileId != null && (!Number.isInteger(replaceFileId) || replaceFileId <= 0)) throw reject('File yang akan diganti tidak valid');
+  if (replaceFileId != null && files.length !== 1) throw reject('Penggantian file hanya menerima satu file baru');
 
   const saved = [];
   const warnings = [];
   let imported = null;
 
   for (const file of files) {
-    const result = await storeOnePart({ req, brandId, platform, channel, month, isReference, file });
+    const result = await storeOnePart({ req, brandId, platform, channel, month, isReference, file, replaceFileId });
     saved.push(result.file);
     if (result.warning) warnings.push(result.warning);
     if (result.imported) {
@@ -82,7 +85,7 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
 
 // One part: read it, file it under the right part number, and — for the three
 // Dashboard datasets — parse it into the fact tables Business Overview reads.
-async function storeOnePart({ req, brandId, platform, channel, month, isReference, file }) {
+async function storeOnePart({ req, brandId, platform, channel, month, isReference, file, replaceFileId }) {
   let summary = { periodMonth: null, periodStart: null, periodEnd: null, coveredDays: 0, dayBitmap: null };
   let rowCount = null;
   let periodSource = null;
@@ -118,7 +121,14 @@ async function storeOnePart({ req, brandId, platform, channel, month, isReferenc
   }
 
   const parts = await library.listSlotParts(brandId, platform, channel, summary.periodMonth ?? null);
-  const { partIndex, previousUploadId } = library.placePart(parts, file.originalname);
+  const sameName = parts.some((part) => part.original_filename === file.originalname);
+  const explicitlySplit = /(?:^|[\s_.-])part[\s_.-]*\d+(?:[\s_.-]*(?:of|dari)[\s_.-]*\d+)?/i.test(file.originalname);
+  if (replaceFileId == null && !sameName && !explicitlySplit && library.hasCoverageOverlap(parts, summary.dayBitmap)) {
+    throw new AppError('Tanggal file bertumpang tindih dengan file yang sudah ada. Gunakan Ganti untuk file pembaruan, atau unggah file dengan penanda part jika ekspornya memang terpecah.', 409);
+  }
+  const placement = library.placePart(parts, file.originalname, replaceFileId);
+  if (!placement) throw new AppError('File yang akan diganti tidak ditemukan pada brand, dataset, dan bulan ini', 400);
+  const { partIndex, previousUploadId } = placement;
 
   const saved = await library.upsertLibraryFile({
     brandId,
