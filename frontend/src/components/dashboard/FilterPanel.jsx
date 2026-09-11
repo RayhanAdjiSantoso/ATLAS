@@ -1,3 +1,5 @@
+import useSessionState from '../../hooks/useSessionState.js';
+import BrandStatusFilter, { matchesBrandStatus } from '../common/BrandStatusFilter.jsx';
 import { useState, useEffect } from 'react';
 import api from '../../api/client.js';
 import DateRangePicker from './DateRangePicker.jsx';
@@ -58,9 +60,10 @@ function computeCompareRange(type, startDate, endDate) {
 
 export default function FilterPanel({ filters, onChange }) {
   const [brands, setBrands] = useState([]);
-  const [showCompare, setShowCompare] = useState(false);
-  const [compareType, setCompareType] = useState('previous_period');
+  const [showCompare, setShowCompare] = useState(Boolean(filters.compare));
+  const [compareType, setCompareType] = useSessionState('dashboard:compare-type', 'previous_period');
 
+  const [brandStatus, setBrandStatus] = useSessionState('dashboard:brand-status', 'active');
   useEffect(() => {
     // Fetch brands list
     api.get('/dashboard/filters')
@@ -68,7 +71,7 @@ export default function FilterPanel({ filters, onChange }) {
         setBrands(res.data.brands);
         // Set default brand if not set
         if (res.data.brands.length > 0 && !filters.brandId) {
-          onChange({ ...filters, brandId: res.data.brands[0].brand_id });
+          onChange({ ...filters, brandId: (res.data.brands.find(b => b.status === 'active') ?? res.data.brands[0]).brand_id });
         }
       })
       .catch(() => {});
@@ -118,10 +121,12 @@ export default function FilterPanel({ filters, onChange }) {
           id="brand-select"
           placeholder="Pilih brand..."
           value={filters.brandId}
-          options={brands.map((b) => ({ value: b.brand_id, label: b.brand_name }))}
+          options={brands.filter(b => matchesBrandStatus(b, brandStatus) || String(b.brand_id) === String(filters.brandId)).map((b) => ({ value: b.brand_id, label: b.brand_name }))}
           onChange={(val) => handleChange('brandId', val)}
         />
       </div>
+
+      <BrandStatusFilter value={brandStatus} onChange={setBrandStatus} />
 
       <div className="con-ctl con-ctl-period">
         <label>Periode</label>

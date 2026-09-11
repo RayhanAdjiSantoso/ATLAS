@@ -1,3 +1,4 @@
+import useSessionState from '../hooks/useSessionState.js';
 import { useState } from 'react';
 import InputDataTab from '../components/internalDashboard/InputDataTab.jsx';
 import ExecutiveOverviewTab from '../components/internalDashboard/ExecutiveOverviewTab.jsx';
@@ -25,7 +26,7 @@ const TAB_COMPONENTS = {
 };
 
 export default function InternalDashboardPage() {
-  const [activeTab, setActiveTab] = useState(TABS[0]);
+  const [activeTab, setActiveTab] = useSessionState('internal:section', TABS[0]);
   const ActiveTabComponent = TAB_COMPONENTS[activeTab];
 
   return (

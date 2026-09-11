@@ -738,10 +738,11 @@ function buildSegmentChangeInsight(segments) {
 // wrapper checks `data.compare` to trigger its own side-by-side split
 // render for every other tab (see Traffic & Funnel's getTrafficAndFunnel).
 export async function getRfmAnalysis({ brandId, startDate, endDate, compareStartDate, compareEndDate }) {
-  const [rawRows, retentionRow, repeatCycleData] = await Promise.all([
+  const [rawRows, retentionRow, repeatCycleData, historyRow] = await Promise.all([
     dashboardRepo.getRfmRawMetrics(brandId, startDate, endDate),
     dashboardRepo.getCustomerRetention(brandId, startDate, endDate),
     dashboardRepo.getRepeatPurchaseCycle(brandId, startDate, endDate),
+    dashboardRepo.getHistoricalRetention(brandId, startDate, endDate),
   ]);
   const snapshot = buildRfmSnapshot(rawRows);
   // Within-period repeat-order rate + 1st->2nd purchase gap (moved here from
@@ -755,7 +756,17 @@ export async function getRfmAnalysis({ brandId, startDate, endDate, compareStart
   // Cohort retention is only meaningful with a comparison period to define
   // the cohort against -- "available: false" means genuinely not computed,
   // not a retention rate of 0.
-  let retention = { available: false, rate: null, retainedCount: null, cohortCount: null };
+  const cohortCount = Number(historyRow.cohort_count);
+  const currentCount = Number(historyRow.current_count);
+  const retainedCount = Number(historyRow.retained_count);
+  const historicalRetention = {
+    available: cohortCount > 0,
+    cohortCount, currentCount, retainedCount,
+    newCount: currentCount - retainedCount,
+    rate: cohortCount ? Number((100 * retainedCount / cohortCount).toFixed(2)) : null,
+    returningShare: currentCount ? Number((100 * retainedCount / currentCount).toFixed(2)) : null,
+  };
+  let retention = { available: false, rate: null, retainedCount: null, cohortCount: null, reason: 'Pilih periode pembanding yang berakhir sebelum periode utama.' };
   let segmentChange = null;
 
   if (compareStartDate && compareEndDate) {
@@ -800,8 +811,9 @@ export async function getRfmAnalysis({ brandId, startDate, endDate, compareStart
     // the other.
     const retainedCount = [...prevSnapshot.usernames].filter((u) => snapshot.usernames.has(u)).length;
     retention = {
-      available: true,
-      rate: prevSnapshot.usernames.size > 0 ? Number(((retainedCount / prevSnapshot.usernames.size) * 100).toFixed(1)) : 0,
+      available: compareEndDate < startDate && prevSnapshot.usernames.size > 0,
+      reason: compareEndDate >= startDate ? 'Periode pembanding harus berakhir sebelum periode utama agar transaksi yang sama tidak dihitung sebagai kembali.' : 'Tidak ada pelanggan pada periode pembanding.',
+      rate: compareEndDate < startDate && prevSnapshot.usernames.size > 0 ? Number(((retainedCount / prevSnapshot.usernames.size) * 100).toFixed(1)) : null,
       retainedCount,
       cohortCount: prevSnapshot.usernames.size,
     };
@@ -833,6 +845,7 @@ export async function getRfmAnalysis({ brandId, startDate, endDate, compareStart
     customersBySegment: snapshot.customersBySegment,
     comparePeriod,
     retention,
+    historicalRetention,
     repeatCustomerRate,
     repeatCycle,
     insights: { segmentChange },

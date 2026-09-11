@@ -1,3 +1,4 @@
+import useSessionState from '../hooks/useSessionState.js';
 import { useRef, useState } from 'react';
 import { GeneratorShell } from './app/GeneratorShell';
 import type { ReportKey } from './app/reports';
@@ -20,7 +21,7 @@ function defaultChannelData(): Record<string, BizChannelMetrics> {
 // Ported from MRG's App.tsx minus its router, auth provider and site shell:
 // ATLAS supplies all three (App.jsx, AuthContext, AppLayout).
 function App() {
-  const [clientId, setClientId] = useState<number | null>(null);
+  const [clientId, setClientId] = useSessionState('generator:client', null);
 
   // platformState feeds the Summary Overview tab (Meta/Shopee/TikTok each
   // report their last-generated result here); the Business Overview state
@@ -66,7 +67,16 @@ function App() {
     <div className="mil-ui report-generator-app">
       <GeneratorShell
         clientId={clientId}
-        setClientId={setClientId}
+        setClientId={(id) => {
+          if (id === clientId) return;
+          setClientId(id);
+          setPlatformState(emptyPlatformStateMap());
+          setOmzetOld(null);
+          setOmzetCur(null);
+          setChannelData(defaultChannelData());
+          setOfflineStores([{ id: 1, name: 'Store 1', ...emptyBizChannel() }]);
+          setOtherChannels([{ id: 2, name: 'Channel 1', ...emptyBizChannel() }]);
+        }}
         badges={badges}
         platformState={platformState}
         bizState={bizState}

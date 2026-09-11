@@ -72,7 +72,7 @@ export function ChannelContributionSection({ mix, periodLabel }: { mix: ChannelM
           </div>
         ) : mix.length === 1 ? (
           <div className="chan-verdict">
-            Hanya <strong>{mix[0].label}</strong> yang punya data periode ini — ROAS {mix[0].roas.toFixed(1).replace('.', ',')}×. Upload Iklan Toko / Iklan Live
+            Hanya <strong>{mix[0].label}</strong> yang punya data periode ini — ROAS {mix[0].roas.toFixed(1).replace('.', ',')}×. Pilih file Iklan Toko / Iklan Live dari Pengaturan Brand
             untuk membandingkan kontribusi antar channel.
           </div>
         ) : null}

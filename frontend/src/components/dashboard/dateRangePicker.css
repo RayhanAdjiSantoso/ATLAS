@@ -1,0 +1,42 @@
+/* Portaled outside the scrolling console; carry its existing color tokens. */
+.date-range-popover {
+  --bg: #fbfcfe;
+  --bg-card: #fff;
+  --bg-elevated: #eef1f7;
+  --border: #dde2ee;
+  --text: #0f1a3a;
+  --text-muted: #5a6a90;
+  --primary: #1e3eb8;
+  --primary-light: #eef1fc;
+  --radius: 9px;
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  width: min(780px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(15, 26, 58, .18);
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  scrollbar-color: #b8c5f5 var(--bg);
+  scrollbar-width: thin;
+}
+.date-range-popover button:focus-visible,
+.date-range-popover select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.date-range-popover ::selection { background: #dbe3ff; color: var(--text); }
+.date-range-presets { flex: 0 0 170px; border-right: 1px solid var(--border); padding: .75rem 0; }
+.date-range-calendars { display: flex; flex: 1; min-width: 0; gap: 1.5rem; padding: 1rem 1.5rem; }
+.date-range-month { flex: 1; min-width: 0; }
+@media (max-width: 760px) {
+  .date-range-popover { flex-direction: column; }
+  .date-range-presets { flex: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-right: 0; border-bottom: 1px solid var(--border); padding: .5rem; }
+  .date-range-presets > div { display: none; }
+  .date-range-calendars { padding: 1rem; gap: 1.5rem; }
+}
+@media (max-width: 580px) {
+  .date-range-calendars { flex-direction: column; }
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Dropzone } from '../../components/Dropzone';
+import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
 import { ReportPages } from '../../components/ReportPages';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { DemoBreakdownCard } from '../../components/DemoBreakdownCard';
@@ -9,6 +9,7 @@ import { SearchSelect } from '../../components/SearchSelect';
 import {
   META_OBJECTIVE_CHOICES,
   defaultMetaDayRanges,
+  splitMonths,
   detectMetaObjectiveCol,
   dominantMetaObjective,
   metaDayRange,
@@ -26,16 +27,12 @@ import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { PeriodCompareChip } from '../../components/PeriodCompareChip';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
-import { SlotSourceTabs, SavedSlotCard, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
-import { getReportDetail } from '../reports/api';
-import { SavedPeriodPicker } from '../reports/SavedPeriodPicker';
-import { formatSavedAt } from '../reports/savedPeriodLabels';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
-import type { RawFileEntry, SaveReportPayload, SavedPeriod } from '../reports/types';
+import type { RawFileEntry, SaveReportPayload } from '../reports/types';
 import { buildMetaReport, type MetaReport } from './metaReport';
 
 // Meta's export uses either a "Month" breakdown or a "Day" breakdown column
@@ -112,34 +109,34 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // "Pilih dari data tersimpan" — Meta uploads one file spanning both
   // periods, so the picker reuses a whole previously-saved comparison
   // (both periods + industry/header config), not an independent period.
-  const [srcMode, setSrcMode] = useState<SlotSource>('upload');
-  const [savedPick, setSavedPick] = useState<SavedPeriod | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
 
-  async function handleUpload(file: File, target: 'meta' | 'cpas') {
+  async function handleUpload(input: File[], target: 'meta' | 'cpas') {
+    const file = input[0];
     const basics = validateFileBasics(file, ['.csv', '.xlsx', '.xls']);
     if (!basics.ok) {
-      setUploadError(basics.message || 'File tidak valid.');
-      return;
+      throw new Error(basics.message || 'File tidak valid.');
     }
     try {
-      const rows = await readSpreadsheetFile(file);
+      const rows = (await Promise.all(input.map(readSpreadsheetFile))).flat();
       if (!rows.length) {
-        setUploadError('File kosong.');
-        return;
+        throw new Error('File kosong.');
       }
       const cols = requireColumns(rows, REQUIRED_COLS);
       if (!cols.ok) {
-        setUploadError(cols.message || 'Kolom wajib tidak ditemukan.');
-        return;
+        throw new Error(cols.message || 'Kolom wajib tidak ditemukan.');
       }
       setUploadError(null);
+      const monthColumn = findCol(rows, ['month']);
+      const dayColumn = findCol(rows, ['day']);
+      if (!dayColumn && splitMonths(rows, monthColumn).months.length !== 2) {
+        throw new Error('Pilih sumber dengan tepat dua periode Month untuk perbandingan. Untuk rentang harian, gunakan file dengan breakdown Day.');
+      }
       const headers = Object.keys(rows[0]);
       if (target === 'meta') {
         setMetaRows(rows);
         setMetaHeaders(headers);
-        setMetaFileName(file.name);
-        setMetaFile(file);
+        setMetaFileName(input.map(f => f.name).join(' · '));
+        setMetaFile(null);
         const dCol = findCol(rows, ['day']);
         const bounds = dCol ? metaDayRange(rows, dCol) : null;
         setDayCol(dCol);
@@ -155,13 +152,14 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       } else {
         setCpasRows(rows);
         setCpasHeaders(headers);
-        setCpasFileName(file.name);
-        setCpasFile(file);
+        setCpasFileName(input.map(f => f.name).join(' · '));
+        setCpasFile(null);
       }
       setReport(null);
       onInvalidate();
     } catch (err) {
       setUploadError('Gagal membaca isi file: ' + (err as Error).message);
+      throw err;
     }
   }
 
@@ -174,95 +172,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setObjective(obj);
     setReport(null);
     onInvalidate();
-  }
-
-  function switchMode(mode: SlotSource) {
-    setSrcMode(mode);
-    setSavedPick(null);
-    setMetaRows(null);
-    setMetaHeaders([]);
-    setMetaFileName('');
-    setMetaFile(null);
-    setCpasRows(null);
-    setCpasHeaders([]);
-    setCpasFileName('');
-    setCpasFile(null);
-    setIndustry(null);
-    setCustomResultsCol(null);
-    setObjective(null);
-    objectivePrefilledFor.current = '';
-    setDayCol(null);
-    setDayBounds(null);
-    setOldRange(null);
-    setCurRange(null);
-    setReport(null);
-    setUploadError(null);
-    onInvalidate();
-  }
-
-  // Rehydrate a whole saved comparison into tab state — same shape
-  // reconstructMetaReport() derives, but left editable so Generate + autosave
-  // run normally (the autosave upserts back onto the same period pair).
-  async function applySavedComparison(p: SavedPeriod) {
-    try {
-      const detail = await getReportDetail(p.runId);
-      const cfg = (detail.report.reportConfig ?? {}) as {
-        industry?: MetaIndustry;
-        customResultsCol?: string | null;
-        objective?: MetaObjectiveKey | null;
-        metaHeaders?: string[];
-        cpasHeaders?: string[];
-      };
-      const extraOf = (r: Record<string, unknown>): SheetRow => (r.extra as SheetRow | null) ?? {};
-      const mainRows = detail.rows.filter((r) => r.channel === 'boost' || r.channel === 'nonboost').map(extraOf);
-      const cpasRowsAll = detail.rows.filter((r) => r.channel === 'cpas_overall').map(extraOf);
-      if (!mainRows.length) {
-        setUploadError('Data Meta tersimpan tidak memuat baris Boost / Non-Boost.');
-        return;
-      }
-      setUploadError(null);
-      setMetaRows(mainRows);
-      setMetaHeaders(cfg.metaHeaders ?? Object.keys(mainRows[0] ?? {}));
-      setMetaFileName(`Data tersimpan · ${detail.report.periodCurLabel ?? '?'} vs ${detail.report.periodOldLabel ?? '?'}`);
-      setMetaFile(null);
-      if (cpasRowsAll.length) {
-        setCpasRows(cpasRowsAll);
-        setCpasHeaders(cfg.cpasHeaders ?? Object.keys(cpasRowsAll[0] ?? {}));
-        setCpasFileName('Data tersimpan');
-        setCpasFile(null);
-      } else {
-        setCpasRows(null);
-        setCpasHeaders([]);
-        setCpasFileName('');
-        setCpasFile(null);
-      }
-      setIndustry(cfg.industry ?? null);
-      setCustomResultsCol(cfg.customResultsCol ?? null);
-      setObjective(cfg.objective ?? null);
-      // Respect a saved objective; otherwise let the prefill effect fill it in.
-      objectivePrefilledFor.current = cfg.objective ? 'saved' : '';
-      setSavedPick(p);
-
-      const dCol = findCol(mainRows, ['day']);
-      setDayCol(dCol);
-      const oS = detail.report.periodOldStart ? fromISODate(detail.report.periodOldStart) : null;
-      const oE = detail.report.periodOldEnd ? fromISODate(detail.report.periodOldEnd) : null;
-      const cS = detail.report.periodCurStart ? fromISODate(detail.report.periodCurStart) : null;
-      const cE = detail.report.periodCurEnd ? fromISODate(detail.report.periodCurEnd) : null;
-      if (dCol && oS && oE && cS && cE) {
-        setDayBounds({ min: oS, max: cE });
-        setOldRange({ start: oS, end: oE });
-        setCurRange({ start: cS, end: cE });
-      } else {
-        setDayBounds(null);
-        setOldRange(null);
-        setCurRange(null);
-      }
-      setReport(null);
-      onInvalidate();
-    } catch (err) {
-      setUploadError('Gagal memuat data tersimpan: ' + (err as Error).message);
-    }
   }
 
   // When the export carries an "Objective" column, Non-Boost is split per
@@ -319,9 +228,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setCurRange(null);
     setReport(null);
     setUploadError(null);
-    setSrcMode('upload');
-    setSavedPick(null);
-    setPickerOpen(false);
     onInvalidate();
   }
 
@@ -350,13 +256,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     };
   }
 
-  function buildSaveFiles(): RawFileEntry[] {
-    const entries: (RawFileEntry | null)[] = [
-      metaFile ? { file: metaFile, channel: 'meta', periodRole: 'old' } : null,
-      cpasFile ? { file: cpasFile, channel: 'cpas', periodRole: 'old' } : null,
-    ];
-    return entries.filter((f): f is RawFileEntry => f !== null);
-  }
+  // Original source files already live in the brand library. Save parsed report rows only.
+  function buildSaveFiles(): RawFileEntry[] { return []; }
+
 
   const hasAnySection = Boolean(
     report && (report.boost || report.nonBoost || report.boostAgeDemo || report.boostGenderDemo || report.ageDemo || report.genderDemo || (report.cpas && Object.keys(report.cpas).length)),
@@ -364,7 +266,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
   const steps: Step[] = [
     {
-      label: 'Upload file Meta Ads & pilih industri',
+      label: 'Pilih file Meta Ads & industri',
       sub: metaFileName || undefined,
       status: metaRows && objectiveOk ? 'done' : 'current',
     },
@@ -414,8 +316,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             </div>
           </div>
         </HowToStep>
-        <HowToStep num={2} title="Upload file & generate laporan">
-          Upload file Meta Ads (wajib). Upload juga file CPAS jika ada. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
+        <HowToStep num={2} title="Pilih sumber & buat laporan">
+          Pilih file Meta Ads dari Pengaturan Brand (wajib). Pilih juga file CPAS jika tersedia. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
         </HowToStep>
       </HowTo>
 
@@ -425,50 +327,12 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         <div className="source-header">
           <div className="source-label">Meta Ads</div>
         </div>
-        <SlotSourceTabs
-          value={srcMode}
-          onChange={switchMode}
-          disabledSavedReason={clientId ? null : 'Pilih klien dulu di bagian atas halaman'}
-        />
-        {srcMode === 'upload' ? (
-          <Dropzone
-            tag="1 file · berisi 2 periode · Boost + Non-boost"
-            accept=".csv,.xlsx,.xls"
-            onFile={(f) => handleUpload(f, 'meta')}
-            loaded={Boolean(metaRows)}
-            fileName={metaFileName}
-            infoText={metaRows ? `${metaRows.length} baris` : undefined}
-          />
-        ) : (
-          <SavedSlotCard
-            picked={
-              savedPick
-                ? {
-                    title: savedPick.sourceComparison,
-                    sourceComparison: savedPick.sourceComparison,
-                    savedAt: formatSavedAt(savedPick.savedAt),
-                    summary: metaRows ? `${metaRows.length} baris${cpasRows ? ` · CPAS ${cpasRows.length}` : ''}` : '',
-                    metaLine: `disimpan ${formatSavedAt(savedPick.savedAt)} · industri & kolom Results ikut dimuat`,
-                  }
-                : null
-            }
-            onOpen={() => setPickerOpen(true)}
-            onClear={() => switchMode('saved')}
-            hint="Memuat 1 perbandingan Meta yang pernah disimpan (kedua periode sekaligus)"
-          />
-        )}
+        <LibraryFileSlot clientId={clientId} platform="meta" channel="meta"
+          tag="Meta Ads · pilih sumber kedua periode"
+          onFiles={(files) => handleUpload(files, 'meta')} loaded={Boolean(metaRows)}
+          fileName={metaFileName} infoText={metaRows ? `${metaRows.length} baris` : undefined} />
         {uploadError && <InlineNotice title="File ini belum kebaca">{uploadError}</InlineNotice>}
       </div>
-
-      {pickerOpen && clientId && (
-        <SavedPeriodPicker
-          clientId={clientId}
-          platform="meta"
-          variant="comparison"
-          onClose={() => setPickerOpen(false)}
-          onPick={applySavedComparison}
-        />
-      )}
 
       {metaRows && (
         <div className="industry-selector visible">
@@ -519,7 +383,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           </div>
           {daysBetweenInclusive(dayBounds.min, dayBounds.max) > LONG_DAY_RANGE_WARNING_THRESHOLD && (
             <InlineNotice tone="info" title="Rentang data ini cukup panjang — pastikan ini yang dimaksud">
-              File yang diupload mencakup {daysBetweenInclusive(dayBounds.min, dayBounds.max)} hari breakdown harian. Tidak masalah untuk digenerate, tapi kalau ini bukan rentang yang dimaksud, cek kembali file yang diexport dari Meta Ads Reporting.
+              File terpilih mencakup {daysBetweenInclusive(dayBounds.min, dayBounds.max)} hari breakdown harian. Tidak masalah untuk digenerate, tapi kalau ini bukan rentang yang dimaksud, cek kembali file yang diexport dari Meta Ads Reporting.
             </InlineNotice>
           )}
           <div className="period-input-row">
@@ -611,10 +475,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           <div className="source-label">CPAS</div>
           <span className="sec-badge">opsional — kosongkan jika tidak ada data CPAS</span>
         </div>
-        <Dropzone
-          tag="1 file · berisi 2 periode"
+        <LibraryFileSlot clientId={clientId} platform="meta" channel="cpas"
+          tag="CPAS · sumber kedua periode"
           accept=".csv,.xlsx,.xls"
-          onFile={(f) => handleUpload(f, 'cpas')}
+          onFiles={(files) => handleUpload(files, 'cpas')}
           loaded={Boolean(cpasRows)}
           fileName={cpasFileName}
           infoText={cpasRows ? `${cpasRows.length} baris` : undefined}
@@ -773,7 +637,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
             <DownloadPdfButton targetId="report-meta" filename="Performance Report - Meta Ads.pdf" />
             <button className="btn btn-ghost" onClick={reset}>
-              ↺ Upload Data Baru
+              ↺ Ganti Sumber Data
             </button>
           </div>
           <SaveStatus status={autoSave.status} message={autoSave.message} />

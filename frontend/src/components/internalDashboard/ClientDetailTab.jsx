@@ -1,3 +1,4 @@
+import useSessionState from '../../hooks/useSessionState.js';
 import { useEffect, useState } from 'react';
 import { Info } from 'lucide-react';
 import api from '../../api/client.js';
@@ -19,9 +20,9 @@ const num = (v) => (v == null ? '-' : new Intl.NumberFormat('id-ID').format(v));
 
 function DetailView() {
   const [clients, setClients] = useState([]);
-  const [clientId, setClientId] = useState('');
-  const [period, setPeriod] = useState(thisMonth());
-  const [compare, setCompare] = useState('mom');
+  const [clientId, setClientId] = useSessionState('internal:ClientDetailTab:clientId', '');
+  const [period, setPeriod] = useSessionState('internal:ClientDetailTab:period', thisMonth());
+  const [compare, setCompare] = useSessionState('internal:ClientDetailTab:compare', 'mom');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -160,11 +161,11 @@ function DetailView() {
 }
 
 function RankingView() {
-  const [period, setPeriod] = useState(thisMonth());
-  const [metric, setMetric] = useState('revenue');
-  const [compare, setCompare] = useState('mom');
-  const [status, setStatus] = useState('active');
-  const [category, setCategory] = useState('all');
+  const [period, setPeriod] = useSessionState('internal:ClientDetailTab:period', thisMonth());
+  const [metric, setMetric] = useSessionState('internal:ClientDetailTab:metric', 'revenue');
+  const [compare, setCompare] = useSessionState('internal:ClientDetailTab:compare', 'mom');
+  const [status, setStatus] = useSessionState('internal:ClientDetailTab:status', 'active');
+  const [category, setCategory] = useSessionState('internal:ClientDetailTab:category', 'all');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -270,7 +271,7 @@ function RankingView() {
 
 // S7 — Client Detail + Ranking.
 export default function ClientDetailTab() {
-  const [view, setView] = useState('detail');
+  const [view, setView] = useSessionState('internal:ClientDetailTab:view', 'detail');
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div style={{ display: 'flex', gap: '0.5rem' }}>

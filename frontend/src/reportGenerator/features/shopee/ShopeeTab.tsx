@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Dropzone } from '../../components/Dropzone';
+import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -9,7 +9,6 @@ import { PeriodCompareChip } from '../../components/PeriodCompareChip';
 import { PeriodInputRow } from '../../components/PeriodInputRow';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
-import { SlotSourceTabs, SavedSlotCard, type SlotSource } from '../../components/SlotSourceTabs';
 import { usePeriodLabel } from '../../hooks/usePeriodLabel';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { fromISODate, toISODate } from '../../lib/dateFmt';
@@ -24,13 +23,12 @@ import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
-import { getProductMaster, getSavedPeriod, replaceProductMaster, saveProductMasterEntry } from '../reports/api';
-import { SavedPeriodPicker } from '../reports/SavedPeriodPicker';
+import { getProductMaster, saveProductMasterEntry } from '../reports/api';
 import { formatChannelCoverage, formatSavedAt } from '../reports/savedPeriodLabels';
 import { mapShopeeRows, type ShopeeCategorization } from '../reports/rowMapping';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
-import type { RawFileEntry, SaveReportPayload, SavedPeriod } from '../reports/types';
+import type { RawFileEntry, SaveReportPayload } from '../reports/types';
 import { ShopeeReportSections } from './ShopeeReportSections';
 import { buildShopeeDeepDiveReport, type ShopeeDeepDiveReport } from './shopeeDeepDiveReport';
 import { buildShopeeFunnelReport, type ShopeeFunnelReport } from './shopeeFunnelReport';
@@ -123,9 +121,6 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // "Pilih dari data tersimpan" — per period side (lama / ini). When 'saved',
   // one pick fills every stored ad channel for that side at once; the user
   // can still drop a fresh file on any individual channel slot to override.
-  const [srcMode, setSrcMode] = useState<Record<PeriodSide, SlotSource>>({ old: 'upload', cur: 'upload' });
-  const [savedPick, setSavedPick] = useState<Record<PeriodSide, SavedPeriod | null>>({ old: null, cur: null });
-  const [pickerOpen, setPickerOpen] = useState<PeriodSide | null>(null);
   const [overviewFiles, setOverviewFiles] = useState(EMPTY_OVERVIEW_FILES);
   // Product Performance is now a 2-slot upload (old & cur), like the other
   // channels — Traffic/Conversion Analysis compare periods, Pareto Analysis
@@ -202,29 +197,26 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // optional slot actually has data (uploaded or filled from a saved report).
   const [optOpen, setOptOpen] = useState(false);
 
-  async function handleAdsFile(file: File, key: AdsFileKey) {
+  async function handleAdsFile(input: File[], key: AdsFileKey, selection: LibrarySelection) {
+    const file = input[0];
     const basics = validateFileBasics(file, ['.csv', '.xlsx', '.xls']);
     if (!basics.ok) {
-      setUploadError(basics.message || 'File tidak valid.');
-      return;
+      throw new Error(basics.message || 'File tidak valid.');
     }
     try {
-      // Ported 1:1: the original always reads Shopee Ads uploads as text
-      // (readAsText), even though the dropzone also accepts .xlsx/.xls — in
-      // practice Shopee's Iklan Toko/Iklan Produk export is CSV-only.
-      const text = await file.text();
-      const { rows, period } = parseShopeeCSV(text);
+      const batches = await Promise.all(input.map(async f => /\.csv$/i.test(f.name)
+        ? parseShopeeCSV(await f.text()).rows : await readSpreadsheetFile(f)));
+      const rows = batches.flat();
+      const period = { label: selection.label, start: selection.start ? fromISODate(selection.start) : null, end: selection.end ? fromISODate(selection.end) : null, days: selection.start && selection.end ? daysBetweenInclusive(fromISODate(selection.start)!, fromISODate(selection.end)!) : null };
       if (!rows.length) {
-        setUploadError('File kosong atau format tidak dikenali.');
-        return;
+        throw new Error('File kosong atau format tidak dikenali.');
       }
       const cols = requireColumns(rows, [{ label: 'Biaya', kw: ['biaya'] }]);
       if (!cols.ok) {
-        setUploadError(cols.message || 'Kolom wajib tidak ditemukan.');
-        return;
+        throw new Error(cols.message || 'Kolom wajib tidak ditemukan.');
       }
       setUploadError(null);
-      setAdsFiles((prev) => ({ ...prev, [key]: { rows, fileName: file.name, file } }));
+      setAdsFiles((prev) => ({ ...prev, [key]: { rows, fileName: input.map(f => f.name).join(' · ') } }));
       const isOld = key.endsWith('-old');
       (isOld ? periodOld : periodCur).autoFill(period.label);
       if (period.days != null) (isOld ? setPeriodOldDays : setPeriodCurDays)(period.days);
@@ -235,25 +227,24 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       onInvalidate();
     } catch (err) {
       setUploadError('Gagal membaca isi file: ' + (err as Error).message);
+      throw err;
     }
   }
 
-  async function handleOverviewFile(file: File, key: OverviewFileKey) {
+  async function handleOverviewFile(input: File[], key: OverviewFileKey) {
+    const file = input[0];
     const basics = validateFileBasics(file, ['.csv', '.xlsx', '.xls']);
     if (!basics.ok) {
-      setUploadError(basics.message || 'File tidak valid.');
-      return;
+      throw new Error(basics.message || 'File tidak valid.');
     }
     try {
-      const rows = await readSpreadsheetFile(file);
+      const rows = (await Promise.all(input.map(readSpreadsheetFile))).flat();
       if (!rows.length) {
-        setUploadError('File kosong.');
-        return;
+        throw new Error('File kosong.');
       }
       const cols = requireColumns(rows, [{ label: 'Kunjungan', kw: ['kunjungan'] }]);
       if (!cols.ok) {
-        setUploadError(cols.message || 'Kolom wajib tidak ditemukan.');
-        return;
+        throw new Error(cols.message || 'Kolom wajib tidak ditemukan.');
       }
       setUploadError(null);
       const period = periodFromOverviewFilename(file.name);
@@ -264,142 +255,65 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       onInvalidate();
     } catch (err) {
       setUploadError('Gagal membaca isi file: ' + (err as Error).message);
+      throw err;
     }
   }
 
-  async function handleProductPerformanceFile(file: File, role: ProductPerformanceRole) {
+  async function handleProductPerformanceFile(input: File[], role: ProductPerformanceRole) {
+    const file = input[0];
     const basics = validateFileBasics(file, ['.xlsx', '.xls']);
     if (!basics.ok) {
-      setUploadError(basics.message || 'File tidak valid.');
-      return;
+      throw new Error(basics.message || 'File tidak valid.');
     }
     try {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
-      const mainSheet = wb.Sheets['Produk dengan Performa Terbaik'];
-      if (!mainSheet) {
-        setUploadError('Sheet "Produk dengan Performa Terbaik" tidak ditemukan di file ini — pastikan Anda export dari menu yang benar di Product Performance.');
-        return;
+      const mainRows: SheetRow[] = [];
+      const tingkatkanRows: SheetRow[] = [];
+      for (const part of input) {
+        const wb = XLSX.read(new Uint8Array(await part.arrayBuffer()), { type: 'array' });
+        const mainSheet = wb.Sheets['Produk dengan Performa Terbaik'];
+        if (!mainSheet) throw new Error(`Sheet Produk dengan Performa Terbaik tidak ditemukan: ${part.name}`);
+        mainRows.push(...XLSX.utils.sheet_to_json<SheetRow>(mainSheet, { defval: '' }));
+        const extra = wb.Sheets['Tingkatkan dengan Iklan'];
+        if (extra) tingkatkanRows.push(...XLSX.utils.sheet_to_json<SheetRow>(extra, { defval: '' }));
       }
-      const mainRows = XLSX.utils.sheet_to_json(mainSheet, { defval: '' }) as SheetRow[];
-      const tingkatkanSheet = wb.Sheets['Tingkatkan dengan Iklan'];
-      const tingkatkanRows = tingkatkanSheet ? (XLSX.utils.sheet_to_json(tingkatkanSheet, { defval: '' }) as SheetRow[]) : [];
       setUploadError(null);
-      setProductPerfFiles((prev) => ({ ...prev, [role]: { mainRows, tingkatkanRows, fileName: file.name, file } }));
+      setProductPerfFiles((prev) => ({ ...prev, [role]: { mainRows, tingkatkanRows, fileName: input.map(f => f.name).join(' · '), file } }));
       setReport(null);
       setDeepDive(null);
       setFunnelReport(null);
       onInvalidate();
     } catch (err) {
       setUploadError('Gagal membaca isi file: ' + (err as Error).message);
+      throw err;
     }
   }
 
-  async function handleProductMasterRefFile(file: File) {
+  async function handleProductMasterRefFile(input: File[]) {
+    const file = input[0];
     const basics = validateFileBasics(file, ['.csv', '.xlsx', '.xls']);
     if (!basics.ok) {
-      setUploadError(basics.message || 'File tidak valid.');
-      return;
+      throw new Error(basics.message || 'File tidak valid.');
     }
     try {
-      const rows = await readSpreadsheetFile(file);
+      const rows = (await Promise.all(input.map(readSpreadsheetFile))).flat();
       const parsed = parseProductMasterRows(rows);
       if (!parsed.entries.length) {
-        setUploadError(
+        throw new Error(
           parsed.nameColumn && parsed.categoryColumn
             ? 'File referensi kategori terbaca, tetapi tidak ada baris yang valid (nama produk + Category harus terisi).'
             : 'File referensi kategori butuh minimal satu kolom nama produk dan satu kolom Category/Kategori.',
         );
-        return;
       }
       setUploadError(null);
       setProductMasterRef({ entries: parsed.entries, fileName: file.name });
       setProductMasterRefSaved(false);
-      // Persist as this client's whole category mapping (full replace) so it
-      // survives page reloads — without a client selected it stays
-      // session-only.
-      if (clientId) {
-        try {
-          const saved = await replaceProductMaster(clientId, parsed.entries);
-          setProductMaster(saved);
-          setProductMasterRefSaved(true);
-        } catch (err) {
-          setUploadError('Referensi kategori terbaca & dipakai untuk sesi ini, tetapi gagal disimpan ke database: ' + (err as Error).message);
-        }
-      }
       setReport(null);
       setDeepDive(null);
       setFunnelReport(null);
       onInvalidate();
     } catch (err) {
       setUploadError('Gagal membaca isi file: ' + (err as Error).message);
-    }
-  }
-
-  function switchMode(side: PeriodSide, mode: SlotSource) {
-    setSrcMode((prev) => ({ ...prev, [side]: mode }));
-    setAdsFiles((prev) => ({
-      ...prev,
-      [`produk-${side}`]: null,
-      [`produk-otomatis-${side}`]: null,
-      [`toko-${side}`]: null,
-      [`toko-keyword-${side}`]: null,
-      [`live-${side}`]: null,
-    }));
-    setOverviewFiles((prev) => ({ ...prev, [`overview-${side}`]: null }));
-    setSavedPick((prev) => ({ ...prev, [side]: null }));
-    setReport(null);
-    setDeepDive(null);
-    setFunnelReport(null);
-    onInvalidate();
-  }
-
-  async function applySavedPeriod(side: PeriodSide, p: SavedPeriod) {
-    try {
-      const detail = await getSavedPeriod(p.runId, p.role);
-      const ch = detail.channels;
-      const label = p.label ?? detail.period.label ?? '';
-      const mk = (rows: SheetRow[] | undefined): AdsFileState | null => (rows && rows.length ? { rows, fileName: `Data tersimpan · ${label}`.trim() } : null);
-      setAdsFiles((prev) => ({
-        ...prev,
-        [`produk-${side}`]: mk(ch.produk),
-        // produk_otomatis was folded into `produk` at save time — can't be
-        // split back out, and every downstream calc already uses the merged form.
-        [`produk-otomatis-${side}`]: null,
-        [`toko-${side}`]: mk(ch.toko),
-        [`toko-keyword-${side}`]: mk(ch.toko_keyword),
-        [`live-${side}`]: mk(ch.live),
-      }));
-      // Product Overview is brand-scoped daily data — the backend already
-      // filtered it to this period's date range, so it drops straight into
-      // the overview slot. (Product Performance has no date and stays manual.)
-      setOverviewFiles((prev) => ({
-        ...prev,
-        [`overview-${side}`]: detail.overview.length ? { rows: detail.overview, fileName: `Data tersimpan · ${label}`.trim(), period: label } : null,
-      }));
-      setSavedPick((prev) => ({ ...prev, [side]: p }));
-
-      (side === 'old' ? periodOld : periodCur).autoFill(label);
-      const start = detail.period.start ?? p.start;
-      const end = detail.period.end ?? p.end;
-      (side === 'old' ? setPeriodOldRange : setPeriodCurRange)({ start, end });
-      const sd = start ? fromISODate(start) : null;
-      const ed = end ? fromISODate(end) : null;
-      (side === 'old' ? setPeriodOldDays : setPeriodCurDays)(sd && ed ? daysBetweenInclusive(sd, ed) : null);
-
-      // reportConfig carries both sides' omzet for the source run — pick the
-      // one matching the period's own role, drop it into this comparison's
-      // matching side.
-      const cfg = (detail.reportConfig ?? {}) as { omzetOld?: number; omzetCur?: number };
-      const omzet = (p.role === 'old' ? cfg.omzetOld : cfg.omzetCur) ?? null;
-      (side === 'old' ? onOmzetOldChange : onOmzetCurChange)(omzet && omzet > 0 ? omzet : null);
-
-      setReport(null);
-      setDeepDive(null);
-      setFunnelReport(null);
-      onInvalidate();
-    } catch (err) {
-      setUploadError('Gagal memuat data tersimpan: ' + (err as Error).message);
+      throw err;
     }
   }
 
@@ -508,9 +422,6 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     onOmzetOldChange(null);
     onOmzetCurChange(null);
     setAdsFiles(EMPTY_ADS_FILES);
-    setSrcMode({ old: 'upload', cur: 'upload' });
-    setSavedPick({ old: null, cur: null });
-    setPickerOpen(null);
     setOverviewFiles(EMPTY_OVERVIEW_FILES);
     setProductPerfFiles({ old: null, cur: null });
     setProductMasterRef(null);
@@ -560,35 +471,17 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     };
   }
 
-  function buildSaveFiles(): RawFileEntry[] {
-    // Slots sourced from stored data have no `file` — skip them (their rows
-    // are still persisted via buildSavePayload; raw_uploads is archive-only).
-    const fileEntry = (state: AdsFileState | null, channel: string, periodRole: 'old' | 'cur'): RawFileEntry | null =>
-      state?.file ? { file: state.file, channel, periodRole } : null;
-    const entries: (RawFileEntry | null)[] = [
-      fileEntry(adsFiles['toko-old'], 'toko', 'old'),
-      fileEntry(adsFiles['toko-cur'], 'toko', 'cur'),
-      fileEntry(adsFiles['produk-old'], 'produk', 'old'),
-      fileEntry(adsFiles['produk-cur'], 'produk', 'cur'),
-      fileEntry(adsFiles['produk-otomatis-old'], 'produk_otomatis', 'old'),
-      fileEntry(adsFiles['produk-otomatis-cur'], 'produk_otomatis', 'cur'),
-      fileEntry(adsFiles['toko-keyword-old'], 'toko_keyword', 'old'),
-      fileEntry(adsFiles['toko-keyword-cur'], 'toko_keyword', 'cur'),
-      fileEntry(adsFiles['live-old'], 'live', 'old'),
-      fileEntry(adsFiles['live-cur'], 'live', 'cur'),
-      productPerfFiles.old ? { file: productPerfFiles.old.file, channel: 'produk_performance', periodRole: 'old' } : null,
-      productPerfFiles.cur ? { file: productPerfFiles.cur.file, channel: 'produk_performance', periodRole: 'cur' } : null,
-    ];
-    return entries.filter((f): f is RawFileEntry => f !== null);
-  }
+  // Original source files already live in the brand library. Save parsed report rows only.
+  function buildSaveFiles(): RawFileEntry[] { return []; }
+
 
   function adsDropzone(key: AdsFileKey, tag: string) {
     const f = adsFiles[key];
     return (
-      <Dropzone
+      <LibraryFileSlot clientId={clientId} platform="shopee"
         tag={tag}
         accept=".csv,.xlsx,.xls"
-        onFile={(file) => handleAdsFile(file, key)}
+        channel={key.replace(/-(old|cur)$/, '').replaceAll('-', '_')} onFiles={(files, selection) => handleAdsFile(files, key, selection)}
         loaded={Boolean(f)}
         fileName={f?.fileName}
         infoText={f ? `${f.rows.length} baris` : undefined}
@@ -600,10 +493,10 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   function overviewDropzone(key: OverviewFileKey) {
     const f = overviewFiles[key];
     return (
-      <Dropzone
+      <LibraryFileSlot clientId={clientId} platform="shopee"
         tag={key === 'overview-old' ? 'Periode Lalu' : 'Periode Ini'}
         accept=".csv,.xlsx,.xls"
-        onFile={(file) => handleOverviewFile(file, key)}
+        channel="overview" onFiles={(files) => handleOverviewFile(files, key)}
         loaded={Boolean(f)}
         fileName={f?.fileName}
         infoText={f ? `${f.rows.length} hari${f.period ? ' · ' + f.period : ''}` : undefined}
@@ -615,7 +508,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
   const steps: Step[] = [
     {
-      label: 'Isi Total Omzet Toko & upload Iklan Produk',
+      label: 'Isi Total Omzet Toko & pilih Iklan Produk',
       sub: hasProduk ? 'Iklan Produk 2 periode sudah terbaca' : undefined,
       status: hasProduk && (omzetOld ?? 0) > 0 && (omzetCur ?? 0) > 0 ? 'done' : 'current',
     },
@@ -648,7 +541,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         <HowToStep num={3} numClassName="shopee-num" title="(Opsional) Upload data untuk analisis mendalam">
           Untuk analisis lebih dalam, tambahkan juga Iklan Produk Otomatis, Iklan Toko - Keyword (jika menggunakan iklan toko), Referensi Kategori Produk, Product Overview & Product Performance untuk insight tambahan. Semuanya opsional, laporan tetap bisa dibuat tanpanya.
         </HowToStep>
-        <HowToStep num={4} numClassName="shopee-num" title="Upload file & generate laporan">
+        <HowToStep num={4} numClassName="shopee-num" title="Pilih sumber & buat laporan">
           Isi kolom Total Omzet, upload Iklan Produk, lalu klik <strong>Generate Laporan</strong>.
         </HowToStep>
       </HowTo>
@@ -697,56 +590,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         </div>
       </div>
 
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Sumber Data Iklan</div>
-          <span className="sec-badge">upload file baru, atau pakai periode yang pernah disimpan</span>
-        </div>
-        <div className="dz-grid-4">
-          {(['old', 'cur'] as const).map((side) => (
-            <div key={side}>
-              <div className="dz-tag" style={{ marginBottom: '.4rem' }}>{side === 'old' ? 'Periode Lalu' : 'Periode Ini'}</div>
-              <SlotSourceTabs
-                value={srcMode[side]}
-                onChange={(m) => switchMode(side, m)}
-                disabledSavedReason={clientId ? null : 'Pilih klien dulu di bagian atas halaman'}
-              />
-              {srcMode[side] === 'saved' && (
-                <SavedSlotCard
-                  picked={
-                    savedPick[side]
-                      ? {
-                          title: savedPick[side]!.label || 'Tanpa label',
-                          sourceComparison: savedPick[side]!.sourceComparison,
-                          savedAt: formatSavedAt(savedPick[side]!.savedAt),
-                          summary: formatChannelCoverage(savedPick[side]!.channels),
-                        }
-                      : null
-                  }
-                  onOpen={() => setPickerOpen(side)}
-                  onClear={() => switchMode(side, 'saved')}
-                  hint="Iklan Produk / Toko / Keyword / Live akan terisi otomatis"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        {(srcMode.old === 'saved' || srcMode.cur === 'saved') && (
-          <InlineNotice tone="info" title="Yang ikut & tidak ikut dari data tersimpan">
-            Iklan Produk / Toko / Keyword / Live dan Product Overview (tren harian) terisi otomatis. <strong>Product Performance</strong> tidak punya tanggal sehingga tetap perlu diupload manual di bawah — untuk section Pareto / Traffic / Conversion. Iklan Produk Otomatis sudah tergabung ke Iklan Produk.
-          </InlineNotice>
-        )}
-      </div>
-
-      {pickerOpen && clientId && (
-        <SavedPeriodPicker
-          clientId={clientId}
-          platform="shopee"
-          variant="period"
-          onClose={() => setPickerOpen(null)}
-          onPick={((side) => (p: SavedPeriod) => applySavedPeriod(side, p))(pickerOpen)}
-        />
-      )}
+      <div className="empty-note">Pilih file dari Pengaturan Brand untuk masing-masing periode. Semua bagian ekspor dapat dipilih bersama; data tambahan tetap opsional.</div>
 
       <div className="source-block">
         <div className="source-header">
@@ -790,18 +634,18 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           <span className="sec-badge">opsional — memetakan nama produk ke Category &amp; Series</span>
         </div>
         <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Satu file berisi kolom <strong>nama produk</strong>, <strong>Category</strong>, dan <strong>Series</strong> — dipakai untuk mengelompokkan produk di "Analisis Per Item". File ini <strong>disimpan ke database per klien</strong>: cukup upload sekali, generate berikutnya otomatis terkategori. Upload file baru akan <strong>mengganti</strong> seluruh pemetaan klien ini.
+          Satu file berisi kolom <strong>nama produk</strong>, <strong>Category</strong>, dan <strong>Series</strong> — dipakai untuk mengelompokkan produk di "Analisis Per Item". Pilih referensi dari <strong>Pengaturan Brand</strong> untuk digunakan pada laporan ini. Pemetaan yang sudah tersimpan tetap dipakai sebagai dasar.
         </div>
         <div className="dz-grid-4">
-          <Dropzone
+          <LibraryFileSlot clientId={clientId} platform="shopee"
             tag="1 file · nama produk → Category / Series"
             accept=".csv,.xlsx,.xls"
-            onFile={handleProductMasterRefFile}
+            channel="product_master" onFiles={handleProductMasterRefFile}
             loaded={Boolean(productMasterRef)}
             fileName={productMasterRef?.fileName}
             infoText={
               productMasterRef
-                ? `${productMasterRef.entries.length} produk terpetakan${productMasterRefSaved ? ' · tersimpan ke database' : clientId ? '' : ' · sesi ini saja (pilih klien untuk menyimpan)'}`
+                ? `${productMasterRef.entries.length} produk terpetakan${productMasterRefSaved ? ' · referensi terpasang' : clientId ? '' : ' · sesi ini saja (pilih klien untuk menyimpan)'}`
                 : undefined
             }
             className="shopee-dz"
@@ -810,7 +654,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         </div>
         {!productMasterRef && productMaster.length > 0 && (
           <div className="empty-note" style={{ padding: '.2rem 1.4rem 0', color: 'var(--shopee)' }}>
-            {productMaster.length} produk sudah terpetakan di database untuk klien ini — dipakai otomatis saat generate. Upload file hanya jika ingin memperbarui.
+            {productMaster.length} produk sudah terpetakan di database untuk klien ini — dipakai otomatis saat generate. Perbarui referensi melalui Pengaturan Brand.
           </div>
         )}
       </div>
@@ -865,26 +709,26 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           <span className="sec-badge">opsional — untuk Pareto / Traffic / Conversion Analysis</span>
         </div>
         <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Upload <strong>2 periode</strong> untuk Traffic &amp; Conversion Analysis (perbandingan antar periode). Pareto Analysis cukup pakai periode ini saja — slot periode lalu boleh dikosongkan.
+          Pilih <strong>2 periode</strong> untuk Traffic &amp; Conversion Analysis (perbandingan antar periode). Pareto Analysis cukup pakai periode ini saja — slot periode lalu boleh dikosongkan.
         </div>
         <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
           Saat mengunduh file ini dari Shopee Seller Center, gunakan status <strong>"Siap Dikirim"</strong>.
         </div>
         <div className="dz-grid-4">
-          <Dropzone
+          <LibraryFileSlot clientId={clientId} platform="shopee"
             tag="Periode Lalu"
             accept=".xlsx,.xls"
-            onFile={(file) => handleProductPerformanceFile(file, 'old')}
+            channel="product_performance" onFiles={(files) => handleProductPerformanceFile(files, 'old')}
             loaded={Boolean(productPerfFiles.old)}
             fileName={productPerfFiles.old?.fileName}
             infoText={productPerfFiles.old ? `${productPerfFiles.old.mainRows.length} baris` : undefined}
             className="shopee-dz"
             icon="📦"
           />
-          <Dropzone
+          <LibraryFileSlot clientId={clientId} platform="shopee"
             tag="Periode Ini"
             accept=".xlsx,.xls"
-            onFile={(file) => handleProductPerformanceFile(file, 'cur')}
+            channel="product_performance" onFiles={(files) => handleProductPerformanceFile(files, 'cur')}
             loaded={Boolean(productPerfFiles.cur)}
             fileName={productPerfFiles.cur?.fileName}
             infoText={productPerfFiles.cur ? `${productPerfFiles.cur.mainRows.length} baris` : undefined}
@@ -958,7 +802,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
             <DownloadPdfButton targetId="report-shopee" filename="Performance Report - Shopee Ads.pdf" />
             <button className="btn btn-ghost" onClick={reset}>
-              ↺ Upload Data Baru
+              ↺ Ganti Sumber Data
             </button>
           </div>
           <SaveStatus status={autoSave.status} message={autoSave.message} />

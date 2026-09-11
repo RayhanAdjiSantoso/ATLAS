@@ -1,3 +1,4 @@
+import useSessionState from '../../hooks/useSessionState.js';
 import { useMemo, useState } from 'react';
 
 // Searchable + status-filterable client list for the Input Data picker.
@@ -12,8 +13,8 @@ const STATUS_FILTERS = [
 const bucketOf = (c) => (c.status === 'active' ? 'active' : 'off');
 
 export default function ClientPicker({ clients, value, onChange }) {
-  const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [query, setQuery] = useSessionState('internal:ClientPicker:query', '');
+  const [statusFilter, setStatusFilter] = useSessionState('internal:ClientPicker:statusFilter', 'all');
 
   const counts = useMemo(() => {
     const c = { all: clients.length, active: 0, off: 0 };

@@ -1365,3 +1365,46 @@ html:has(.con-bar) {
   .rca-row, .rca-row-header { grid-template-columns:20px minmax(0,1fr) auto 24px; }
   .rca-delta { grid-column:2 / span 2; flex-direction:row; align-items:baseline; gap:.4rem; min-width:0; }
 }
+
+/* Shared client status controls and the master brand list. */
+.brand-status-filter { display: flex; flex-direction: column; gap: .35rem; font-size: .75rem; color: var(--muted, #5a6a90); min-width: 135px; }
+.brand-status-filter select, .brand-list-panel select, .brand-list-tools input { min-height: 38px; border: 1px solid var(--border, #dde2ee); border-radius: 6px; background: var(--surface, #fff); color: var(--text, #0f1a3a); padding: .45rem .65rem; font: inherit; }
+.brand-picker-menu > .brand-status-filter { margin: .5rem .75rem; }
+.brand-list-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+.brand-list-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 1rem 0; }
+.brand-list-tools input { flex: 1; min-width: 180px; }
+.brand-list-table { overflow-x: auto; }
+.brand-list-table table { width: 100%; border-collapse: collapse; text-align: left; font-size: .85rem; }
+.brand-list-table th, .brand-list-table td { padding: .7rem .6rem; border-bottom: 1px solid var(--border); }
+.brand-list-table th { color: var(--muted); font-size: .75rem; }
+.con-controls { flex-wrap: wrap; }
+.con-ctl-period { flex-shrink: 0; }
+@media (max-width: 600px) { .con-ctl-period { width: 100%; } .brand-view-nav { flex-wrap: wrap; } }
+.brand-status-filter { display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px; min-width: 0; align-items: center; }
+.brand-status-filter button { display: inline-flex; gap: 6px; align-items: center; justify-content: center; min-height: 34px; padding: .4rem .65rem; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted, #5a6a90); font: inherit; font-size: .75rem; font-weight: 550; cursor: pointer; white-space: nowrap; }
+.brand-status-filter button:hover { background: var(--s2, #eef1f7); color: var(--text, #0f1a3a); }
+.brand-status-filter button.is-selected { background: var(--acc-100, #eef1fc); border-color: var(--acc-300, #b8c5f5); color: var(--acc, #1e3eb8); }
+.brand-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #718096; }
+.brand-status-dot.is-active { background: #15803d; }
+.brand-status-dot.is-freeze { background: #b45309; }
+.brand-status-dot.is-unknown { background: transparent; border: 1px solid currentColor; }
+.con-controls > .brand-status-filter { flex-basis: 100%; order: 2; padding-top: .6rem; border-top: 1px solid var(--border); }
+.brand-list-tools { padding: .8rem 0; border-bottom: 1px solid var(--border); margin-bottom: 0; }
+.brand-list-tools input { max-width: 340px; }
+.brand-list-table th { padding-top: 1rem; padding-bottom: .7rem; }
+.brand-list-table td:first-child { font-weight: 600; }
+.brand-list-table tbody tr:hover { background: var(--acc-100, #eef1fc); }
+.brand-list-table select { min-width: 128px; cursor: pointer; }
+.brand-list-table td:last-child { text-align: right; }
+.brand-list-table th:last-child { text-align: right; }
+.is-brand-list .brand-hero-badge, .is-brand-list .brand-hero-fx, .is-brand-list .brand-hero-eye { display: none; }
+.is-brand-list .brand-hero { background: var(--surface); box-shadow: none; }
+.is-brand-list .brand-hero-main { padding: 1.5rem; }
+.is-brand-list .brand-hero-copy h1 { font-size: 1.6rem; }
+.is-brand-list .brand-hero-stats { margin-top: .75rem; }
+@media (max-width: 600px) { .brand-list-tools input { max-width: none; width: 100%; } .brand-list-table td, .brand-list-table th { padding: .7rem .35rem; } }
+.brand-list-table .brand-status-value { border-radius: 99px; font-size: .76rem; font-weight: 600; min-height: 32px; padding: .35rem .65rem; border-color: transparent; }
+.brand-list-table .brand-status-value.is-active { background: #eefcf2; color: #166534; }
+.brand-list-table .brand-status-value.is-off { background: #eef1f7; color: #52617c; }
+.brand-list-table .brand-status-value.is-freeze { background: #fef3c7; color: #92400e; }
+.brand-list-table .brand-status-value:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }

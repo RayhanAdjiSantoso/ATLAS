@@ -10,6 +10,7 @@ router.use(authenticate);
 
 router.get('/', brandController.listBrands);
 router.post('/', brandController.createBrand);
+router.patch('/:brandId/status', brandController.updateBrandStatus);
 
 // Pengaturan Brand: the brand's narrative profile, and the file library the
 // other modules read instead of asking for their own upload.

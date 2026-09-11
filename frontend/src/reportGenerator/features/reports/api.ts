@@ -17,8 +17,8 @@ import api from '../../../api/client.js';
 // rejects with a generic "Request failed with status code 409" unless we
 // unwrap it ourselves, so every call below goes through this on error.
 function unwrap(err: unknown): never {
-  const data = (err as { response?: { data?: { error?: string } } })?.response?.data;
-  throw new Error(data?.error || (err instanceof Error ? err.message : 'Request failed'));
+  const data = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+  throw new Error(data?.error || data?.message || (err instanceof Error ? err.message : 'Request failed'));
 }
 
 // "Clients" here are ATLAS's own brands (public.brands, via /api/brands) —
@@ -28,7 +28,7 @@ function unwrap(err: unknown): never {
 export async function getClients(): Promise<Client[]> {
   try {
     const res = await api.get('/brands');
-    return res.data.brands.map((b: { brand_id: number; brand_name: string }) => ({ id: b.brand_id, name: b.brand_name }));
+    return res.data.brands.map((b: { brand_id: number; brand_name: string; status: string | null }) => ({ id: b.brand_id, name: b.brand_name, status: b.status }));
   } catch (err) {
     unwrap(err);
   }
@@ -38,7 +38,7 @@ export async function createClient(name: string): Promise<Client> {
   try {
     const res = await api.post('/brands', { brandName: name });
     const b = res.data.brand;
-    return { id: b.brand_id, name: b.brand_name };
+    return { id: b.brand_id, name: b.brand_name, status: b.status };
   } catch (err) {
     unwrap(err);
   }

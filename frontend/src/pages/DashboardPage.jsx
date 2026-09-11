@@ -1,3 +1,4 @@
+import useSessionState from '../hooks/useSessionState.js';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -154,13 +155,13 @@ function ModuleCard({ domain, entry, onOpen, index = 0 }) {
 }
 
 export default function DashboardPage() {
-  const [activeKey, setActiveKey] = useState('Executive Snapshot');
-  const [productLevel, setProductLevel] = useState('category');
+  const [activeKey, setActiveKey] = useSessionState('dashboard:section', 'Executive Snapshot');
+  const [productLevel, setProductLevel] = useSessionState('dashboard:product-level', 'category');
   const [stuck, setStuck] = useState(false);
   const sentinelRef = useRef(null);
   const reduceMotion = useReducedMotion();
 
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useSessionState('dashboard:filters', {
     brandId: '',
     startDate: '2026-06-01',
     endDate: '2026-06-30',

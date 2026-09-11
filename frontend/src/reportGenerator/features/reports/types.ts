@@ -7,6 +7,7 @@ export type Platform = 'meta' | 'shopee' | 'tiktok';
 export type PeriodRole = 'old' | 'cur';
 
 export interface Client {
+  status?: string | null;
   id: number;
   name: string;
 }

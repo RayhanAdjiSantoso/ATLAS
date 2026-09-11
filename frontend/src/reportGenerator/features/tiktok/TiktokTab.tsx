@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dropzone } from '../../components/Dropzone';
+import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -10,7 +10,6 @@ import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
-import { SlotSourceTabs, SavedSlotCard, type SlotSource } from '../../components/SlotSourceTabs';
 import { usePeriodLabel } from '../../hooks/usePeriodLabel';
 import { fromISODate, toISODate } from '../../lib/dateFmt';
 import { daysBetweenInclusive } from '../../lib/periodLabel';
@@ -22,10 +21,8 @@ import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapTiktokRows } from '../reports/rowMapping';
-import { getSavedPeriod } from '../reports/api';
-import { SavedPeriodPicker } from '../reports/SavedPeriodPicker';
 import { formatChannelCoverage, formatSavedAt } from '../reports/savedPeriodLabels';
-import type { SaveReportPayload, SavedPeriod } from '../reports/types';
+import type { RawFileEntry, SaveReportPayload } from '../reports/types';
 import { buildTiktokReport, type TiktokReport } from './tiktokReport';
 
 type FileKey = 'tiktok-old' | 'tiktok-cur';
@@ -63,9 +60,6 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
 
   const [files, setFiles] = useState<Record<FileKey, FileState | null>>({ 'tiktok-old': null, 'tiktok-cur': null });
   const [fileErrors, setFileErrors] = useState<Record<FileKey, string | null>>({ 'tiktok-old': null, 'tiktok-cur': null });
-  const [srcMode, setSrcMode] = useState<Record<FileKey, SlotSource>>({ 'tiktok-old': 'upload', 'tiktok-cur': 'upload' });
-  const [savedPick, setSavedPick] = useState<Record<FileKey, SavedPeriod | null>>({ 'tiktok-old': null, 'tiktok-cur': null });
-  const [pickerOpen, setPickerOpen] = useState<FileKey | null>(null);
   const [periodOldDays, setPeriodOldDays] = useState<number | null>(null);
   const [periodCurDays, setPeriodCurDays] = useState<number | null>(null);
   const [periodOldRange, setPeriodOldRange] = useState<DateRange>(EMPTY_RANGE);
@@ -73,27 +67,24 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   const [report, setReport] = useState<TiktokReport | null>(null);
   const [generatedAt, setGeneratedAt] = useState('');
 
-  async function handleFile(file: File, key: FileKey) {
+  async function handleFile(input: File[], key: FileKey, selection: LibrarySelection) {
+    const file = input[0];
     const basics = validateFileBasics(file, ['.xlsx', '.xls', '.csv']);
     if (!basics.ok) {
-      setFileErrors((prev) => ({ ...prev, [key]: basics.message || 'File tidak valid.' }));
-      return;
+      throw new Error(basics.message || 'File tidak valid.');
     }
     try {
-      const buffer = await file.arrayBuffer();
-      const rows = parseTiktokXLSX(buffer);
+      const rows = (await Promise.all(input.map(async f => parseTiktokXLSX(await f.arrayBuffer())))).flat();
       if (!rows.length) {
-        setFileErrors((prev) => ({ ...prev, [key]: 'File kosong atau format tidak dikenali.' }));
-        return;
+        throw new Error('File kosong atau format tidak dikenali.');
       }
       const cols = requireColumns(rows, [{ label: 'Cost', kw: ['cost'] }]);
       if (!cols.ok) {
-        setFileErrors((prev) => ({ ...prev, [key]: cols.message || 'Kolom wajib tidak ditemukan.' }));
-        return;
+        throw new Error(cols.message || 'Kolom wajib tidak ditemukan.');
       }
       setFileErrors((prev) => ({ ...prev, [key]: null }));
-      setFiles((prev) => ({ ...prev, [key]: { rows, fileName: file.name, file } }));
-      const period = periodFromTiktokFilename(file.name);
+      setFiles((prev) => ({ ...prev, [key]: { rows, fileName: input.map(f => f.name).join(' · ') } }));
+      const period = { label: selection.label, start: selection.start ? fromISODate(selection.start) : null, end: selection.end ? fromISODate(selection.end) : null, days: selection.start && selection.end ? daysBetweenInclusive(fromISODate(selection.start)!, fromISODate(selection.end)!) : null };
       const isOld = key === 'tiktok-old';
       (isOld ? periodOld : periodCur).autoFill(period.label);
       if (period.days != null) (isOld ? setPeriodOldDays : setPeriodCurDays)(period.days);
@@ -102,37 +93,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
       onInvalidate();
     } catch (err) {
       setFileErrors((prev) => ({ ...prev, [key]: 'Gagal membaca isi file: ' + (err as Error).message }));
-    }
-  }
-
-  function switchMode(key: FileKey, mode: SlotSource) {
-    setSrcMode((prev) => ({ ...prev, [key]: mode }));
-    setFiles((prev) => ({ ...prev, [key]: null }));
-    setSavedPick((prev) => ({ ...prev, [key]: null }));
-    setFileErrors((prev) => ({ ...prev, [key]: null }));
-    setReport(null);
-    onInvalidate();
-  }
-
-  async function applySavedPeriod(key: FileKey, p: SavedPeriod) {
-    const isOld = key === 'tiktok-old';
-    try {
-      const detail = await getSavedPeriod(p.runId, p.role);
-      const rows = detail.channels.tiktok ?? [];
-      setFiles((prev) => ({ ...prev, [key]: { rows, fileName: `Data tersimpan · ${p.label ?? detail.period.label ?? ''}`.trim() } }));
-      setSavedPick((prev) => ({ ...prev, [key]: p }));
-      setFileErrors((prev) => ({ ...prev, [key]: null }));
-      (isOld ? periodOld : periodCur).autoFill(p.label ?? detail.period.label ?? '');
-      const start = detail.period.start ?? p.start;
-      const end = detail.period.end ?? p.end;
-      (isOld ? setPeriodOldRange : setPeriodCurRange)({ start, end });
-      const sd = start ? fromISODate(start) : null;
-      const ed = end ? fromISODate(end) : null;
-      (isOld ? setPeriodOldDays : setPeriodCurDays)(sd && ed ? daysBetweenInclusive(sd, ed) : null);
-      setReport(null);
-      onInvalidate();
-    } catch (err) {
-      setFileErrors((prev) => ({ ...prev, [key]: 'Gagal memuat data tersimpan: ' + (err as Error).message }));
+      throw err;
     }
   }
 
@@ -154,9 +115,6 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     periodCur.reset();
     setFiles({ 'tiktok-old': null, 'tiktok-cur': null });
     setFileErrors({ 'tiktok-old': null, 'tiktok-cur': null });
-    setSrcMode({ 'tiktok-old': 'upload', 'tiktok-cur': 'upload' });
-    setSavedPick({ 'tiktok-old': null, 'tiktok-cur': null });
-    setPickerOpen(null);
     setPeriodOldDays(null);
     setPeriodCurDays(null);
     setPeriodOldRange(EMPTY_RANGE);
@@ -175,56 +133,22 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     };
   }
 
-  function buildSaveFiles() {
-    return [
-      files['tiktok-old']?.file ? { file: files['tiktok-old']!.file!, channel: 'tiktok', periodRole: 'old' as const } : null,
-      files['tiktok-cur']?.file ? { file: files['tiktok-cur']!.file!, channel: 'tiktok', periodRole: 'cur' as const } : null,
-    ].filter((f): f is { file: File; channel: string; periodRole: 'old' | 'cur' } => f !== null);
-  }
+  // Original source files already live in the brand library. Save parsed report rows only.
+  function buildSaveFiles(): RawFileEntry[] { return []; }
+
 
   function dropzone(key: FileKey) {
     const f = files[key];
-    const pick = savedPick[key];
-    return (
-      <div>
-        <SlotSourceTabs
-          value={srcMode[key]}
-          onChange={(m) => switchMode(key, m)}
-          disabledSavedReason={clientId ? null : 'Pilih klien dulu di bagian atas halaman'}
-        />
-        {srcMode[key] === 'upload' ? (
-          <Dropzone
-            tag={key === 'tiktok-old' ? 'Periode Lalu' : 'Periode Ini'}
-            accept=".xlsx,.xls,.csv"
-            onFile={(file) => handleFile(file, key)}
-            loaded={Boolean(f)}
-            fileName={f?.fileName}
-            infoText={f ? `${f.rows.length} campaigns` : undefined}
-          />
-        ) : (
-          <SavedSlotCard
-            picked={
-              pick
-                ? {
-                    title: pick.label || 'Tanpa label',
-                    sourceComparison: pick.sourceComparison,
-                    savedAt: formatSavedAt(pick.savedAt),
-                    summary: f ? `${f.rows.length} campaigns · ${formatChannelCoverage(pick.channels)}` : '',
-                  }
-                : null
-            }
-            onOpen={() => setPickerOpen(key)}
-            onClear={() => switchMode(key, 'saved')}
-          />
-        )}
-        {fileErrors[key] && <InlineNotice title="File ini belum kebaca">{fileErrors[key]}</InlineNotice>}
-      </div>
-    );
+    return <div><LibraryFileSlot clientId={clientId} platform="tiktok" channel="tiktok"
+      tag={key === 'tiktok-old' ? 'Periode Lalu' : 'Periode Ini'}
+      onFiles={(input, selection) => handleFile(input, key, selection)} loaded={Boolean(f)}
+      fileName={f?.fileName} infoText={f ? `${f.rows.length} kampanye` : undefined} />
+      {fileErrors[key] && <InlineNotice title="Sumber belum dapat dibaca">{fileErrors[key]}</InlineNotice>}</div>;
   }
 
   const steps: Step[] = [
     {
-      label: 'Upload file GMV Max — Periode Lalu & Ini',
+      label: 'Pilih file GMV Max — Periode Lalu & Ini',
       sub: files['tiktok-old'] && files['tiktok-cur'] ? `${files['tiktok-old'].fileName} · ${files['tiktok-cur'].fileName}` : undefined,
       status: files['tiktok-old'] && files['tiktok-cur'] ? 'done' : 'current',
     },
@@ -242,8 +166,8 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
         <HowToStep num={1} numClassName="tiktok-num" title="Download report dari TikTok Ads Manager">
           Buka TikTok Ads Manager → <strong>Reporting</strong> → pilih level <strong>Campaign</strong>. Set rentang tanggal untuk periode lalu dan periode ini secara terpisah, lalu download masing-masing sebagai file Excel (.xlsx). Pastikan kolom yang tersedia meliputi: Campaign Name, Cost, SKU Orders, Cost per Order, Gross Revenue, dan ROI.
         </HowToStep>
-        <HowToStep num={2} numClassName="tiktok-num" title="Upload file & generate laporan">
-          Upload file periode lalu dan periode ini, lalu klik <strong>Generate Laporan</strong>. Semua metrik (Cost, Order, Cost per Order, Gross Revenue, AOV, ROI) dihitung otomatis dari data campaign.
+        <HowToStep num={2} numClassName="tiktok-num" title="Pilih sumber & buat laporan">
+          Pilih file perpustakaan untuk periode lalu dan periode ini, lalu klik <strong>Generate Laporan</strong>. Semua metrik (Cost, Order, Cost per Order, Gross Revenue, AOV, ROI) dihitung otomatis dari data campaign.
         </HowToStep>
       </HowTo>
 
@@ -271,15 +195,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
         </div>
       </div>
 
-      {pickerOpen && clientId && (
-        <SavedPeriodPicker
-          clientId={clientId}
-          platform="tiktok"
-          variant="period"
-          onClose={() => setPickerOpen(null)}
-          onPick={((key) => (p: SavedPeriod) => applySavedPeriod(key, p))(pickerOpen)}
-        />
-      )}
+
 
       {ready && (
         <div id="cta" style={{ marginTop: '1rem' }}>
@@ -332,7 +248,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
             <DownloadPdfButton targetId="report-tiktok" filename="Performance Report - TikTok GMV Max.pdf" />
             <button className="btn btn-ghost" onClick={reset}>
-              ↺ Upload Data Baru
+              ↺ Ganti Sumber Data
             </button>
           </div>
           <SaveStatus status={autoSave.status} message={autoSave.message} />

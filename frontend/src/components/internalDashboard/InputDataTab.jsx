@@ -1,3 +1,4 @@
+import useSessionState from '../../hooks/useSessionState.js';
 import { useEffect, useState } from 'react';
 import api from '../../api/client.js';
 import ClientPicker from './ClientPicker.jsx';
@@ -24,9 +25,9 @@ const thisMonth = () => new Date().toISOString().slice(0, 7);
 export default function InputDataTab() {
   const [clients, setClients] = useState([]);
   const [clientsError, setClientsError] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [period, setPeriod] = useState(thisMonth());
-  const [sub, setSub] = useState(SUB_TABS[0].key);
+  const [clientId, setClientId] = useSessionState('internal:InputDataTab:clientId', '');
+  const [period, setPeriod] = useSessionState('internal:InputDataTab:period', thisMonth());
+  const [sub, setSub] = useSessionState('internal:InputDataTab:sub', SUB_TABS[0].key);
   const [logRefresh, setLogRefresh] = useState(0);
 
   useEffect(() => {

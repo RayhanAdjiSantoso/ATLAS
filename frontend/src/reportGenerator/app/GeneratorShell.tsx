@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { clearLibraryCatalog } from '../features/reports/LibraryFileSlot';
 import { Navigate, useParams } from 'react-router-dom';
 import { MetaTab } from '../features/meta/MetaTab';
 import { ShopeeTab } from '../features/shopee/ShopeeTab';
@@ -48,6 +50,7 @@ export interface GeneratorShellProps {
 // branch (that page is not ported — see reports.ts).
 export function GeneratorShell(props: GeneratorShellProps) {
   const { platform } = useParams();
+  useEffect(() => () => clearLibraryCatalog(), []);
   if (!isReportKey(platform)) return <Navigate to="/report-generator/meta" replace />;
   const activeTab: ReportKey = platform;
   const active = reportByKey(activeTab);
@@ -71,13 +74,13 @@ export function GeneratorShell(props: GeneratorShellProps) {
 
           <ClientPicker clientId={props.clientId} onChange={props.setClientId} />
 
-          <MetaTab
+          <MetaTab key={`${props.clientId}-MetaTab`}
             isActive={activeTab === 'meta'}
             clientId={props.clientId}
             onGenerated={(data) => props.setPlatformResult('meta', data)}
             onInvalidate={() => props.invalidatePlatform('meta')}
           />
-          <ShopeeTab
+          <ShopeeTab key={`${props.clientId}-ShopeeTab`}
             isActive={activeTab === 'shopee'}
             clientId={props.clientId}
             omzetOld={props.omzetOld}
@@ -87,7 +90,7 @@ export function GeneratorShell(props: GeneratorShellProps) {
             onGenerated={(data) => props.setPlatformResult('shopee', data)}
             onInvalidate={() => props.invalidatePlatform('shopee')}
           />
-          <TiktokTab
+          <TiktokTab key={`${props.clientId}-TiktokTab`}
             isActive={activeTab === 'tiktok'}
             clientId={props.clientId}
             onGenerated={(data) => props.setPlatformResult('tiktok', data)}

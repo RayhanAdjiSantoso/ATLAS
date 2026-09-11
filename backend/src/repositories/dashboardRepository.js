@@ -244,6 +244,7 @@ export async function getRfmRawMetrics(brandId, startDate, endDate) {
       JOIN shopee.order_statuses os ON os.order_status_id = o.order_status_id
       WHERE o.brand_id = $1
         AND os.status_name = 'Selesai'
+        AND o.customer_id IS NOT NULL
         AND o.order_completed_at >= $2
         AND o.order_completed_at < ($3::date + INTERVAL '1 day')
     ),
@@ -308,6 +309,7 @@ export async function getTransactionBehaviorMetrics(brandId, startDate, endDate)
       JOIN shopee.order_statuses os ON os.order_status_id = o.order_status_id
       WHERE o.brand_id = $1
         AND os.status_name = 'Selesai'
+        AND o.customer_id IS NOT NULL
         AND o.order_completed_at >= $2
         AND o.order_completed_at < ($3::date + INTERVAL '1 day')
         AND o.order_completed_at >= o.order_created_at
@@ -432,6 +434,7 @@ export async function getBasketAnalysisMetrics(brandId, startDate, endDate) {
       JOIN shopee.order_items oi ON oi.order_id = o.order_id AND oi.brand_id = o.brand_id
       WHERE o.brand_id = $1
         AND os.status_name = 'Selesai'
+        AND o.customer_id IS NOT NULL
         AND o.order_completed_at >= $2
         AND o.order_completed_at < ($3::date + INTERVAL '1 day')
       GROUP BY o.order_id, o.total_payment
@@ -469,6 +472,7 @@ export async function getBasketAnalysisMetrics(brandId, startDate, endDate) {
       JOIN shopee.order_statuses os ON os.order_status_id = o.order_status_id
       WHERE o.brand_id = $1
         AND os.status_name = 'Selesai'
+        AND o.customer_id IS NOT NULL
         AND o.order_completed_at >= $2
         AND o.order_completed_at < ($3::date + INTERVAL '1 day')
         AND UPPER(TRIM(oi.product_name_snapshot)) != 'RETURN HANDLING FEE'
@@ -636,6 +640,7 @@ export async function getCustomerRetention(brandId, startDate, endDate) {
       JOIN shopee.order_statuses os ON os.order_status_id = o.order_status_id
       WHERE o.brand_id = $1
         AND os.status_name = 'Selesai'
+        AND o.customer_id IS NOT NULL
         AND o.order_completed_at >= $2
         AND o.order_completed_at < ($3::date + INTERVAL '1 day')
       GROUP BY o.customer_id
@@ -648,6 +653,28 @@ export async function getCustomerRetention(brandId, startDate, endDate) {
   `;
   const res = await pool.query(query, [brandId, startDate, endDate]);
   return res.rows[0] || { total_customers: 0, customers_single: 0, customers_retained: 0 };
+}
+
+// Use only known buyers and completed orders before the observation cutoff.
+// The historical cohort excludes the selected period and all future orders.
+export async function getHistoricalRetention(brandId, startDate, endDate) {
+  const { rows } = await pool.query(`
+    WITH buyers AS (
+      SELECT o.customer_id,
+        bool_or(o.order_completed_at < $2::date) AS prior,
+        bool_or(o.order_completed_at >= $2::date) AS current
+      FROM shopee.orders o
+      JOIN shopee.order_statuses os USING (order_status_id)
+      WHERE o.brand_id = $1 AND os.status_name = 'Selesai'
+        AND o.customer_id IS NOT NULL
+        AND o.order_completed_at < ($3::date + INTERVAL '1 day')
+      GROUP BY o.customer_id
+    )
+    SELECT count(*) FILTER (WHERE prior)::int AS cohort_count,
+      count(*) FILTER (WHERE current)::int AS current_count,
+      count(*) FILTER (WHERE prior AND current)::int AS retained_count
+    FROM buyers`, [brandId, startDate, endDate]);
+  return rows[0];
 }
 
 // Repeat purchase cycle: for customers with >=2 completed orders in the
@@ -880,6 +907,7 @@ export async function getBasketUnitMetrics(brandId, startDate, endDate) {
       JOIN shopee.order_statuses os ON os.order_status_id = o.order_status_id
       WHERE o.brand_id = $1
         AND os.status_name = 'Selesai'
+        AND o.customer_id IS NOT NULL
         AND o.order_completed_at >= $2
         AND o.order_completed_at < ($3::date + INTERVAL '1 day')
     )

@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import './dateRangePicker.css';
 import { Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 const WEEKDAY_LABELS = ['M', 'S', 'S', 'R', 'K', 'J', 'S'];
@@ -46,15 +48,15 @@ function MonthCalendar({ viewDate, onNavigate, start, end, hoverEnd, onPickDay, 
   const effectiveEnd = end || hoverEnd;
 
   return (
-    <div style={{ flex: 1, minWidth: '260px' }}>
+    <div className="date-range-month">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', marginBottom: '0.75rem' }}>
-        <NavBtn onClick={() => onNavigate(addMonths(viewDate, -12))}><ChevronsLeft size={16} /></NavBtn>
-        <NavBtn onClick={() => onNavigate(addMonths(viewDate, -1))}><ChevronLeft size={16} /></NavBtn>
+        <NavBtn label="Tahun sebelumnya" onClick={() => onNavigate(addMonths(viewDate, -12))}><ChevronsLeft size={16} /></NavBtn>
+        <NavBtn label="Bulan sebelumnya" onClick={() => onNavigate(addMonths(viewDate, -1))}><ChevronLeft size={16} /></NavBtn>
         <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>
           {MONTH_LABELS[month]} {year}
         </div>
-        <NavBtn onClick={() => onNavigate(addMonths(viewDate, 1))}><ChevronRight size={16} /></NavBtn>
-        <NavBtn onClick={() => onNavigate(addMonths(viewDate, 12))}><ChevronsRight size={16} /></NavBtn>
+        <NavBtn label="Bulan berikutnya" onClick={() => onNavigate(addMonths(viewDate, 1))}><ChevronRight size={16} /></NavBtn>
+        <NavBtn label="Tahun berikutnya" onClick={() => onNavigate(addMonths(viewDate, 12))}><ChevronsRight size={16} /></NavBtn>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '0.25rem' }}>
@@ -79,6 +81,8 @@ function MonthCalendar({ viewDate, onNavigate, start, end, hoverEnd, onPickDay, 
             <button
               key={idx}
               type="button"
+              aria-label={`${date.getDate()} ${MONTH_LABELS[month]} ${year}`}
+              aria-pressed={Boolean(isEdge || inRange)}
               onClick={() => onPickDay(date)}
               onMouseEnter={() => onHoverDay(date)}
               style={{
@@ -102,11 +106,12 @@ function MonthCalendar({ viewDate, onNavigate, start, end, hoverEnd, onPickDay, 
   );
 }
 
-function NavBtn({ onClick, children }) {
+function NavBtn({ onClick, children, label }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
       style={{
         border: 'none',
         background: 'transparent',
@@ -155,16 +160,67 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
   const containerRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+  const [position, setPosition] = useState({ left: 8, top: 8 });
+  const closePanel = () => {
+    setOpen(false);
+    triggerRef.current?.focus({ preventScroll: true });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const place = () => {
+      const anchor = triggerRef.current?.getBoundingClientRect();
+      const panel = panelRef.current;
+      if (!anchor || !panel) return;
+      const width = panel.offsetWidth;
+      const height = panel.offsetHeight;
+      const left = Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8));
+      const below = anchor.bottom + 8;
+      const top = below + height <= window.innerHeight - 8
+        ? below
+        : Math.max(8, Math.min(anchor.top - height - 8, window.innerHeight - height - 8));
+      setPosition({ left, top });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    const observer = new ResizeObserver(place);
+    observer.observe(panelRef.current);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, mode]);
 
   useEffect(() => {
+    if (!open) return undefined;
     function handleOutside(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      if (!containerRef.current?.contains(e.target) && !panelRef.current?.contains(e.target)) {
         setOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, []);
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closePanel();
+      }
+    }
+    function handleFocus(e) {
+      if (!containerRef.current?.contains(e.target) && !panelRef.current?.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('focusin', handleFocus);
+    document.addEventListener('pointerdown', handleOutside);
+    document.addEventListener('keydown', handleKey);
+    panelRef.current?.querySelector('button')?.focus({ preventScroll: true });
+    return () => {
+      document.removeEventListener('focusin', handleFocus);
+      document.removeEventListener('pointerdown', handleOutside);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
 
   const openPanel = () => {
     setPendingStart(parseISODate(startDate));
@@ -180,7 +236,7 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
       startDate: toISODate(start),
       endDate: toISODate(end),
     });
-    setOpen(false);
+    closePanel();
   };
 
   const handlePickDay = (date) => {
@@ -293,6 +349,9 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
     <div ref={containerRef} style={{ position: 'relative', display: 'block', width: '100%' }}>
       <button
         type="button"
+        ref={triggerRef}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         onClick={openPanel}
         style={{
           display: 'flex',
@@ -309,26 +368,19 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
           whiteSpace: 'nowrap',
         }}
       >
-        <Calendar size={16} />
-        <span>{formatShort(start)} - {formatShort(end)} (GMT+7)</span>
+        <Calendar size={16} style={{ flexShrink: 0 }} />
+        <span style={{ whiteSpace: 'normal', textAlign: 'left' }}>{formatShort(start)} – {formatShort(end)} (GMT+7)</span>
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 8px)',
-            right: 0,
-            zIndex: 50,
-            background: 'var(--bg-card)',
-            borderRadius: '12px',
-            boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
-            display: 'flex',
-            overflow: 'hidden',
-            border: '1px solid var(--border)',
-          }}
+          ref={panelRef}
+          className="date-range-popover"
+          role="dialog"
+          aria-label="Pilih periode"
+          style={position}
         >
-          <div style={{ width: '170px', borderRight: '1px solid var(--border)', padding: '0.75rem 0' }}>
+          <div className="date-range-presets">
             {PRESETS.map((preset) => (
               <button
                 key={preset.label}
@@ -400,7 +452,7 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: '1.5rem', padding: '1rem 1.5rem', minWidth: '580px' }}
+            <div className="date-range-calendars"
                  onMouseLeave={() => setHoverDate(null)}>
               <MonthCalendar
                 viewDate={leftView}
@@ -424,7 +476,8 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
               />
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

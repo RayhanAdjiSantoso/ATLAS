@@ -157,11 +157,11 @@ export const HEADLINES = {
   },
 
   'Retention Analysis': (d) => {
-    const rate = d?.repeatCustomerRate;
-    if (rate?.retentionRatePct == null) return absent('Data pelanggan belum tersedia untuk periode ini.');
+    const rate = d?.historicalRetention;
+    if (rate?.rate == null) return absent('Data pelanggan belum tersedia untuk periode ini.');
     return {
-      value: formatPercent(rate.retentionRatePct),
-      caption: `Pelanggan dengan lebih dari satu transaksi, dari ${num(rate.totalCustomers || 0)} pelanggan.`,
+      value: formatPercent(rate.rate),
+      caption: `${num(rate.retainedCount)} dari ${num(rate.cohortCount)} pelanggan sebelumnya kembali pada periode ini.`,
       delta: null,
     };
   },

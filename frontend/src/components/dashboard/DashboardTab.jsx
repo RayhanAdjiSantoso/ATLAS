@@ -1274,7 +1274,7 @@ function RepeatCycleStatsGrid({ stats = {} }) {
 function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endDate } = {}) {
     const {
       totalCustomers = 0, segments = [], matrices = {}, customersBySegment = {},
-      comparePeriod = null, retention = { available: false, rate: null, retainedCount: null, cohortCount: null },
+      historicalRetention = {}, comparePeriod = null, retention = { available: false, rate: null, retainedCount: null, cohortCount: null },
       repeatCustomerRate = { totalCustomers: 0, customersSingle: 0, customersRetained: 0, retentionRatePct: 0 },
       repeatCycle = { stats: {}, distribution: [], comparison: [] },
       insights = {},
@@ -1300,12 +1300,30 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', alignItems: 'stretch' }}>
           <KpiCard title="Total Pelanggan (Ter-RFM)" value={totalCustomers} type="number" />
           <KpiCard
-            title="Customer Retention"
+            title="Pelanggan Kembali"
+            value={historicalRetention.currentCount ? historicalRetention.retainedCount : null}
+            type="number"
+            note={`Pelanggan periode ini yang sudah pernah menyelesaikan pesanan sebelum tanggal awal periode, dari seluruh riwayat brand yang tersedia. ${formatNumber(historicalRetention.newCount ?? 0)} pelanggan baru; pembelian setelah periode ini tidak dihitung.`}
+          />
+          <KpiCard
+            title="Porsi Pelanggan Kembali"
+            value={historicalRetention.returningShare == null ? null : historicalRetention.returningShare / 100}
+            type="percentage"
+            note="Pelanggan kembali ÷ seluruh pelanggan unik periode ini. Berbeda dari retention kohort: denominator hanya pelanggan yang bertransaksi pada periode terpilih."
+          />
+          <KpiCard
+            title="Retention Seluruh Riwayat"
+            value={historicalRetention.rate == null ? null : historicalRetention.rate / 100}
+            type="percentage"
+            note={`Dari ${formatNumber(historicalRetention.cohortCount ?? 0)} pelanggan sebelum periode ini, ${formatNumber(historicalRetention.retainedCount ?? 0)} kembali pada periode terpilih. Berdasarkan pesanan Selesai dan tanggal selesai; pelanggan tanpa identitas dikecualikan. Jika belum ada riwayat sebelumnya, angka belum tersedia.`}
+          />
+          <KpiCard
+            title="Retention Kohort Pembanding"
             value={retention.available ? retention.rate / 100 : null}
             type="percentage"
             note={retention.available
               ? `Retention kohort: dari ${formatNumber(retention.cohortCount)} pelanggan pada periode pembanding, ${formatNumber(retention.retainedCount)} kembali bertransaksi pada periode utama. Berbeda dari 'Repeat Customer Rate' di bawah (repeat-order rate dalam satu periode, bukan cohort antar-periode).`
-              : 'Aktifkan "Bandingkan Periode" pada filter untuk melihat retention kohort (pelanggan periode pembanding yang kembali bertransaksi pada periode utama).'}
+              : (retention.reason || 'Aktifkan Bandingkan Periode untuk melihat retention kohort pembanding.')}
           />
           {segmentChange ? (
             <InsightCard tone={segmentChange.tone} label={segmentChange.label} detail={segmentChange.detail} />

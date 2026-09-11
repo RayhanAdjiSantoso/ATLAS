@@ -1,3 +1,5 @@
+import useSessionState from '../../../hooks/useSessionState.js';
+import BrandStatusFilter, { matchesBrandStatus } from '../../../components/common/BrandStatusFilter.jsx';
 import { useEffect, useState } from 'react';
 import { SearchSelect } from '../../components/SearchSelect';
 import { createClient, getClients } from './api';
@@ -14,6 +16,7 @@ interface ClientPickerProps {
 // /api/clients inserts into that same table) instead of blocking the user
 // until someone adds it there first.
 export function ClientPicker({ clientId, onChange }: ClientPickerProps) {
+  const [status, setStatus] = useSessionState('generator:client-status', 'active');
   const [clients, setClients] = useState<Client[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -51,10 +54,11 @@ export function ClientPicker({ clientId, onChange }: ClientPickerProps) {
       <span className="client-bar-label">Klien</span>
       {!adding ? (
         <>
-          <SearchSelect options={clients} value={clientId} onChange={(id) => onChange(Number(id))} placeholder="— pilih klien —" searchPlaceholder="Cari brand…" emptyLabel="Brand tidak ditemukan" />
-          <span className="mpill mpill-add" onClick={() => setAdding(true)}>
+          <BrandStatusFilter value={status} onChange={setStatus} />
+          <SearchSelect options={clients.filter(c => matchesBrandStatus(c, status) || c.id === clientId)} value={clientId} onChange={(id) => onChange(Number(id))} placeholder="— pilih klien —" searchPlaceholder="Cari brand…" emptyLabel="Brand tidak ditemukan" />
+          <button type="button" className="mpill mpill-add" onClick={() => setAdding(true)}>
             + Klien baru
-          </span>
+          </button>
         </>
       ) : (
         <>

@@ -1,3 +1,5 @@
+import useSessionState from '../hooks/useSessionState.js';
+import BrandStatusFilter, { matchesBrandStatus, BRAND_STATUS_LABELS } from '../components/common/BrandStatusFilter.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
@@ -110,6 +112,7 @@ const PERIOD_SOURCE_LABEL = {
 };
 
 const VIEWS = [
+  { id: 'brands', label: 'Daftar brand', Icon: Layers3, note: 'Kelola status klien dari satu daftar bersama' },
   { id: 'context', label: 'Brand context', Icon: Database, note: 'Identitas yang memberi arti pada angka' },
   { id: 'direction', label: 'Current direction', Icon: Layers3, note: 'Arah kerja yang membingkai keputusan' },
   { id: 'data', label: 'Data & file', Icon: Archive, note: 'Satu perpustakaan sumber untuk semua modul' },
@@ -256,7 +259,8 @@ function platformSummary(platform, months, lookup) {
 
 function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useSessionState('brand-settings:search', '');
+  const [status, setStatus] = useSessionState('brand-settings:status', 'active');
   const wrap = useRef(null);
 
   useEffect(() => {
@@ -272,19 +276,19 @@ function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
   // one; typing two letters is not.
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return brands;
-    return brands
+    if (!q) return brands.filter(b => matchesBrandStatus(b, status));
+    return brands.filter(b => matchesBrandStatus(b, status))
       .filter((item) => item.brand_name.toLowerCase().includes(q))
       .sort((a, b) => {
         const aStarts = a.brand_name.toLowerCase().startsWith(q);
         const bStarts = b.brand_name.toLowerCase().startsWith(q);
         return aStarts === bStarts ? 0 : aStarts ? -1 : 1;
       });
-  }, [brands, query]);
+  }, [brands, query, status]);
 
   return (
     <div className="brand-picker" ref={wrap}>
-      <button type="button" className={`brand-picker-btn ${open ? 'is-open' : ''}`} onClick={() => { setQuery(''); setOpen((v) => !v); }} aria-haspopup="listbox" aria-expanded={open}>
+      <button type="button" className={`brand-picker-btn ${open ? 'is-open' : ''}`} onClick={() => setOpen((v) => !v)} aria-haspopup="listbox" aria-expanded={open}>
         <span className="brand-picker-text">
           <strong>{brand?.brand_name ?? 'Pilih brand'}</strong>
           <small>{sector || `${brands.length} brand terdaftar`}</small>
@@ -307,6 +311,7 @@ function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
                 placeholder="Cari brand…" autoFocus aria-label="Cari brand"
               />
             </label>
+            <BrandStatusFilter value={status} onChange={setStatus} />
             <ul role="listbox">
               {shown.map((item) => (
                 <li key={item.brand_id}>
@@ -783,7 +788,7 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
           <span className="brand-cov-legend-hint">Klik sel untuk upload ke bulan itu · klik nama dataset untuk detail hari.</span>
         </div>
 
-        <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait">
           <PlatformPanel
             key={platform.id} platform={platform} months={months} lookup={lookup} reduced={reduced}
             onPick={onPick} onDelete={onDelete} onReimport={onReimport} busyKey={busyKey} focusMonth={focusMonth}
@@ -800,8 +805,12 @@ export default function BrandSettingsPage() {
   const reduced = useReducedMotion();
   const [brands, setBrands] = useState([]);
   const [brand, setBrand] = useState(null);
-  const [activeView, setActiveView] = useState('context');
-  const [marketId, setMarketId] = useState('shopee');
+  const [lastBrandId, setLastBrandId] = useSessionState('brand-settings:brand', null);
+  const [listQuery, setListQuery] = useSessionState('brand-settings:list-query', '');
+  const [listStatus, setListStatus] = useSessionState('brand-settings:list-status', 'all');
+  const [statusBusy, setStatusBusy] = useState(null);
+  const [activeView, setActiveView] = useSessionState('brand-settings:view', 'brands');
+  const [marketId, setMarketId] = useSessionState('brand-settings:platform', 'shopee');
 
   const [profile, setProfile] = useState(null);
   const [draft, setDraft] = useState({});
@@ -814,6 +823,7 @@ export default function BrandSettingsPage() {
   const [busyKey, setBusyKey] = useState(null);
 
   const [creating, setCreating] = useState(false);
+  const [creatingBusy, setCreatingBusy] = useState(false);
   const [newName, setNewName] = useState('');
 
   const [windowStart, setWindowStart] = useState(0);
@@ -829,7 +839,7 @@ export default function BrandSettingsPage() {
         if (!alive) return;
         const list = data.brands ?? [];
         setBrands(list);
-        setBrand((current) => current ?? list[0] ?? null);
+        setBrand((current) => current ?? list.find(b => b.brand_id === lastBrandId) ?? list.find(b => b.status === 'active') ?? list[0] ?? null);
       })
       .catch(() => alive && setError('Gagal memuat daftar brand.'));
     return () => { alive = false; };
@@ -856,6 +866,7 @@ export default function BrandSettingsPage() {
 
   useEffect(() => {
     if (!brand) return;
+    setLastBrandId(brand.brand_id);
     setFocus(null);
     loadBrand(brand.brand_id);
   }, [brand, loadBrand]);
@@ -995,23 +1006,36 @@ export default function BrandSettingsPage() {
   const createBrand = async (event) => {
     event.preventDefault();
     const name = newName.trim();
-    if (!name) return;
+    if (!name || creatingBusy) return;
+    setCreatingBusy(true);
     try {
       const { data } = await api.post('/brands', { brandName: name });
       setBrands((current) => [...current, data.brand].sort((a, b) => a.brand_name.localeCompare(b.brand_name)));
       setBrand(data.brand);
       setCreating(false);
+      setActiveView('context');
       setNotice(`Brand "${data.brand.brand_name}" dibuat. Lengkapi context dan datanya di bawah.`);
     } catch (err) {
-      setNotice(err.response?.data?.message || 'Gagal membuat brand baru.');
-    }
+      setError(err.response?.data?.error || err.response?.data?.message || 'Gagal membuat brand baru.');
+    } finally { setCreatingBusy(false); }
   };
 
+  async function changeStatus(item, status) {
+    setStatusBusy(item.brand_id);
+    setError(null);
+    try {
+      const { data } = await api.patch(`/brands/${item.brand_id}/status`, { status });
+      setBrands(list => list.map(b => b.brand_id === item.brand_id ? data.brand : b));
+      setBrand(current => current?.brand_id === item.brand_id ? data.brand : current);
+      setNotice(`${item.brand_name}: status ${BRAND_STATUS_LABELS[status].toLowerCase()} tersimpan.`);
+    } catch (err) { setError(describeError(err, 'Gagal menyimpan status brand')); }
+    finally { setStatusBusy(null); }
+  }
   const view = VIEWS.find((v) => v.id === activeView);
   const setField = (key) => (value) => setDraft((current) => ({ ...current, [key]: value }));
 
   return (
-    <div className="con brand-settings">
+    <div className={`con brand-settings${activeView === 'brands' ? ' is-brand-list' : ''}`}>
       <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" multiple hidden onChange={handleFile} />
 
       <header className="brand-hero">
@@ -1058,7 +1082,7 @@ export default function BrandSettingsPage() {
                 placeholder="Nama brand baru" autoFocus
                 onKeyDown={(event) => { if (event.key === 'Escape') setCreating(false); }}
               />
-              <button type="submit" className="brand-new" disabled={!newName.trim()}><Check size={15} /> Simpan</button>
+              <button type="submit" className="brand-new" disabled={creatingBusy || !newName.trim()}><Check size={15} /> Simpan</button>
             </form>
           ) : (
             <button type="button" className="brand-new" onClick={() => { setNewName(''); setCreating(true); }}>
@@ -1112,6 +1136,23 @@ export default function BrandSettingsPage() {
         </div>
       )}
 
+        {activeView === 'brands' && <section className="brand-list-panel" aria-label="Daftar brand">
+        <SectionHead title="Daftar brand" description="Status ini digunakan bersama oleh seluruh modul. Menonaktifkan brand tidak menghapus data dan laporan." meta={`${brands.filter(b => b.status === 'active').length} aktif dari ${brands.length} brand`} />
+        <div className="brand-list-tools">
+          <input aria-label="Cari dalam daftar brand" placeholder="Cari nama brand…" value={listQuery} onChange={e => setListQuery(e.target.value)} />
+          <BrandStatusFilter value={listStatus} onChange={setListStatus} />
+        </div>
+        <div className="brand-list-table"><table><thead><tr><th>Brand</th><th>Status klien</th><th>Pengaturan</th></tr></thead><tbody>
+          {brands.filter(b => matchesBrandStatus(b, listStatus) && b.brand_name.toLowerCase().includes(listQuery.trim().toLowerCase())).map(b => <tr key={b.brand_id}>
+            <td>{b.brand_name}</td><td><select className={`brand-status-value is-${b.status || 'unknown'}`} aria-label={`Status ${b.brand_name}`} value={b.status ?? ''} disabled={statusBusy === b.brand_id} onChange={e => changeStatus(b, e.target.value)}>
+              {!b.status && <option value="" disabled>Belum diatur</option>}
+              {['active', 'off', 'freeze'].map(status => <option key={status} value={status}>{BRAND_STATUS_LABELS[status]}</option>)}
+            </select>{statusBusy === b.brand_id && <span role="status"> Menyimpan…</span>}</td>
+            <td><button type="button" className="brand-new" onClick={() => { setBrand(b); setActiveView('data'); }}>Buka data &amp; file</button></td>
+          </tr>)}
+        </tbody></table></div>
+        {!brands.some(b => matchesBrandStatus(b, listStatus) && b.brand_name.toLowerCase().includes(listQuery.trim().toLowerCase())) && <p className="brand-picker-empty">Tidak ada brand yang cocok. Ubah pencarian atau filter status.</p>}
+      </section>}
       <AnimatePresence mode="wait">
         {activeView === 'context' && (
           <ViewShell viewId="context" reduced={reduced}>
