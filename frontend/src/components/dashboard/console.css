@@ -1552,3 +1552,11 @@ html:has(.con-bar) {
   .brand-hero-main { flex-direction: row; align-items: center; }
   .brand-hero-badge { width: 170px; max-width: 170px; }
 }
+
+/* AppLayout already contributes 2rem above desktop pages. These workspaces
+   own their top rhythm just like Report Generator, so cancel that outer layer
+   and retain the hero's responsive inset. */
+@media (min-width: 901px) {
+  .brand-settings,
+  .con.dashboard-console { margin-top: -2rem; }
+}

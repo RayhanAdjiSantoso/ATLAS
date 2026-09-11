@@ -174,8 +174,10 @@ tr:hover td { background: var(--primary-light); }
   width: 240px;
   /* Above the page, below the modals (which sit at 1000+). */
   z-index: 50;
-  background: var(--bg-elevated);
-  border-right: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 12% 5%, rgba(53, 104, 255, 0.13), transparent 26%),
+    linear-gradient(180deg, #f9fbff 0%, #f1f5fc 56%, #f7f9fd 100%);
+  border-right: 1px solid rgba(127, 151, 205, 0.24);
   /* Constant — animating this too would shift everything inside the rail
      against the rail's own movement. */
   padding: 1.5rem 0.75rem;
@@ -185,7 +187,7 @@ tr:hover td { background: var(--primary-light); }
   overflow-x: hidden;
 }
 .sidebar.collapsed { width: 66px; }
-.sidebar.collapsed.peek { width: 240px; box-shadow: var(--shadow-md); }
+.sidebar.collapsed.peek { width: 240px; box-shadow: 18px 0 50px rgba(29, 54, 111, 0.14); }
 
 /* Motion. A transition is read off whichever rule matches AFTER the class
    changes, so each direction can be tuned on its own:
@@ -213,7 +215,7 @@ tr:hover td { background: var(--primary-light); }
   align-items: center;
   font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 2rem;
+  margin-bottom: 1.35rem;
   padding: 0 0.75rem;
   color: var(--text);
 }
@@ -229,21 +231,68 @@ tr:hover td { background: var(--primary-light); }
   width: 216px;
   display: flex;
   flex-direction: column;
+  gap: 0.9rem;
+}
+.sidebar-nav-group {
+  display: flex;
+  flex-direction: column;
   gap: 0.25rem;
+}
+.sidebar-nav-title {
+  height: 1.2rem;
+  padding: 0 0.75rem;
+  color: #8695b1;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.2rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 0.18s ease 0.12s;
 }
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border-radius: var(--radius);
-  color: var(--text-muted);
+  gap: 0.62rem;
+  min-height: 46px;
+  padding: 0.42rem;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  color: #43516a;
   text-decoration: none;
-  transition: background 0.15s, color 0.15s;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
-.sidebar-link:hover { background: var(--primary-light); color: var(--primary); text-decoration: none; }
-.sidebar-link.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
-.sidebar-ico { flex-shrink: 0; }
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(116, 145, 211, 0.18);
+  color: var(--primary);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.sidebar-link.active {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(70, 111, 224, 0.2);
+  color: var(--primary);
+  font-weight: 700;
+  box-shadow: 0 8px 22px rgba(39, 72, 151, 0.1);
+}
+.sidebar-ico {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.48);
+  color: #53627a;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+.sidebar-link:hover .sidebar-ico,
+.sidebar-link.active .sidebar-ico {
+  background: linear-gradient(145deg, #edf3ff, #fff);
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px rgba(65, 107, 221, 0.14);
+}
 
 /* Nav labels fade rather than unmount, so they keep their place in the fixed
    216px layout and the rail only has to reveal them. Fading in waits for the
@@ -256,6 +305,21 @@ tr:hover td { background: var(--primary-light); }
 .sidebar.collapsed:not(.peek) .sidebar-nav .sidebar-label {
   opacity: 0;
   transition: opacity 0.16s ease;
+}
+.sidebar.collapsed:not(.peek) .sidebar-nav-title {
+  height: 1px;
+  margin: 0.25rem 0.7rem;
+  padding: 0;
+  overflow: hidden;
+  color: transparent;
+  background: rgba(113, 136, 185, 0.24);
+  opacity: 1;
+}
+@media (min-width: 901px) {
+  .sidebar.collapsed:not(.peek) .sidebar-link {
+    width: 42px;
+    padding: 4px;
+  }
 }
 
 .sidebar-toggle {
@@ -274,12 +338,54 @@ tr:hover td { background: var(--primary-light); }
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.sidebar-toggle:hover { background: var(--primary-light); color: var(--primary); }
-.sidebar-logout { width: 100%; justify-content: center; }
+.sidebar-toggle:hover { background: rgba(255, 255, 255, 0.72); color: var(--primary); }
+.sidebar-logout {
+  width: 100%;
+  justify-content: flex-start;
+  border-color: rgba(112, 136, 188, 0.26);
+  background: rgba(255, 255, 255, 0.72);
+  color: #3e4c64;
+  box-shadow: 0 6px 18px rgba(39, 64, 116, 0.06);
+}
+.sidebar-logout:hover { border-color: rgba(37, 99, 235, 0.3); background: #fff; color: var(--primary); }
 
-.sidebar-footer { padding-top: 1rem; border-top: 1px solid var(--border); }
-.user-info { font-size: 0.85rem; color: var(--text-muted); padding: 0.5rem; margin-bottom: 0.5rem; }
+.sidebar-footer { padding-top: 0.9rem; border-top: 1px solid rgba(112, 136, 188, 0.22); }
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.62rem;
+  min-width: 0;
+  margin-bottom: 0.65rem;
+  padding: 0.58rem;
+  border: 1px solid rgba(112, 136, 188, 0.2);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
 .user-info strong { display: block; color: var(--text); }
+.sidebar-user-avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #1d4ed8, #3b82f6);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.2);
+}
+.sidebar-user-copy { min-width: 0; }
+.sidebar-user-copy strong,
+.sidebar-user-copy .sidebar-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* The footer is the one part that does track the rail: its two buttons are
    real boxes with a border, and a 216px button clipped to 42px would show
@@ -336,6 +442,14 @@ tr:hover td { background: var(--primary-light); }
      label-visibility overrides survive: someone who collapsed the rail on
      desktop must still get full labels inside the drawer. */
   .sidebar-nav { width: auto; }
+  .sidebar.collapsed:not(.peek) .sidebar-nav-title {
+    height: 1.2rem;
+    margin: 0;
+    padding: 0 0.75rem;
+    color: #8695b1;
+    background: transparent;
+    opacity: 1;
+  }
   .sidebar.collapsed:not(.peek) .sidebar-nav .sidebar-label { opacity: 1; }
   .sidebar.collapsed:not(.peek) .sidebar-brand .sidebar-label,
   .sidebar.collapsed:not(.peek) .sidebar-footer .sidebar-label { display: inline; }

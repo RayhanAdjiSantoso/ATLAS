@@ -21,15 +21,15 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 // One entry per destination so the collapsed rail, the expanded list and the
 // tooltips can never drift apart.
 const NAV = [
-  { to: '/', label: 'Beranda', Icon: Home, end: true },
-  { to: '/dashboard', label: 'Dashboard Business Overview', Icon: LayoutDashboard },
+  { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
+  { to: '/dashboard', label: 'Dashboard Business Overview', Icon: LayoutDashboard, group: 'Workspace' },
   // Sits directly under the dashboard it feeds: this is where the data those
   // charts read comes in, and it used to be that page's first tab.
-  { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal },
-  { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart },
-  { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, adminOnly: true },
-  { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, adminOnly: true },
-  { to: '/history', label: 'History Upload', Icon: History },
+  { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal, group: 'Workspace' },
+  { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace' },
+  { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, adminOnly: true, group: 'Operasional' },
+  { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, adminOnly: true, group: 'Operasional' },
+  { to: '/history', label: 'History Upload', Icon: History, group: 'Operasional' },
 ];
 
 export default function AppLayout() {
@@ -84,7 +84,17 @@ export default function AppLayout() {
   }, [mobileOpen]);
 
   const links = NAV.filter((n) => !n.adminOnly || isAdmin);
+  const groups = ['Workspace', 'Operasional']
+    .map((label) => ({ label, links: links.filter((link) => link.group === label) }))
+    .filter((group) => group.links.length > 0);
   const open = !collapsed || peek;
+  const displayName = user?.full_name || user?.fullName || 'Pengguna ATLAS';
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
 
   return (
     <div className="layout">
@@ -115,20 +125,25 @@ export default function AppLayout() {
         </Link>
 
         <nav className="sidebar-nav">
-          {links.map(({ to, label, Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
-              // Only useful while collapsed; when the label is on screen a
-              // tooltip repeating it is noise.
-              title={open ? undefined : label}
-            >
-              <Icon size={18} className="sidebar-ico" />
-              <span className="sidebar-label">{label}</span>
-            </NavLink>
+          {groups.map((group) => (
+            <div className="sidebar-nav-group" key={group.label}>
+              <span className="sidebar-nav-title">{group.label}</span>
+              {group.links.map(({ to, label, Icon, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  onClick={() => setMobileOpen(false)}
+                  className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
+                  // Only useful while collapsed; when the label is on screen a
+                  // tooltip repeating it is noise.
+                  title={open ? undefined : label}
+                >
+                  <Icon size={18} className="sidebar-ico" />
+                  <span className="sidebar-label">{label}</span>
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
@@ -146,9 +161,12 @@ export default function AppLayout() {
           </button>
 
           <div className="user-info">
-            <strong>{user?.full_name || user?.fullName}</strong>
-            <span className="sidebar-label">
-              {user?.email} · {isAdmin ? 'Admin' : 'User'}
+            <span className="sidebar-user-avatar" aria-hidden>{initials || 'A'}</span>
+            <span className="sidebar-user-copy">
+              <strong>{displayName}</strong>
+              <span className="sidebar-label">
+                {user?.email} · {isAdmin ? 'Admin' : 'User'}
+              </span>
             </span>
           </div>
 
