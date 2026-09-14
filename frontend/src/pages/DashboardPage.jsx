@@ -1,7 +1,8 @@
 import useSessionState from '../hooks/useSessionState.js';
 import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
-import { ArrowUp, ArrowDown, Minus, ArrowRight, BarChart3, Database, Sparkles } from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus, ArrowRight, BarChart3, Brain, CalendarDays, Check, CheckCircle2, ChevronDown, Circle, Database, Download, FileText, ListChecks, Loader2, Sparkles, UsersRound } from 'lucide-react';
 import FilterPanel from '../components/dashboard/FilterPanel.jsx';
 import DashboardTab from '../components/dashboard/DashboardTab.jsx';
 import { useConsoleData } from '../components/dashboard/useConsoleData.js';
@@ -15,6 +16,7 @@ import {
 import '../components/dashboard/console.css';
 import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
+import api from '../api/client';
 
 const DASH_EASE = [0.16, 1, 0.3, 1];
 
@@ -119,6 +121,128 @@ function KpiStrip({ entry }) {
         );
       })}
     </div>
+  );
+}
+
+const MOM_TYPE_LABELS = { regular: 'Meeting reguler', non_regular: 'Meeting non reguler', whatsapp_quick_call: 'WhatsApp (quick call)' };
+const lines = (value) => (value ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+const dateLabel = (value) => new Date(`${value}T00:00:00`).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+
+function taskGroups(value, scope) {
+  const groups = [];
+  let current = { name: 'Tanpa PIC', tasks: [] };
+  for (const raw of lines(value)) {
+    const clean = raw.replace(/^[-•✓]\s*/, '');
+    if (/^[^:]{1,60}:$/.test(clean)) {
+      if (current.tasks.length) groups.push(current);
+      current = { name: clean.slice(0, -1).trim(), tasks: [] };
+    } else current.tasks.push({ text: clean, key: `${scope}|${current.name}|${clean}`.toLowerCase() });
+  }
+  if (current.tasks.length) groups.push(current);
+  return groups;
+}
+
+function TaskBoard({ title, scope, minute, onToggle }) {
+  const groups = taskGroups(minute?.[scope === 'mil' ? 'todo_mil' : 'todo_client'], scope);
+  const done = new Set(minute?.completed_task_keys ?? []);
+  const openGroups = groups.map((group) => ({ ...group, tasks: group.tasks.filter((task) => !done.has(task.key)) })).filter((group) => group.tasks.length);
+  const completed = groups.flatMap((group) => group.tasks.map((task) => ({ ...task, person: group.name }))).filter((task) => done.has(task.key));
+  return <section className="mom-task-board">
+    <div className="mom-task-head"><span>{title}</span><small>{groups.flatMap((g) => g.tasks).length - completed.length} aktif</small></div>
+    {!openGroups.length && <p className="mom-dash-empty">Tidak ada tindak lanjut aktif.</p>}
+    {openGroups.map((group) => <div className="mom-assignee" key={group.name}><strong><span />{group.name}</strong><ul>{group.tasks.map((task) => <li key={task.key}><button type="button" onClick={() => onToggle(task.key, true)} aria-label={`Tandai selesai: ${task.text}`}><Circle size={15} /></button><span>{task.text}</span></li>)}</ul></div>)}
+    {completed.length > 0 && <details className="mom-done"><summary><CheckCircle2 size={14} /> Sudah dilakukan <span>{completed.length}</span><ChevronDown size={14} /></summary><ul>{completed.map((task) => <li key={task.key}><button type="button" onClick={() => onToggle(task.key, false)} aria-label={`Kembalikan ke aktif: ${task.text}`}><CheckCircle2 size={15} /></button><span><small>{task.person}</small>{task.text}</span></li>)}</ul></details>}
+  </section>;
+}
+
+const AI_SECTIONS = [
+  ['diagnosis', 'Ringkasan eksekutif'], ['objective_alignment', 'Keputusan & kesepakatan'],
+  ['winning', 'Poin utama'], ['challenge', 'Isu terbuka'], ['strategic_direction', 'Langkah berikutnya'],
+  ['action_items', 'Tindak lanjut'], ['risks', 'Risiko'], ['data_gaps', 'Konteks yang masih dibutuhkan'],
+];
+
+function MinutesOverview({ filters }) {
+  const [minutes, setMinutes] = useState([]);
+  const [status, setStatus] = useState('idle');
+  const [selected, setSelected] = useState([]);
+  const [downloading, setDownloading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiError, setAiError] = useState('');
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [taskSaveError, setTaskSaveError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const latest = minutes[0];
+
+  useEffect(() => {
+    let alive = true;
+    if (!filters.brandId) { setMinutes([]); setSelected([]); setStatus('idle'); return undefined; }
+    setStatus('loading');
+    api.get(`/brands/${filters.brandId}/minutes`, { params: { startDate: filters.startDate, endDate: filters.endDate } })
+      .then(({ data }) => { if (!alive) return; const list = data.minutes ?? []; setMinutes(list); setSelected(list.map((item) => item.id)); setStatus('ready'); })
+      .catch(() => { if (alive) setStatus('error'); });
+    return () => { alive = false; };
+  }, [filters.brandId, filters.startDate, filters.endDate, reloadKey]);
+
+  const chosen = useMemo(() => minutes.filter((item) => selected.includes(item.id)), [minutes, selected]);
+  const summaryText = useMemo(() => aiSummary ? AI_SECTIONS.map(([key, label]) => {
+    const value = aiSummary[key]; if (!value || (Array.isArray(value) && !value.length)) return null;
+    return `${label.toUpperCase()}\n${Array.isArray(value) ? value.map((item) => `• ${item}`).join('\n') : value}`;
+  }).filter(Boolean).join('\n\n') : '', [aiSummary]);
+
+  const generate = async () => {
+    if (!selected.length) return;
+    setGenerating(true); setAiError('');
+    try { const { data } = await api.post(`/brands/${filters.brandId}/minutes/summary`, { minute_ids: selected }); setAiSummary(data.summary); setSummaryOpen(true); }
+    catch (err) { setAiError(err?.response?.data?.message || err?.response?.data?.error || 'Gemini gagal membuat ringkasan. Coba lagi.'); }
+    finally { setGenerating(false); }
+  };
+
+  const toggleTask = async (minute, key, checked) => {
+    const current = new Set(minute.completed_task_keys ?? []); checked ? current.add(key) : current.delete(key);
+    const keys = [...current];
+    setMinutes((items) => items.map((item) => item.id === minute.id ? { ...item, completed_task_keys: keys } : item));
+    setTaskSaveError(null);
+    try { await api.patch(`/brands/${filters.brandId}/minutes/${minute.id}/tasks`, { completed_task_keys: keys }); }
+    catch {
+      setMinutes((items) => items.map((item) => item.id === minute.id ? minute : item));
+      setTaskSaveError({ minute, key, checked });
+    }
+  };
+
+  const download = async () => {
+    if (!chosen.length) return;
+    setDownloading(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('Minutes Of Meeting — Summary', 48, 54);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90, 106, 144); doc.text(`${chosen.length} recap terpilih`, 48, 72);
+      doc.setTextColor(15, 26, 58); doc.setFontSize(10);
+      const wrapped = doc.splitTextToSize(summaryText, 499);
+      let y = 96;
+      for (const row of wrapped) { if (y > 790) { doc.addPage(); y = 48; } doc.text(row, 48, y); y += 14; }
+      doc.save('Minutes-of-Meeting-Summary.pdf');
+    } finally { setDownloading(false); }
+  };
+
+  return (
+    <section className="mom-dashboard" aria-labelledby="mom-dashboard-title">
+      <div className="mom-dashboard-head"><div><h2 id="mom-dashboard-title">Minutes Of Meeting</h2><p>Recap keputusan dan tindak lanjut dalam periode dashboard.</p></div>{latest && <span><CalendarDays size={13} /> Terbaru {dateLabel(latest.meeting_date)}</span>}</div>
+      {status === 'loading' && <div className="mom-dash-state"><Loader2 size={17} className="brand-spin" /> Memuat catatan meeting…</div>}
+      {status === 'error' && <div className="mom-dash-state is-error"><span>Catatan meeting gagal dimuat. Periksa koneksi API, lalu coba lagi.</span><button type="button" onClick={() => setReloadKey((key) => key + 1)}>Coba lagi</button></div>}
+      {status !== 'loading' && status !== 'error' && !filters.brandId && <div className="mom-dash-state"><UsersRound size={18} /> Pilih satu brand untuk melihat Minutes Of Meeting.</div>}
+      {status === 'ready' && !latest && <div className="mom-dash-state"><FileText size={18} /> Belum ada MOM pada periode ini. Tambahkan melalui Pengaturan Brand.</div>}
+      {latest && <div className="mom-workspace">
+        <div className="mom-summary-pane">
+          <div className="mom-recap-controls"><details className="mom-recap-picker"><summary><span><FileText size={14} /> {selected.length ? `${selected.length} recap dipilih` : 'Pilih recap'}</span><ChevronDown size={15} /></summary><div>{minutes.map((item) => <label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={() => { setSelected((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]); setAiSummary(null); }} /><span><strong>{dateLabel(item.meeting_date)}</strong><small>{MOM_TYPE_LABELS[item.meeting_type]}</small></span></label>)}</div></details><button type="button" className="btn btn-primary" onClick={generate} disabled={!selected.length || generating}>{generating ? <Loader2 size={15} className="brand-spin" /> : <Brain size={15} />}{generating ? 'Gemini sedang merangkum…' : 'Buat ringkasan AI'}</button></div>
+          {aiError && <div className="mom-ai-error">{aiError}</div>}
+          <button type="button" className="mom-summary-title" onClick={() => setSummaryOpen((open) => !open)} aria-expanded={summaryOpen}><span><Brain size={15} /><span><strong>Ringkasan meeting</strong><small>{aiSummary ? `Disusun dari ${chosen.length} recap terpilih` : 'Pilih recap lalu buat ringkasan dengan Gemini'}</small></span></span><ChevronDown size={17} /></button>
+          {summaryOpen && <div className="mom-ai-content">{aiSummary ? <>{AI_SECTIONS.map(([key, label]) => { const value = aiSummary[key]; if (!value || (Array.isArray(value) && !value.length)) return null; return <section key={key}><h3>{label}</h3>{Array.isArray(value) ? <ul>{value.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>{value}</p>}</section>; })}<button type="button" className="mom-download" onClick={download} disabled={downloading}><Download size={14} />{downloading ? 'Menyiapkan PDF…' : 'Download summary PDF'}</button></> : <div className="mom-ai-empty"><Brain size={21} /><span>Ringkasan AI akan tampil terstruktur di sini.</span></div>}</div>}
+        </div>
+        <aside className="mom-task-rail" aria-label="To Do List"><div className="mom-rail-title"><ListChecks size={15} /><span><strong>To Do List</strong><small>Dari catatan meeting terbaru</small></span></div>{taskSaveError && <div className="mom-task-error"><span>Status tugas belum tersimpan.</span><button type="button" onClick={() => toggleTask(taskSaveError.minute, taskSaveError.key, taskSaveError.checked)}>Coba lagi</button></div>}<TaskBoard title="MIL" scope="mil" minute={latest} onToggle={(key, checked) => toggleTask(latest, key, checked)} /><TaskBoard title="Client" scope="client" minute={latest} onToggle={(key, checked) => toggleTask(latest, key, checked)} /></aside>
+      </div>}
+    </section>
   );
 }
 
@@ -265,6 +389,7 @@ export default function DashboardPage() {
       <div className="con-body dashboard-body">
         <div className="con-canvas">
           <KpiStrip entry={read('Executive Snapshot')} />
+          <MinutesOverview filters={filters} />
 
           <section className="con-focus" aria-labelledby="con-focus-title">
             <div className="con-focus-head">

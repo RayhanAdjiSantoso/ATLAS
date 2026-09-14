@@ -4,6 +4,7 @@ import * as uploadService from '../services/uploadService.js';
 import { processUpload } from '../services/import/importService.js';
 import * as brandService from '../services/brandService.js';
 import * as library from '../services/brandLibraryService.js';
+import * as ai from '../services/aiSummaryService.js';
 
 async function requireBrand(brandId) {
   const brand = await brandService.getBrandById(brandId);
@@ -28,6 +29,83 @@ export const saveProfile = asyncHandler(async (req, res) => {
   await requireBrand(brandId);
   const profile = await library.saveProfile(brandId, req.body ?? {}, req.user?.userId);
   res.json({ profile });
+});
+
+const MOM_TYPES = new Set(['regular', 'non_regular', 'whatsapp_quick_call']);
+
+function parseMinute(req) {
+  const body = req.body ?? {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(body.meeting_date ?? '')) throw new AppError('Tanggal meeting wajib diisi', 400);
+  if (!MOM_TYPES.has(body.meeting_type)) throw new AppError('Tipe meeting tidak valid', 400);
+  return {
+    meeting_date: body.meeting_date,
+    meeting_type: body.meeting_type,
+    meeting_recap: String(body.meeting_recap ?? '').trim(),
+    todo_client: String(body.todo_client ?? '').trim(),
+    todo_mil: String(body.todo_mil ?? '').trim(),
+  };
+}
+
+export const listMinutes = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req);
+  await requireBrand(brandId);
+  res.json({ minutes: await library.listMinutes(brandId, { startDate: req.query.startDate, endDate: req.query.endDate }) });
+});
+
+export const createMinute = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req);
+  await requireBrand(brandId);
+  res.status(201).json({ minute: await library.createMinute(brandId, parseMinute(req), req.user?.userId) });
+});
+
+export const updateMinute = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req);
+  const minuteId = Number(req.params.minuteId);
+  if (!Number.isInteger(minuteId) || minuteId <= 0) throw new AppError('ID MOM tidak valid', 400);
+  await requireBrand(brandId);
+  const minute = await library.updateMinute(brandId, minuteId, parseMinute(req), req.user?.userId);
+  if (!minute) throw new AppError('MOM tidak ditemukan', 404);
+  res.json({ minute });
+});
+
+export const deleteMinute = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req);
+  const minuteId = Number(req.params.minuteId);
+  if (!Number.isInteger(minuteId) || minuteId <= 0) throw new AppError('ID MOM tidak valid', 400);
+  await requireBrand(brandId);
+  if (!await library.deleteMinute(brandId, minuteId)) throw new AppError('MOM tidak ditemukan', 404);
+  res.status(204).end();
+});
+
+export const saveMinuteTaskState = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req);
+  const minuteId = Number(req.params.minuteId);
+  const keys = req.body?.completed_task_keys;
+  if (!Number.isInteger(minuteId) || minuteId <= 0) throw new AppError('ID MOM tidak valid', 400);
+  if (!Array.isArray(keys) || keys.length > 500 || keys.some((key) => typeof key !== 'string' || key.length > 500)) throw new AppError('Status checklist tidak valid', 400);
+  await requireBrand(brandId);
+  const minute = await library.saveMinuteTaskState(brandId, minuteId, [...new Set(keys)], req.user?.userId);
+  if (!minute) throw new AppError('MOM tidak ditemukan', 404);
+  res.json({ minute });
+});
+
+export const generateMinutesSummary = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req);
+  const minuteIds = req.body?.minute_ids;
+  if (!Array.isArray(minuteIds) || !minuteIds.length || minuteIds.length > 20 || minuteIds.some((id) => !Number.isInteger(Number(id)))) throw new AppError('Pilih 1–20 recap untuk diringkas', 400);
+  const brand = await requireBrand(brandId);
+  const all = await library.listMinutes(brandId);
+  const wanted = new Set(minuteIds.map(Number));
+  const chosen = all.filter((minute) => wanted.has(minute.id));
+  if (chosen.length !== wanted.size) throw new AppError('Salah satu recap tidak ditemukan pada brand ini', 404);
+  const source = chosen.map((m) => `Tanggal: ${m.meeting_date}\nJenis: ${m.meeting_type}\nRecap: ${m.meeting_recap || '—'}\nTugas Client: ${m.todo_client || '—'}\nTugas MIL: ${m.todo_mil || '—'}`).join('\n\n---\n\n');
+  const prompt = `Ringkas beberapa minutes of meeting untuk brand ${brand.brand_name}. Gunakan Bahasa Indonesia profesional. Jangan mengarang fakta. Diagnosis harus menjadi executive summary lintas meeting; objective_alignment menjelaskan keputusan/kesepakatan; winning berisi poin utama; challenge berisi isu terbuka; strategic_direction berisi langkah berikutnya; action_items berisi tindak lanjut spesifik; risks dan data_gaps hanya jika relevan.\n\nSUMBER:\n${source}`;
+  try {
+    res.json({ summary: await ai.callGemini(prompt), model: ai.MODEL });
+  } catch (err) {
+    if (err instanceof ai.AiSummaryError) throw new AppError(err.message, err.statusCode);
+    throw err;
+  }
 });
 
 export const listLibrary = asyncHandler(async (req, res) => {

@@ -241,11 +241,11 @@ A cool, ink-blue palette on a paper-white ground: one saturated accent, a set of
 
 The shell is a fixed 240px sidebar (66px collapsed, with a 240px hover peek) plus a 2rem-padded main column. Below 900px it becomes a drawer: the sidebar goes off-canvas at 260px with a scrim, and a 52px sticky translucent `.mobile-bar` holds the menu button and the wordmark.
 
-The console lays out inside that column as a two-track grid: a 232px domain rail and a `minmax(0, 1fr)` canvas, 1.75rem apart, both starting at the top. It cancels the shell's 2rem padding (`margin: -2rem`) and sets its own `clamp(18px, 2.4vw, 34px)` gutters, so the sticky control bar can bleed to the full column width. The rail is sticky under the 64px bar; the canvas is a vertical stack at 1.25rem rhythm: KPI strip, focused panel, then a summary grid of `auto-fill minmax(268px, 1fr)` cards at 0.85rem.
+The console lays out inside that column as a two-track grid: a 232px domain rail and a `minmax(0, 1fr)` canvas, 1.75rem apart, both starting at the top. It cancels the shell's 2rem padding (`margin: -2rem`) and sets its own `clamp(18px, 2.4vw, 34px)` gutters, so the sticky control bar can bleed to the full column width. The rail is sticky under the 64px bar; the canvas is a vertical stack at 1.25rem rhythm: KPI strip, the Minutes of Meeting workspace, focused panel, then a summary grid of `auto-fill minmax(268px, 1fr)` cards at 0.85rem. MOM sits between the KPI reading and focused analysis as a two-column operational surface: the reading column takes `minmax(0, 1.7fr)`, while a task rail stays at `minmax(300px, .72fr)`, separated by one hairline rather than a gutter or nested card.
 
 Spacing is small and consistent: 0.55rem for table and list rows, 0.85–1rem for card interiors, 1.35rem for panel interiors, 1.25rem between stacked sections.
 
-Breakpoints and what changes: **1180px** — KPI strip goes 4-up to 2-up and re-cuts its hairlines. **900px** — the shell becomes a drawer, the console goes single-column, and the rail turns into a two-column grid of the same rows above the panel. **760px** — summary cards go single-column, panel padding drops to 1rem, labels wrap. **359px** — the rail finally goes one column.
+Breakpoints and what changes: **1180px** — KPI strip goes 4-up to 2-up and re-cuts its hairlines. **900px** — the shell becomes a drawer, the console goes single-column, and the rail turns into a two-column grid of the same rows above the panel. **760px** — summary cards go single-column, panel padding drops to 1rem, labels wrap. **700px** — MOM editor fields and history rows become one column; the MOM workspace stacks the summary above the task rail, recap controls stack full-width, and each AI section moves from a 145px label column to a single reading column. **359px** — the rail finally goes one column.
 
 ### Named Rules
 **The Re-Cut Rule.** Every grid that divides itself with hairlines re-declares those hairlines at each breakpoint. A rule that leads nowhere — a border on the last column of a row that no longer exists — is a defect, not a leftover.
@@ -318,6 +318,13 @@ The most repeated element in the product. Inline-flex, 5px radius, 0.7rem/700, w
 - **Not yet fetched:** a shimmering bar at 5px radius (72% or 44% width), never a dash.
 The registry's `absent()` helper returns `value: null` rather than falling back to 0 precisely to keep these apart. Rail dots carry the same idea by *shape*, not colour alone: filled = in memory, spinning ring = fetching, hollow = not yet.
 
+### Signature: The Minutes of Meeting Handoff
+One shared record has two deliberately different readings. In Brand Settings, a 12px bordered editor uses uppercase labels, compact date/type fields, full-width recap text, paired client/MIL task areas, and a hairline-separated action row; saved records become ruled history rows with date/type metadata, recap text, and quiet edit/delete actions. In Business Overview, in-period records feed one top-level operational workspace directly after the KPI strip. Its left reading pane holds a recap checklist dropdown, the Gemini action, and a collapsible summary whose response is rendered as labelled sections with 145px label columns rather than an undifferentiated text block. The right rail is deliberately narrower and stacks **MIL before Client**, matching the internal-to-external handoff order.
+
+The task rail translates authored lines into a PIC hierarchy: a line ending in a colon becomes a PIC heading, following lines become indented tasks on a hairline branch, and unheaded lines fall under “Tanpa PIC.” Each ownership section names its active count. Completing a task moves it out of the active branch into a nested “Sudah dilakukan” disclosure; its struck-through row retains the PIC label and its check control reverses the move. Completion is optimistically reflected, persisted to the MOM record, and rolled back on failure; the rail then shows a compact inline warning with “Coba lagi,” keeping persistence trouble local to the action that caused it.
+
+Recap choice precedes generation: the dropdown checklist defaults to all in-period records, changing the selection invalidates the prior summary, and the primary action is disabled without a selection or while Gemini is working. A successful response opens the structured summary; PDF export lives inside that disclosure and changes label while preparing the file. Loading, no-brand, no-record, fetch failure, Gemini failure, save failure, empty active-task groups, generation, and download all have explicit Indonesian states. At 700px the reading pane and task rail stack, controls stretch, and labelled AI sections become a single column.
+
 ### Signature: The Threshold Band
 For values read against a scale rather than a previous period: accent tint by default, `#fdf3e0`/`#92400e` for watch, at 6px radius — and it always spells the band out in words.
 
@@ -342,6 +349,7 @@ The parts nobody draws still belong to the system: selection is `#d9e1fb` on ink
 - **Do** reserve the sticky bar's height on the scroll container (`html:has(.con-bar) { scroll-padding-top }`) on any page that pins a bar, so a keyboard-focused control is never parked underneath it (WCAG 2.2 Focus Not Obscured).
 - **Do** treat Inter as a decided exception to the `overused-font` detector: it is what the project's own generated design system declares (`--f`) and shares across surfaces, and PRODUCT.md records one-family platform coherence as a brand commitment. The suppression is scoped to that one value in `.impeccable/config.json`.
 - **Do** state every status in words as well as colour, and differentiate load states by shape as well as fill.
+- **Do** keep MOM creation and history in Brand Settings and make Business Overview the operational reading: recap checklist and Gemini summary on the left; MIL then Client tasks on the right; PIC headings over indented tasks; reversible completion under “Sudah dilakukan”; and inline retry when persisted task state fails.
 
 ### Don't:
 - **Don't** hand-edit `frontend/src/reportGenerator/index.css`. It is generated by `frontend/scripts/scope-css.py` from the Monthly Report Generator; changes belong upstream and arrive by re-running the script.
@@ -353,3 +361,4 @@ The parts nobody draws still belong to the system: selection is `#d9e1fb` on ink
 - **Don't** re-animate charts or entrances on a filter change; a page that redraws on every keystroke reads as slow no matter how fast it is.
 - **Don't** truncate a domain or metric name, and don't abbreviate one to make it fit. Let it wrap.
 - **Don't** ship an undrawn native control (a raw checkbox, a bare select) into a bar that has otherwise been drawn.
+- **Don't** turn Minutes of Meeting into another analytics-domain card, flatten PIC and task into one list, reverse the MIL → Client order, or make completion destructive. Finished tasks remain recoverable in the nested disclosure and their state belongs in the database, not only in local UI state.

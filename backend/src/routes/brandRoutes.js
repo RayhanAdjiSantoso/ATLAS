@@ -16,6 +16,12 @@ router.patch('/:brandId/status', brandController.updateBrandStatus);
 // other modules read instead of asking for their own upload.
 router.get('/:brandId/profile', brandLibraryController.getProfile);
 router.put('/:brandId/profile', brandLibraryController.saveProfile);
+router.get('/:brandId/minutes', brandLibraryController.listMinutes);
+router.post('/:brandId/minutes', brandLibraryController.createMinute);
+router.post('/:brandId/minutes/summary', brandLibraryController.generateMinutesSummary);
+router.put('/:brandId/minutes/:minuteId', brandLibraryController.updateMinute);
+router.patch('/:brandId/minutes/:minuteId/tasks', brandLibraryController.saveMinuteTaskState);
+router.delete('/:brandId/minutes/:minuteId', brandLibraryController.deleteMinute);
 router.get('/:brandId/library', brandLibraryController.listLibrary);
 // .array, not .single: a month whose export Shopee split into parts is
 // filed in one action (see migration 016).

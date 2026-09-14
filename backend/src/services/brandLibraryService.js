@@ -81,6 +81,65 @@ export async function saveProfile(brandId, patch, userId) {
   return result.rows[0];
 }
 
+/* ── Minutes of Meeting ───────────────────────────────────────────── */
+
+const MOM_FIELDS = 'm.id, m.brand_id, m.meeting_date::text AS meeting_date, m.meeting_type, m.meeting_recap, m.todo_client, m.todo_mil, m.completed_task_keys, m.created_at, m.updated_at';
+
+export async function listMinutes(brandId, { startDate, endDate } = {}) {
+  const values = [brandId];
+  const clauses = ['m.brand_id = $1'];
+  if (startDate) { values.push(startDate); clauses.push(`m.meeting_date >= $${values.length}`); }
+  if (endDate) { values.push(endDate); clauses.push(`m.meeting_date <= $${values.length}`); }
+  const result = await pool.query(
+    `SELECT ${MOM_FIELDS}, u.full_name AS updated_by_name
+     FROM public.brand_minutes m
+     LEFT JOIN public.users u ON u.user_id = m.updated_by
+     WHERE ${clauses.join(' AND ')}
+     ORDER BY m.meeting_date DESC, m.id DESC`,
+    values,
+  );
+  return result.rows;
+}
+
+export async function createMinute(brandId, input, userId) {
+  const result = await pool.query(
+    `INSERT INTO public.brand_minutes AS m
+       (brand_id, meeting_date, meeting_type, meeting_recap, todo_client, todo_mil, created_by, updated_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+     RETURNING ${MOM_FIELDS}`,
+    [brandId, input.meeting_date, input.meeting_type, input.meeting_recap || null, input.todo_client || null, input.todo_mil || null, userId ?? null],
+  );
+  return result.rows[0];
+}
+
+export async function updateMinute(brandId, minuteId, input, userId) {
+  const result = await pool.query(
+    `UPDATE public.brand_minutes m SET
+       meeting_date = $3, meeting_type = $4, meeting_recap = $5,
+       todo_client = $6, todo_mil = $7, updated_by = $8, updated_at = now()
+     WHERE m.brand_id = $1 AND m.id = $2
+     RETURNING ${MOM_FIELDS}`,
+    [brandId, minuteId, input.meeting_date, input.meeting_type, input.meeting_recap || null, input.todo_client || null, input.todo_mil || null, userId ?? null],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function deleteMinute(brandId, minuteId) {
+  const result = await pool.query('DELETE FROM public.brand_minutes WHERE brand_id = $1 AND id = $2', [brandId, minuteId]);
+  return result.rowCount > 0;
+}
+
+export async function saveMinuteTaskState(brandId, minuteId, completedTaskKeys, userId) {
+  const result = await pool.query(
+    `UPDATE public.brand_minutes m
+     SET completed_task_keys = $3::jsonb, updated_by = $4, updated_at = now()
+     WHERE m.brand_id = $1 AND m.id = $2
+     RETURNING ${MOM_FIELDS}`,
+    [brandId, minuteId, JSON.stringify(completedTaskKeys), userId ?? null],
+  );
+  return result.rows[0] ?? null;
+}
+
 /* ── Library ────────────────────────────────────────────────────────── */
 
 // Everything except the bytes — the list endpoint is polled on every brand

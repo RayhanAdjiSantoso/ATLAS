@@ -3,9 +3,9 @@ import BrandStatusFilter, { matchesBrandStatus, BRAND_STATUS_LABELS } from '../c
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
-  Archive, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
+  Archive, ArrowUpRight, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
   CloudUpload, Database, Download, FileSpreadsheet, Layers3, Loader2, Plus, RefreshCw, Save,
-  Search, Sparkles, Trash2, Upload,
+  Search, Sparkles, Trash2, Upload, UsersRound,
 } from 'lucide-react';
 import api from '../api/client';
 import atlasIcon from '../assets/atlas-icon.png';
@@ -115,8 +115,16 @@ const VIEWS = [
   { id: 'brands', label: 'Daftar brand', Icon: Layers3, note: 'Kelola status klien dari satu daftar bersama' },
   { id: 'context', label: 'Brand context', Icon: Database, note: 'Identitas yang memberi arti pada angka' },
   { id: 'direction', label: 'Current direction', Icon: Layers3, note: 'Arah kerja yang membingkai keputusan' },
+  { id: 'mom', label: 'Minutes of Meeting', Icon: UsersRound, note: 'Recap dan tindak lanjut setiap pertemuan' },
   { id: 'data', label: 'Data & file', Icon: Archive, note: 'Satu perpustakaan sumber untuk semua modul' },
 ];
+
+const MOM_TYPES = [
+  ['regular', 'Meeting reguler'],
+  ['non_regular', 'Meeting non reguler'],
+  ['whatsapp_quick_call', 'WhatsApp (quick call)'],
+];
+const emptyMinute = () => ({ meeting_date: new Date().toISOString().slice(0, 10), meeting_type: 'regular', meeting_recap: '', todo_client: '', todo_mil: '' });
 
 /* ── Month model ────────────────────────────────────────────────────────
    Months are derived from what the brand actually has (plus the current
@@ -414,6 +422,46 @@ function SaveBar({ profile, saving, dirty, onSave }) {
         {saving ? 'Menyimpan…' : dirty ? 'Simpan perubahan' : 'Tersimpan'}
       </button>
     </div>
+  );
+}
+
+function MinutesView({ minutes, onSave, onDelete, busy }) {
+  const [draftMinute, setDraftMinute] = useState(emptyMinute);
+  const [editingId, setEditingId] = useState(null);
+  const edit = (minute) => { setEditingId(minute.id); setDraftMinute({ ...minute }); };
+  const reset = () => { setEditingId(null); setDraftMinute(emptyMinute()); };
+  const submit = async (event) => {
+    event.preventDefault();
+    const saved = await onSave(draftMinute, editingId);
+    if (saved) reset();
+  };
+  return (
+    <>
+      <SectionHead title="Minutes Of Meeting" description="Simpan hasil pembahasan dan pembagian tindak lanjut per meeting. Catatan terbaru langsung tersedia di Business Overview." meta={`${minutes.length} catatan`} />
+      <form className="mom-editor" onSubmit={submit}>
+        <div className="mom-fields">
+          <label><span>Tanggal</span><input type="date" required value={draftMinute.meeting_date} onChange={(e) => setDraftMinute({ ...draftMinute, meeting_date: e.target.value })} /></label>
+          <label><span>Tipe meeting</span><select value={draftMinute.meeting_type} onChange={(e) => setDraftMinute({ ...draftMinute, meeting_type: e.target.value })}>{MOM_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        </div>
+        <label className="mom-text"><span>Meeting Recap</span><small>Keputusan, insight, dan konteks penting dari meeting.</small><textarea rows="5" value={draftMinute.meeting_recap} onChange={(e) => setDraftMinute({ ...draftMinute, meeting_recap: e.target.value })} placeholder="Tuliskan ringkasan meeting…" /></label>
+        <div className="mom-todos">
+          <label className="mom-text"><span>To Do List Client</span><small>Satu tugas per baris agar mudah dipindai.</small><textarea rows="4" value={draftMinute.todo_client} onChange={(e) => setDraftMinute({ ...draftMinute, todo_client: e.target.value })} placeholder="Tindak lanjut untuk client…" /></label>
+          <label className="mom-text"><span>To Do List MIL</span><small>Satu tugas per baris agar mudah dipindai.</small><textarea rows="4" value={draftMinute.todo_mil} onChange={(e) => setDraftMinute({ ...draftMinute, todo_mil: e.target.value })} placeholder="Tindak lanjut untuk tim MIL…" /></label>
+        </div>
+        <div className="mom-editor-actions">
+          {editingId && <button type="button" className="btn btn-secondary" onClick={reset}>Batal edit</button>}
+          <button type="submit" className="btn btn-primary" disabled={busy || !draftMinute.meeting_date}>{busy ? <Loader2 size={16} className="brand-spin" /> : <Save size={16} />}{busy ? 'Menyimpan…' : editingId ? 'Simpan perubahan' : 'Tambah MOM'}</button>
+        </div>
+      </form>
+      <div className="mom-history">
+        {minutes.map((minute) => <article key={minute.id} className="mom-history-row">
+          <div className="mom-history-date"><CalendarDays size={15} /><strong>{new Date(`${minute.meeting_date}T00:00:00`).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</strong><span>{MOM_TYPES.find(([value]) => value === minute.meeting_type)?.[1]}</span></div>
+          <p>{minute.meeting_recap || 'Recap belum diisi.'}</p>
+          <div className="mom-history-actions"><button type="button" onClick={() => edit(minute)}>Edit</button><button type="button" onClick={() => onDelete(minute.id)} aria-label={`Hapus MOM ${minute.meeting_date}`}><Trash2 size={14} /> Hapus</button></div>
+        </article>)}
+        {!minutes.length && <div className="mom-empty"><UsersRound size={24} /><strong>Belum ada catatan meeting</strong><span>Isi tanggal, tipe meeting, dan hasil pembahasan di atas.</span></div>}
+      </div>
+    </>
   );
 }
 
@@ -848,6 +896,8 @@ export default function BrandSettingsPage() {
   const [saving, setSaving] = useState(false);
 
   const [files, setFiles] = useState([]);
+  const [minutes, setMinutes] = useState([]);
+  const [minuteBusy, setMinuteBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -887,9 +937,17 @@ export default function BrandSettingsPage() {
       setProfile(profileRes.data.profile);
       setDraft(profileRes.data.profile ?? {});
       setFiles(libraryRes.data.files ?? []);
+      try {
+        const minutesRes = await api.get(`/brands/${brandId}/minutes`);
+        setMinutes(minutesRes.data.minutes ?? []);
+      } catch {
+        setMinutes([]);
+        setNotice('MOM belum dapat dimuat. Data brand lainnya tetap tersedia; coba lagi setelah API diperbarui.');
+      }
     } catch (err) {
       setError(describeError(err, 'Gagal memuat data brand'));
       setFiles([]);
+      setMinutes([]);
     } finally {
       setLoading(false);
     }
@@ -943,6 +1001,28 @@ export default function BrandSettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveMinute = async (minute, id) => {
+    if (!brand) return false;
+    setMinuteBusy(true);
+    try {
+      const { data } = id
+        ? await api.put(`/brands/${brand.brand_id}/minutes/${id}`, minute)
+        : await api.post(`/brands/${brand.brand_id}/minutes`, minute);
+      setMinutes((current) => [data.minute, ...current.filter((item) => item.id !== data.minute.id)].sort((a, b) => b.meeting_date.localeCompare(a.meeting_date) || b.id - a.id));
+      setNotice(id ? 'Catatan MOM diperbarui.' : 'Catatan MOM tersimpan.');
+      return true;
+    } catch (err) { setNotice(describeError(err, 'Gagal menyimpan MOM')); return false; }
+    finally { setMinuteBusy(false); }
+  };
+
+  const deleteMinute = async (id) => {
+    if (!brand || !window.confirm('Hapus catatan MOM ini? Tindakan ini tidak dapat dibatalkan.')) return;
+    setMinuteBusy(true);
+    try { await api.delete(`/brands/${brand.brand_id}/minutes/${id}`); setMinutes((current) => current.filter((item) => item.id !== id)); setNotice('Catatan MOM dihapus.'); }
+    catch (err) { setNotice(describeError(err, 'Gagal menghapus MOM')); }
+    finally { setMinuteBusy(false); }
   };
 
   // Upload targets a single (platform, channel, month) slot. The month is
@@ -1219,6 +1299,12 @@ export default function BrandSettingsPage() {
               ))}
             </div>
             <SaveBar profile={profile} saving={saving} dirty={dirty} onSave={saveProfile} />
+          </ViewShell>
+        )}
+
+        {activeView === 'mom' && (
+          <ViewShell viewId="mom" reduced={reduced}>
+            <MinutesView minutes={minutes} onSave={saveMinute} onDelete={deleteMinute} busy={minuteBusy} />
           </ViewShell>
         )}
 
