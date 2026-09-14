@@ -142,48 +142,71 @@ const summaryToText = (summary) => AI_SECTIONS.map(([key, label]) => {
   return `${label.toUpperCase()}\n${Array.isArray(value) ? value.map((item) => `• ${item}`).join('\n') : value}`;
 }).filter(Boolean).join('\n\n');
 
-function TaskBoard({ title, scope, minute, onToggle }) {
-  const groups = taskGroups(minute?.[scope === 'mil' ? 'todo_mil' : 'todo_client'], scope);
-  const done = new Set(minute?.completed_task_keys ?? []);
-  const total = groups.reduce((count, group) => count + group.tasks.length, 0);
-  const openGroups = groups.map((group) => ({ ...group, tasks: group.tasks.filter((task) => !done.has(task.key)) })).filter((group) => group.tasks.length);
-  const completed = groups.flatMap((group) => group.tasks.map((task) => ({ ...task, person: group.name }))).filter((task) => done.has(task.key));
-  const pct = total ? Math.round((completed.length / total) * 100) : 0;
+// A to-do is not a reading of the dashboard period. It was agreed in some
+// meeting and stays owed until someone ticks it, so the rail gathers every
+// open task from every meeting of the brand — a task from July still shows
+// when the dashboard is set to today — and each task carries the meeting it
+// came from. PIC headings merge across meetings (case-insensitively), newest
+// meeting first, so one person's backlog reads as one list.
+function collectTasks(minutes, scope) {
+  const field = scope === 'mil' ? 'todo_mil' : 'todo_client';
+  const open = new Map();
+  const done = [];
+  for (const minute of minutes) {
+    const completed = new Set(minute.completed_task_keys ?? []);
+    for (const group of taskGroups(minute[field], scope)) {
+      const groupKey = group.name.toLowerCase();
+      for (const task of group.tasks) {
+        const item = { ...task, person: group.name, minuteId: minute.id, date: minute.meeting_date, type: minute.meeting_type };
+        if (completed.has(task.key)) {
+          done.push(item);
+        } else {
+          if (!open.has(groupKey)) open.set(groupKey, { name: group.name, tasks: [] });
+          open.get(groupKey).tasks.push(item);
+        }
+      }
+    }
+  }
+  const groups = [...open.values()];
+  return { groups, done, openCount: groups.reduce((count, group) => count + group.tasks.length, 0) };
+}
+
+function TaskBoard({ title, scope, minutes, onToggle }) {
+  const { groups, done, openCount } = useMemo(() => collectTasks(minutes, scope), [minutes, scope]);
+  const total = openCount + done.length;
 
   return (
     <section className="mom-task-board">
       <div className="mom-task-head">
         <span>{title}</span>
-        <small>{total ? `${total - completed.length} aktif · ${completed.length} selesai` : 'Tidak ada tugas'}</small>
+        <small>{total ? `${openCount} aktif · ${done.length} selesai` : 'Tidak ada tugas'}</small>
       </div>
-      {total > 0 && (
-        <div className="mom-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`Progres tugas ${title}`}>
-          <i style={{ width: `${pct}%` }} />
-        </div>
-      )}
-      {!total && <p className="mom-dash-empty">Catatan ini tidak memuat tugas untuk {title}.</p>}
-      {total > 0 && !openGroups.length && <p className="mom-dash-done"><CheckCircle2 size={14} /> Semua tugas {title} sudah selesai.</p>}
-      {openGroups.map((group) => (
-        <div className="mom-assignee" key={group.name}>
-          <strong><span aria-hidden="true" />{group.name}</strong>
+      {!total && <p className="mom-dash-empty">Belum ada tugas untuk {title} di catatan meeting mana pun.</p>}
+      {total > 0 && !openCount && <p className="mom-dash-done"><CheckCircle2 size={14} /> Semua tugas {title} sudah selesai.</p>}
+      {groups.map((group) => (
+        <div className="mom-assignee" key={group.name.toLowerCase()}>
+          <strong><span aria-hidden="true" />{group.name}<em>{group.tasks.length}</em></strong>
           <ul>
             {group.tasks.map((task) => (
-              <li key={task.key}>
-                <button type="button" onClick={() => onToggle(task.key, true)} aria-label={`Tandai selesai: ${task.text}`}><Circle size={15} /></button>
-                <span>{task.text}</span>
+              <li key={`${task.minuteId}|${task.key}`}>
+                <button type="button" onClick={() => onToggle(task.minuteId, task.key, true)} aria-label={`Tandai selesai: ${task.text}`}><Circle size={15} /></button>
+                <span>
+                  {task.text}
+                  <small className="mom-task-src">{dateLabel(task.date)} · {MOM_TYPE_LABELS[task.type]}</small>
+                </span>
               </li>
             ))}
           </ul>
         </div>
       ))}
-      {completed.length > 0 && (
+      {done.length > 0 && (
         <details className="mom-done">
-          <summary><CheckCircle2 size={14} /> Sudah dilakukan <span>{completed.length}</span><ChevronDown size={14} /></summary>
+          <summary><CheckCircle2 size={14} /> Sudah dilakukan <span>{done.length}</span><ChevronDown size={14} /></summary>
           <ul>
-            {completed.map((task) => (
-              <li key={task.key}>
-                <button type="button" onClick={() => onToggle(task.key, false)} aria-label={`Kembalikan ke aktif: ${task.text}`}><CheckCircle2 size={15} /></button>
-                <span><small>{task.person}</small>{task.text}</span>
+            {done.map((task) => (
+              <li key={`${task.minuteId}|${task.key}`}>
+                <button type="button" onClick={() => onToggle(task.minuteId, task.key, false)} aria-label={`Kembalikan ke aktif: ${task.text}`}><CheckCircle2 size={15} /></button>
+                <span><small>{task.person} · {dateLabel(task.date)}</small>{task.text}</span>
               </li>
             ))}
           </ul>
@@ -215,7 +238,7 @@ function RecapItem({ minute, open, onToggle }) {
 function MinutesOverview({ filters }) {
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useSessionState('dashboard:mom-open', true);
-  const [minutes, setMinutes] = useState([]);
+  const [allMinutes, setAllMinutes] = useState([]);
   const [status, setStatus] = useState('idle');
   const [reloadKey, setReloadKey] = useState(0);
   const [selected, setSelected] = useState([]);
@@ -227,7 +250,6 @@ function MinutesOverview({ filters }) {
   const [openRecaps, setOpenRecaps] = useState(() => new Set());
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [sourceId, setSourceId] = useState(null);
   const [taskError, setTaskError] = useState(null);
 
   // Task writes are optimistic and can overlap. The refs hold the latest list
@@ -237,40 +259,55 @@ function MinutesOverview({ filters }) {
   const minutesRef = useRef([]);
   const confirmedRef = useRef(new Map());
   const seqRef = useRef(new Map());
-  const scope = `${filters.brandId}|${filters.startDate}|${filters.endDate}|${reloadKey}`;
-  const scopeRef = useRef(scope);
-  scopeRef.current = scope;
+  // Tasks answer to the brand; recaps and the summary answer to the period.
+  const brandScope = `${filters.brandId}|${reloadKey}`;
+  const periodScope = `${brandScope}|${filters.startDate}|${filters.endDate}`;
+  const brandScopeRef = useRef(brandScope);
+  const periodScopeRef = useRef(periodScope);
+  brandScopeRef.current = brandScope;
+  periodScopeRef.current = periodScope;
 
-  const commit = (list) => { minutesRef.current = list; setMinutes(list); };
+  const commit = (list) => { minutesRef.current = list; setAllMinutes(list); };
 
+  // The brand's whole record, once per brand. The period filter used to go to
+  // the API, which is what made a to-do vanish whenever the dashboard range
+  // did not cover the day its meeting took place.
   useEffect(() => {
     let alive = true;
-    // A summary, a failed request or a task source from the previous brand or
-    // period must not survive into this one — the old code kept showing the
-    // last brand's Gemini summary after the brand filter changed.
-    setAiSummary(null); setAiError(''); setTaskError(null); setSourceId(null); setOpenRecaps(new Set());
-    if (!filters.brandId) { commit([]); setSelected([]); setStatus('idle'); return undefined; }
+    setTaskError(null);
+    if (!filters.brandId) { commit([]); setStatus('idle'); return undefined; }
     setStatus('loading');
-    api.get(`/brands/${filters.brandId}/minutes`, { params: { startDate: filters.startDate, endDate: filters.endDate } })
+    api.get(`/brands/${filters.brandId}/minutes`)
       .then(({ data }) => {
         if (!alive) return;
         const list = data.minutes ?? [];
         commit(list);
         confirmedRef.current = new Map(list.map((minute) => [minute.id, minute.completed_task_keys ?? []]));
-        setSelected(list.map((minute) => minute.id));
         setStatus('ready');
       })
       .catch(() => { if (alive) { commit([]); setStatus('error'); } });
     return () => { alive = false; };
-  }, [filters.brandId, filters.startDate, filters.endDate, reloadKey]);
+  }, [filters.brandId, reloadKey]);
 
-  const source = minutes.find((minute) => minute.id === sourceId) ?? minutes[0];
-  const activeTasks = useMemo(() => minutes.reduce((count, minute) => { const stats = taskStats(minute); return count + stats.total - stats.done; }, 0), [minutes]);
+  const periodMinutes = useMemo(() => allMinutes.filter((minute) =>
+    (!filters.startDate || minute.meeting_date >= filters.startDate)
+    && (!filters.endDate || minute.meeting_date <= filters.endDate)), [allMinutes, filters.startDate, filters.endDate]);
+  const periodIds = periodMinutes.map((minute) => minute.id).join(',');
+
+  // Recap choice and the Gemini summary are period readings: a new brand or
+  // range starts from "every meeting in range" with no summary carried over.
+  // Keyed on the id list, so ticking a task (same ids) never resets them.
+  useEffect(() => {
+    setSelected(periodIds ? periodIds.split(',').map(Number) : []);
+    setAiSummary(null); setAiError(''); setOpenRecaps(new Set());
+  }, [periodIds, filters.brandId]);
+
+  const activeTasks = useMemo(() => allMinutes.reduce((count, minute) => { const stats = taskStats(minute); return count + stats.total - stats.done; }, 0), [allMinutes]);
   const stale = aiSummary && !sameIds(aiSummary.ids, selected);
   const periodLabel = `${dateLabel(filters.startDate)} – ${dateLabel(filters.endDate)}`;
 
   const toggleTask = (minuteId, key, checked) => {
-    const requestScope = scopeRef.current;
+    const requestScope = brandScopeRef.current;
     const current = minutesRef.current.find((minute) => minute.id === minuteId);
     if (!current) return;
     const set = new Set(current.completed_task_keys ?? []);
@@ -283,13 +320,13 @@ function MinutesOverview({ filters }) {
     const settle = (serverKeys) => commit(minutesRef.current.map((minute) => (minute.id === minuteId ? { ...minute, completed_task_keys: serverKeys } : minute)));
     api.patch(`/brands/${filters.brandId}/minutes/${minuteId}/tasks`, { completed_task_keys: keys })
       .then(({ data }) => {
-        if (scopeRef.current !== requestScope) return;
+        if (brandScopeRef.current !== requestScope) return;
         const serverKeys = data.minute?.completed_task_keys ?? keys;
         confirmedRef.current.set(minuteId, serverKeys);
         if (seqRef.current.get(minuteId) === seq) settle(serverKeys);
       })
       .catch(() => {
-        if (scopeRef.current !== requestScope || seqRef.current.get(minuteId) !== seq) return;
+        if (brandScopeRef.current !== requestScope || seqRef.current.get(minuteId) !== seq) return;
         settle(confirmedRef.current.get(minuteId) ?? []);
         setTaskError({ minuteId, key, checked });
       });
@@ -297,16 +334,16 @@ function MinutesOverview({ filters }) {
 
   const generate = async () => {
     if (!selected.length || generating) return;
-    const requestScope = scopeRef.current;
+    const requestScope = periodScopeRef.current;
     const ids = [...selected];
     setGenerating(true); setAiError('');
     try {
       const { data } = await api.post(`/brands/${filters.brandId}/minutes/summary`, { minute_ids: ids });
-      if (scopeRef.current !== requestScope) return;
+      if (periodScopeRef.current !== requestScope) return;
       setAiSummary({ content: data.summary, brandName: data.brand_name, ids, generatedAt: new Date() });
       setSummaryOpen(true);
     } catch (err) {
-      if (scopeRef.current === requestScope) setAiError(err?.response?.data?.message || err?.response?.data?.error || 'Gemini gagal membuat ringkasan. Coba lagi.');
+      if (periodScopeRef.current === requestScope) setAiError(err?.response?.data?.message || err?.response?.data?.error || 'Gemini gagal membuat ringkasan. Coba lagi.');
     } finally {
       setGenerating(false);
     }
@@ -339,7 +376,7 @@ function MinutesOverview({ filters }) {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.setTextColor(15, 26, 58);
       doc.text('Minutes of Meeting — Ringkasan', margin, y + 12); y += 32;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(90, 106, 144);
-      const usedDates = minutes.filter((minute) => aiSummary.ids.includes(minute.id)).map((minute) => dateLabel(minute.meeting_date)).join(', ');
+      const usedDates = allMinutes.filter((minute) => aiSummary.ids.includes(minute.id)).map((minute) => dateLabel(minute.meeting_date)).join(', ');
       [
         `Brand: ${aiSummary.brandName ?? '—'}`,
         `Periode dashboard: ${periodLabel}`,
@@ -397,7 +434,7 @@ function MinutesOverview({ filters }) {
     ? 'Pilih brand untuk melihat catatan meeting'
     : status === 'loading' ? 'Memuat catatan meeting…'
       : status === 'error' ? 'Catatan meeting gagal dimuat'
-        : `${minutes.length} meeting · ${activeTasks} tugas aktif · ${periodLabel}`;
+        : `${periodMinutes.length} meeting di periode · ${activeTasks} tugas aktif dari semua meeting`;
 
   return (
     <section className={`mom-dashboard${open ? ' is-open' : ''}`} aria-labelledby="mom-dashboard-title">
@@ -410,11 +447,12 @@ function MinutesOverview({ filters }) {
               <span>Minutes of Meeting</span>
             </button>
           </h2>
-          <p>{open ? 'Recap keputusan dan tindak lanjut dalam periode dashboard.' : collapsedLine}</p>
+          <p>{open ? 'Recap mengikuti periode dashboard; to do list menampilkan semua tugas yang belum selesai.' : collapsedLine}</p>
         </div>
         <div className="mom-head-meta">
-          {status === 'ready' && minutes.length > 0 && <span className="brand-section-meta"><CalendarDays size={12} /> Terbaru {dateLabel(minutes[0].meeting_date)}</span>}
-          {status === 'ready' && <span className="brand-section-meta">{minutes.length} meeting</span>}
+          {status === 'ready' && allMinutes.length > 0 && <span className="brand-section-meta"><CalendarDays size={12} /> Terbaru {dateLabel(allMinutes[0].meeting_date)}</span>}
+          {status === 'ready' && <span className="brand-section-meta">{periodMinutes.length} meeting di periode</span>}
+          {status === 'ready' && activeTasks > 0 && <span className="brand-section-meta is-tasks">{activeTasks} tugas aktif</span>}
           <Link to="/pengaturan-brand" className="mom-head-link" onClick={openInSettings}>Kelola catatan <ArrowUpRight size={13} /></Link>
         </div>
       </header>
@@ -437,146 +475,144 @@ function MinutesOverview({ filters }) {
                 <button type="button" onClick={() => setReloadKey((key) => key + 1)}><RefreshCw size={13} /> Coba lagi</button>
               </div>
             )}
-            {filters.brandId && status === 'ready' && !minutes.length && (
+            {filters.brandId && status === 'ready' && !allMinutes.length && (
               <div className="mom-dash-state is-empty">
                 <FileText size={18} />
-                <span>Belum ada catatan meeting pada {periodLabel}.</span>
+                <span>Belum ada catatan meeting untuk brand ini.</span>
                 <Link to="/pengaturan-brand" onClick={openInSettings}>Tambah di Pengaturan Brand <ArrowUpRight size={13} /></Link>
               </div>
             )}
 
-            {status === 'ready' && minutes.length > 0 && source && (
+            {status === 'ready' && allMinutes.length > 0 && (
               <div className="mom-workspace">
                 <div className="mom-summary-pane">
-                  <div className="mom-toolbar">
-                    <div className="mom-toolbar-select">
-                      <SelectMenu
-                        multiple label="Recap untuk diringkas" menuTitle="Recap dalam periode" icon={FileText}
-                        value={selected} onChange={setSelected}
-                        summary={selected.length ? `${selected.length} dari ${minutes.length} recap dipilih` : 'Pilih recap'}
-                        options={minutes.map((minute) => ({
-                          value: minute.id,
-                          label: `${dateLabel(minute.meeting_date)} · ${MOM_TYPE_LABELS[minute.meeting_type]}`,
-                          description: minute.meeting_recap ? recapPreview(minute.meeting_recap, 70) : 'Tanpa recap — hanya to do list',
-                        }))}
-                      />
-                    </div>
-                    <button type="button" className="btn btn-primary mom-generate" onClick={generate} disabled={!selected.length || generating}>
-                      {generating ? <Loader2 size={15} className="brand-spin" /> : <Sparkles size={15} />}
-                      {generating ? 'Gemini sedang merangkum…' : aiSummary ? 'Buat ulang ringkasan' : 'Buat ringkasan AI'}
-                    </button>
-                  </div>
-                  {aiError && (
-                    <div className="mom-ai-error" role="alert">
-                      <CircleAlert size={14} /><span>{aiError}</span>
-                      <button type="button" onClick={generate} disabled={generating || !selected.length}>Coba lagi</button>
+                  {!periodMinutes.length && (
+                    <div className="mom-period-empty">
+                      <FileText size={18} />
+                      <span>
+                        <strong>Tidak ada meeting pada {periodLabel}</strong>
+                        Recap dan ringkasan AI mengikuti periode dashboard. To do list di samping tetap menampilkan semua tugas yang belum selesai dari meeting sebelumnya.
+                      </span>
                     </div>
                   )}
 
-                  <div className="mom-block">
-                    <button type="button" className="mom-block-title" onClick={() => setSummaryOpen((current) => !current)} aria-expanded={summaryOpen}>
-                      <span className="mom-block-icon" aria-hidden="true"><Brain size={15} /></span>
-                      <span className="mom-block-copy">
-                        <strong>Ringkasan meeting</strong>
-                        <small>{aiSummary
-                          ? `Dari ${aiSummary.ids.length} recap · dibuat ${aiSummary.generatedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
-                          : 'Pilih recap lalu buat ringkasan terstruktur dengan Gemini'}</small>
-                      </span>
-                      <span className="brand-ds-chev" aria-hidden="true"><ChevronDown size={15} /></span>
-                    </button>
-                    {summaryOpen && (
-                      <div className="mom-block-body">
-                        {!aiSummary && (
-                          <div className="mom-ai-empty">
-                            {generating ? <Loader2 size={20} className="brand-spin" /> : <Brain size={20} />}
-                            <span>{generating
-                              ? `Gemini sedang menyusun ringkasan dari ${selected.length} recap…`
-                              : 'Ringkasan eksekutif, kesepakatan, isu terbuka, dan tindak lanjut akan tampil terstruktur di sini.'}</span>
+                  {periodMinutes.length > 0 && (
+                    <>
+                      <div className="mom-toolbar">
+                        <div className="mom-toolbar-select">
+                          <SelectMenu
+                            multiple label="Recap untuk diringkas" menuTitle="Recap dalam periode" icon={FileText}
+                            value={selected} onChange={setSelected}
+                            summary={selected.length ? `${selected.length} dari ${periodMinutes.length} recap dipilih` : 'Pilih recap'}
+                            options={periodMinutes.map((minute) => ({
+                              value: minute.id,
+                              label: `${dateLabel(minute.meeting_date)} · ${MOM_TYPE_LABELS[minute.meeting_type]}`,
+                              description: minute.meeting_recap ? recapPreview(minute.meeting_recap, 70) : 'Tanpa recap — hanya to do list',
+                            }))}
+                          />
+                        </div>
+                        <button type="button" className="btn btn-primary mom-generate" onClick={generate} disabled={!selected.length || generating}>
+                          {generating ? <Loader2 size={15} className="brand-spin" /> : <Sparkles size={15} />}
+                          {generating ? 'Gemini sedang merangkum…' : aiSummary ? 'Buat ulang ringkasan' : 'Buat ringkasan AI'}
+                        </button>
+                      </div>
+                      {aiError && (
+                        <div className="mom-ai-error" role="alert">
+                          <CircleAlert size={14} /><span>{aiError}</span>
+                          <button type="button" onClick={generate} disabled={generating || !selected.length}>Coba lagi</button>
+                        </div>
+                      )}
+
+                      <div className="mom-block">
+                        <button type="button" className="mom-block-title" onClick={() => setSummaryOpen((current) => !current)} aria-expanded={summaryOpen}>
+                          <span className="mom-block-icon" aria-hidden="true"><Brain size={15} /></span>
+                          <span className="mom-block-copy">
+                            <strong>Ringkasan meeting</strong>
+                            <small>{aiSummary
+                              ? `Dari ${aiSummary.ids.length} recap · dibuat ${aiSummary.generatedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
+                              : 'Pilih recap lalu buat ringkasan terstruktur dengan Gemini'}</small>
+                          </span>
+                          <span className="brand-ds-chev" aria-hidden="true"><ChevronDown size={15} /></span>
+                        </button>
+                        {summaryOpen && (
+                          <div className="mom-block-body">
+                            {!aiSummary && (
+                              <div className="mom-ai-empty">
+                                {generating ? <Loader2 size={20} className="brand-spin" /> : <Brain size={20} />}
+                                <span>{generating
+                                  ? `Gemini sedang menyusun ringkasan dari ${selected.length} recap…`
+                                  : 'Ringkasan eksekutif, kesepakatan, isu terbuka, dan tindak lanjut akan tampil terstruktur di sini.'}</span>
+                              </div>
+                            )}
+                            {aiSummary && (
+                              <>
+                                {stale && <p className="mom-stale"><CircleAlert size={14} /> Pilihan recap berubah sejak ringkasan ini dibuat. Buat ulang agar isinya sesuai pilihan sekarang.</p>}
+                                <div className={`mom-ai-content${stale ? ' is-stale' : ''}`}>
+                                  {AI_SECTIONS.map(([key, label]) => {
+                                    const value = aiSummary.content[key];
+                                    if (!hasValue(value)) return null;
+                                    return (
+                                      <section key={key}>
+                                        <h3>{label}</h3>
+                                        {Array.isArray(value) ? <ul>{value.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>{value}</p>}
+                                      </section>
+                                    );
+                                  })}
+                                </div>
+                                <div className="brand-ds-fileacts mom-ai-actions">
+                                  <button type="button" onClick={copySummary}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'Tersalin' : 'Salin teks'}</button>
+                                  <button type="button" onClick={download} disabled={downloading}>
+                                    {downloading ? <Loader2 size={14} className="brand-spin" /> : <Download size={14} />}
+                                    {downloading ? 'Menyiapkan PDF…' : 'Unduh PDF'}
+                                  </button>
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
-                        {aiSummary && (
-                          <>
-                            {stale && <p className="mom-stale"><CircleAlert size={14} /> Pilihan recap berubah sejak ringkasan ini dibuat. Buat ulang agar isinya sesuai pilihan sekarang.</p>}
-                            <div className={`mom-ai-content${stale ? ' is-stale' : ''}`}>
-                              {AI_SECTIONS.map(([key, label]) => {
-                                const value = aiSummary.content[key];
-                                if (!hasValue(value)) return null;
-                                return (
-                                  <section key={key}>
-                                    <h3>{label}</h3>
-                                    {Array.isArray(value) ? <ul>{value.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>{value}</p>}
-                                  </section>
-                                );
-                              })}
-                            </div>
-                            <div className="brand-ds-fileacts mom-ai-actions">
-                              <button type="button" onClick={copySummary}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'Tersalin' : 'Salin teks'}</button>
-                              <button type="button" onClick={download} disabled={downloading}>
-                                {downloading ? <Loader2 size={14} className="brand-spin" /> : <Download size={14} />}
-                                {downloading ? 'Menyiapkan PDF…' : 'Unduh PDF'}
-                              </button>
-                            </div>
-                          </>
+                      </div>
+
+                      <div className="mom-block">
+                        <button type="button" className="mom-block-title" onClick={() => setRecapsOpen((current) => !current)} aria-expanded={recapsOpen}>
+                          <span className="mom-block-icon" aria-hidden="true"><FileText size={15} /></span>
+                          <span className="mom-block-copy">
+                            <strong>Recap meeting</strong>
+                            <small>{periodMinutes.length} catatan dalam periode · buka untuk membaca lengkap</small>
+                          </span>
+                          <span className="brand-ds-chev" aria-hidden="true"><ChevronDown size={15} /></span>
+                        </button>
+                        {recapsOpen && (
+                          <ul className="mom-recap-list">
+                            {periodMinutes.map((minute) => (
+                              <RecapItem
+                                key={minute.id} minute={minute} open={openRecaps.has(minute.id)}
+                                onToggle={() => setOpenRecaps((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(minute.id)) next.delete(minute.id); else next.add(minute.id);
+                                  return next;
+                                })}
+                              />
+                            ))}
+                          </ul>
                         )}
                       </div>
-                    )}
-                  </div>
-
-                  <div className="mom-block">
-                    <button type="button" className="mom-block-title" onClick={() => setRecapsOpen((current) => !current)} aria-expanded={recapsOpen}>
-                      <span className="mom-block-icon" aria-hidden="true"><FileText size={15} /></span>
-                      <span className="mom-block-copy">
-                        <strong>Recap meeting</strong>
-                        <small>{minutes.length} catatan dalam periode · buka untuk membaca lengkap</small>
-                      </span>
-                      <span className="brand-ds-chev" aria-hidden="true"><ChevronDown size={15} /></span>
-                    </button>
-                    {recapsOpen && (
-                      <ul className="mom-recap-list">
-                        {minutes.map((minute) => (
-                          <RecapItem
-                            key={minute.id} minute={minute} open={openRecaps.has(minute.id)}
-                            onToggle={() => setOpenRecaps((current) => {
-                              const next = new Set(current);
-                              if (next.has(minute.id)) next.delete(minute.id); else next.add(minute.id);
-                              return next;
-                            })}
-                          />
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                    </>
+                  )}
                 </div>
 
                 <aside className="mom-task-rail" aria-label="To do list">
                   <div className="mom-rail-title">
                     <ListChecks size={15} />
-                    <span><strong>To do list</strong><small>{source.id === minutes[0].id ? 'Dari catatan meeting terbaru' : `Dari meeting ${dateLabel(source.meeting_date)}`}</small></span>
+                    <span><strong>To do list</strong><small>Semua tugas terbuka dari seluruh meeting · tidak terikat periode</small></span>
                   </div>
-                  {minutes.length > 1 && (
-                    <div className="mom-rail-source">
-                      <SelectMenu
-                        label="Sumber to do list" menuTitle="Pilih catatan meeting" icon={CalendarDays}
-                        value={source.id} onChange={setSourceId}
-                        options={minutes.map((minute, index) => {
-                          const stats = taskStats(minute);
-                          return {
-                            value: minute.id,
-                            label: `${dateLabel(minute.meeting_date)}${index === 0 ? ' · terbaru' : ''}`,
-                            description: `${MOM_TYPE_LABELS[minute.meeting_type]} · ${stats.total ? `${stats.total - stats.done} tugas aktif` : 'tanpa tugas'}`,
-                          };
-                        })}
-                      />
-                    </div>
-                  )}
                   {taskError && (
                     <div className="mom-task-error" role="alert">
                       <span>Status tugas belum tersimpan.</span>
                       <button type="button" onClick={() => toggleTask(taskError.minuteId, taskError.key, taskError.checked)}>Coba lagi</button>
                     </div>
                   )}
-                  <TaskBoard title="MIL" scope="mil" minute={source} onToggle={(key, checked) => toggleTask(source.id, key, checked)} />
-                  <TaskBoard title="Client" scope="client" minute={source} onToggle={(key, checked) => toggleTask(source.id, key, checked)} />
+                  <TaskBoard title="MIL" scope="mil" minutes={allMinutes} onToggle={toggleTask} />
+                  <TaskBoard title="Client" scope="client" minutes={allMinutes} onToggle={toggleTask} />
                 </aside>
               </div>
             )}

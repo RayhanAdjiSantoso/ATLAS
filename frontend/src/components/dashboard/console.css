@@ -1748,7 +1748,6 @@ html:has(.con-bar) {
 .mom-rail-title small { display:block; }
 .mom-rail-title strong { font-size:.8rem; font-weight:780; }
 .mom-rail-title small { margin-top:.08rem; color:var(--text-muted); font-size:.64rem; }
-.mom-rail-source { padding:.65rem 1rem; border-bottom:1px solid var(--rule); }
 .mom-task-error { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin:.65rem 1rem 0; padding:.5rem .6rem; color:#92400e; border:1px solid #f6d999; border-radius:8px; background:#fdf6e7; font-size:.67rem; }
 .mom-task-error button { color:inherit; border:0; background:transparent; font:inherit; font-weight:800; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 .mom-task-board { padding:.85rem 1rem; border-bottom:1px solid var(--rule); }
@@ -1756,11 +1755,12 @@ html:has(.con-bar) {
 .mom-task-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.45rem; }
 .mom-task-head > span { color:var(--text); font-size:.66rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
 .mom-task-head small { color:var(--text-muted); font-size:.62rem; font-weight:650; font-variant-numeric:tabular-nums lining-nums; }
-.mom-progress { height:5px; margin-bottom:.7rem; overflow:hidden; border-radius:99px; background:#e7ebf5; }
-.mom-progress i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--acc),#4f7cff); transition:width .35s cubic-bezier(.16,1,.3,1); }
 .mom-assignee + .mom-assignee { margin-top:.7rem; }
 .mom-assignee > strong { display:flex; align-items:center; gap:.42rem; color:var(--text); font-size:.72rem; font-weight:760; }
 .mom-assignee > strong > span { width:7px; height:7px; border-radius:50%; background:var(--acc-300); }
+.mom-assignee > strong > em { margin-left:auto; padding:0 .35rem; color:var(--acc); border-radius:99px; background:var(--primary-light); font-size:.6rem; font-style:normal; font-weight:800; font-variant-numeric:tabular-nums lining-nums; }
+/* Which meeting a task was agreed in — the rail spans every meeting now. */
+.mom-task-src { display:block; margin-top:.08rem; color:var(--text-placeholder); font-size:.6rem; font-weight:600; }
 .mom-assignee ul,
 .mom-done ul { margin:.35rem 0 0 .18rem; padding:0 0 0 .72rem; border-left:1px solid var(--rule); list-style:none; }
 .mom-assignee li,
@@ -1780,6 +1780,13 @@ html:has(.con-bar) {
 .mom-done li { color:var(--text-placeholder); text-decoration:line-through; }
 .mom-done li button { color:var(--success); }
 .mom-done li small { display:block; font-size:.59rem; font-weight:700; text-decoration:none; }
+/* Completed tasks accumulate for the life of the brand; keep the disclosure
+   from pushing the rail far past the reading pane beside it. */
+.mom-done[open] ul { max-height:280px; overflow-y:auto; scrollbar-width:thin; }
+.mom-head-meta .brand-section-meta.is-tasks { color:var(--acc); background:var(--primary-light); box-shadow:inset 0 0 0 1px var(--acc-300); }
+.mom-period-empty { display:flex; align-items:flex-start; gap:.65rem; padding:1rem 1.1rem; color:var(--text-muted); border:1px dashed var(--border); border-radius:12px; background:#fbfcff; font-size:.72rem; line-height:1.55; }
+.mom-period-empty svg { flex:0 0 auto; margin-top:.1rem; color:var(--acc-300); }
+.mom-period-empty strong { display:block; margin-bottom:.15rem; color:var(--text); font-size:.78rem; }
 .mom-dash-empty { margin:0; color:var(--text-placeholder); font-size:.7rem; font-style:italic; }
 .mom-dash-done { display:flex; align-items:center; gap:.35rem; margin:0; color:var(--success); font-size:.7rem; font-weight:650; }
 
