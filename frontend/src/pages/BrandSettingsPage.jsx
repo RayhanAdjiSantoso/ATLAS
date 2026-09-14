@@ -656,7 +656,7 @@ function MinutesView({ brand, minutes, loading, onSave, onDelete, busy, reduced 
                 <MomTaskField
                   left scope="mil" label="To do list MIL" value={draft.todo_mil} onChange={setField('todo_mil')}
                   guidance="Tulis nama PIC diakhiri titik dua, lalu satu tugas per baris di bawahnya."
-                  placeholder={'Jo:\nSiapkan laporan performa iklan\nUpdate materi konten minggu depan'}
+                  placeholder={'Ucup:\nSiapkan laporan performa iklan\nUpdate materi konten minggu depan'}
                 />
                 <MomTaskField
                   scope="client" label="To do list Client" value={draft.todo_client} onChange={setField('todo_client')}
