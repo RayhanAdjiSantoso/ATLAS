@@ -7,6 +7,8 @@ const CHANNEL_LABELS: Record<string, string> = {
   toko: 'Toko',
   toko_keyword: 'Keyword',
   live: 'Live',
+  overview: 'Overview',
+  product_performance: 'Product Performance',
   boost: 'Boost',
   nonboost: 'Non-Boost',
   cpas_overall: 'CPAS',

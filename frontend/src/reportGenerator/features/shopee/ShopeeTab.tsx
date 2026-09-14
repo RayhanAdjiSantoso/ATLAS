@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
+import api from '../../../api/client.js';
 import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { HowTo, HowToStep } from '../../components/HowTo';
@@ -23,12 +24,15 @@ import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
-import { getProductMaster, saveProductMasterEntry } from '../reports/api';
-import { formatChannelCoverage, formatSavedAt } from '../reports/savedPeriodLabels';
+import { getProductMaster, getSavedPeriod, getSavedPeriods, saveProductMasterEntry } from '../reports/api';
+import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { mapShopeeRows, type ShopeeCategorization } from '../reports/rowMapping';
+import { LibraryPeriodPicker, type LibraryMonth } from '../reports/LibraryPeriodPicker';
+import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
-import type { RawFileEntry, SaveReportPayload } from '../reports/types';
+import { DEFAULT_PARETO_RANGE, type ParetoRangeSelection, type PerfMetricVars, type ProductPerfMonth } from '../../lib/shopeeProductAnalysis';
+import type { PeriodRole, RawFileEntry, SaveReportPayload } from '../reports/types';
 import { ShopeeReportSections } from './ShopeeReportSections';
 import { buildShopeeDeepDiveReport, type ShopeeDeepDiveReport } from './shopeeDeepDiveReport';
 import { buildShopeeFunnelReport, type ShopeeFunnelReport } from './shopeeFunnelReport';
@@ -50,9 +54,9 @@ type OverviewFileKey = 'overview-old' | 'overview-cur';
 interface AdsFileState {
   rows: SheetRow[];
   fileName: string;
-  // Absent when the rows came from stored data (SavedPeriodPicker) instead
-  // of a fresh upload — nothing to re-archive, and raw_uploads isn't used
-  // for reconstruction anyway.
+  // Absent when the rows came from "Pilih Periode" (the brand library)
+  // instead of a fresh upload — nothing to re-archive, and raw_uploads
+  // isn't used for reconstruction anyway.
   file?: File;
 }
 
@@ -75,7 +79,10 @@ interface ProductPerformanceFileState {
   mainRows: SheetRow[];
   tingkatkanRows: SheetRow[];
   fileName: string;
-  file: File;
+  // Absent when the rows came from the brand library via "Pilih Periode"
+  // (see applyLibraryMonth) instead of a fresh upload — nothing to
+  // re-archive then.
+  file?: File;
 }
 
 type ProductPerformanceRole = 'old' | 'cur';
@@ -97,6 +104,26 @@ const EMPTY_OVERVIEW_FILES: Record<OverviewFileKey, OverviewFileState | null> = 
   'overview-old': null,
   'overview-cur': null,
 };
+
+// Every Shopee library channel "Pilih Periode" knows how to apply — the
+// picker only counts a month as available when it has a file in one of
+// these (Referensi Kategori Produk has no period, so it's not here).
+const SHOPEE_PERIOD_CHANNELS = ['produk', 'produk_otomatis', 'toko', 'toko_keyword', 'live', 'overview', 'product_performance'] as const;
+
+interface LibraryFileMeta {
+  id: number;
+  platform: string;
+  channel: string;
+  original_filename: string;
+  period_month: string | null;
+  period_start: string | null;
+  period_end: string | null;
+}
+
+async function downloadLibraryFile(clientId: number, file: LibraryFileMeta): Promise<File> {
+  const { data } = await api.get(`/brands/${clientId}/library/${file.id}/download`, { responseType: 'blob' });
+  return new File([data], file.original_filename, { type: (data as Blob).type });
+}
 
 function formatGeneratedDate(): string {
   return new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -123,10 +150,46 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // can still drop a fresh file on any individual channel slot to override.
   const [overviewFiles, setOverviewFiles] = useState(EMPTY_OVERVIEW_FILES);
   // Product Performance is now a 2-slot upload (old & cur), like the other
-  // channels — Traffic/Conversion Analysis compare periods, Pareto Analysis
-  // uses only the newest. The "cur" file also still drives the older
-  // single-snapshot insights (unadvertised products, Tingkatkan dengan Iklan).
+  // channels — Traffic/Conversion Analysis compare periods. The "cur" file
+  // also still drives the older single-snapshot insights (unadvertised
+  // products, Tingkatkan dengan Iklan). Pareto Analysis instead uses every
+  // Product Performance file already saved to this brand's library — see
+  // productPerfAllMonths below — so it ranks lifetime contribution, not just
+  // the newest month.
   const [productPerfFiles, setProductPerfFiles] = useState<Record<ProductPerformanceRole, ProductPerformanceFileState | null>>({ old: null, cur: null });
+  // Every month's "Produk dengan Performa Terbaik" sheet already uploaded to
+  // this brand's library (independent of the old/cur slots above), fetched
+  // whenever the client changes. Feeds Pareto Analysis only — buildPareto
+  // sums Sales (Confirmed Order) per product across whichever months
+  // paretoRange below selects (default: all of them).
+  const [productPerfAllMonths, setProductPerfAllMonths] = useState<ProductPerfMonth[]>([]);
+  // "Semua Bulan" by default — see ParetoRangeControl in the Pareto sections.
+  const [paretoRange, setParetoRange] = useState<ParetoRangeSelection>(DEFAULT_PARETO_RANGE);
+  useEffect(() => {
+    setProductPerfAllMonths([]);
+    if (!clientId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get(`/brands/${clientId}/library`);
+        const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'shopee' && f.channel === 'product_performance' && f.period_month);
+        const months: ProductPerfMonth[] = [];
+        for (const f of files) {
+          if (cancelled) return;
+          const { data: blob } = await api.get(`/brands/${clientId}/library/${f.id}/download`, { responseType: 'blob' });
+          const wb = XLSX.read(new Uint8Array(await (blob as Blob).arrayBuffer()), { type: 'array' });
+          const sheet = wb.Sheets['Produk dengan Performa Terbaik'];
+          if (sheet) months.push({ month: f.period_month!.slice(0, 7), rows: XLSX.utils.sheet_to_json<SheetRow>(sheet, { defval: '' }) });
+        }
+        if (!cancelled) setProductPerfAllMonths(months);
+      } catch {
+        if (!cancelled) setProductPerfAllMonths([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
   // The uploaded "Referensi Kategori Produk" file for this session. On upload
   // it's also persisted to the backend (full replace of this client's
   // product_master), so `productMasterRefSaved` tracks whether that succeeded.
@@ -174,11 +237,147 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const [periodOldRange, setPeriodOldRange] = useState<DateRange>(EMPTY_RANGE);
   const [periodCurRange, setPeriodCurRange] = useState<DateRange>(EMPTY_RANGE);
 
+  // "Pilih Periode" — per period side, sourced straight from the brand
+  // library (any month with files there, generated before or not — see
+  // LibraryPeriodPicker), not from report_runs. One pick fills every
+  // channel that has a file for that month (Iklan Produk/Produk Otomatis/
+  // Toko/Keyword/Live/Overview/Product Performance); the user can still
+  // drop a fresh file on any individual channel slot below to override just
+  // that one channel. Total Omzet Toko is the one thing no file ever
+  // carries — it only fills in when this exact month was already Generated
+  // before (cross-checked against report_runs below), otherwise it's left
+  // blank for manual entry.
+  const [oldSource, setOldSource] = useState<SlotSource>('upload');
+  const [curSource, setCurSource] = useState<SlotSource>('upload');
+  const [oldPickedMonth, setOldPickedMonth] = useState<LibraryMonth | null>(null);
+  const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
+  const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
+  const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
+
+  async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
+    if (!clientId) return;
+    setApplyingRole(targetRole);
+    setUploadError(null);
+    try {
+      const { data } = await api.get(`/brands/${clientId}/library`);
+      const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'shopee' && f.period_month?.slice(0, 7) === month.month);
+      const byChannel = new Map<string, LibraryFileMeta[]>();
+      for (const f of files) {
+        (byChannel.get(f.channel) ?? byChannel.set(f.channel, []).get(f.channel)!).push(f);
+      }
+      const downloadAll = (list: LibraryFileMeta[]) => Promise.all(list.map((f) => downloadLibraryFile(clientId, f)));
+      const parseAdsLike = async (parts: File[]) => (await Promise.all(parts.map(async (f) => (/\.csv$/i.test(f.name) ? parseShopeeCSV(await f.text()).rows : readSpreadsheetFile(f))))).flat();
+
+      const adsChannelKeys: Record<string, AdsFileKey> = {
+        produk: `produk-${targetRole}` as AdsFileKey,
+        produk_otomatis: `produk-otomatis-${targetRole}` as AdsFileKey,
+        toko: `toko-${targetRole}` as AdsFileKey,
+        toko_keyword: `toko-keyword-${targetRole}` as AdsFileKey,
+        live: `live-${targetRole}` as AdsFileKey,
+      };
+      const adsUpdates: Partial<Record<AdsFileKey, AdsFileState | null>> = {};
+      for (const [channel, key] of Object.entries(adsChannelKeys)) {
+        const list = byChannel.get(channel) ?? [];
+        if (!list.length) {
+          adsUpdates[key] = null;
+          continue;
+        }
+        const rows = await parseAdsLike(await downloadAll(list));
+        adsUpdates[key] = rows.length ? { rows, fileName: list.map((f) => f.original_filename).join(' · ') } : null;
+      }
+      setAdsFiles((prev) => ({ ...prev, ...adsUpdates }));
+
+      const overviewList = byChannel.get('overview') ?? [];
+      if (overviewList.length) {
+        const rows = (await Promise.all((await downloadAll(overviewList)).map(readSpreadsheetFile))).flat();
+        setOverviewFiles((prev) => ({ ...prev, [`overview-${targetRole}`]: rows.length ? { rows, fileName: overviewList.map((f) => f.original_filename).join(' · '), period: month.label } : null }));
+      } else {
+        setOverviewFiles((prev) => ({ ...prev, [`overview-${targetRole}`]: null }));
+      }
+
+      const perfList = byChannel.get('product_performance') ?? [];
+      if (perfList.length) {
+        const parts = await downloadAll(perfList);
+        const mainRows: SheetRow[] = [];
+        const tingkatkanRows: SheetRow[] = [];
+        for (const file of parts) {
+          const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+          const mainSheet = wb.Sheets['Produk dengan Performa Terbaik'];
+          if (mainSheet) mainRows.push(...XLSX.utils.sheet_to_json<SheetRow>(mainSheet, { defval: '' }));
+          const extraSheet = wb.Sheets['Tingkatkan dengan Iklan'];
+          if (extraSheet) tingkatkanRows.push(...XLSX.utils.sheet_to_json<SheetRow>(extraSheet, { defval: '' }));
+        }
+        setProductPerfFiles((prev) => ({ ...prev, [targetRole]: mainRows.length ? { mainRows, tingkatkanRows, fileName: perfList.map((f) => f.original_filename).join(' · ') } : null }));
+      } else {
+        setProductPerfFiles((prev) => ({ ...prev, [targetRole]: null }));
+      }
+
+      const [y, mo] = month.month.split('-').map(Number);
+      const calStart = `${month.month}-01`;
+      const calEnd = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
+      const rangeStart = month.start && month.start < calStart ? month.start : calStart;
+      const rangeEnd = month.end && month.end > calEnd ? month.end : calEnd;
+      (targetRole === 'old' ? periodOld : periodCur).autoFill(month.label);
+      (targetRole === 'old' ? setPeriodOldRange : setPeriodCurRange)({ start: rangeStart, end: rangeEnd });
+      (targetRole === 'old' ? setPeriodOldDays : setPeriodCurDays)(daysBetweenInclusive(fromISODate(rangeStart)!, fromISODate(rangeEnd)!));
+
+      // Total Omzet Toko isn't in any file — it only carries over when this
+      // exact month was already Generated before (a report_runs side whose
+      // date range overlaps this month). No match => genuinely unknown =>
+      // cleared for manual entry, not left holding a stale value.
+      let omzetValue: number | null = null;
+      try {
+        const saved = await getSavedPeriods(clientId, 'shopee');
+        const hit = saved.find((p) => p.start && p.end && p.start <= rangeEnd && p.end >= rangeStart);
+        if (hit) {
+          const detail = await getSavedPeriod(hit.runId, hit.role);
+          const config = (detail.reportConfig ?? {}) as { omzetOld?: number; omzetCur?: number };
+          omzetValue = (hit.role === 'old' ? config.omzetOld : config.omzetCur) ?? null;
+        }
+      } catch {
+        /* Omzet cross-reference is best-effort — a lookup failure just leaves it blank */
+      }
+      (targetRole === 'old' ? onOmzetOldChange : onOmzetCurChange)(omzetValue);
+
+      setReport(null);
+      setDeepDive(null);
+      setFunnelReport(null);
+      onInvalidate();
+    } catch (err) {
+      setUploadError('Gagal memuat periode dari perpustakaan: ' + (err as Error).message);
+      (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+    } finally {
+      setApplyingRole(null);
+    }
+  }
+
+  function handlePickMonth(month: LibraryMonth) {
+    const targetRole = pickerRole;
+    if (!targetRole) return;
+    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(month);
+    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    applyLibraryMonth(targetRole, month);
+  }
+
+  function clearPickedPeriod(role: PeriodRole) {
+    (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    (role === 'old' ? setOldSource : setCurSource)('upload');
+    setAdsFiles((prev) => ({ ...prev, [`produk-${role}`]: null, [`produk-otomatis-${role}`]: null, [`toko-${role}`]: null, [`toko-keyword-${role}`]: null, [`live-${role}`]: null }));
+    setOverviewFiles((prev) => ({ ...prev, [`overview-${role}`]: null }));
+    setProductPerfFiles((prev) => ({ ...prev, [role]: null }));
+    (role === 'old' ? onOmzetOldChange : onOmzetCurChange)(null);
+    setReport(null);
+    setDeepDive(null);
+    setFunnelReport(null);
+    onInvalidate();
+  }
+
   const [report, setReport] = useState<ShopeeReport | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [deepDive, setDeepDive] = useState<ShopeeDeepDiveReport | null>(null);
   const [funnelReport, setFunnelReport] = useState<ShopeeFunnelReport | null>(null);
-  const [itemPivotTab, setItemPivotTab] = useState<'produk' | 'keyword'>('produk');
+  const [itemPivotTab, setItemPivotTab] = useState<'produk' | 'keyword' | 'performa'>('produk');
   const [generatedAt, setGeneratedAt] = useState('');
 
   // Metric picker state for the item-level pivots: `null` selections mean
@@ -191,6 +390,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const [keywordSelections, setKeywordSelections] = useState<MetricSelection[] | null>(null);
   const [customMetrics, setCustomMetrics] = useState<MetricSelection[]>([]);
   const [dailyTrendSelections, setDailyTrendSelections] = useState<DailyTrendMetricSelection[] | null>(null);
+  const [performanceSelections, setPerformanceSelections] = useState<(keyof PerfMetricVars)[] | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   // "Data tambahan (opsional)" — the 7 optional upload cards collapse into one
   // <details> so the page isn't a wall of dropzones. Auto-opens the moment any
@@ -362,6 +562,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       liveOld: adsFiles['live-old']?.rows ?? [],
       liveCur: adsFiles['live-cur']?.rows ?? [],
       productPerformanceRows: productPerfFiles.cur?.mainRows ?? null,
+      productPerformanceOldRows: productPerfFiles.old?.mainRows ?? null,
       tingkatkanDenganIklanRows: productPerfFiles.cur?.tingkatkanRows ?? null,
       overviewOldRows: overviewFiles['overview-old']?.rows ?? null,
       overviewCurRows: overviewFiles['overview-cur']?.rows ?? null,
@@ -371,6 +572,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       produkSelections,
       keywordSelections,
       dailyTrendSelections,
+      performanceSelections,
     });
     // Fundamental / Pareto / Traffic / Conversion — the 4 "manual report"
     // sections. Iklan Produk Otomatis is folded into the produk rows first,
@@ -387,6 +589,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       omzetCur: omzetCur ?? 0,
       productPerfOld: productPerfFiles.old?.mainRows ?? null,
       productPerfCur: productPerfFiles.cur?.mainRows ?? null,
+      productPerfAllMonths,
+      paretoRange,
     });
     // Only default the open tab to the dominant channel on the very first
     // Generate — a later regenerate (metric change, uncategorized-mapping
@@ -408,7 +612,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   useEffect(() => {
     if (report && deepDive) generate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveProductMaster, produkSelections, keywordSelections, dailyTrendSelections]);
+  }, [effectiveProductMaster, produkSelections, keywordSelections, dailyTrendSelections, performanceSelections, paretoRange]);
 
   async function handleSaveCategory(name: string, category: string, series: string) {
     if (!clientId) return;
@@ -424,6 +628,10 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     setAdsFiles(EMPTY_ADS_FILES);
     setOverviewFiles(EMPTY_OVERVIEW_FILES);
     setProductPerfFiles({ old: null, cur: null });
+    setOldSource('upload');
+    setCurSource('upload');
+    setOldPickedMonth(null);
+    setCurPickedMonth(null);
     setProductMasterRef(null);
     setProductMasterRefSaved(false);
     setPeriodOldDays(null);
@@ -559,6 +767,56 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       />
       <PeriodWarningBanner message={uploadPeriodWarning} />
       {uploadError && <InlineNotice title="File ini belum kebaca">{uploadError}</InlineNotice>}
+
+      <div className="source-block">
+        <div className="source-header">
+          <div className="source-label shopee-label">Pilih Periode</div>
+          <span className="sec-badge">isi Iklan Produk/Toko/Keyword/Live/Overview/Product Performance sekaligus dari Pengaturan Brand</span>
+        </div>
+        <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
+          Bisa memilih bulan mana pun yang sudah diunggah di Pengaturan Brand, walau belum pernah di-Generate. Total Omzet Toko hanya ikut terisi kalau bulan itu sudah pernah di-Generate sebelumnya — kalau belum, isi manual di bawah.
+        </div>
+        <div className="dz-grid-4">
+          {(['old', 'cur'] as const).map((role) => {
+            const picked = role === 'old' ? oldPickedMonth : curPickedMonth;
+            const source = role === 'old' ? oldSource : curSource;
+            return (
+              <div key={role}>
+                <SlotSourceTabs
+                  value={source}
+                  onChange={(v) => {
+                    (role === 'old' ? setOldSource : setCurSource)(v);
+                    if (v === 'saved' && !picked) setPickerRole(role);
+                  }}
+                  disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
+                />
+                {source === 'saved' &&
+                  (applyingRole === role ? (
+                    <div className="empty-note">Menerapkan periode…</div>
+                  ) : (
+                    <SavedSlotCard
+                      picked={
+                        picked && {
+                          title: picked.label,
+                          sourceComparison: '',
+                          savedAt: '',
+                          summary: formatChannelCoverage(picked.channels),
+                          metaLine: '',
+                        }
+                      }
+                      onOpen={() => setPickerRole(role)}
+                      onClear={() => clearPickedPeriod(role)}
+                    />
+                  ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {pickerRole && clientId && (
+        <LibraryPeriodPicker clientId={clientId} platform="shopee" periodChannels={SHOPEE_PERIOD_CHANNELS} onClose={() => setPickerRole(null)} onPick={handlePickMonth} />
+      )}
 
       <div className="source-block">
         <div className="source-header">
@@ -785,6 +1043,9 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
                 onProdukSelectionsChange={setProdukSelections}
                 onKeywordSelectionsChange={setKeywordSelections}
                 onDailyTrendSelectionsChange={setDailyTrendSelections}
+                onPerformanceSelectionsChange={setPerformanceSelections}
+                paretoRange={paretoRange}
+                onParetoRangeChange={setParetoRange}
                 itemPivotTab={itemPivotTab}
                 onItemPivotTabChange={setItemPivotTab}
                 onSaveCategory={handleSaveCategory}

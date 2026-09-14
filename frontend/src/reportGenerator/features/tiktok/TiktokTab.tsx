@@ -21,8 +21,11 @@ import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapTiktokRows } from '../reports/rowMapping';
+import { getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage, formatSavedAt } from '../reports/savedPeriodLabels';
-import type { RawFileEntry, SaveReportPayload } from '../reports/types';
+import { SavedPeriodPicker } from '../reports/SavedPeriodPicker';
+import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
+import type { PeriodRole, RawFileEntry, SaveReportPayload, SavedPeriod } from '../reports/types';
 import { buildTiktokReport, type TiktokReport } from './tiktokReport';
 
 type FileKey = 'tiktok-old' | 'tiktok-cur';
@@ -66,6 +69,57 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   const [periodCurRange, setPeriodCurRange] = useState<DateRange>(EMPTY_RANGE);
   const [report, setReport] = useState<TiktokReport | null>(null);
   const [generatedAt, setGeneratedAt] = useState('');
+
+  // "Pilih dari data tersimpan" — per period side, fills that side's file
+  // straight from a previously saved report_run instead of re-uploading.
+  const [oldSource, setOldSource] = useState<SlotSource>('upload');
+  const [curSource, setCurSource] = useState<SlotSource>('upload');
+  const [oldPicked, setOldPicked] = useState<SavedPeriod | null>(null);
+  const [curPicked, setCurPicked] = useState<SavedPeriod | null>(null);
+  const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
+  const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
+
+  async function applySavedPeriod(targetRole: PeriodRole, period: SavedPeriod) {
+    const key: FileKey = targetRole === 'old' ? 'tiktok-old' : 'tiktok-cur';
+    setApplyingRole(targetRole);
+    setFileErrors((prev) => ({ ...prev, [key]: null }));
+    try {
+      const detail = await getSavedPeriod(period.runId, period.role);
+      const rows = detail.channels.tiktok ?? [];
+      if (!rows.length) throw new Error('Periode ini tidak memiliki data campaign yang tersimpan.');
+      setFiles((prev) => ({ ...prev, [key]: { rows, fileName: 'Dari laporan tersimpan' } }));
+      (targetRole === 'old' ? periodOld : periodCur).autoFill(detail.period.label);
+      if (detail.period.start && detail.period.end) {
+        (targetRole === 'old' ? setPeriodOldRange : setPeriodCurRange)({ start: detail.period.start, end: detail.period.end });
+        (targetRole === 'old' ? setPeriodOldDays : setPeriodCurDays)(daysBetweenInclusive(fromISODate(detail.period.start)!, fromISODate(detail.period.end)!));
+      }
+      setReport(null);
+      onInvalidate();
+    } catch (err) {
+      setFileErrors((prev) => ({ ...prev, [key]: 'Gagal memuat periode tersimpan: ' + (err as Error).message }));
+      (targetRole === 'old' ? setOldPicked : setCurPicked)(null);
+      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+    } finally {
+      setApplyingRole(null);
+    }
+  }
+
+  function handlePickPeriod(period: SavedPeriod) {
+    const targetRole = pickerRole;
+    if (!targetRole) return;
+    (targetRole === 'old' ? setOldPicked : setCurPicked)(period);
+    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    applySavedPeriod(targetRole, period);
+  }
+
+  function clearPickedPeriod(role: PeriodRole) {
+    const key: FileKey = role === 'old' ? 'tiktok-old' : 'tiktok-cur';
+    (role === 'old' ? setOldPicked : setCurPicked)(null);
+    (role === 'old' ? setOldSource : setCurSource)('upload');
+    setFiles((prev) => ({ ...prev, [key]: null }));
+    setReport(null);
+    onInvalidate();
+  }
 
   async function handleFile(input: File[], key: FileKey, selection: LibrarySelection) {
     const file = input[0];
@@ -115,6 +169,10 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     periodCur.reset();
     setFiles({ 'tiktok-old': null, 'tiktok-cur': null });
     setFileErrors({ 'tiktok-old': null, 'tiktok-cur': null });
+    setOldSource('upload');
+    setCurSource('upload');
+    setOldPicked(null);
+    setCurPicked(null);
     setPeriodOldDays(null);
     setPeriodCurDays(null);
     setPeriodOldRange(EMPTY_RANGE);
@@ -137,13 +195,19 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   function buildSaveFiles(): RawFileEntry[] { return []; }
 
 
+  // No wrapping <div> here — librarySource.css's `.dz-grid-4:has(> .library-slot)`
+  // rule (which stretches a LibraryFileSlot to the grid's full width instead
+  // of squeezing 2 of its own wide internal columns into a half-width grid
+  // cell) only matches when .library-slot is a DIRECT child of .dz-grid-4.
+  // A wrapper div here breaks that match and the slot overflows its column.
   function dropzone(key: FileKey) {
     const f = files[key];
-    return <div><LibraryFileSlot clientId={clientId} platform="tiktok" channel="tiktok"
-      tag={key === 'tiktok-old' ? 'Periode Lalu' : 'Periode Ini'}
-      onFiles={(input, selection) => handleFile(input, key, selection)} loaded={Boolean(f)}
-      fileName={f?.fileName} infoText={f ? `${f.rows.length} kampanye` : undefined} />
-      {fileErrors[key] && <InlineNotice title="Sumber belum dapat dibaca">{fileErrors[key]}</InlineNotice>}</div>;
+    return (
+      <LibraryFileSlot clientId={clientId} platform="tiktok" channel="tiktok"
+        tag={key === 'tiktok-old' ? 'Periode Lalu' : 'Periode Ini'}
+        onFiles={(input, selection) => handleFile(input, key, selection)} loaded={Boolean(f)}
+        fileName={f?.fileName} infoText={f ? `${f.rows.length} kampanye` : undefined} />
+    );
   }
 
   const steps: Step[] = [
@@ -186,6 +250,54 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
       <div className="source-block">
         <div className="source-header">
           <div className="source-label" style={{ color: 'var(--tiktok)' }}>
+            Pilih Periode
+          </div>
+          <span className="sec-badge">isi file campaign sekaligus dari laporan tersimpan</span>
+        </div>
+        <div className="dz-grid-4">
+          {(['old', 'cur'] as const).map((role) => {
+            const picked = role === 'old' ? oldPicked : curPicked;
+            const source = role === 'old' ? oldSource : curSource;
+            return (
+              <div key={role}>
+                <SlotSourceTabs
+                  value={source}
+                  onChange={(v) => {
+                    (role === 'old' ? setOldSource : setCurSource)(v);
+                    if (v === 'saved' && !picked) setPickerRole(role);
+                  }}
+                  disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
+                />
+                {source === 'saved' &&
+                  (applyingRole === role ? (
+                    <div className="empty-note">Menerapkan periode…</div>
+                  ) : (
+                    <SavedSlotCard
+                      picked={
+                        picked && {
+                          title: picked.label || 'Tanpa label',
+                          sourceComparison: picked.sourceComparison,
+                          savedAt: formatSavedAt(picked.savedAt),
+                          summary: formatChannelCoverage(picked.channels),
+                        }
+                      }
+                      onOpen={() => setPickerRole(role)}
+                      onClear={() => clearPickedPeriod(role)}
+                    />
+                  ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {pickerRole && clientId && (
+        <SavedPeriodPicker clientId={clientId} platform="tiktok" variant="period" onClose={() => setPickerRole(null)} onPick={handlePickPeriod} />
+      )}
+
+      <div className="source-block">
+        <div className="source-header">
+          <div className="source-label" style={{ color: 'var(--tiktok)' }}>
             TikTok GMV Max
           </div>
         </div>
@@ -193,6 +305,8 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
           {dropzone('tiktok-old')}
           {dropzone('tiktok-cur')}
         </div>
+        {fileErrors['tiktok-old'] && <InlineNotice title="Sumber Periode Lalu belum dapat dibaca">{fileErrors['tiktok-old']}</InlineNotice>}
+        {fileErrors['tiktok-cur'] && <InlineNotice title="Sumber Periode Ini belum dapat dibaca">{fileErrors['tiktok-cur']}</InlineNotice>}
       </div>
 
 

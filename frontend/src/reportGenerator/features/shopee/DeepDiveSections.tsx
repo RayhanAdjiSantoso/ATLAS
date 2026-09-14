@@ -9,6 +9,7 @@ import { validateFormula } from '../../lib/formula';
 import { DAILY_TREND_BUILTIN_METRICS, dailyTrendSelectionId, dailyTrendSelectionLabel, type DailyTrendMetricSelection, type DailyTrendPivotRow, type ProductPerformanceRow } from '../../lib/shopeeDeepDiveInsights';
 import { ITEM_BUILTIN_METRICS, metricSelectionId, metricSelectionLabel, type KeywordPivotRow, type MetricSelection, type ProdukPivotRow } from '../../lib/shopeeDeepDiveItemPivot';
 import { fmtPivotVal, type PivotFmt, type PivotRow } from '../../lib/shopeeDeepDivePivot';
+import { PERFORMANCE_BUILTIN_METRICS, type PerfMetricVars, type PerformancePivotRow } from '../../lib/shopeeProductAnalysis';
 import type { FunnelTreeRow } from '../../lib/shopeeFunnel';
 import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import type { SheetRow } from '../../lib/types';
@@ -430,6 +431,10 @@ export function ItemPivotSection({
   hasKeywordData,
   keywordSelections,
   onKeywordSelectionsChange,
+  performaRows,
+  hasPerformaData,
+  performanceSelections,
+  onPerformanceSelectionsChange,
   customMetrics,
   onAddCustomMetric,
   activeTab,
@@ -444,10 +449,14 @@ export function ItemPivotSection({
   hasKeywordData: boolean;
   keywordSelections: readonly MetricSelection[];
   onKeywordSelectionsChange: (sels: MetricSelection[]) => void;
+  performaRows: PerformancePivotRow[];
+  hasPerformaData: boolean;
+  performanceSelections: readonly (keyof PerfMetricVars)[];
+  onPerformanceSelectionsChange: (sels: (keyof PerfMetricVars)[]) => void;
   customMetrics: MetricSelection[];
   onAddCustomMetric: (sel: MetricSelection) => void;
-  activeTab: 'produk' | 'keyword';
-  onTabChange: (tab: 'produk' | 'keyword') => void;
+  activeTab: 'produk' | 'keyword' | 'performa';
+  onTabChange: (tab: 'produk' | 'keyword' | 'performa') => void;
   p1: string;
   p2: string;
 }) {
@@ -462,6 +471,12 @@ export function ItemPivotSection({
   const [produkIdentityCols, setProdukIdentityCols] = useState<string[]>(PRODUK_IDENTITY_COLS.map((c) => c.id));
   const allSelections: MetricSelection[] = [...ITEM_BUILTIN_METRICS.map((m): MetricSelection => ({ kind: 'builtin', key: m.key })), ...customMetrics];
   const byId = new Map(allSelections.map((s) => [metricSelectionId(s), s]));
+  const performaById = new Map(PERFORMANCE_BUILTIN_METRICS.map((m) => [m.key as string, m]));
+  // Per Performa draws from its own metric universe (the Product Performance
+  // sheet's own columns), never from the Iklan Produk/Toko metrics above —
+  // activeSelections/onActiveChange below are only ever read for the
+  // produk/keyword tabs (every 'performa' branch returns before touching
+  // them).
   const activeSelections = activeTab === 'produk' ? produkSelections : keywordSelections;
   const onActiveChange = activeTab === 'produk' ? onProdukSelectionsChange : onKeywordSelectionsChange;
 
@@ -476,10 +491,16 @@ export function ItemPivotSection({
   // knows about 2 extra "pseudo-metric" ids that toggle identity columns
   // instead of adding a metric column-group.
   const identityOptionIds = activeTab === 'produk' ? PRODUK_IDENTITY_COLS.map((c) => c.id) : [];
-  const pickerAllCols = [...allSelections.map((s) => metricSelectionId(s)), ...identityOptionIds];
-  const pickerActiveCols = [...activeSelections.map((s) => metricSelectionId(s)), ...(activeTab === 'produk' ? produkIdentityCols : [])];
+  const pickerAllCols =
+    activeTab === 'performa' ? PERFORMANCE_BUILTIN_METRICS.map((m) => m.key as string) : [...allSelections.map((s) => metricSelectionId(s)), ...identityOptionIds];
+  const pickerActiveCols =
+    activeTab === 'performa' ? performanceSelections.map(String) : [...activeSelections.map((s) => metricSelectionId(s)), ...(activeTab === 'produk' ? produkIdentityCols : [])];
 
   function handlePickerChange(ids: string[]) {
+    if (activeTab === 'performa') {
+      onPerformanceSelectionsChange(ids.filter((id) => performaById.has(id)) as (keyof PerfMetricVars)[]);
+      return;
+    }
     if (activeTab === 'produk') {
       setProdukIdentityCols(ids.filter((id) => identityOptionIds.includes(id)));
       onActiveChange(
@@ -497,6 +518,8 @@ export function ItemPivotSection({
     if (overrides[id]) return overrides[id];
     const identityCol = PRODUK_IDENTITY_COLS.find((c) => c.id === id);
     if (identityCol) return identityCol.label;
+    const perfDef = performaById.get(id);
+    if (perfDef) return perfDef.label;
     return byId.get(id) ? metricSelectionLabel(byId.get(id)!) : id;
   }
 
@@ -517,6 +540,10 @@ export function ItemPivotSection({
   }
 
   function handleRemoveMetric(id: string) {
+    if (activeTab === 'performa') {
+      onPerformanceSelectionsChange(performanceSelections.filter((k) => k !== id));
+      return;
+    }
     if (activeTab === 'produk' && identityOptionIds.includes(id)) {
       setProdukIdentityCols((prev) => prev.filter((x) => x !== id));
       return;
@@ -525,6 +552,10 @@ export function ItemPivotSection({
   }
 
   function handleReorderMetrics(fromId: string, toId: string) {
+    if (activeTab === 'performa') {
+      onPerformanceSelectionsChange(reorderIds(performanceSelections.map(String), fromId, toId) as (keyof PerfMetricVars)[]);
+      return;
+    }
     if (activeTab === 'produk' && identityOptionIds.includes(fromId) && identityOptionIds.includes(toId)) {
       setProdukIdentityCols((prev) => reorderIds(prev, fromId, toId));
       return;
@@ -541,7 +572,7 @@ export function ItemPivotSection({
   return (
     <div className="sec-block">
       <div className="sec-heading shopee-heading">
-        Analisis Per Item <span className="sec-badge">Iklan Toko + Iklan Produk</span>
+        Analisis Per Item <span className="sec-badge">Iklan Toko + Iklan Produk + Product Performance</span>
         <SectionExcelButton />
         <SectionDownloadButton />
       </div>
@@ -556,14 +587,22 @@ export function ItemPivotSection({
             Per Keyword (Iklan Toko)
           </button>
         )}
+        {hasPerformaData && (
+          <button type="button" className={`ind-pill${activeTab === 'performa' ? ' selected' : ''}`} onClick={() => onTabChange('performa')}>
+            <span className="ind-pill-dot" />
+            Per Performa (Product Performance)
+          </button>
+        )}
       </div>
       <div style={{ padding: '1rem 1.4rem 0', display: 'flex', gap: '.6rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <MetricPicker allCols={pickerAllCols} activeCols={pickerActiveCols} onChange={handlePickerChange} labelFn={pickerLabel} dense />
-        <button type="button" className="mpill mpill-add" onClick={() => setShowCustomForm((v) => !v)}>
-          {showCustomForm ? '✕ Batal metrik custom' : '+ Buat metrik custom'}
-        </button>
+        {activeTab !== 'performa' && (
+          <button type="button" className="mpill mpill-add" onClick={() => setShowCustomForm((v) => !v)}>
+            {showCustomForm ? '✕ Batal metrik custom' : '+ Buat metrik custom'}
+          </button>
+        )}
       </div>
-      {showCustomForm && (
+      {showCustomForm && activeTab !== 'performa' && (
         <div style={{ padding: '0 1.4rem' }}>
           <CustomMetricForm varLegend={ITEM_BUILTIN_METRICS.map((m) => m.key)} onCreate={handleCreate} onCancel={() => setShowCustomForm(false)} />
         </div>
@@ -584,7 +623,7 @@ export function ItemPivotSection({
             onRemoveMetric={handleRemoveMetric}
             onReorderMetrics={handleReorderMetrics}
           />
-        ) : (
+        ) : activeTab === 'keyword' ? (
           <MultiMetricTable
             rows={keywordRows}
             identityHeaders={['Nama Iklan', 'Kata Pencarian']}
@@ -593,6 +632,20 @@ export function ItemPivotSection({
             p1={p1}
             p2={p2}
             emptyMessage="Tidak ada data keyword."
+            labelOverrides={overrides}
+            onRenameMetric={handleRenameMetric}
+            onRemoveMetric={handleRemoveMetric}
+            onReorderMetrics={handleReorderMetrics}
+          />
+        ) : (
+          <MultiMetricTable
+            rows={performaRows}
+            identityHeaders={['Produk']}
+            renderIdentity={(r) => [r.produk]}
+            rowKey={(r) => r.key}
+            p1={p1}
+            p2={p2}
+            emptyMessage="Tidak ada data Product Performance."
             labelOverrides={overrides}
             onRenameMetric={handleRenameMetric}
             onRemoveMetric={handleRemoveMetric}

@@ -6,7 +6,8 @@ import { useInlineMetricEditor } from '../../hooks/useInlineMetricEditor';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { FunnelTreeRow, FunnelValueRow } from '../../lib/shopeeFunnel';
 import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
-import type { ParetoRow, ProductMetricRanking } from '../../lib/shopeeProductAnalysis';
+import type { ParetoRangeSelection, ParetoRow, ProductMetricRanking } from '../../lib/shopeeProductAnalysis';
+import { ParetoRangeControl } from './ProductAnalysisCharts';
 
 // ══════════════════════════════════════════════════════
 // SHOPEE ADS — presentational sections for the 4 "manual report" analyses:
@@ -228,15 +229,41 @@ function FundamentalGroupedValues({ values, p1, p2 }: { values: FunnelValueRow[]
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<FgGroup | null>(null);
   const [moved, setMoved] = useState<string | null>(null);
+  // Session-only reorder rank (within a group, lower sorts first) + rename
+  // overrides, keyed by metric key — same "click label to rename" convention
+  // as ProductRankingSection/DataTable above; reorder here is via ▲▼ instead
+  // of a drag handle since the row is already draggable (to move it between
+  // groups) and a second drag target on the same row would be confusing.
+  const [rank, setRank] = useState<Record<string, number>>({});
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const editor = useInlineMetricEditor({
+    onRename: (id, label) => setLabels((prev) => ({ ...prev, [id]: label })),
+    onReorder: () => {},
+  });
+
+  const defaultRank = new Map(values.map((v, i) => [v.key, i]));
+  const rankOf = (key: string) => rank[key] ?? defaultRank.get(key) ?? 0;
+  const labelOf = (v: FunnelValueRow) => labels[v.key] ?? v.label;
 
   const groupOf = (key: string): FgGroup => group[key] ?? FG_DEFAULT[key] ?? 'client';
-  const rowsIn = (g: FgGroup) => values.filter((v) => groupOf(v.key) === g);
+  const rowsIn = (g: FgGroup) => values.filter((v) => groupOf(v.key) === g).sort((a, b) => rankOf(a.key) - rankOf(b.key));
 
   function move(key: string, to: FgGroup) {
     if (groupOf(key) === to) return;
     setGroup((prev) => ({ ...prev, [key]: to }));
     setMoved(key);
     window.setTimeout(() => setMoved((k) => (k === key ? null : k)), 800);
+  }
+
+  function reorder(g: FgGroup, key: string, dir: -1 | 1) {
+    const siblings = rowsIn(g);
+    const idx = siblings.findIndex((v) => v.key === key);
+    const otherIdx = idx + dir;
+    if (idx === -1 || otherIdx < 0 || otherIdx >= siblings.length) return;
+    const other = siblings[otherIdx];
+    const a = rankOf(key);
+    const b = rankOf(other.key);
+    setRank((prev) => ({ ...prev, [key]: b, [other.key]: a }));
   }
 
   return (
@@ -296,7 +323,30 @@ function FundamentalGroupedValues({ values, p1, p2 }: { values: FunnelValueRow[]
                         <span className="fg-handle" aria-hidden>
                           ⠿
                         </span>
-                        {v.label}
+                        {editor.editingId === v.key ? (
+                          <input
+                            className="metric-th-input"
+                            autoFocus
+                            value={editor.editingValue}
+                            onChange={(e) => editor.setEditingValue(e.target.value)}
+                            onBlur={editor.commitEdit}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') editor.commitEdit();
+                              if (e.key === 'Escape') editor.cancelEdit();
+                            }}
+                          />
+                        ) : (
+                          <span className="demo-th-label" title="Klik untuk ganti nama" onClick={() => editor.startEdit(v.key, labelOf(v))}>
+                            {labelOf(v)}
+                          </span>
+                        )}
+                        <button type="button" className="fg-move" title="Naikkan urutan" disabled={rows[0]?.key === v.key} onClick={() => reorder(grp.id, v.key, -1)}>
+                          ▲
+                        </button>
+                        <button type="button" className="fg-move" title="Turunkan urutan" disabled={rows[rows.length - 1]?.key === v.key} onClick={() => reorder(grp.id, v.key, 1)}>
+                          ▼
+                        </button>
                         <button type="button" className="fg-move" title={`Pindahkan ke ${other === 'strategist' ? 'Ads Strategist' : 'Client'}`} onClick={() => move(v.key, other)}>
                           ⇄
                         </button>
@@ -506,7 +556,25 @@ export function SymptomAnalysisSection({ tree, summary, p1, p2 }: { tree: Funnel
 
 // ── Pareto Analysis ──────────────────────────────────────────────────────
 
-export function ParetoAnalysisSection({ rows, hasData, periodLabel }: { rows: ParetoRow[]; hasData: boolean; periodLabel: string }) {
+const PARETO_TABLE_SCOPE_LABEL: Record<ParetoRangeSelection['mode'], string> = {
+  all: 'seluruh bulan terunggah',
+  range: 'rentang bulan terpilih',
+  single: 'satu bulan terpilih',
+};
+
+export function ParetoAnalysisSection({
+  rows,
+  hasData,
+  range,
+  availableMonths,
+  onRangeChange,
+}: {
+  rows: ParetoRow[];
+  hasData: boolean;
+  range: ParetoRangeSelection;
+  availableMonths: string[];
+  onRangeChange: (next: ParetoRangeSelection) => void;
+}) {
   const columns: DataColumn<ParetoRow>[] = [
     { id: 'rank', label: '#', thStyle: RANK_TH, tdStyle: RANK_TD, sortValue: (_r, i) => i, render: (_r, i) => i + 1 },
     { id: 'produk', label: 'Produk', thStyle: PRODUK_TH, tdStyle: { textAlign: 'left' }, sortValue: (r) => r.produk, render: (r) => r.produk },
@@ -518,15 +586,16 @@ export function ParetoAnalysisSection({ rows, hasData, periodLabel }: { rows: Pa
   return (
     <div className="sec-block">
       <div className="sec-heading shopee-heading">
-        Pareto Analysis <span className="sec-badge">Product Performance · {periodLabel}</span>
+        Pareto Analysis <span className="sec-badge">Product Performance · {PARETO_TABLE_SCOPE_LABEL[range.mode]}</span>
         <SectionExcelButton />
         <SectionDownloadButton />
       </div>
       <div style={{ padding: '.6rem 1.4rem 1.4rem' }}>
+        <ParetoRangeControl range={range} months={availableMonths} onChange={onRangeChange} />
         {!hasData ? (
-          <div className="empty-note">Upload file Product Performance periode ini untuk melihat analisis 80/20.</div>
+          <div className="empty-note">Upload file Product Performance (bulan berapa pun) di Pengaturan Brand untuk melihat analisis 80/20.</div>
         ) : !rows.length ? (
-          <div className="empty-note">Tidak ada produk dengan penjualan pada periode ini.</div>
+          <div className="empty-note">Tidak ada produk dengan penjualan pada cakupan bulan ini.</div>
         ) : (
           <DataTable columns={columns} rows={rows} rowKey={(r) => r.key} rowStyle={(r) => (r.cumulative <= 80 ? { fontWeight: 600 } : undefined)} />
         )}

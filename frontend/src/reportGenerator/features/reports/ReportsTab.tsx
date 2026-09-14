@@ -11,6 +11,7 @@ import { ShopeeReportSections } from '../shopee/ShopeeReportSections';
 import type { ProductMasterEntry } from '../../lib/shopeeDeepDive';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
+import { DEFAULT_PARETO_RANGE, type ParetoRangeSelection, type PerfMetricVars } from '../../lib/shopeeProductAnalysis';
 import { deleteReport, getProductMaster, getReportDetail, getReports, saveProductMasterEntry } from './api';
 import { reconstructMetaReport, reconstructShopeeDeepDive, reconstructShopeeFunnel, reconstructShopeeReport, reconstructTiktokReport } from './reconstruct';
 import type { Platform, ReportDetail, ReportListItem } from './types';
@@ -160,8 +161,16 @@ function ShopeeDetailView({ detail }: { detail: ReportDetail }) {
   const [produkSelections, setProdukSelections] = useState<MetricSelection[] | null>(null);
   const [keywordSelections, setKeywordSelections] = useState<MetricSelection[] | null>(null);
   const [dailyTrendSelections, setDailyTrendSelections] = useState<DailyTrendMetricSelection[] | null>(null);
+  // Product Performance isn't persisted, so Per Performa never has data to
+  // show here — the setter exists only to satisfy ShopeeReportSections' prop
+  // contract.
+  const [, setPerformanceSelections] = useState<(keyof PerfMetricVars)[] | null>(null);
+  // Same story as performanceSelections above — Product Performance isn't
+  // persisted, so paretoAvailableMonths is always empty here; the setter
+  // just satisfies the prop contract.
+  const [paretoRange, setParetoRange] = useState<ParetoRangeSelection>(DEFAULT_PARETO_RANGE);
   const [customMetrics, setCustomMetrics] = useState<MetricSelection[]>([]);
-  const [itemPivotTab, setItemPivotTab] = useState<'produk' | 'keyword'>('produk');
+  const [itemPivotTab, setItemPivotTab] = useState<'produk' | 'keyword' | 'performa'>('produk');
 
   const deepDive = useMemo(
     () => reconstructShopeeDeepDive(detail, productMaster, { produkSelections, keywordSelections, dailyTrendSelections }),
@@ -186,7 +195,6 @@ function ShopeeDetailView({ detail }: { detail: ReportDetail }) {
           <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
         </div>
       </div>
-      <SectionNav bodyRef={bodyRef} scanKey={detail} accent="var(--shopee)" />
       <div data-role="r-body" ref={bodyRef}>
         <ShopeeReportSections
           report={report}
@@ -200,6 +208,9 @@ function ShopeeDetailView({ detail }: { detail: ReportDetail }) {
           onProdukSelectionsChange={setProdukSelections}
           onKeywordSelectionsChange={setKeywordSelections}
           onDailyTrendSelectionsChange={setDailyTrendSelections}
+          onPerformanceSelectionsChange={setPerformanceSelections}
+          paretoRange={paretoRange}
+          onParetoRangeChange={setParetoRange}
           itemPivotTab={itemPivotTab}
           onItemPivotTabChange={setItemPivotTab}
           onSaveCategory={handleSaveCategory}

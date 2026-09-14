@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import api from '../../../api/client.js';
+import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ReportPages } from '../../components/ReportPages';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { DemoBreakdownCard } from '../../components/DemoBreakdownCard';
@@ -8,7 +9,6 @@ import { InlineNotice } from '../../components/InlineNotice';
 import { SearchSelect } from '../../components/SearchSelect';
 import {
   META_OBJECTIVE_CHOICES,
-  defaultMetaDayRanges,
   splitMonths,
   detectMetaObjectiveCol,
   dominantMetaObjective,
@@ -32,7 +32,10 @@ import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
-import type { RawFileEntry, SaveReportPayload } from '../reports/types';
+import { LibraryPeriodPicker, type LibraryMonth } from '../reports/LibraryPeriodPicker';
+import { formatChannelCoverage } from '../reports/savedPeriodLabels';
+import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
+import type { PeriodRole, RawFileEntry, SaveReportPayload } from '../reports/types';
 import { buildMetaReport, type MetaReport } from './metaReport';
 
 // Meta's export uses either a "Month" breakdown or a "Day" breakdown column
@@ -48,6 +51,27 @@ const INDUSTRY_OPTIONS = [
   { id: 'retail', name: 'Retail' },
 ];
 const OBJECTIVE_OPTIONS = META_OBJECTIVE_CHOICES.map((o) => ({ id: o.key, name: o.label }));
+
+const META_PERIOD_CHANNELS = ['meta', 'cpas'] as const;
+
+interface MetaFileState {
+  rows: SheetRow[];
+  fileName: string;
+}
+const EMPTY_META_SIDES: Record<PeriodRole, MetaFileState | null> = { old: null, cur: null };
+
+interface LibraryFileMeta {
+  id: number;
+  platform: string;
+  channel: string;
+  original_filename: string;
+  period_month: string | null;
+}
+
+async function downloadLibraryFile(clientId: number, file: LibraryFileMeta): Promise<File> {
+  const { data } = await api.get(`/brands/${clientId}/library/${file.id}/download`, { responseType: 'blob' });
+  return new File([data], file.original_filename, { type: (data as Blob).type });
+}
 
 function formatGeneratedDate(): string {
   return new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -70,15 +94,18 @@ interface MetaTabProps {
 }
 
 export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaTabProps) {
-  const [metaRows, setMetaRows] = useState<SheetRow[] | null>(null);
-  const [metaHeaders, setMetaHeaders] = useState<string[]>([]);
-  const [metaFileName, setMetaFileName] = useState('');
-  const [metaFile, setMetaFile] = useState<File | null>(null);
+  // One upload per period side now (not one file spanning both) — matches
+  // Shopee/TikTok's Periode Lalu/Periode Ini split, so nobody has to
+  // download a combined 2-month export from Meta Ads Reporting anymore.
+  // metaRows/metaHeaders below are the two sides concatenated, which is all
+  // buildMetaReport (and its Month/Day auto-split) has ever needed.
+  const [metaSides, setMetaSides] = useState<Record<PeriodRole, MetaFileState | null>>(EMPTY_META_SIDES);
+  const [cpasSides, setCpasSides] = useState<Record<PeriodRole, MetaFileState | null>>(EMPTY_META_SIDES);
 
-  const [cpasRows, setCpasRows] = useState<SheetRow[] | null>(null);
-  const [cpasHeaders, setCpasHeaders] = useState<string[]>([]);
-  const [cpasFileName, setCpasFileName] = useState('');
-  const [cpasFile, setCpasFile] = useState<File | null>(null);
+  const metaRows = useMemo(() => (metaSides.old || metaSides.cur ? [...(metaSides.old?.rows ?? []), ...(metaSides.cur?.rows ?? [])] : null), [metaSides]);
+  const metaHeaders = useMemo(() => (metaRows?.length ? Object.keys(metaRows[0]) : []), [metaRows]);
+  const cpasRows = useMemo(() => (cpasSides.old || cpasSides.cur ? [...(cpasSides.old?.rows ?? []), ...(cpasSides.cur?.rows ?? [])] : null), [cpasSides]);
+  const cpasHeaders = useMemo(() => (cpasRows?.length ? Object.keys(cpasRows[0]) : []), [cpasRows]);
 
   // B2B / Retail — manual, not in the export. Objective — Meta's ODAX
   // objective; auto-prefilled from the file's "Objective" column when present,
@@ -92,25 +119,102 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // prefill effect doesn't keep stomping a manual change.
   const objectivePrefilledFor = useRef<string>('');
 
-  // Day-breakdown support: when the uploaded file has a "Day" column instead
-  // of "Month" (a real per-day export, not a bucketed calendar month), the
-  // user picks exact old/cur sub-ranges instead of relying on Meta's own
-  // month-bucket boundaries — see lib/meta.ts's splitByDayRange.
-  const [dayCol, setDayCol] = useState<string | null>(null);
-  const [dayBounds, setDayBounds] = useState<{ min: Date; max: Date } | null>(null);
+  // Day-breakdown support: when a side's upload has a "Day" column instead
+  // of "Month" (a real per-day export, not a bucketed calendar month), its
+  // own min/max day becomes that side's default range — the date pickers
+  // below still let the user trim within it.
+  const dayCol = useMemo(() => (metaRows ? findCol(metaRows, ['day']) : null), [metaRows]);
   const [oldRange, setOldRange] = useState<{ start: Date; end: Date } | null>(null);
   const [curRange, setCurRange] = useState<{ start: Date; end: Date } | null>(null);
+  const oldDayBounds = useMemo(() => (dayCol && metaSides.old ? metaDayRange(metaSides.old.rows, dayCol) : null), [dayCol, metaSides.old]);
+  const curDayBounds = useMemo(() => (dayCol && metaSides.cur ? metaDayRange(metaSides.cur.rows, dayCol) : null), [dayCol, metaSides.cur]);
+
+  // Each side's suggested range is simply that side's own file bounds —
+  // exact by construction now that old/cur are 2 separate uploads, not a
+  // heuristic half-split of one combined file like before. Still user-
+  // editable via the date inputs below (e.g. to trim a few days off).
+  useEffect(() => {
+    setOldRange(oldDayBounds ? { start: oldDayBounds.min, end: oldDayBounds.max } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oldDayBounds]);
+  useEffect(() => {
+    setCurRange(curDayBounds ? { start: curDayBounds.min, end: curDayBounds.max } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curDayBounds]);
 
   const [report, setReport] = useState<MetaReport | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [generatedAt, setGeneratedAt] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // "Pilih dari data tersimpan" — Meta uploads one file spanning both
-  // periods, so the picker reuses a whole previously-saved comparison
-  // (both periods + industry/header config), not an independent period.
+  // "Pilih Periode" — per side, sourced from the brand library (any month
+  // uploaded there), exactly like Shopee's picker: one pick fills that
+  // side's Meta Ads + CPAS files at once; a fresh upload on either slot
+  // below still overrides just that one file.
+  const [oldSource, setOldSource] = useState<SlotSource>('upload');
+  const [curSource, setCurSource] = useState<SlotSource>('upload');
+  const [oldPickedMonth, setOldPickedMonth] = useState<LibraryMonth | null>(null);
+  const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
+  const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
+  const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
 
-  async function handleUpload(input: File[], target: 'meta' | 'cpas') {
+  async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
+    if (!clientId) return;
+    setApplyingRole(targetRole);
+    setUploadError(null);
+    try {
+      const { data } = await api.get(`/brands/${clientId}/library`);
+      const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'meta' && f.period_month?.slice(0, 7) === month.month);
+      const metaList = files.filter((f) => f.channel === 'meta');
+      const cpasList = files.filter((f) => f.channel === 'cpas');
+
+      async function downloadAndParse(list: LibraryFileMeta[]): Promise<SheetRow[]> {
+        const parts = await Promise.all(list.map((f) => downloadLibraryFile(clientId!, f)));
+        return (await Promise.all(parts.map(readSpreadsheetFile))).flat();
+      }
+
+      if (metaList.length) {
+        const rows = await downloadAndParse(metaList);
+        setMetaSides((prev) => ({ ...prev, [targetRole]: rows.length ? { rows, fileName: metaList.map((f) => f.original_filename).join(' · ') } : null }));
+      } else {
+        setMetaSides((prev) => ({ ...prev, [targetRole]: null }));
+      }
+      if (cpasList.length) {
+        const rows = await downloadAndParse(cpasList);
+        setCpasSides((prev) => ({ ...prev, [targetRole]: rows.length ? { rows, fileName: cpasList.map((f) => f.original_filename).join(' · ') } : null }));
+      } else {
+        setCpasSides((prev) => ({ ...prev, [targetRole]: null }));
+      }
+
+      setReport(null);
+      onInvalidate();
+    } catch (err) {
+      setUploadError('Gagal memuat periode dari perpustakaan: ' + (err as Error).message);
+      (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+    } finally {
+      setApplyingRole(null);
+    }
+  }
+
+  function handlePickMonth(month: LibraryMonth) {
+    const targetRole = pickerRole;
+    if (!targetRole) return;
+    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(month);
+    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    applyLibraryMonth(targetRole, month);
+  }
+
+  function clearPickedPeriod(role: PeriodRole) {
+    (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    (role === 'old' ? setOldSource : setCurSource)('upload');
+    setMetaSides((prev) => ({ ...prev, [role]: null }));
+    setCpasSides((prev) => ({ ...prev, [role]: null }));
+    setReport(null);
+    onInvalidate();
+  }
+
+  async function handleUpload(input: File[], target: 'meta' | 'cpas', role: PeriodRole) {
     const file = input[0];
     const basics = validateFileBasics(file, ['.csv', '.xlsx', '.xls']);
     if (!basics.ok) {
@@ -125,36 +229,21 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       if (!cols.ok) {
         throw new Error(cols.message || 'Kolom wajib tidak ditemukan.');
       }
-      setUploadError(null);
       const monthColumn = findCol(rows, ['month']);
       const dayColumn = findCol(rows, ['day']);
-      if (!dayColumn && splitMonths(rows, monthColumn).months.length !== 2) {
-        throw new Error('Pilih sumber dengan tepat dua periode Month untuk perbandingan. Untuk rentang harian, gunakan file dengan breakdown Day.');
-      }
-      const headers = Object.keys(rows[0]);
-      if (target === 'meta') {
-        setMetaRows(rows);
-        setMetaHeaders(headers);
-        setMetaFileName(input.map(f => f.name).join(' · '));
-        setMetaFile(null);
-        const dCol = findCol(rows, ['day']);
-        const bounds = dCol ? metaDayRange(rows, dCol) : null;
-        setDayCol(dCol);
-        setDayBounds(bounds);
-        if (bounds) {
-          const defaults = defaultMetaDayRanges(bounds.min, bounds.max);
-          setOldRange(defaults.old);
-          setCurRange(defaults.cur);
-        } else {
-          setOldRange(null);
-          setCurRange(null);
+      if (!dayColumn) {
+        const monthCount = splitMonths(rows, monthColumn).months.length;
+        if (monthCount !== 1) {
+          throw new Error(
+            monthCount === 0
+              ? 'Kolom Month tidak terbaca — export ulang dengan breakdown Month atau Day.'
+              : 'File ini mencakup lebih dari 1 bulan Month — upload satu bulan saja untuk slot Periode Lalu/Periode Ini ini.',
+          );
         }
-      } else {
-        setCpasRows(rows);
-        setCpasHeaders(headers);
-        setCpasFileName(input.map(f => f.name).join(' · '));
-        setCpasFile(null);
       }
+      setUploadError(null);
+      const fileState: MetaFileState = { rows, fileName: input.map((f) => f.name).join(' · ') };
+      (target === 'meta' ? setMetaSides : setCpasSides)((prev) => ({ ...prev, [role]: fileState }));
       setReport(null);
       onInvalidate();
     } catch (err) {
@@ -210,22 +299,16 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   }
 
   function reset() {
-    setMetaRows(null);
-    setMetaHeaders([]);
-    setMetaFileName('');
-    setMetaFile(null);
-    setCpasRows(null);
-    setCpasHeaders([]);
-    setCpasFileName('');
-    setCpasFile(null);
+    setMetaSides(EMPTY_META_SIDES);
+    setCpasSides(EMPTY_META_SIDES);
+    setOldSource('upload');
+    setCurSource('upload');
+    setOldPickedMonth(null);
+    setCurPickedMonth(null);
     setIndustry(null);
     setCustomResultsCol(null);
     setObjective(null);
     objectivePrefilledFor.current = '';
-    setDayCol(null);
-    setDayBounds(null);
-    setOldRange(null);
-    setCurRange(null);
     setReport(null);
     setUploadError(null);
     onInvalidate();
@@ -267,7 +350,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const steps: Step[] = [
     {
       label: 'Pilih file Meta Ads & industri',
-      sub: metaFileName || undefined,
+      sub: metaSides.old && metaSides.cur ? `${metaSides.old.fileName} · ${metaSides.cur.fileName}` : undefined,
       status: metaRows && objectiveOk ? 'done' : 'current',
     },
     { label: 'Generate laporan', status: report ? 'done' : ready ? 'current' : 'todo' },
@@ -277,10 +360,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
       <HowTo>
-        <HowToStep num={1} title="Download file dari Meta Ads Reporting">
-          Download satu file yang mencakup rentang dua periode (periode lalu &amp; periode ini) langsung dari Meta Ads Reporting. Gunakan kolom-kolom berikut sesuai jenis akun:
+        <HowToStep num={1} title="Download file dari Meta Ads Reporting — satu bulan per periode">
+          Download <strong>dua file terpisah</strong> dari Meta Ads Reporting, masing-masing mencakup satu bulan/periode saja — satu untuk periode lalu, satu untuk periode ini. Gunakan kolom-kolom berikut sesuai jenis akun:
           <div className="empty-note" style={{ padding: '.4rem 0 0' }}>
-            Meta Ads Reporting dapat memakai breakdown "Month" atau "Day", rentang tanggalnya bebas (tidak harus 1 bulan penuh). Namun, jika memilih "Month", diharapkan bulan penuh. Jika memilih "Day", tanggalnya dapat disesuaikan.
+            Meta Ads Reporting dapat memakai breakdown "Month" atau "Day". Jika memilih "Month", satu file = satu bulan penuh. Jika memilih "Day", tanggalnya bebas asal tidak melewati bulan yang dimaksud.
           </div>
           <div className="empty-note" style={{ padding: '.4rem 0 0' }}>
             <strong>Penting untuk hasil yang presisi:</strong> saat export, pilih format <strong>"Formatted data table (.xlsx)"</strong> (bukan "Raw data").
@@ -317,7 +400,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           </div>
         </HowToStep>
         <HowToStep num={2} title="Pilih sumber & buat laporan">
-          Pilih file Meta Ads dari Pengaturan Brand (wajib). Pilih juga file CPAS jika tersedia. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
+          Pilih file Meta Ads untuk periode lalu dan periode ini dari Pengaturan Brand (wajib). Pilih juga file CPAS jika tersedia. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
         </HowToStep>
       </HowTo>
 
@@ -325,12 +408,68 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
       <div className="source-block">
         <div className="source-header">
+          <div className="source-label">Pilih Periode</div>
+          <span className="sec-badge">isi Meta Ads &amp; CPAS sekaligus dari Pengaturan Brand</span>
+        </div>
+        <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
+          Bisa memilih bulan mana pun yang sudah diunggah di Pengaturan Brand — satu bulan per slot Periode Lalu/Periode Ini.
+        </div>
+        <div className="dz-grid-4">
+          {(['old', 'cur'] as const).map((role) => {
+            const picked = role === 'old' ? oldPickedMonth : curPickedMonth;
+            const source = role === 'old' ? oldSource : curSource;
+            return (
+              <div key={role}>
+                <SlotSourceTabs
+                  value={source}
+                  onChange={(v) => {
+                    (role === 'old' ? setOldSource : setCurSource)(v);
+                    if (v === 'saved' && !picked) setPickerRole(role);
+                  }}
+                  disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
+                />
+                {source === 'saved' &&
+                  (applyingRole === role ? (
+                    <div className="empty-note">Menerapkan periode…</div>
+                  ) : (
+                    <SavedSlotCard
+                      picked={
+                        picked && {
+                          title: picked.label,
+                          sourceComparison: '',
+                          savedAt: '',
+                          summary: formatChannelCoverage(picked.channels),
+                          metaLine: '',
+                        }
+                      }
+                      onOpen={() => setPickerRole(role)}
+                      onClear={() => clearPickedPeriod(role)}
+                    />
+                  ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {pickerRole && clientId && (
+        <LibraryPeriodPicker clientId={clientId} platform="meta" periodChannels={META_PERIOD_CHANNELS} onClose={() => setPickerRole(null)} onPick={handlePickMonth} />
+      )}
+
+      <div className="source-block">
+        <div className="source-header">
           <div className="source-label">Meta Ads</div>
         </div>
-        <LibraryFileSlot clientId={clientId} platform="meta" channel="meta"
-          tag="Meta Ads · pilih sumber kedua periode"
-          onFiles={(files) => handleUpload(files, 'meta')} loaded={Boolean(metaRows)}
-          fileName={metaFileName} infoText={metaRows ? `${metaRows.length} baris` : undefined} />
+        <div className="dz-grid-4">
+          <LibraryFileSlot clientId={clientId} platform="meta" channel="meta"
+            tag="Periode Lalu"
+            onFiles={(files) => handleUpload(files, 'meta', 'old')} loaded={Boolean(metaSides.old)}
+            fileName={metaSides.old?.fileName} infoText={metaSides.old ? `${metaSides.old.rows.length} baris` : undefined} />
+          <LibraryFileSlot clientId={clientId} platform="meta" channel="meta"
+            tag="Periode Ini"
+            onFiles={(files) => handleUpload(files, 'meta', 'cur')} loaded={Boolean(metaSides.cur)}
+            fileName={metaSides.cur?.fileName} infoText={metaSides.cur ? `${metaSides.cur.rows.length} baris` : undefined} />
+        </div>
         {uploadError && <InlineNotice title="File ini belum kebaca">{uploadError}</InlineNotice>}
       </div>
 
@@ -373,95 +512,108 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         </div>
       )}
 
-      {dayCol && dayBounds && (
+      {dayCol && (oldDayBounds || curDayBounds) && (
         <div className="source-block">
           <div className="source-header">
             <div className="source-label">Rentang Tanggal yang Dibandingkan</div>
           </div>
           <div className="empty-note" style={{ paddingTop: 0, paddingBottom: '.6rem' }}>
-            File ini pakai breakdown harian — tersedia data {formatPeriodLabel(dayBounds.min, dayBounds.max)}. Rentang di bawah sudah disarankan otomatis, bebas diubah selama masih dalam data yang tersedia.
+            File ini pakai breakdown harian — rentang di bawah sudah diambil otomatis dari masing-masing file, bebas diubah selama masih dalam data yang tersedia di file itu.
           </div>
-          {daysBetweenInclusive(dayBounds.min, dayBounds.max) > LONG_DAY_RANGE_WARNING_THRESHOLD && (
-            <InlineNotice tone="info" title="Rentang data ini cukup panjang — pastikan ini yang dimaksud">
-              File terpilih mencakup {daysBetweenInclusive(dayBounds.min, dayBounds.max)} hari breakdown harian. Tidak masalah untuk digenerate, tapi kalau ini bukan rentang yang dimaksud, cek kembali file yang diexport dari Meta Ads Reporting.
-            </InlineNotice>
-          )}
           <div className="period-input-row">
             <div className="period-input-field">
               <label>Periode Lalu</label>
-              <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
-                <input
-                  type="date"
-                  className="period-text-input"
-                  value={toISODate(oldRange?.start ?? null) ?? ''}
-                  min={toISODate(dayBounds.min) ?? undefined}
-                  max={toISODate(dayBounds.max) ?? undefined}
-                  onChange={(e) => {
-                    const d = fromISODate(e.target.value);
-                    if (d) setOldRange((prev) => ({ start: d, end: prev?.end ?? d }));
-                    setReport(null);
-                    onInvalidate();
-                  }}
-                />
-                <span style={{ color: 'var(--muted)' }}>–</span>
-                <input
-                  type="date"
-                  className="period-text-input"
-                  value={toISODate(oldRange?.end ?? null) ?? ''}
-                  min={toISODate(dayBounds.min) ?? undefined}
-                  max={toISODate(dayBounds.max) ?? undefined}
-                  onChange={(e) => {
-                    const d = fromISODate(e.target.value);
-                    if (d) setOldRange((prev) => ({ start: prev?.start ?? d, end: d }));
-                    setReport(null);
-                    onInvalidate();
-                  }}
-                />
-              </div>
-              {oldRange && (
-                <div className="num" style={{ fontSize: '.65rem', color: 'var(--muted)', fontWeight: 600, marginTop: '.3rem' }}>
-                  {formatPeriodLabel(oldRange.start, oldRange.end)} · {daysBetweenInclusive(oldRange.start, oldRange.end)} hari
-                </div>
+              {oldDayBounds ? (
+                <>
+                  <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+                    <input
+                      type="date"
+                      className="period-text-input"
+                      value={toISODate(oldRange?.start ?? null) ?? ''}
+                      min={toISODate(oldDayBounds.min) ?? undefined}
+                      max={toISODate(oldDayBounds.max) ?? undefined}
+                      onChange={(e) => {
+                        const d = fromISODate(e.target.value);
+                        if (d) setOldRange((prev) => ({ start: d, end: prev?.end ?? d }));
+                        setReport(null);
+                        onInvalidate();
+                      }}
+                    />
+                    <span style={{ color: 'var(--muted)' }}>–</span>
+                    <input
+                      type="date"
+                      className="period-text-input"
+                      value={toISODate(oldRange?.end ?? null) ?? ''}
+                      min={toISODate(oldDayBounds.min) ?? undefined}
+                      max={toISODate(oldDayBounds.max) ?? undefined}
+                      onChange={(e) => {
+                        const d = fromISODate(e.target.value);
+                        if (d) setOldRange((prev) => ({ start: prev?.start ?? d, end: d }));
+                        setReport(null);
+                        onInvalidate();
+                      }}
+                    />
+                  </div>
+                  {oldRange && (
+                    <div className="num" style={{ fontSize: '.65rem', color: 'var(--muted)', fontWeight: 600, marginTop: '.3rem' }}>
+                      {formatPeriodLabel(oldRange.start, oldRange.end)} · {daysBetweenInclusive(oldRange.start, oldRange.end)} hari
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="empty-note" style={{ padding: '.3rem 0 0' }}>Belum ada file Periode Lalu.</div>
               )}
             </div>
             <div className="period-input-field">
               <label>Periode Ini</label>
-              <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
-                <input
-                  type="date"
-                  className="period-text-input"
-                  value={toISODate(curRange?.start ?? null) ?? ''}
-                  min={toISODate(dayBounds.min) ?? undefined}
-                  max={toISODate(dayBounds.max) ?? undefined}
-                  onChange={(e) => {
-                    const d = fromISODate(e.target.value);
-                    if (d) setCurRange((prev) => ({ start: d, end: prev?.end ?? d }));
-                    setReport(null);
-                    onInvalidate();
-                  }}
-                />
-                <span style={{ color: 'var(--muted)' }}>–</span>
-                <input
-                  type="date"
-                  className="period-text-input"
-                  value={toISODate(curRange?.end ?? null) ?? ''}
-                  min={toISODate(dayBounds.min) ?? undefined}
-                  max={toISODate(dayBounds.max) ?? undefined}
-                  onChange={(e) => {
-                    const d = fromISODate(e.target.value);
-                    if (d) setCurRange((prev) => ({ start: prev?.start ?? d, end: d }));
-                    setReport(null);
-                    onInvalidate();
-                  }}
-                />
-              </div>
-              {curRange && (
-                <div className="num" style={{ fontSize: '.65rem', color: 'var(--muted)', fontWeight: 600, marginTop: '.3rem' }}>
-                  {formatPeriodLabel(curRange.start, curRange.end)} · {daysBetweenInclusive(curRange.start, curRange.end)} hari
-                </div>
+              {curDayBounds ? (
+                <>
+                  <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+                    <input
+                      type="date"
+                      className="period-text-input"
+                      value={toISODate(curRange?.start ?? null) ?? ''}
+                      min={toISODate(curDayBounds.min) ?? undefined}
+                      max={toISODate(curDayBounds.max) ?? undefined}
+                      onChange={(e) => {
+                        const d = fromISODate(e.target.value);
+                        if (d) setCurRange((prev) => ({ start: d, end: prev?.end ?? d }));
+                        setReport(null);
+                        onInvalidate();
+                      }}
+                    />
+                    <span style={{ color: 'var(--muted)' }}>–</span>
+                    <input
+                      type="date"
+                      className="period-text-input"
+                      value={toISODate(curRange?.end ?? null) ?? ''}
+                      min={toISODate(curDayBounds.min) ?? undefined}
+                      max={toISODate(curDayBounds.max) ?? undefined}
+                      onChange={(e) => {
+                        const d = fromISODate(e.target.value);
+                        if (d) setCurRange((prev) => ({ start: prev?.start ?? d, end: d }));
+                        setReport(null);
+                        onInvalidate();
+                      }}
+                    />
+                  </div>
+                  {curRange && (
+                    <div className="num" style={{ fontSize: '.65rem', color: 'var(--muted)', fontWeight: 600, marginTop: '.3rem' }}>
+                      {formatPeriodLabel(curRange.start, curRange.end)} · {daysBetweenInclusive(curRange.start, curRange.end)} hari
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="empty-note" style={{ padding: '.3rem 0 0' }}>Belum ada file Periode Ini.</div>
               )}
             </div>
           </div>
+          {(oldDayBounds ? daysBetweenInclusive(oldDayBounds.min, oldDayBounds.max) : 0) > LONG_DAY_RANGE_WARNING_THRESHOLD ||
+          (curDayBounds ? daysBetweenInclusive(curDayBounds.min, curDayBounds.max) : 0) > LONG_DAY_RANGE_WARNING_THRESHOLD ? (
+            <InlineNotice tone="info" title="Salah satu file breakdown harian ini cukup panjang — pastikan ini yang dimaksud">
+              Tidak masalah untuk digenerate, tapi kalau ini bukan rentang yang dimaksud, cek kembali file yang diexport dari Meta Ads Reporting.
+            </InlineNotice>
+          ) : null}
           {oldRange && curRange && Math.abs(daysBetweenInclusive(oldRange.start, oldRange.end) - daysBetweenInclusive(curRange.start, curRange.end)) > 1 && (
             <div className="period-warning" style={{ marginTop: '.8rem', marginBottom: 0 }}>
               Panjang periode berbeda: {daysBetweenInclusive(oldRange.start, oldRange.end)} hari vs {daysBetweenInclusive(curRange.start, curRange.end)} hari — bandingkan dengan hati-hati.
@@ -475,14 +627,24 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           <div className="source-label">CPAS</div>
           <span className="sec-badge">opsional — kosongkan jika tidak ada data CPAS</span>
         </div>
-        <LibraryFileSlot clientId={clientId} platform="meta" channel="cpas"
-          tag="CPAS · sumber kedua periode"
-          accept=".csv,.xlsx,.xls"
-          onFiles={(files) => handleUpload(files, 'cpas')}
-          loaded={Boolean(cpasRows)}
-          fileName={cpasFileName}
-          infoText={cpasRows ? `${cpasRows.length} baris` : undefined}
-        />
+        <div className="dz-grid-4">
+          <LibraryFileSlot clientId={clientId} platform="meta" channel="cpas"
+            tag="Periode Lalu"
+            accept=".csv,.xlsx,.xls"
+            onFiles={(files) => handleUpload(files, 'cpas', 'old')}
+            loaded={Boolean(cpasSides.old)}
+            fileName={cpasSides.old?.fileName}
+            infoText={cpasSides.old ? `${cpasSides.old.rows.length} baris` : undefined}
+          />
+          <LibraryFileSlot clientId={clientId} platform="meta" channel="cpas"
+            tag="Periode Ini"
+            accept=".csv,.xlsx,.xls"
+            onFiles={(files) => handleUpload(files, 'cpas', 'cur')}
+            loaded={Boolean(cpasSides.cur)}
+            fileName={cpasSides.cur?.fileName}
+            infoText={cpasSides.cur ? `${cpasSides.cur.rows.length} baris` : undefined}
+          />
+        </div>
       </div>
 
       {ready && (
