@@ -1,6 +1,7 @@
 import { categorizeProdukRows, mergeProdukOtomatis, type ProductMasterEntry } from '../../lib/shopeeDeepDive';
 import { buildDailyTrendPivot, collectAdvertisedProductCodes, DEFAULT_DAILY_TREND_SELECTIONS, findUnadvertisedProducts, rankProductsBySiapDikirim, type DailyTrendMetricSelection, type DailyTrendPivotRow, type ProductPerformanceRow } from '../../lib/shopeeDeepDiveInsights';
 import { buildKeywordPivot, buildProdukPivot, DEFAULT_KEYWORD_SELECTIONS, pickDominantProdukMetric, type KeywordPivotRow, type MetricSelection, type ProdukPivotRow } from '../../lib/shopeeDeepDiveItemPivot';
+import { buildPerformancePivot, DEFAULT_PERFORMANCE_SELECTIONS, type PerfMetricVars, type PerformancePivotRow } from '../../lib/shopeeProductAnalysis';
 import { buildPivotRows, calcLiveChannelMetrics, calcStandardChannelMetrics, CHANNEL_METRIC_DEFS, combineOverallMetrics, detectDominantChannel, LIVE_METRIC_DEFS, OVERALL_METRIC_DEFS, withChannelShare, type DominantChannel, type PivotRow } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 
@@ -22,8 +23,12 @@ export interface BuildShopeeDeepDiveReportInput {
   liveOld: SheetRow[];
   liveCur: SheetRow[];
   // Product Performance is a single, non-compared snapshot (spec: "opsional,
-  // insight tambahan, tidak ikut dibandingkan 2 periode").
+  // insight tambahan, tidak ikut dibandingkan 2 periode") for unadvertised
+  // products / Tingkatkan dengan Iklan. The "Per Performa" tab below is the
+  // one place it IS compared old vs cur — productPerformanceOldRows feeds
+  // only that.
   productPerformanceRows: SheetRow[] | null;
+  productPerformanceOldRows?: SheetRow[] | null;
   tingkatkanDenganIklanRows: SheetRow[] | null;
   overviewOldRows: SheetRow[] | null;
   overviewCurRows: SheetRow[] | null;
@@ -40,6 +45,7 @@ export interface BuildShopeeDeepDiveReportInput {
   produkSelections?: readonly MetricSelection[] | null;
   keywordSelections?: readonly MetricSelection[] | null;
   dailyTrendSelections?: readonly DailyTrendMetricSelection[] | null;
+  performanceSelections?: readonly (keyof PerfMetricVars)[] | null;
 }
 
 export interface ShopeeDeepDiveReport {
@@ -52,6 +58,9 @@ export interface ShopeeDeepDiveReport {
   produkSelections: readonly MetricSelection[];
   keywordPivot: KeywordPivotRow[];
   keywordSelections: readonly MetricSelection[];
+  performancePivot: PerformancePivotRow[];
+  performanceSelections: readonly (keyof PerfMetricVars)[];
+  hasPerformancePivotData: boolean;
   uncategorized: string[];
   hasProductPerformanceData: boolean;
   unadvertisedProducts: ProductPerformanceRow[];
@@ -92,9 +101,11 @@ export function buildShopeeDeepDiveReport(input: BuildShopeeDeepDiveReportInput)
   const produkSelections = input.produkSelections && input.produkSelections.length ? input.produkSelections : [{ kind: 'builtin' as const, key: pickDominantProdukMetric(produkMOld, produkMCur) }];
   const keywordSelections = input.keywordSelections && input.keywordSelections.length ? input.keywordSelections : DEFAULT_KEYWORD_SELECTIONS;
   const dailyTrendSelections = input.dailyTrendSelections && input.dailyTrendSelections.length ? input.dailyTrendSelections : DEFAULT_DAILY_TREND_SELECTIONS;
+  const performanceSelections = input.performanceSelections && input.performanceSelections.length ? input.performanceSelections : DEFAULT_PERFORMANCE_SELECTIONS;
 
   const advertisedCodes = collectAdvertisedProductCodes(produkMergedOld, produkMergedCur, input.tokoOld, input.tokoCur, input.liveOld, input.liveCur, input.tokoKeywordOld, input.tokoKeywordCur);
   const rankedProducts = input.productPerformanceRows ? rankProductsBySiapDikirim(input.productPerformanceRows) : [];
+  const performancePivot = buildPerformancePivot(input.productPerformanceOldRows ?? [], input.productPerformanceRows ?? [], performanceSelections);
 
   return {
     overall: buildPivotRows(overallMOld, overallMCur, OVERALL_METRIC_DEFS),
@@ -106,6 +117,9 @@ export function buildShopeeDeepDiveReport(input: BuildShopeeDeepDiveReportInput)
     produkSelections,
     keywordPivot: buildKeywordPivot(input.tokoKeywordOld, input.tokoKeywordCur, keywordSelections, input.omzetOld, input.omzetCur),
     keywordSelections,
+    performancePivot,
+    performanceSelections,
+    hasPerformancePivotData: Boolean(input.productPerformanceOldRows?.length || input.productPerformanceRows?.length),
     uncategorized: [...new Set([...catOld.uncategorized, ...catCur.uncategorized])],
     hasProductPerformanceData: Boolean(input.productPerformanceRows),
     unadvertisedProducts: findUnadvertisedProducts(rankedProducts, advertisedCodes),

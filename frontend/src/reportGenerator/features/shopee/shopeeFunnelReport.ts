@@ -14,15 +14,20 @@ import {
   buildProductPairChange,
   buildProductRankings,
   CONVERSION_METRIC_DEFS,
+  DEFAULT_PARETO_RANGE,
   hasVisitorsCol,
+  mergeProductPerfBySales,
   parseProductPerfRows,
   PRODUCT_CHART_PAIRS,
+  selectParetoMonths,
   TRAFFIC_METRIC_DEFS,
+  type ParetoRangeSelection,
   type ParetoRow,
   type PotentialProduct,
   type ProductChartPairDef,
   type ProductMetricRanking,
   type ProductPairPoint,
+  type ProductPerfMonth,
 } from '../../lib/shopeeProductAnalysis';
 import { findShopeeCol, parseShopeeNum } from '../../lib/shopeeAds';
 import type { SheetRow } from '../../lib/types';
@@ -51,6 +56,16 @@ export interface BuildShopeeFunnelReportInput {
   // Conversion fall back to single-period).
   productPerfOld: SheetRow[] | null;
   productPerfCur: SheetRow[] | null;
+  // Every Product Performance file already saved to this brand's library,
+  // one entry per month, independent of the old/cur periods above. Pareto
+  // sums Sales (Confirmed Order) per product across whichever of these
+  // paretoRange selects, instead of using productPerfCur alone. Omit/empty
+  // falls back to productPerfCur (e.g. reconstructed history reports, which
+  // never carry Product Performance data at all).
+  productPerfAllMonths?: ProductPerfMonth[] | null;
+  // Which of the months above to include — "Semua Bulan" (default), a
+  // Bulan Awal–Akhir range, or a single month. See selectParetoMonths.
+  paretoRange?: ParetoRangeSelection | null;
 }
 
 // One ad channel's current-period contribution — feeds the "Kontribusi Antar
@@ -103,6 +118,9 @@ export interface ShopeeFunnelReport {
   // False when the export has no plain "Pengunjung Produk" column — the
   // Visit → ATC chart says so rather than drawing a row of zero bars.
   hasVisitorsCol: boolean;
+  // Every month Pareto could draw from (sorted ascending) — feeds the
+  // "Semua Bulan / rentang / satu bulan" picker's month dropdowns.
+  paretoAvailableMonths: string[];
 }
 
 function sumLiveGmv(rows: SheetRow[]): number {
@@ -126,6 +144,9 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
 
   const perfOld = input.productPerfOld ? parseProductPerfRows(input.productPerfOld) : [];
   const perfCur = input.productPerfCur ? parseProductPerfRows(input.productPerfCur) : [];
+  const allMonths = input.productPerfAllMonths ?? [];
+  const selectedMonths = selectParetoMonths(allMonths, input.paretoRange ?? DEFAULT_PARETO_RANGE);
+  const paretoRecords = selectedMonths.length ? mergeProductPerfBySales(selectedMonths.map((m) => parseProductPerfRows(m.rows))) : perfCur;
 
   // Current-period channel mix — Iklan Produk always present; Toko / Live only
   // when the user uploaded that channel. Live GMV uses the same "Omzet
@@ -167,7 +188,7 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     symptom: buildSymptomSummary(mOld, mCur),
     channelMix: channelMix.filter((e) => e.spend > 0 || e.gmv > 0),
     liveGmv: { old: liveOldGmv, cur: liveCurGmv, hasData: liveOldGmv > 0 || liveCurGmv > 0 },
-    pareto: buildPareto(perfCur),
+    pareto: buildPareto(paretoRecords),
     traffic: buildProductRankings(perfOld, perfCur, TRAFFIC_METRIC_DEFS),
     conversion: buildProductRankings(perfOld, perfCur, CONVERSION_METRIC_DEFS),
     hasProductPerfCur: perfCur.length > 0,
@@ -175,5 +196,6 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     productCharts: PRODUCT_CHART_PAIRS.map((pair) => ({ pair, points: buildProductPairChange(perfOld, perfCur, pair) })),
     potentialProducts: buildPotentialProducts(perfCur, 5),
     hasVisitorsCol: input.productPerfCur ? hasVisitorsCol(input.productPerfCur) : false,
+    paretoAvailableMonths: [...new Set(allMonths.map((m) => m.month))].sort(),
   };
 }

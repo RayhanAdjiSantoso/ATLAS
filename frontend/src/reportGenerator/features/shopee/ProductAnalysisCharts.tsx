@@ -2,17 +2,76 @@ import { useState } from 'react';
 import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { ParetoChart } from '../../components/ParetoChart';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
-import { SegmentedToggle } from '../../components/SegmentedToggle';
+import { SegmentedToggle, type SegmentedOption } from '../../components/SegmentedToggle';
+import { formatMonth } from '../reports/LibraryFileSlot';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import {
   POTENTIAL_METRICS,
   rankProductPairs,
   type ChartDirection,
+  type ParetoRangeSelection,
   type ParetoRow,
   type PotentialProduct,
   type ProductChartPairDef,
   type ProductPairPoint,
 } from '../../lib/shopeeProductAnalysis';
+
+// ── Pareto's "which months" control — shared by the chart card here and the
+// table version in AnalysisSections.tsx, both reading the same session
+// state (ShopeeTab's paretoRange) so the two stay in sync.
+const PARETO_MODES: readonly SegmentedOption<ParetoRangeSelection['mode']>[] = [
+  { value: 'all', label: 'Semua Bulan' },
+  { value: 'range', label: 'Rentang Bulan' },
+  { value: 'single', label: 'Satu Bulan' },
+];
+
+export function ParetoRangeControl({ range, months, onChange }: { range: ParetoRangeSelection; months: string[]; onChange: (next: ParetoRangeSelection) => void }) {
+  if (months.length < 2) return null; // nothing to narrow down with 0-1 month uploaded
+  return (
+    <div className="chart-controls">
+      <SegmentedToggle label="Cakupan" options={PARETO_MODES} value={range.mode} onChange={(mode) => onChange({ ...range, mode })} accent="var(--shopee-700)" />
+      {range.mode === 'range' && (
+        <>
+          <label style={{ display: 'inline-flex', flexDirection: 'column', gap: '.2rem', fontSize: '.68rem', fontWeight: 600, color: 'var(--muted)' }}>
+            Bulan Awal
+            <select className="custom-col-select" value={range.start ?? ''} onChange={(e) => onChange({ ...range, start: e.target.value || null })}>
+              <option value="">— pilih —</option>
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {formatMonth(m)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: 'inline-flex', flexDirection: 'column', gap: '.2rem', fontSize: '.68rem', fontWeight: 600, color: 'var(--muted)' }}>
+            Bulan Akhir
+            <select className="custom-col-select" value={range.end ?? ''} onChange={(e) => onChange({ ...range, end: e.target.value || null })}>
+              <option value="">— pilih —</option>
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {formatMonth(m)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
+      {range.mode === 'single' && (
+        <label style={{ display: 'inline-flex', flexDirection: 'column', gap: '.2rem', fontSize: '.68rem', fontWeight: 600, color: 'var(--muted)' }}>
+          Bulan
+          <select className="custom-col-select" value={range.single ?? ''} onChange={(e) => onChange({ ...range, single: e.target.value || null })}>
+            <option value="">— pilih —</option>
+            {months.map((m) => (
+              <option key={m} value={m}>
+                {formatMonth(m)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
 
 // ══════════════════════════════════════════════════════
 // PRODUCT ANALYSIS — the visual half of the product sections.
@@ -154,27 +213,46 @@ export function ProductChangeChartSection({
 }
 
 // ── #4: Pareto ───────────────────────────────────────────────────────────
-export function ParetoChartSection({ rows, hasData, periodLabel }: { rows: ParetoRow[]; hasData: boolean; periodLabel: string }) {
+const PARETO_SCOPE_LABEL: Record<ParetoRangeSelection['mode'], string> = {
+  all: 'seluruh bulan terunggah',
+  range: 'rentang bulan terpilih',
+  single: 'satu bulan terpilih',
+};
+
+export function ParetoChartSection({
+  rows,
+  hasData,
+  range,
+  availableMonths,
+  onRangeChange,
+}: {
+  rows: ParetoRow[];
+  hasData: boolean;
+  range: ParetoRangeSelection;
+  availableMonths: string[];
+  onRangeChange: (next: ParetoRangeSelection) => void;
+}) {
   const vital = rows.findIndex((r) => r.cumulative >= 80);
   return (
-    <SectionShell title="Visualisasi Pareto Analysis" badge={`Kontribusi penjualan · ${periodLabel}`}>
+    <SectionShell title="Visualisasi Pareto Analysis" badge={`Kontribusi penjualan · ${PARETO_SCOPE_LABEL[range.mode]}`}>
+      <ParetoRangeControl range={range} months={availableMonths} onChange={onRangeChange} />
       {!hasData ? (
-        <div className="empty-note">Upload file Product Performance periode ini untuk melihat analisis 80/20.</div>
+        <div className="empty-note">Upload file Product Performance (bulan berapa pun) di Pengaturan Brand untuk melihat analisis 80/20.</div>
       ) : !rows.length ? (
-        <div className="empty-note">Tidak ada produk dengan penjualan pada periode ini.</div>
+        <div className="empty-note">Tidak ada produk dengan penjualan pada cakupan bulan ini.</div>
       ) : (
         <>
           <p className="chart-caption">
             {vital >= 0 ? (
               <>
-                <strong>{vital + 1} produk</strong> dari {rows.length} sudah menyumbang 80% penjualan periode ini.
+                <strong>{vital + 1} produk</strong> dari {rows.length} sudah menyumbang 80% penjualan.
               </>
             ) : (
               <>Penjualan tersebar cukup merata — tidak ada kelompok kecil yang mencapai 80%.</>
             )}
           </p>
           <ParetoChart rows={rows} />
-          <p className="chart-foot">Periode terbaru saja ({periodLabel}); Pareto membandingkan produk satu sama lain, bukan antar periode.</p>
+          <p className="chart-foot">Menjumlahkan {PARETO_SCOPE_LABEL[range.mode]} Product Performance; Pareto membandingkan produk satu sama lain, bukan antar periode.</p>
         </>
       )}
     </SectionShell>

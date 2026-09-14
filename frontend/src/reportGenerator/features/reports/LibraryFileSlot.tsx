@@ -4,7 +4,7 @@ import { Database, FileSpreadsheet, RefreshCw, ChevronDown, Check, FolderOpen } 
 import api from '../../../api/client.js';
 import './librarySource.css';
 
-type LibraryFile = { id: number; platform: string; channel: string; original_filename: string; period_month: string | null; period_start: string | null; period_end: string | null; part_index: number; row_count: number | null; period_source: string | null };
+export type LibraryFile = { id: number; platform: string; channel: string; original_filename: string; period_month: string | null; period_start: string | null; period_end: string | null; part_index: number; row_count: number | null; period_source: string | null };
 export type LibrarySelection = { label: string; start: string | null; end: string | null };
 // Metadata is shared by slots; bytes are fetched only for the chosen files.
 const catalog = new Map<number, Promise<LibraryFile[]>>();
@@ -12,7 +12,7 @@ function getCatalog(id: number) {
   if (!catalog.has(id)) catalog.set(id, api.get(`/brands/${id}/library`).then(r => r.data.files).catch(e => { catalog.delete(id); throw e; }));
   return catalog.get(id)!;
 }
-const formatMonth = (month: string) => new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month.slice(0,7)}-01T00:00:00Z`));
+export const formatMonth = (month: string) => new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month.slice(0,7)}-01T00:00:00Z`));
 export function clearLibraryCatalog() { catalog.clear(); }
 interface Props {
   clientId: number | null;
@@ -57,7 +57,7 @@ export function LibraryFileSlot({ clientId, platform, channel, tag, loaded, file
     try {
       const choices = files.filter(f => selected.includes(f.id));
       if (choices.some(f => f.period_source === 'mismatch')) throw new Error('Periode file tidak sesuai slot bulan. Perbaiki file di Pengaturan Brand terlebih dahulu.');
-      if (platform !== 'meta' && new Set(choices.map(f => f.period_month)).size > 1) throw new Error('Pilih file dari satu bulan untuk satu sisi perbandingan.');
+      if (new Set(choices.map(f => f.period_month)).size > 1) throw new Error('Pilih file dari satu bulan untuk satu sisi perbandingan.');
       // Sequential downloads keep large multipart selections within memory limits.
       const downloaded: File[] = [];
       for (const f of choices) {

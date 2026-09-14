@@ -1,4 +1,5 @@
 import { computeDelta, deltaClassForSentiment, formatDeltaID } from './delta';
+import type { ItemMetricCell } from './shopeeDeepDiveItemPivot';
 import { parseOverviewNum } from './shopeeOverview';
 import type { DeltaClassName, Sentiment, SheetRow } from './types';
 import type { PivotFmt } from './shopeeDeepDivePivot';
@@ -134,6 +135,52 @@ export interface ParetoRow {
   sales: number;
   contribution: number; // % of total
   cumulative: number; // running % (last row = 100)
+}
+
+// Sums Sales (Confirmed Order) per product across every month's parsed
+// records, so buildPareto below can rank lifetime contribution instead of a
+// single period. Other fields are irrelevant to Pareto and just keep
+// whichever month's values were seen first.
+export function mergeProductPerfBySales(recordSets: ProductPerfRecord[][]): ProductPerfRecord[] {
+  const merged = new Map<string, ProductPerfRecord>();
+  for (const records of recordSets) {
+    for (const r of records) {
+      const existing = merged.get(r.key);
+      if (existing) existing.salesConfirmed += r.salesConfirmed;
+      else merged.set(r.key, { ...r });
+    }
+  }
+  return [...merged.values()];
+}
+
+// User-facing control for which uploaded months feed Pareto — "Semua
+// Bulan" (every month, the original all-time behavior), "range" (an
+// inclusive Bulan Awal–Bulan Akhir span), or "single" (exactly one month).
+export interface ParetoRangeSelection {
+  mode: 'all' | 'range' | 'single';
+  start: string | null; // 'YYYY-MM', range mode
+  end: string | null; // 'YYYY-MM', range mode
+  single: string | null; // 'YYYY-MM', single mode
+}
+
+export const DEFAULT_PARETO_RANGE: ParetoRangeSelection = { mode: 'all', start: null, end: null, single: null };
+
+// One monthly Product Performance upload — the raw sheet rows plus which
+// calendar month they belong to (from the brand library's period_month),
+// needed to filter by the selection above before merging into Pareto.
+export interface ProductPerfMonth {
+  month: string; // 'YYYY-MM'
+  rows: SheetRow[];
+}
+
+export function selectParetoMonths(months: ProductPerfMonth[], sel: ParetoRangeSelection): ProductPerfMonth[] {
+  if (sel.mode === 'single') return sel.single ? months.filter((m) => m.month === sel.single) : [];
+  if (sel.mode === 'range') {
+    if (!sel.start || !sel.end) return [];
+    const [lo, hi] = sel.start <= sel.end ? [sel.start, sel.end] : [sel.end, sel.start];
+    return months.filter((m) => m.month >= lo && m.month <= hi);
+  }
+  return months;
 }
 
 export function buildPareto(records: ProductPerfRecord[]): ParetoRow[] {
@@ -342,4 +389,163 @@ export function buildPotentialProducts(curRecords: ProductPerfRecord[], count = 
     .sort((a, b) => b.salesConfirmed - a.salesConfirmed)
     .slice(0, count)
     .map((r) => ({ key: r.key, produk: r.produk, revenue: r.salesConfirmed, conversionRate: r.conversionRate }));
+}
+
+// ── "Per Performa" item pivot (Analisis Per Item) ────────────────────────
+// A dedicated metric universe drawn only from the "Produk dengan Performa
+// Terbaik" sheet's own columns — kept separate from ItemMetricVars (which
+// covers Iklan Produk/Toko ad exports) so the "Per Performa" tab's metric
+// picker never offers a column this sheet doesn't actually have.
+
+export interface PerfMetricVars {
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  atc: number;
+  atcRate: number;
+  ordersCreated: number;
+  ordersReady: number;
+  buyersCreated: number;
+  buyersReady: number;
+  conversionCreated: number;
+  conversionReady: number;
+  salesCreated: number;
+  salesReady: number;
+  aovCreated: number;
+  aovReady: number;
+  visitors: number;
+  likes: number;
+}
+
+export const PERFORMANCE_BUILTIN_METRICS: readonly { key: keyof PerfMetricVars; label: string; fmt: PivotFmt; sentiment: Sentiment }[] = [
+  { key: 'ordersReady', label: 'Pesanan Siap Dikirim', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'buyersReady', label: 'Order', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'atc', label: 'ATC', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'atcRate', label: 'Tingkat ATC', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'impressions', label: 'Dilihat', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'clicks', label: 'Diklik', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'ctr', label: 'CTR', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'visitors', label: 'Pengunjung', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'ordersCreated', label: 'Pesanan Dibuat', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'buyersCreated', label: 'Pembeli (Pesanan Dibuat)', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'conversionReady', label: 'Konversi (Siap Dikirim)', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'conversionCreated', label: 'Konversi (Dibuat)', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'salesReady', label: 'Penjualan (Siap Dikirim)', fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'salesCreated', label: 'Penjualan (Dibuat)', fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'aovReady', label: 'AOV (Siap Dikirim)', fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'aovCreated', label: 'AOV (Dibuat)', fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'likes', label: 'Suka', fmt: 'num', sentiment: 'higher-better' },
+];
+
+export const DEFAULT_PERFORMANCE_SELECTIONS: readonly (keyof PerfMetricVars)[] = ['buyersReady', 'atc'];
+
+// Every column below is matched by its exact Shopee header — several of the
+// sheet's headers are near-duplicates that only differ by "Pesanan Dibuat"
+// vs "Pesanan Siap Dikirim" (e.g. "Tingkat Konversi Pesanan (...)" vs
+// "Tingkat Konversi (...)"), so pickCol's fuzzy `includes` fallback is too
+// eager to trust here — exact match only.
+function performanceCols(h: string[]) {
+  return {
+    produk: pickCol(h, { exact: ['produk'], includes: [['produk']], excludes: ['kode', 'unik', 'dilihat', 'diklik'] }),
+    kodeProduk: pickCol(h, { exact: ['kode produk'] }),
+    kodeVariasi: pickCol(h, { exact: ['kode variasi'] }),
+    impressions: pickCol(h, { exact: ['jumlah produk dilihat'] }),
+    clicks: pickCol(h, { exact: ['produk diklik'] }),
+    ctr: pickCol(h, { exact: ['persentase klik'] }),
+    atc: pickCol(h, { exact: ['pengunjung produk (menambahkan produk ke keranjang)'] }),
+    atcRate: pickCol(h, { exact: ['tingkat konversi produk dimasukkan ke keranjang'] }),
+    ordersCreated: pickCol(h, { exact: ['pesanan dibuat'] }),
+    ordersReady: pickCol(h, { exact: ['pesanan siap dikirim'] }),
+    buyersCreated: pickCol(h, { exact: ['total pembeli (pesanan dibuat)'] }),
+    buyersReady: pickCol(h, { exact: ['total pembeli (pesanan siap dikirim)'] }),
+    conversionCreated: pickCol(h, { exact: ['tingkat konversi (pesanan yang dibuat)'] }),
+    conversionReady: pickCol(h, { exact: ['tingkat konversi (pesanan siap dikirim)'] }),
+    salesCreated: pickCol(h, { exact: ['total penjualan (pesanan dibuat) (idr)'] }),
+    salesReady: pickCol(h, { exact: ['penjualan (pesanan siap dikirim) (idr)'] }),
+    aovCreated: pickCol(h, { exact: ['penjualan per pesanan (pesanan dibuat) (idr)'] }),
+    aovReady: pickCol(h, { exact: ['penjualan per pesanan (pesanan siap dikirim) (idr)'] }),
+    visitors: pickVisitorsCol(h),
+    likes: pickCol(h, { exact: ['suka'] }),
+  };
+}
+
+function parsePerformanceGroups(rows: SheetRow[]): Map<string, { produk: string; vars: PerfMetricVars }> {
+  const out = new Map<string, { produk: string; vars: PerfMetricVars }>();
+  if (!rows.length) return out;
+  const h = Object.keys(rows[0]);
+  const col = performanceCols(h);
+  const n = (row: SheetRow, c: string | null) => (c ? parseOverviewNum(row[c]) : 0);
+  for (const r of rows) {
+    if (col.kodeVariasi && String(r[col.kodeVariasi] ?? '').trim() !== '-') continue; // variant row, skip
+    const produk = col.produk ? String(r[col.produk] ?? '').trim() : '';
+    const kodeProduk = col.kodeProduk ? String(r[col.kodeProduk] ?? '').trim() : '';
+    if (!produk && !kodeProduk) continue;
+    const key = kodeProduk && kodeProduk !== '-' ? kodeProduk : produk;
+    out.set(key, {
+      produk: produk || key,
+      vars: {
+        impressions: n(r, col.impressions),
+        clicks: n(r, col.clicks),
+        ctr: n(r, col.ctr),
+        atc: n(r, col.atc),
+        atcRate: n(r, col.atcRate),
+        ordersCreated: n(r, col.ordersCreated),
+        ordersReady: n(r, col.ordersReady),
+        buyersCreated: n(r, col.buyersCreated),
+        buyersReady: n(r, col.buyersReady),
+        conversionCreated: n(r, col.conversionCreated),
+        conversionReady: n(r, col.conversionReady),
+        salesCreated: n(r, col.salesCreated),
+        salesReady: n(r, col.salesReady),
+        aovCreated: n(r, col.aovCreated),
+        aovReady: n(r, col.aovReady),
+        visitors: n(r, col.visitors),
+        likes: n(r, col.likes),
+      },
+    });
+  }
+  return out;
+}
+
+export interface PerformancePivotRow {
+  key: string;
+  produk: string;
+  metrics: ItemMetricCell[];
+}
+
+// Sorted by |%Change| of the first selected metric descending — same "what
+// moved the most" default as buildProdukPivot/buildKeywordPivot.
+export function buildPerformancePivot(
+  oldRows: SheetRow[],
+  curRows: SheetRow[],
+  selectedKeys: readonly (keyof PerfMetricVars)[] = DEFAULT_PERFORMANCE_SELECTIONS,
+): PerformancePivotRow[] {
+  const oldGroups = parsePerformanceGroups(oldRows);
+  const curGroups = parsePerformanceGroups(curRows);
+  const keys = new Set([...oldGroups.keys(), ...curGroups.keys()]);
+  const defByKey = new Map(PERFORMANCE_BUILTIN_METRICS.map((m) => [m.key, m]));
+  const rows: PerformancePivotRow[] = [];
+  for (const key of keys) {
+    const gOld = oldGroups.get(key);
+    const gCur = curGroups.get(key);
+    const produk = gCur?.produk ?? gOld?.produk ?? key;
+    const metrics: ItemMetricCell[] = selectedKeys.map((mk) => {
+      const def = defByKey.get(mk);
+      const oldVal = gOld ? gOld.vars[mk] : 0;
+      const curVal = gCur ? gCur.vars[mk] : 0;
+      const { deltaNum, deltaStr } = computeDelta(oldVal, curVal);
+      return {
+        id: mk,
+        label: def?.label ?? mk,
+        fmt: def?.fmt ?? 'num',
+        old: oldVal,
+        cur: curVal,
+        deltaNum,
+        delta: formatDeltaID(deltaNum, deltaStr),
+        cls: deltaClassForSentiment(deltaNum, def?.sentiment ?? 'neutral'),
+      };
+    });
+    rows.push({ key, produk, metrics });
+  }
+  return rows.sort((a, b) => Math.abs(b.metrics[0]?.deltaNum ?? 0) - Math.abs(a.metrics[0]?.deltaNum ?? 0));
 }

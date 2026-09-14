@@ -5,6 +5,7 @@ import { SectionAccordion } from '../../components/SectionAccordion';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
+import type { ParetoRangeSelection, PerfMetricVars } from '../../lib/shopeeProductAnalysis';
 import { ChannelPivotSection, DailyTrendSection, ItemPivotSection, TingkatkanDenganIklanTable, UnadvertisedProductsTable, UncategorizedPanel } from './DeepDiveSections';
 import { FundamentalAnalysisSection, ParetoAnalysisSection, ProductRankingSection } from './AnalysisSections';
 import { ParetoChartSection, PotentialProductsSection, ProductChangeChartSection } from './ProductAnalysisCharts';
@@ -29,8 +30,11 @@ interface ShopeeReportSectionsProps {
   onProdukSelectionsChange: (sels: MetricSelection[]) => void;
   onKeywordSelectionsChange: (sels: MetricSelection[]) => void;
   onDailyTrendSelectionsChange: (sels: DailyTrendMetricSelection[]) => void;
-  itemPivotTab: 'produk' | 'keyword';
-  onItemPivotTabChange: (tab: 'produk' | 'keyword') => void;
+  onPerformanceSelectionsChange: (sels: (keyof PerfMetricVars)[]) => void;
+  paretoRange: ParetoRangeSelection;
+  onParetoRangeChange: (next: ParetoRangeSelection) => void;
+  itemPivotTab: 'produk' | 'keyword' | 'performa';
+  onItemPivotTabChange: (tab: 'produk' | 'keyword' | 'performa') => void;
   onSaveCategory: (name: string, category: string, series: string) => Promise<void>;
 }
 
@@ -46,6 +50,9 @@ export function ShopeeReportSections({
   onProdukSelectionsChange,
   onKeywordSelectionsChange,
   onDailyTrendSelectionsChange,
+  onPerformanceSelectionsChange,
+  paretoRange,
+  onParetoRangeChange,
   itemPivotTab,
   onItemPivotTabChange,
   onSaveCategory,
@@ -141,7 +148,13 @@ export function ShopeeReportSections({
               p2={report.p2}
             />
           ))}
-          <ParetoChartSection rows={funnelReport.pareto} hasData={funnelReport.hasProductPerfCur} periodLabel={report.p2} />
+          <ParetoChartSection
+            rows={funnelReport.pareto}
+            hasData={funnelReport.pareto.length > 0}
+            range={paretoRange}
+            availableMonths={funnelReport.paretoAvailableMonths}
+            onRangeChange={onParetoRangeChange}
+          />
           <PotentialProductsSection products={funnelReport.potentialProducts} hasData={funnelReport.hasProductPerfCur} periodLabel={report.p2} />
         </>
       ) : null,
@@ -153,7 +166,13 @@ export function ShopeeReportSections({
         <>
           {funnelReport && (
             <>
-              <ParetoAnalysisSection rows={funnelReport.pareto} hasData={funnelReport.hasProductPerfCur} periodLabel={report.p2} />
+              <ParetoAnalysisSection
+                rows={funnelReport.pareto}
+                hasData={funnelReport.pareto.length > 0}
+                range={paretoRange}
+                availableMonths={funnelReport.paretoAvailableMonths}
+                onRangeChange={onParetoRangeChange}
+              />
               <ProductRankingSection
                 title="Traffic Analysis"
                 badge="Product Performance · ranking traffic per produk"
@@ -182,9 +201,15 @@ export function ShopeeReportSections({
             hasKeywordData={hasTokoKeywordData}
             keywordSelections={deepDive.keywordSelections}
             onKeywordSelectionsChange={onKeywordSelectionsChange}
+            performaRows={deepDive.performancePivot}
+            hasPerformaData={deepDive.hasPerformancePivotData}
+            performanceSelections={deepDive.performanceSelections}
+            onPerformanceSelectionsChange={onPerformanceSelectionsChange}
             customMetrics={customMetrics}
             onAddCustomMetric={onAddCustomMetric}
-            activeTab={hasTokoKeywordData ? itemPivotTab : 'produk'}
+            activeTab={
+              (itemPivotTab === 'keyword' && !hasTokoKeywordData) || (itemPivotTab === 'performa' && !deepDive.hasPerformancePivotData) ? 'produk' : itemPivotTab
+            }
             onTabChange={onItemPivotTabChange}
             p1={report.p1}
             p2={report.p2}

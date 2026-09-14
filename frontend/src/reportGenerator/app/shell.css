@@ -825,6 +825,7 @@
   }
   .fg-move:hover{opacity:1;background:var(--fg-line)}
   .fg-move:focus-visible{opacity:1}
+  .fg-move:disabled{cursor:not-allowed;opacity:0!important}
   .fg-empty{padding:.9rem .7rem;text-align:center;color:var(--muted2);font-size:.76rem;font-style:italic}
   @media(hover:none){.fg-move{opacity:.7}}
   /* ============================================================================
