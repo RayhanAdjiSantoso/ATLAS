@@ -1,4 +1,10 @@
 :root {
+  /* One ceiling for every workspace page (Beranda, Dashboard, Pengaturan
+     Brand, Report Generator). It was 1280px on three of them, which fits a
+     laptop but leaves a TV or large monitor with wide empty gutters; 1840px
+     matches the ceiling Beranda already used, so all four pages now share one
+     left and right edge and fill the screen they are shown on. */
+  --workspace-max: 1840px;
   --bg: #ffffff;
   --bg-elevated: #f8fafc;
   --bg-card: #ffffff;

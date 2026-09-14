@@ -41,7 +41,7 @@
 /* ── Report Generator workspace ─────────────────────────────────────
    A compact sibling of the Brand Settings and Dashboard heroes. */
 .mil-ui.report-generator-app .gen-wrap.bleed {
-  max-width: calc(1280px + 2 * clamp(16px, 2.4vw, 32px));
+  max-width: calc(var(--workspace-max, 1840px) + 2 * clamp(16px, 2.4vw, 32px));
   padding-inline: clamp(16px, 2.4vw, 32px);
   padding-block: clamp(1rem, 2.4vw, 2.2rem) 4.5rem;
 }
@@ -82,10 +82,38 @@
 .mil-ui .rg-dock .brand-status-filter { order: 3; flex-basis: 100%; padding-top: .55rem; border-top: 1px solid rgba(211, 219, 238, .82); }
 .mil-ui .rg-dock .client-bar-error { order: 4; }
 
-.mil-ui.report-generator-app .gen-rail { margin: 1.3rem 0 .7rem; overflow: hidden; border: 1px solid rgba(206, 215, 236, .9); border-radius: 16px; background: rgba(237, 240, 248, .7); box-shadow: 0 6px 24px rgba(15, 26, 58, .07), inset 0 1px rgba(255, 255, 255, .8); backdrop-filter: blur(16px) saturate(160%); }
-.mil-ui.report-generator-app .gen-rail-inner.bleed { max-width: none; height: auto; gap: 3px; padding: 5px; }
-.mil-ui.report-generator-app .gen-rail-item { flex: 1 0 150px; }
-.mil-ui.report-generator-app .gen-rail-link { justify-content: center; min-height: 42px; padding: .45rem .62rem; }
+/* Report-type rail: the same section-navigation language as Business
+   Overview and Pengaturan Brand. It was a flex row of 150px-minimum items
+   inside overflow:hidden, so on a narrower laptop the last reports were
+   clipped off the edge with no way to reach them. Now a grid that re-splits
+   2 → 3 → 6 by the rail's own width, with labels allowed to wrap, and the
+   active report drawn as a solid tile in that report's own accent. */
+.mil-ui.report-generator-app .gen-rail { container-type: inline-size; margin: 1.3rem 0 .7rem; overflow: visible; border: 1px solid rgba(206, 215, 236, .9); border-radius: 18px; background: rgba(237, 240, 248, .72); box-shadow: 0 10px 30px rgba(15, 26, 58, .08), inset 0 1px rgba(255, 255, 255, .8); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); }
+.mil-ui.report-generator-app .gen-rail-inner.bleed { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: none; height: auto; gap: 4px; padding: 5px; overflow: visible; }
+@container (min-width: 560px) { .mil-ui.report-generator-app .gen-rail-inner.bleed { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 980px) { .mil-ui.report-generator-app .gen-rail-inner.bleed { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.mil-ui.report-generator-app .gen-rail-item { min-width: 0; }
+.mil-ui.report-generator-app .gen-rail-link { justify-content: flex-start; min-height: 54px; padding: .5rem .7rem; border-radius: 13px; font-size: .78rem; white-space: normal; transition: color .2s ease, background .2s ease; }
+.mil-ui.report-generator-app .gen-rail-link:hover:not(.active) { background: rgba(255, 255, 255, .62); }
+.mil-ui.report-generator-app .gen-rail-label { min-width: 0; line-height: 1.22; text-wrap: balance; }
+.mil-ui.report-generator-app .gen-rail-ico { width: 32px; height: 32px; border-radius: 10px; background: #fff; }
+.mil-ui.report-generator-app .gen-rail-pill { border-radius: 13px; background: var(--gr-accent, var(--acc)); box-shadow: 0 10px 22px color-mix(in srgb, var(--gr-accent, var(--acc)) 30%, transparent), inset 0 1px rgba(255, 255, 255, .18); }
+.mil-ui.report-generator-app .gen-rail-link.active { color: #fff; }
+.mil-ui.report-generator-app .gen-rail-link.active .gen-rail-ico { color: #fff; background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .24); box-shadow: none; }
+.mil-ui.report-generator-app .gen-rail-badge { margin-left: auto; }
+.mil-ui.report-generator-app .gen-rail-link.active .gen-rail-badge { color: var(--gr-accent, var(--acc)); background: #fff; border-color: transparent; }
+.mil-ui.report-generator-app .gen-rail-link.active .gen-rail-badge.done { background: #fff; }
+/* The report itself does NOT follow the workspace to full width. PDF export
+   (exportImage.ts) rasterises each card at its on-screen width and scales it
+   to A4, so a report laid out 1840px wide on a TV would come out with type
+   roughly two-thirds the size of the same report exported from a laptop — the
+   client's file would depend on the operator's screen. 1280px is the width
+   the whole workspace used to be capped at, so every export matches what it
+   was before; the hero, rail, pickers and upload slots still fill the screen. */
+.mil-ui.report-generator-app :is(#report-meta, #report-shopee, #report-tiktok, #business-container, #summary-container) {
+  max-width: 1280px;
+  margin-inline: auto;
+}
 .mil-ui .rg-active-caption { display: flex; align-items: center; gap: .5rem; min-height: 25px; padding: 0 .3rem; color: var(--muted); animation: rg-caption-in .3s var(--ease-out) both; }
 .mil-ui .rg-active-caption strong { color: var(--rg-accent, var(--acc)); font-size: .72rem; }
 .mil-ui .rg-active-caption span { font-size: .68rem; font-weight: 650; }

@@ -83,7 +83,12 @@ export async function saveProfile(brandId, patch, userId) {
 
 /* ── Minutes of Meeting ───────────────────────────────────────────── */
 
-const MOM_FIELDS = 'm.id, m.brand_id, m.meeting_date::text AS meeting_date, m.meeting_type, m.meeting_recap, m.todo_client, m.todo_mil, m.completed_task_keys, m.created_at, m.updated_at';
+// updated_by_name is a correlated subquery rather than a JOIN so the same list
+// works in RETURNING: a freshly saved record comes back already carrying the
+// editor's name, instead of rendering nameless until the next full reload.
+const MOM_FIELDS = `m.id, m.brand_id, m.meeting_date::text AS meeting_date, m.meeting_type, m.meeting_recap,
+  m.todo_client, m.todo_mil, m.completed_task_keys, m.created_at, m.updated_at,
+  (SELECT u.full_name FROM public.users u WHERE u.user_id = m.updated_by) AS updated_by_name`;
 
 export async function listMinutes(brandId, { startDate, endDate } = {}) {
   const values = [brandId];
@@ -91,9 +96,8 @@ export async function listMinutes(brandId, { startDate, endDate } = {}) {
   if (startDate) { values.push(startDate); clauses.push(`m.meeting_date >= $${values.length}`); }
   if (endDate) { values.push(endDate); clauses.push(`m.meeting_date <= $${values.length}`); }
   const result = await pool.query(
-    `SELECT ${MOM_FIELDS}, u.full_name AS updated_by_name
+    `SELECT ${MOM_FIELDS}
      FROM public.brand_minutes m
-     LEFT JOIN public.users u ON u.user_id = m.updated_by
      WHERE ${clauses.join(' AND ')}
      ORDER BY m.meeting_date DESC, m.id DESC`,
     values,

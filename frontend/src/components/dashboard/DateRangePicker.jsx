@@ -41,7 +41,7 @@ function getMonthCells(year, month) {
   return cells;
 }
 
-function MonthCalendar({ viewDate, onNavigate, start, end, hoverEnd, onPickDay, onHoverDay, today }) {
+export function MonthCalendar({ viewDate, onNavigate, start, end, hoverEnd, onPickDay, onHoverDay, today }) {
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const cells = getMonthCells(year, month);

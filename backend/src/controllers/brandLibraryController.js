@@ -35,15 +35,32 @@ const MOM_TYPES = new Set(['regular', 'non_regular', 'whatsapp_quick_call']);
 
 function parseMinute(req) {
   const body = req.body ?? {};
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(body.meeting_date ?? '')) throw new AppError('Tanggal meeting wajib diisi', 400);
+  const date = typeof body.meeting_date === 'string' ? body.meeting_date : '';
+  // The shape check alone accepted 2026-02-31, which Postgres then rejects as
+  // a 500. Round-tripping through Date catches impossible calendar days here.
+  const parsed = new Date(`${date}T00:00:00Z`);
+  // Month 13 makes an Invalid Date, whose toISOString() throws — check the
+  // timestamp first so a bad date is a 400, not an unhandled 500.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    throw new AppError('Tanggal meeting wajib diisi dengan tanggal yang valid', 400);
+  }
   if (!MOM_TYPES.has(body.meeting_type)) throw new AppError('Tipe meeting tidak valid', 400);
-  return {
-    meeting_date: body.meeting_date,
+  const minute = {
+    meeting_date: date,
     meeting_type: body.meeting_type,
     meeting_recap: String(body.meeting_recap ?? '').trim(),
     todo_client: String(body.todo_client ?? '').trim(),
     todo_mil: String(body.todo_mil ?? '').trim(),
   };
+  // A record with a date and nothing else has nothing for Business Overview to
+  // read or summarise; the editor blocks it too, this is the server's copy.
+  if (!minute.meeting_recap && !minute.todo_client && !minute.todo_mil) {
+    throw new AppError('Isi recap atau minimal satu to do list', 400);
+  }
+  if ([minute.meeting_recap, minute.todo_client, minute.todo_mil].some((text) => text.length > 20000)) {
+    throw new AppError('Isi MOM terlalu panjang (maksimal 20.000 karakter per bagian)', 400);
+  }
+  return minute;
 }
 
 export const listMinutes = asyncHandler(async (req, res) => {
@@ -98,10 +115,11 @@ export const generateMinutesSummary = asyncHandler(async (req, res) => {
   const wanted = new Set(minuteIds.map(Number));
   const chosen = all.filter((minute) => wanted.has(minute.id));
   if (chosen.length !== wanted.size) throw new AppError('Salah satu recap tidak ditemukan pada brand ini', 404);
-  const source = chosen.map((m) => `Tanggal: ${m.meeting_date}\nJenis: ${m.meeting_type}\nRecap: ${m.meeting_recap || '—'}\nTugas Client: ${m.todo_client || '—'}\nTugas MIL: ${m.todo_mil || '—'}`).join('\n\n---\n\n');
+  const typeLabel = { regular: 'Meeting reguler', non_regular: 'Meeting non reguler', whatsapp_quick_call: 'WhatsApp (quick call)' };
+  const source = chosen.map((m) => `Tanggal: ${m.meeting_date}\nJenis: ${typeLabel[m.meeting_type] ?? m.meeting_type}\nRecap: ${m.meeting_recap || '—'}\nTugas Client: ${m.todo_client || '—'}\nTugas MIL: ${m.todo_mil || '—'}`).join('\n\n---\n\n');
   const prompt = `Ringkas beberapa minutes of meeting untuk brand ${brand.brand_name}. Gunakan Bahasa Indonesia profesional. Jangan mengarang fakta. Diagnosis harus menjadi executive summary lintas meeting; objective_alignment menjelaskan keputusan/kesepakatan; winning berisi poin utama; challenge berisi isu terbuka; strategic_direction berisi langkah berikutnya; action_items berisi tindak lanjut spesifik; risks dan data_gaps hanya jika relevan.\n\nSUMBER:\n${source}`;
   try {
-    res.json({ summary: await ai.callGemini(prompt), model: ai.MODEL });
+    res.json({ summary: await ai.callGemini(prompt), model: ai.MODEL, brand_name: brand.brand_name });
   } catch (err) {
     if (err instanceof ai.AiSummaryError) throw new AppError(err.message, err.statusCode);
     throw err;
