@@ -575,3 +575,9 @@ tr:hover td { background: var(--primary-light); }
 @media (max-width: 640px) {
   .home-band-logo { height: 24px; }
 }
+
+/* Pusat Kendali badge: overdue MOM tasks + brands needing data action.
+   Collapsed, it pins to the icon so the count survives the narrow rail. */
+.sidebar-link { position: relative; }
+.sidebar-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: auto; padding: 0 6px; color: #fff; border-radius: 99px; background: #dc2626; box-shadow: 0 0 0 2px #fff; font-size: 0.64rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.sidebar.collapsed:not(.peek) .sidebar-badge { position: absolute; top: 3px; right: 5px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 0.56rem; }

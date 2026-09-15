@@ -1821,3 +1821,104 @@ html:has(.con-bar) {
   .mom-ai-content > section { grid-template-columns:minmax(0,1fr); gap:.3rem; }
   .mom-recap-item > p { padding-left:.9rem; }
 }
+
+
+/* ── Pusat Kendali ─────────────────────────────────────────────────────
+   Built from the Pengaturan Brand vocabulary (hero, dock, section nav,
+   .brand-workspace card). Tones carry meaning and always travel with words:
+   good = lengkap, warn = sebagian / mulai tertunda,
+   bad = perlu tindakan, idle = tidak ada yang diharapkan. */
+.control-center { --tone-good:#15803d; --tone-good-bg:#eefcf2; --tone-warn:#b45309; --tone-warn-bg:#fdf3e0; --tone-bad:#c81e1e; --tone-bad-bg:#fef1f0; --tone-idle:#5a6a90; --tone-idle-bg:#eef1f7; }
+.cc-dock { grid-template-columns:minmax(200px,1fr) minmax(220px,300px) auto; }
+.cc-workspace { min-height:320px; }
+.cc-nav-count { display:inline-grid; place-items:center; min-width:17px; height:17px; margin-right:.3rem; padding:0 .3rem; border-radius:99px; background:#c81e1e; color:#fff; font-size:.58rem; font-weight:800; }
+.brand-view-tab.is-active .cc-nav-count { background:#fff; color:var(--acc); }
+
+.cc-pill { display:inline-flex; align-items:center; padding:.18rem .5rem; border-radius:99px; font-size:.64rem; font-weight:780; white-space:nowrap; }
+.cc-pill.is-good { color:#15803d; background:#eefcf2; box-shadow:inset 0 0 0 1px rgba(21,128,61,.18); }
+.cc-pill.is-warn { color:#92400e; background:#fdf3e0; box-shadow:inset 0 0 0 1px rgba(180,83,9,.2); }
+.cc-pill.is-bad { color:#c81e1e; background:#fef1f0; box-shadow:inset 0 0 0 1px rgba(200,30,30,.2); }
+.cc-pill.is-idle { color:#5a6a90; background:#eef1f7; box-shadow:inset 0 0 0 1px #dde2ee; }
+
+.cc-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--rule); }
+.cc-kpi { display:grid; gap:.2rem; align-content:start; padding:.9rem 1.5rem; color:var(--text); border:0; border-right:1px solid var(--rule); background:transparent; font:inherit; text-align:left; cursor:pointer; transition:background .16s ease; box-shadow:inset 0 3px 0 transparent; }
+.cc-kpi:last-child { border-right:0; }
+.cc-kpi.is-static { cursor:default; }
+.cc-kpi:not(.is-static):hover { background:#fafbff; }
+.cc-kpi > span { color:var(--text-muted); font-size:.62rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.cc-kpi > strong { font-size:1.45rem; font-weight:800; letter-spacing:-.03em; font-variant-numeric:tabular-nums lining-nums; }
+.cc-kpi > small { color:var(--text-muted); font-size:.66rem; line-height:1.4; }
+.cc-kpi.is-bad > strong { color:#c81e1e; }
+.cc-kpi.is-warn > strong { color:#b45309; }
+.cc-kpi.is-good > strong { color:#15803d; }
+.cc-kpi.is-selected { background:var(--primary-light); box-shadow:inset 0 3px 0 var(--acc); }
+.cc-kpi:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
+
+.cc-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem .8rem; padding:.75rem 1.5rem; border-bottom:1px solid var(--rule); background:#fafbff; }
+.cc-search { flex:0 1 280px; padding:.45rem .65rem; }
+.cc-toolbar .brand-status-filter button { min-height:30px; padding:.3rem .6rem; font-size:.7rem; }
+.cc-toolbar-count { margin-left:auto; color:var(--text-muted); font-size:.68rem; font-weight:650; }
+
+.cc-list { display:grid; }
+.cc-row { display:grid; gap:.65rem; padding:.9rem 1.5rem 1rem; border-bottom:1px solid var(--rule); box-shadow:inset 3px 0 0 transparent; transition:background .16s ease; }
+.cc-row:last-child { border-bottom:0; }
+.cc-row:hover { background:#fcfdff; }
+.cc-row.is-bad { box-shadow:inset 3px 0 0 #c81e1e; }
+.cc-row.is-warn { box-shadow:inset 3px 0 0 #d97706; }
+.cc-row-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem; }
+.cc-row-title { display:flex; flex-wrap:wrap; align-items:center; gap:.55rem; min-width:0; }
+.cc-row-title strong { font-size:.88rem; font-weight:780; letter-spacing:-.014em; }
+.cc-muted { margin:0; color:var(--text-placeholder); font-size:.72rem; font-style:italic; }
+
+.cc-ds-list { display:flex; flex-wrap:wrap; gap:.4rem; margin:0; padding:0; list-style:none; }
+.cc-ds { display:flex; align-items:flex-start; gap:.4rem; padding:.42rem .6rem; border-radius:9px; background:#fff; box-shadow:inset 0 0 0 1px var(--border); }
+.cc-ds > svg { flex:0 0 auto; margin-top:.12rem; }
+.cc-ds b { display:block; color:var(--text); font-size:.7rem; font-weight:720; }
+.cc-ds small { display:block; font-size:.63rem; font-weight:600; }
+.cc-ds.is-good svg, .cc-ds.is-good small { color:#15803d; }
+.cc-ds.is-warn { background:#fffaf0; box-shadow:inset 0 0 0 1px rgba(217,119,6,.28); }
+.cc-ds.is-warn svg, .cc-ds.is-warn small { color:#b45309; }
+.cc-ds.is-bad { background:#fff7f6; box-shadow:inset 0 0 0 1px rgba(200,30,30,.26); }
+.cc-ds.is-bad svg, .cc-ds.is-bad small { color:#c81e1e; }
+.cc-ds.is-idle svg, .cc-ds.is-idle small { color:var(--text-muted); }
+
+.cc-task-group { border-bottom:1px solid var(--rule); }
+.cc-task-group:last-child { border-bottom:0; }
+.cc-task-group-head { display:flex; align-items:center; gap:.5rem; padding:.7rem 1.5rem .35rem; }
+.cc-task-group-head strong { font-size:.82rem; font-weight:780; }
+.cc-task-group-head .mom-head-link { margin-left:auto; }
+.cc-count { display:inline-grid; place-items:center; min-width:20px; height:20px; padding:0 .35rem; color:var(--acc); border-radius:99px; background:var(--primary-light); font-size:.62rem; font-weight:800; }
+.cc-task-group ul { display:grid; margin:0; padding:0 1.5rem .7rem; list-style:none; }
+.cc-task { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:.7rem; padding:.5rem .2rem; border-top:1px dashed var(--rule); }
+.cc-task:first-child { border-top:0; }
+.cc-task-check { display:grid; place-items:center; width:30px; height:30px; color:var(--acc-300); border:0; border-radius:50%; background:transparent; cursor:pointer; transition:color .14s ease, background .14s ease; }
+.cc-task-check:hover:not(:disabled) { color:var(--acc); background:var(--primary-light); }
+.cc-task-check:disabled { cursor:progress; }
+.cc-task-check:focus-visible { outline:2px solid var(--acc); outline-offset:1px; }
+.cc-task-body { display:grid; gap:.1rem; min-width:0; }
+.cc-task-body strong { color:var(--text); font-size:.76rem; font-weight:650; line-height:1.4; }
+.cc-task-body small { color:var(--text-muted); font-size:.64rem; }
+.cc-age { display:inline-flex; align-items:center; gap:.25rem; padding:.18rem .45rem; color:var(--text-muted); border-radius:99px; background:#eef1f7; font-size:.63rem; font-weight:750; white-space:nowrap; font-variant-numeric:tabular-nums lining-nums; }
+.cc-age.is-warn { color:#92400e; background:#fdf3e0; }
+.cc-age.is-bad { color:#c81e1e; background:#fef1f0; }
+.cc-undo { display:flex; align-items:center; gap:.45rem; margin:0; padding:.55rem 1.5rem; color:#15803d; border-bottom:1px solid var(--rule); background:#eefcf2; font-size:.72rem; font-weight:650; }
+.cc-undo span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cc-undo button { display:inline-flex; align-items:center; gap:.25rem; margin-left:auto; padding:.25rem .55rem; color:#15803d; border:1px solid rgba(21,128,61,.3); border-radius:7px; background:#fff; font:inherit; font-size:.68rem; font-weight:750; cursor:pointer; }
+.cc-workspace > .mom-form-error { border-top:0; }
+
+/* MOM task rail: flag tasks whose meeting is over a week old. */
+.mom-task-src.is-overdue { color:#b45309; font-weight:750; }
+
+@media (max-width:900px) {
+  .cc-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .cc-kpi:nth-child(2) { border-right:0; }
+  .cc-kpi:nth-child(-n+2) { border-bottom:1px solid var(--rule); }
+  .cc-dock { grid-template-columns:1fr; }
+}
+@media (max-width:640px) {
+  .cc-row, .cc-toolbar, .cc-kpi, .cc-undo { padding-left:1rem; padding-right:1rem; }
+  .cc-task-group-head, .cc-task-group ul { padding-left:1rem; padding-right:1rem; }
+  .cc-task { grid-template-columns:auto minmax(0,1fr); }
+  .cc-age { grid-column:2; justify-self:start; }
+  .cc-toolbar-count { margin-left:0; }
+}

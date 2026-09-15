@@ -10,6 +10,7 @@ import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
 import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
 import BrandSettingsPage from './pages/BrandSettingsPage.jsx';
+import ControlCenterPage from './pages/ControlCenterPage.jsx';
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/meta-automation" element={<MetaAutomationPage />} />
             <Route path="/internal-dashboard" element={<InternalDashboardPage />} />
+            <Route path="/pusat-kendali" element={<ControlCenterPage />} />
           </Route>
         </Route>
       </Route>

@@ -62,3 +62,15 @@ export const recapPreview = (text, length = 140) => {
   const flat = (text ?? '').replace(/\s+/g, ' ').trim();
   return flat.length > length ? `${flat.slice(0, length).trimEnd()}…` : flat;
 };
+
+// A task is "tertunda" once its meeting is more than a week old and it is
+// still unticked. The same threshold drives the dashboard tag, Pusat Kendali
+// and the sidebar badge (backend/src/services/controlCenterService.js).
+export const OVERDUE_DAYS = 7;
+
+export function daysSince(fromISO, toISO = todayISO()) {
+  if (!fromISO) return 0;
+  const from = Date.parse(`${fromISO.slice(0, 10)}T00:00:00Z`);
+  const to = Date.parse(`${toISO.slice(0, 10)}T00:00:00Z`);
+  return Math.round((to - from) / 86_400_000);
+}

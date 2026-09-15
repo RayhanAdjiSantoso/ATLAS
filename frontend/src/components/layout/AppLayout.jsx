@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   History,
@@ -12,8 +12,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
+  Radar,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import api from '../../api/client.js';
 import atlasIcon from '../../assets/atlas-icon.png';
 
 const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
@@ -29,6 +31,7 @@ const NAV = [
   { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace' },
   { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, adminOnly: true, group: 'Operasional' },
   { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, adminOnly: true, group: 'Operasional' },
+  { to: '/pusat-kendali', label: 'Pusat Kendali', Icon: Radar, adminOnly: true, group: 'Operasional' },
   { to: '/history', label: 'History Upload', Icon: History, group: 'Operasional' },
 ];
 
@@ -56,6 +59,22 @@ export default function AppLayout() {
   // remembered preference: a drawer is closed by default every visit, and
   // remembering it would be remembering the wrong thing.
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Pusat Kendali badge: overdue MOM tasks + brands needing data action this
+  // month. Refreshed on navigation at most once a minute — a reminder, not a
+  // live feed, and not worth a request on every click.
+  const location = useLocation();
+  const [attention, setAttention] = useState(null);
+  const lastSummaryAt = useRef(0);
+  useEffect(() => {
+    if (!isAdmin || Date.now() - lastSummaryAt.current < 60_000) return;
+    lastSummaryAt.current = Date.now();
+    api.get('/control-center/summary').then(({ data }) => setAttention(data)).catch(() => {});
+  }, [isAdmin, location.pathname]);
+  const badgeCount = (attention?.overdueTasks ?? 0) + (attention?.dataAttention ?? 0);
+  const badgeTitle = attention
+    ? `${attention.overdueTasks} to do tertunda · ${attention.dataAttention} brand perlu tindakan data`
+    : undefined;
 
   useEffect(() => {
     try {
@@ -141,6 +160,9 @@ export default function AppLayout() {
                 >
                   <Icon size={18} className="sidebar-ico" />
                   <span className="sidebar-label">{label}</span>
+                  {to === '/pusat-kendali' && badgeCount > 0 && (
+                    <span className="sidebar-badge" title={badgeTitle} aria-label={badgeTitle}>{badgeCount > 99 ? '99+' : badgeCount}</span>
+                  )}
                 </NavLink>
               ))}
             </div>

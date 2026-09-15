@@ -1167,6 +1167,11 @@ export default function BrandSettingsPage() {
   const [listStatus, setListStatus] = useSessionState('brand-settings:list-status', 'all');
   const [statusBusy, setStatusBusy] = useState(null);
   const [activeView, setActiveView] = useSessionState('brand-settings:view', 'brands');
+  // A view remembered from a tab that no longer exists (the removed "Target
+  // bulanan") would render an empty workspace; fall back to the brand list.
+  useEffect(() => {
+    if (!VIEWS.some((v) => v.id === activeView)) setActiveView('brands');
+  }, [activeView, setActiveView]);
   const [marketId, setMarketId] = useSessionState('brand-settings:platform', 'shopee');
 
   const [profile, setProfile] = useState(null);

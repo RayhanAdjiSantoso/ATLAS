@@ -21,7 +21,7 @@ import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
 import api from '../api/client';
 import SelectMenu from '../components/common/SelectMenu.jsx';
-import { MOM_TYPE_LABELS, dateLabel, longDateLabel, parseISO, recapPreview, taskGroups, taskStats } from '../components/mom/momModel.js';
+import { MOM_TYPE_LABELS, OVERDUE_DAYS, dateLabel, daysSince, longDateLabel, parseISO, recapPreview, taskGroups, taskStats } from '../components/mom/momModel.js';
 
 const DASH_EASE = [0.16, 1, 0.3, 1];
 
@@ -192,7 +192,9 @@ function TaskBoard({ title, scope, minutes, onToggle }) {
                 <button type="button" onClick={() => onToggle(task.minuteId, task.key, true)} aria-label={`Tandai selesai: ${task.text}`}><Circle size={15} /></button>
                 <span>
                   {task.text}
-                  <small className="mom-task-src">{dateLabel(task.date)} · {MOM_TYPE_LABELS[task.type]}</small>
+                  <small className={`mom-task-src${daysSince(task.date) > OVERDUE_DAYS ? ' is-overdue' : ''}`}>
+                    {dateLabel(task.date)} · {MOM_TYPE_LABELS[task.type]}{daysSince(task.date) > OVERDUE_DAYS ? ` · tertunda ${daysSince(task.date)} hari` : ''}
+                  </small>
                 </span>
               </li>
             ))}
