@@ -778,7 +778,10 @@ export default function DashboardPage() {
       <div className="con-body dashboard-body">
         <div className="con-canvas">
           <KpiStrip entry={read('Executive Snapshot')} />
-          <MinutesOverview filters={filters} />
+          {/* Meeting notes are a brand-level reading, not an analysis domain:
+              they belong beside the executive view, not repeated above every
+              drill-down the user opens. */}
+          {activeKey === 'Executive Snapshot' && <MinutesOverview filters={filters} />}
 
           <section className="con-focus" aria-labelledby="con-focus-title">
             <div className="con-focus-head">
