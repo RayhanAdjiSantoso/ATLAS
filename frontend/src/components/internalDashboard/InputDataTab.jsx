@@ -8,6 +8,7 @@ import PlatformSpendForm from './PlatformSpendForm.jsx';
 import SalesChannelsForm from './SalesChannelsForm.jsx';
 import AdAccountsForm from './AdAccountsForm.jsx';
 import IngestionLogPanel from './IngestionLogPanel.jsx';
+import SheetSyncPanel from './SheetSyncPanel.jsx';
 
 const SUB_TABS = [
   { key: 'metrics', label: 'Metrik Bulanan', target: 'client_monthly_metrics', Form: MonthlyMetricsForm, periodScoped: true },
@@ -60,6 +61,8 @@ export default function InputDataTab() {
           </p>
         )}
       </div>
+
+      <SheetSyncPanel clientId={numericClientId} onSynced={() => setLogRefresh((k) => k + 1)} />
 
       <div className="tabs-nav" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
         {SUB_TABS.map((t) => (

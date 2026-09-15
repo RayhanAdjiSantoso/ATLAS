@@ -12,4 +12,8 @@ export const config = {
     webAppUrl: process.env.META_AUTOMATION_WEBAPP_URL,
     apiKey: process.env.META_AUTOMATION_API_KEY,
   },
+  internalDashboardSheets: {
+    webAppUrl: process.env.INTERNAL_DASHBOARD_SHEETS_WEBAPP_URL,
+    apiKey: process.env.INTERNAL_DASHBOARD_SHEETS_API_KEY,
+  },
 };

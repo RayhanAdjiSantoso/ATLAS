@@ -17,6 +17,19 @@ export const listClients = asyncHandler(async (req, res) => {
   res.json({ clients: await service.listClients() });
 });
 
+// --- Google Sheets live sync -----------------------------------------
+// GET /api/internal-dashboard/sheet-sources
+export const listSheetSyncSources = asyncHandler(async (req, res) => {
+  res.json({ sources: await service.listSheetSyncSources() });
+});
+
+// POST /api/internal-dashboard/sync-from-sheets  { brand_id }
+export const syncFromSheets = asyncHandler(async (req, res) => {
+  validate(req);
+  const result = await service.syncBrandFromSheets(Number(req.body.brand_id), req.user.userId);
+  res.json({ result });
+});
+
 // --- §2.3 client_monthly_metrics -----------------------------------
 export const listMonthlyMetrics = asyncHandler(async (req, res) => {
   validate(req);

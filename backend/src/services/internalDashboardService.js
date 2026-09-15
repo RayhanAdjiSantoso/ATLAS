@@ -3,6 +3,7 @@ import { AppError } from '../utils/errors.js';
 import { S1 as S1_CONFIG, S4 as S4_CONFIG, CATEGORY_MAP } from '../config/internalDashboard.js';
 import * as brandService from './brandService.js';
 import * as repo from '../repositories/internalDashboardRepository.js';
+import { syncBrandFromSheets as runSheetSync } from './internalDashboardSheets/syncService.js';
 
 // "YYYY-MM" (from the month picker) -> "YYYY-MM-01" (DATE the tables store).
 const toPeriodDate = (period) => `${period}-01`;
@@ -33,6 +34,16 @@ async function inTransaction(work) {
 
 export async function listClients() {
   return repo.listClients();
+}
+
+// --- Google Sheets live sync -----------------------------------------
+export async function listSheetSyncSources() {
+  return repo.listActiveSheetSources();
+}
+
+export async function syncBrandFromSheets(brandId, userId) {
+  await assertBrand(brandId);
+  return runSheetSync(brandId, userId);
 }
 
 // --- §2.3 -----------------------------------------------------------
@@ -1021,7 +1032,7 @@ export async function getIndustries(params) {
 // for the revenue/spend blended figure in S1).
 
 const SALES_CHANNELS = ['shopee', 'tiktok_shop', 'website', 'offline'];
-const AD_PLATFORMS = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads'];
+const AD_PLATFORMS = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads', 'cpas_tokopedia', 'ttam_tiktok'];
 
 export async function getChannels(params) {
   const period = params.period;
@@ -1635,7 +1646,7 @@ export async function getBenchmark(params) {
 // "Mulai kerja sama" is intentionally null/TBD — join_date does not exist
 // yet and must NOT be proxied.
 
-const AD_PLATFORMS_S7 = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads'];
+const AD_PLATFORMS_S7 = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads', 'cpas_tokopedia', 'ttam_tiktok'];
 
 export async function getClientDetail(params) {
   const clientId = Number(params.client_id);
