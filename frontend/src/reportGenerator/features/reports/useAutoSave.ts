@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { saveReport } from './api';
+import { useAuth } from '../../../contexts/AuthContext.jsx';
 import type { Platform, RawFileEntry, SaveReportPayload } from './types';
 
 export type SaveStatusValue = 'idle' | 'saving' | 'saved' | 'error';
@@ -8,10 +9,16 @@ export type SaveStatusValue = 'idle' | 'saving' | 'saved' | 'error';
 // using this tool don't need to understand "save to database" as a separate
 // step, so there's no button for it, just a small status line.
 export function useAutoSave(platform: Platform) {
+  const { isViewOnly } = useAuth();
   const [status, setStatus] = useState<SaveStatusValue>('idle');
   const [message, setMessage] = useState('');
 
   async function save(clientId: number | null, payload: Omit<SaveReportPayload, 'brandId' | 'platform'>, files: RawFileEntry[]) {
+    if (isViewOnly) {
+      setStatus('idle');
+      setMessage('Akun ini hanya dapat melihat data — laporan tidak disimpan.');
+      return;
+    }
     if (!clientId) {
       setStatus('error');
       setMessage('Laporan belum tersimpan — pilih klien di bagian atas halaman.');

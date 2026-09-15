@@ -192,6 +192,10 @@ reportsRouter.post('/', upload.array('files'), async (req, res) => {
     res.status(400).json({ error: 'Payload missing required fields: brandId, platform, period, rows.' });
     return;
   }
+  if (req.user.allowedBrandId && payload.brandId !== req.user.allowedBrandId) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
+    return;
+  }
 
   let fileMeta = [];
   if (req.body.fileMeta) {
@@ -326,6 +330,10 @@ reportsRouter.get('/', async (req, res) => {
     res.status(400).json({ error: 'client_id is required' });
     return;
   }
+  if (req.user.allowedBrandId && clientId !== req.user.allowedBrandId) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
+    return;
+  }
   const { rows } = await pool.query(
     `SELECT id, platform, period_old_label, period_cur_label,
             period_old_start::text AS period_old_start, period_old_end::text AS period_old_end,
@@ -385,6 +393,10 @@ reportsRouter.get('/:id/period/:role', async (req, res) => {
     res.status(404).json({ error: 'Report not found' });
     return;
   }
+  if (req.user.allowedBrandId && run.brand_id !== req.user.allowedBrandId) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
+    return;
+  }
   let table = null;
   if (run.platform === 'shopee') table = 'ads_reports.shopee_ad_rows';
   else if (run.platform === 'meta') table = 'ads_reports.meta_ad_rows';
@@ -438,6 +450,10 @@ reportsRouter.get('/:id', async (req, res) => {
     res.status(404).json({ error: 'Report not found' });
     return;
   }
+  if (req.user.allowedBrandId && run.brand_id !== req.user.allowedBrandId) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
+    return;
+  }
 
   let table = null;
   if (run.platform === 'shopee') table = 'ads_reports.shopee_ad_rows';
@@ -484,6 +500,17 @@ reportsRouter.delete('/:id', async (req, res) => {
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: 'Invalid id' });
     return;
+  }
+  if (req.user.allowedBrandId) {
+    const runResult = await pool.query('SELECT brand_id FROM ads_reports.report_runs WHERE id = $1', [id]);
+    if (!runResult.rows[0]) {
+      res.status(404).json({ error: 'Report not found' });
+      return;
+    }
+    if (runResult.rows[0].brand_id !== req.user.allowedBrandId) {
+      res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
+      return;
+    }
   }
   // Child tables (raw_uploads/shopee_ad_rows/meta_ad_rows/tiktok_ad_rows) all
   // reference report_runs with ON DELETE CASCADE — see 004_ads_reports_schema.sql.

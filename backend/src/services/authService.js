@@ -21,7 +21,7 @@ export async function registerUser({ email, password, fullName, role = 'user' })
 
 export async function loginUser({ email, password }) {
   const result = await pool.query(
-    'SELECT user_id, email, password_hash, full_name, role, is_active FROM users WHERE LOWER(email) = LOWER($1)',
+    'SELECT user_id, email, password_hash, full_name, role, is_active, allowed_brand_id, is_view_only FROM users WHERE LOWER(email) = LOWER($1)',
     [email],
   );
 
@@ -44,6 +44,8 @@ export async function loginUser({ email, password }) {
     email: user.email,
     role: user.role,
     fullName: user.full_name,
+    allowedBrandId: user.allowed_brand_id,
+    isViewOnly: user.is_view_only,
   });
 
   return {
@@ -53,13 +55,15 @@ export async function loginUser({ email, password }) {
       email: user.email,
       fullName: user.full_name,
       role: user.role,
+      allowedBrandId: user.allowed_brand_id,
+      isViewOnly: user.is_view_only,
     },
   };
 }
 
 export async function getUserById(userId) {
   const result = await pool.query(
-    'SELECT user_id, email, full_name, role, created_at FROM users WHERE user_id = $1 AND is_active = TRUE',
+    'SELECT user_id, email, full_name, role, created_at, allowed_brand_id, is_view_only FROM users WHERE user_id = $1 AND is_active = TRUE',
     [userId],
   );
   if (result.rows.length === 0) return null;
@@ -70,5 +74,7 @@ export async function getUserById(userId) {
     fullName: user.full_name,
     role: user.role,
     createdAt: user.created_at,
+    allowedBrandId: user.allowed_brand_id,
+    isViewOnly: user.is_view_only,
   };
 }

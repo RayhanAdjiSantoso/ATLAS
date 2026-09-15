@@ -75,6 +75,7 @@ export const listUploads = asyncHandler(async (req, res) => {
   const uploads = await uploadService.listUploads({
     userId: req.user.userId,
     role: req.user.role,
+    allowedBrandId: req.user.allowedBrandId,
     filters: {
       brand: toArray(req.query.brand),
       fileType: toArray(req.query.fileType),
@@ -93,6 +94,9 @@ export const getUpload = asyncHandler(async (req, res) => {
 
   if (req.user.role !== 'admin' && upload.user_id !== req.user.userId) {
     throw new AppError('Akses ditolak', 403);
+  }
+  if (req.user.allowedBrandId && upload.brand_id !== req.user.allowedBrandId) {
+    throw new AppError('Akses ditolak untuk brand ini', 403);
   }
 
   res.json({ upload });
@@ -137,6 +141,9 @@ export const deleteUpload = asyncHandler(async (req, res) => {
   if (req.user.role !== 'admin' && upload.user_id !== req.user.userId) {
     throw new AppError('Akses ditolak', 403);
   }
+  if (req.user.allowedBrandId && upload.brand_id !== req.user.allowedBrandId) {
+    throw new AppError('Akses ditolak untuk brand ini', 403);
+  }
 
   await uploadService.deleteUpload(req.params.uploadId);
 
@@ -144,7 +151,7 @@ export const deleteUpload = asyncHandler(async (req, res) => {
 });
 
 export const getFilterOptions = asyncHandler(async (req, res) => {
-  const brands = await uploadService.listBrandsForFilter();
+  const brands = await uploadService.listBrandsForFilter(req.user.allowedBrandId);
   const users = req.user.role === 'admin'
     ? await uploadService.listUsersForFilter()
     : [];

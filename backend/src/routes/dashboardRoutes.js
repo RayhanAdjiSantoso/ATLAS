@@ -1,19 +1,24 @@
 import { Router } from 'express';
 import { authenticate } from '../middlewares/auth.js';
+import { requireBrandAccess } from '../middlewares/brandAccess.js';
 import * as dashboardController from '../controllers/dashboardController.js';
 
 const router = Router();
 
 router.use(authenticate);
 
+const brandScoped = requireBrandAccess((req) => req.query.brandId);
+
+// /filters is not brand-scoped -- it returns the brand list itself
+// (already filtered per-user inside the controller).
 router.get('/filters', dashboardController.getDashboardFilters);
-router.get('/executive-snapshot', dashboardController.getExecutiveSnapshot);
-router.get('/business-growth', dashboardController.getBusinessGrowth);
-router.get('/traffic-funnel', dashboardController.getTrafficAndFunnel);
-router.get('/rfm', dashboardController.getRfmAnalysis);
-router.get('/transaction-behavior', dashboardController.getTransactionBehavior);
-router.get('/basket-analysis', dashboardController.getBasketAnalysis);
-router.get('/root-cause', dashboardController.getRootCauseAnalysis);
-router.get('/product-performance', dashboardController.getProductPerformance);
+router.get('/executive-snapshot', brandScoped, dashboardController.getExecutiveSnapshot);
+router.get('/business-growth', brandScoped, dashboardController.getBusinessGrowth);
+router.get('/traffic-funnel', brandScoped, dashboardController.getTrafficAndFunnel);
+router.get('/rfm', brandScoped, dashboardController.getRfmAnalysis);
+router.get('/transaction-behavior', brandScoped, dashboardController.getTransactionBehavior);
+router.get('/basket-analysis', brandScoped, dashboardController.getBasketAnalysis);
+router.get('/root-cause', brandScoped, dashboardController.getRootCauseAnalysis);
+router.get('/product-performance', brandScoped, dashboardController.getProductPerformance);
 
 export default router;
