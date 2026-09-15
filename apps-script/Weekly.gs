@@ -66,12 +66,14 @@
  *
  * SETUP:
  * 1. Ganti SELURUH isi file script lama dengan file ini
- * 2. Script Properties (Project Settings):
- *      META_TOKEN_PETITEFLEUR = <token system user Petite Fleur>
- *      META_TOKEN_VALENTINE   = <token system user Valentine>
- * 3. Sesuaikan CONFIG.ACCOUNTS dan CONFIG.EMAIL_TO (EMAIL_TO cuma
- *    kontak admin untuk error skrip total, BUKAN penerima laporan --
- *    penerima laporan selalu dari data Langganan)
+ * 2. CONFIG.ACCOUNTS kosong sejak semua brand dipindah ke penyimpanan
+ *    dinamis (DYNAMIC_ACCOUNTS) -- tambah/edit brand lewat ATLAS
+ *    "Meta Ads Automation" > "Brand & Langganan" > "Brand", bukan di
+ *    kode. Token diinput lewat form itu juga, langsung tersimpan
+ *    sebagai Script Property lewat uiSaveBrand_() (DailyTrackingBoostPost.gs).
+ * 3. Sesuaikan CONFIG.EMAIL_TO (cuma kontak admin untuk error skrip
+ *    total, BUKAN penerima laporan -- penerima laporan selalu dari
+ *    data Langganan)
  * 4. checkTokens()        -> pastikan semua token hidup
  * 5. diagnoseResultKeys() -> cocokkan dengan Ads Manager
  * 6. Jalankan migrateToBrandsAndSubscriptions() SATU KALI supaya
@@ -101,14 +103,16 @@ var CONFIG = {
    * tokenKey merujuk nama Script Property berisi token portfolio
    * bersangkutan. System user adalah aset milik satu portfolio,
    * jadi tokennya tidak bisa membaca portfolio lain.
+   *
+   * Sengaja kosong -- SEMUA brand (termasuk Petite Fleur & Valentine)
+   * sekarang disimpan dinamis lewat DYNAMIC_ACCOUNTS (lihat
+   * getDynamicAccounts_/uiSaveBrand_ di bawah), supaya bisa
+   * ditambah/diedit/dihapus dari ATLAS tanpa menyentuh kode. Array ini
+   * cuma dipertahankan untuk kompatibilitas getAllAccounts_() dan
+   * kalau suatu saat memang perlu akun yang sengaja tidak bisa
+   * diedit lewat ATLAS.
    */
-  ACCOUNTS: [
-    { client: 'Petite Fleur', id: 'act_678276314370782',
-      type: 'MAIN', tokenKey: 'META_TOKEN_PETITEFLEUR' },
-
-    { client: 'Valentine',    id: 'act_6589844197811528',
-      type: 'MAIN', tokenKey: 'META_TOKEN_VALENTINE' },
-  ],
+  ACCOUNTS: [],
 
   // Nilai default SISTEM, dipakai kalau langganan tidak mengisi
   // field tertentu (bukan lagi per-akun sejak v6 -- per-langganan,
