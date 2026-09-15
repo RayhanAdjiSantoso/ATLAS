@@ -13,12 +13,14 @@ interface SlotSourceTabsProps {
   // explaining why (e.g. no client selected yet).
   disabledSavedReason?: string | null;
   className?: string;
+  // Shopee and TikTok lead with the library (their default source) and keep
+  // manual upload as the second choice. Meta omits this and is unchanged.
+  savedFirst?: boolean;
 }
 
-export function SlotSourceTabs({ value, onChange, disabledSavedReason, className }: SlotSourceTabsProps) {
-  return (
-    <div className={`slot-src-tabs${className ? ' ' + className : ''}`} role="tablist">
-      <button
+export function SlotSourceTabs({ value, onChange, disabledSavedReason, className, savedFirst = false }: SlotSourceTabsProps) {
+  const uploadTab = (
+      <button key="upload"
         type="button"
         role="tab"
         aria-selected={value === 'upload'}
@@ -27,7 +29,9 @@ export function SlotSourceTabs({ value, onChange, disabledSavedReason, className
       >
         Upload file baru
       </button>
-      <button
+  );
+  const savedTab = (
+      <button key="saved"
         type="button"
         role="tab"
         aria-selected={value === 'saved'}
@@ -38,6 +42,10 @@ export function SlotSourceTabs({ value, onChange, disabledSavedReason, className
       >
         Pilih dari data tersimpan
       </button>
+  );
+  return (
+    <div className={`slot-src-tabs${className ? ' ' + className : ''}`} role="tablist">
+      {savedFirst ? [savedTab, uploadTab] : [uploadTab, savedTab]}
     </div>
   );
 }

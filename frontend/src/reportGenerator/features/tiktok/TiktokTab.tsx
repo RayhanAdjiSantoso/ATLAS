@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
+import { ManualFileSlot } from '../reports/ManualFileSlot';
+import { combineManualPeriods } from '../../lib/manualPeriod';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -72,12 +74,14 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
 
   // "Pilih dari data tersimpan" — per period side, fills that side's file
   // straight from a previously saved report_run instead of re-uploading.
-  const [oldSource, setOldSource] = useState<SlotSource>('upload');
-  const [curSource, setCurSource] = useState<SlotSource>('upload');
+  const [oldSource, setOldSource] = useState<SlotSource>('saved');
+  const [curSource, setCurSource] = useState<SlotSource>('saved');
   const [oldPicked, setOldPicked] = useState<SavedPeriod | null>(null);
   const [curPicked, setCurPicked] = useState<SavedPeriod | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
+  // Per-slot notes from combining manual files (a date gap, an unreadable period).
+  const [manualWarnings, setManualWarnings] = useState<Record<FileKey, string | null>>({ 'tiktok-old': null, 'tiktok-cur': null });
 
   async function applySavedPeriod(targetRole: PeriodRole, period: SavedPeriod) {
     const key: FileKey = targetRole === 'old' ? 'tiktok-old' : 'tiktok-cur';
@@ -98,7 +102,6 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     } catch (err) {
       setFileErrors((prev) => ({ ...prev, [key]: 'Gagal memuat periode tersimpan: ' + (err as Error).message }));
       (targetRole === 'old' ? setOldPicked : setCurPicked)(null);
-      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
     } finally {
       setApplyingRole(null);
     }
@@ -115,7 +118,6 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   function clearPickedPeriod(role: PeriodRole) {
     const key: FileKey = role === 'old' ? 'tiktok-old' : 'tiktok-cur';
     (role === 'old' ? setOldPicked : setCurPicked)(null);
-    (role === 'old' ? setOldSource : setCurSource)('upload');
     setFiles((prev) => ({ ...prev, [key]: null }));
     setReport(null);
     onInvalidate();
@@ -151,6 +153,23 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     }
   }
 
+  // ── Manual upload ("Upload file baru") ─────────────────────────────────
+  // Not stored in the brand library. TikTok names its exports with their date
+  // range, which is where each file's period comes from; ranges must join up
+  // before the files are summed (see lib/manualPeriod.ts).
+  async function handleManualFile(input: File[], key: FileKey) {
+    const { selection, warning } = combineManualPeriods(input.map((f) => ({ name: f.name, period: periodFromTiktokFilename(f.name) })));
+    await handleFile(input, key, selection);
+    setManualWarnings((prev) => ({ ...prev, [key]: warning }));
+  }
+
+  function clearManualFile(key: FileKey) {
+    setFiles((prev) => ({ ...prev, [key]: null }));
+    setManualWarnings((prev) => ({ ...prev, [key]: null }));
+    setReport(null);
+    onInvalidate();
+  }
+
   const ready = Boolean(files['tiktok-old'] && files['tiktok-cur'] && clientId);
 
   const autoSave = useAutoSave('tiktok');
@@ -169,8 +188,9 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     periodCur.reset();
     setFiles({ 'tiktok-old': null, 'tiktok-cur': null });
     setFileErrors({ 'tiktok-old': null, 'tiktok-cur': null });
-    setOldSource('upload');
-    setCurSource('upload');
+    setOldSource('saved');
+    setCurSource('saved');
+    setManualWarnings({ 'tiktok-old': null, 'tiktok-cur': null });
     setOldPicked(null);
     setCurPicked(null);
     setPeriodOldDays(null);
@@ -202,6 +222,17 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   // A wrapper div here breaks that match and the slot overflows its column.
   function dropzone(key: FileKey) {
     const f = files[key];
+    if ((key === 'tiktok-old' ? oldSource : curSource) === 'upload') {
+      return (
+        <ManualFileSlot
+          tag={key === 'tiktok-old' ? 'Periode Lalu' : 'Periode Ini'} accept=".xlsx,.xls,.csv"
+          loaded={Boolean(f)} fileName={f?.fileName} infoText={f ? `${f.rows.length} kampanye` : undefined}
+          warning={manualWarnings[key]}
+          onFiles={(input) => handleManualFile(input, key)}
+          onClear={() => clearManualFile(key)}
+        />
+      );
+    }
     return (
       <LibraryFileSlot clientId={clientId} platform="tiktok" channel="tiktok"
         tag={key === 'tiktok-old' ? 'Periode Lalu' : 'Periode Ini'}
@@ -231,7 +262,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
           Buka TikTok Ads Manager → <strong>Reporting</strong> → pilih level <strong>Campaign</strong>. Set rentang tanggal untuk periode lalu dan periode ini secara terpisah, lalu download masing-masing sebagai file Excel (.xlsx). Pastikan kolom yang tersedia meliputi: Campaign Name, Cost, SKU Orders, Cost per Order, Gross Revenue, dan ROI.
         </HowToStep>
         <HowToStep num={2} numClassName="tiktok-num" title="Pilih sumber & buat laporan">
-          Pilih file perpustakaan untuk periode lalu dan periode ini, lalu klik <strong>Generate Laporan</strong>. Semua metrik (Cost, Order, Cost per Order, Gross Revenue, AOV, ROI) dihitung otomatis dari data campaign.
+          Pilih file perpustakaan untuk periode lalu dan periode ini — atau pilih <strong>Upload file baru</strong> untuk rentang khusus yang tidak disimpan — lalu klik <strong>Generate Laporan</strong>. Semua metrik (Cost, Order, Cost per Order, Gross Revenue, AOV, ROI) dihitung otomatis dari data campaign.
         </HowToStep>
       </HowTo>
 
@@ -261,6 +292,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
             return (
               <div key={role}>
                 <SlotSourceTabs
+                  savedFirst
                   value={source}
                   onChange={(v) => {
                     (role === 'old' ? setOldSource : setCurSource)(v);
@@ -268,6 +300,11 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
                   }}
                   disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
                 />
+                {source === 'upload' && (
+                  <div className="manual-mode-note">
+                    <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah di bagian TikTok GMV Max di bawah — file tidak disimpan ke Pengaturan Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis; periode dibaca dari nama file ekspor TikTok.
+                  </div>
+                )}
                 {source === 'saved' &&
                   (applyingRole === role ? (
                     <div className="empty-note">Menerapkan periode…</div>

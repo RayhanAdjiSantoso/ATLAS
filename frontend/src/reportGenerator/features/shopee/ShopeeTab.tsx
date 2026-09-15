@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '../../../api/client.js';
 import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
+import { ManualFileSlot } from '../reports/ManualFileSlot';
+import { combineManualPeriods } from '../../lib/manualPeriod';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -15,7 +17,7 @@ import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { fromISODate, toISODate } from '../../lib/dateFmt';
 import { parseShopeeCSV } from '../../lib/shopeeAds';
 import { categorizeProdukRows, mergeProdukOtomatis, mergeProductMaster, parseProductMasterRows, type ProductMasterEntry } from '../../lib/shopeeDeepDive';
-import { comparePeriodDays, daysBetweenInclusive } from '../../lib/periodLabel';
+import { comparePeriodDays, daysBetweenInclusive, emptyParsedPeriod, type ParsedPeriod } from '../../lib/periodLabel';
 import { periodFromOverviewFilename } from '../../lib/shopeeOverview';
 import type { SheetRow } from '../../lib/types';
 import { requireColumns, validateFileBasics } from '../../lib/validation';
@@ -247,8 +249,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // carries — it only fills in when this exact month was already Generated
   // before (cross-checked against report_runs below), otherwise it's left
   // blank for manual entry.
-  const [oldSource, setOldSource] = useState<SlotSource>('upload');
-  const [curSource, setCurSource] = useState<SlotSource>('upload');
+  const [oldSource, setOldSource] = useState<SlotSource>('saved');
+  const [curSource, setCurSource] = useState<SlotSource>('saved');
   const [oldPickedMonth, setOldPickedMonth] = useState<LibraryMonth | null>(null);
   const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
@@ -346,7 +348,6 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     } catch (err) {
       setUploadError('Gagal memuat periode dari perpustakaan: ' + (err as Error).message);
       (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
-      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
     } finally {
       setApplyingRole(null);
     }
@@ -362,7 +363,6 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
   function clearPickedPeriod(role: PeriodRole) {
     (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
-    (role === 'old' ? setOldSource : setCurSource)('upload');
     setAdsFiles((prev) => ({ ...prev, [`produk-${role}`]: null, [`produk-otomatis-${role}`]: null, [`toko-${role}`]: null, [`toko-keyword-${role}`]: null, [`live-${role}`]: null }));
     setOverviewFiles((prev) => ({ ...prev, [`overview-${role}`]: null }));
     setProductPerfFiles((prev) => ({ ...prev, [role]: null }));
@@ -396,6 +396,49 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // <details> so the page isn't a wall of dropzones. Auto-opens the moment any
   // optional slot actually has data (uploaded or filled from a saved report).
   const [optOpen, setOptOpen] = useState(false);
+  // Per-slot notes from combining manual files (a date gap, an unreadable period).
+  const [manualWarnings, setManualWarnings] = useState<Record<string, string | null>>({});
+
+  // ── Manual upload ("Upload file baru") ─────────────────────────────────
+  // Files never reach the brand library. Each Iklan CSV states its own range
+  // on its "Periode" line, so several files are combined only after checking
+  // their ranges join up (see lib/manualPeriod.ts); the existing handlers then
+  // read them exactly as they read library parts.
+  const sideSource = (side: PeriodRole) => (side === 'old' ? oldSource : curSource);
+
+  async function shopeeFilePeriod(file: File): Promise<ParsedPeriod> {
+    return /\.csv$/i.test(file.name) ? parseShopeeCSV(await file.text()).period : emptyParsedPeriod();
+  }
+
+  async function handleManualAds(files: File[], key: AdsFileKey) {
+    const periods = await Promise.all(files.map(async (f) => ({ name: f.name, period: await shopeeFilePeriod(f) })));
+    const { selection, warning } = combineManualPeriods(periods);
+    await handleAdsFile(files, key, selection);
+    setManualWarnings((prev) => ({ ...prev, [key]: warning }));
+  }
+
+  function invalidateReport() {
+    setReport(null);
+    setDeepDive(null);
+    setFunnelReport(null);
+    onInvalidate();
+  }
+
+  function clearAdsChannel(key: AdsFileKey) {
+    setAdsFiles((prev) => ({ ...prev, [key]: null }));
+    setManualWarnings((prev) => ({ ...prev, [key]: null }));
+    invalidateReport();
+  }
+
+  function clearOverviewChannel(key: OverviewFileKey) {
+    setOverviewFiles((prev) => ({ ...prev, [key]: null }));
+    invalidateReport();
+  }
+
+  function clearProductPerformance(role: ProductPerformanceRole) {
+    setProductPerfFiles((prev) => ({ ...prev, [role]: null }));
+    invalidateReport();
+  }
 
   async function handleAdsFile(input: File[], key: AdsFileKey, selection: LibrarySelection) {
     const file = input[0];
@@ -628,8 +671,9 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     setAdsFiles(EMPTY_ADS_FILES);
     setOverviewFiles(EMPTY_OVERVIEW_FILES);
     setProductPerfFiles({ old: null, cur: null });
-    setOldSource('upload');
-    setCurSource('upload');
+    setOldSource('saved');
+    setCurSource('saved');
+    setManualWarnings({});
     setOldPickedMonth(null);
     setCurPickedMonth(null);
     setProductMasterRef(null);
@@ -685,6 +729,17 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
   function adsDropzone(key: AdsFileKey, tag: string) {
     const f = adsFiles[key];
+    if (sideSource(key.endsWith('-old') ? 'old' : 'cur') === 'upload') {
+      return (
+        <ManualFileSlot
+          tag={tag} accept=".csv,.xlsx,.xls"
+          loaded={Boolean(f)} fileName={f?.fileName} infoText={f ? `${f.rows.length} baris` : undefined}
+          warning={manualWarnings[key]}
+          onFiles={(files) => handleManualAds(files, key)}
+          onClear={() => clearAdsChannel(key)}
+        />
+      );
+    }
     return (
       <LibraryFileSlot clientId={clientId} platform="shopee"
         tag={tag}
@@ -700,6 +755,17 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
   function overviewDropzone(key: OverviewFileKey) {
     const f = overviewFiles[key];
+    if (sideSource(key === 'overview-old' ? 'old' : 'cur') === 'upload') {
+      return (
+        <ManualFileSlot
+          tag={key === 'overview-old' ? 'Periode Lalu' : 'Periode Ini'} accept=".csv,.xlsx,.xls"
+          loaded={Boolean(f)} fileName={f?.fileName}
+          infoText={f ? `${f.rows.length} hari${f.period ? ' · ' + f.period : ''}` : undefined}
+          onFiles={(files) => handleOverviewFile(files, key)}
+          onClear={() => clearOverviewChannel(key)}
+        />
+      );
+    }
     return (
       <LibraryFileSlot clientId={clientId} platform="shopee"
         tag={key === 'overview-old' ? 'Periode Lalu' : 'Periode Ini'}
@@ -783,6 +849,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
             return (
               <div key={role}>
                 <SlotSourceTabs
+                  savedFirst
                   value={source}
                   onChange={(v) => {
                     (role === 'old' ? setOldSource : setCurSource)(v);
@@ -790,6 +857,11 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
                   }}
                   disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
                 />
+                {source === 'upload' && (
+                  <div className="manual-mode-note">
+                    <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah langsung di setiap bagian di bawah — file hanya dibaca untuk laporan ini dan tidak disimpan ke Pengaturan Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis.
+                  </div>
+                )}
                 {source === 'saved' &&
                   (applyingRole === role ? (
                     <div className="empty-note">Menerapkan periode…</div>
@@ -973,26 +1045,29 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           Saat mengunduh file ini dari Shopee Seller Center, gunakan status <strong>"Siap Dikirim"</strong>.
         </div>
         <div className="dz-grid-4">
-          <LibraryFileSlot clientId={clientId} platform="shopee"
-            tag="Periode Lalu"
-            accept=".xlsx,.xls"
-            channel="product_performance" onFiles={(files) => handleProductPerformanceFile(files, 'old')}
-            loaded={Boolean(productPerfFiles.old)}
-            fileName={productPerfFiles.old?.fileName}
-            infoText={productPerfFiles.old ? `${productPerfFiles.old.mainRows.length} baris` : undefined}
-            className="shopee-dz"
-            icon="📦"
-          />
-          <LibraryFileSlot clientId={clientId} platform="shopee"
-            tag="Periode Ini"
-            accept=".xlsx,.xls"
-            channel="product_performance" onFiles={(files) => handleProductPerformanceFile(files, 'cur')}
-            loaded={Boolean(productPerfFiles.cur)}
-            fileName={productPerfFiles.cur?.fileName}
-            infoText={productPerfFiles.cur ? `${productPerfFiles.cur.mainRows.length} baris` : undefined}
-            className="shopee-dz"
-            icon="📦"
-          />
+          {(['old', 'cur'] as const).map((role) => {
+            const perf = productPerfFiles[role];
+            const tag = role === 'old' ? 'Periode Lalu' : 'Periode Ini';
+            return sideSource(role) === 'upload' ? (
+              <ManualFileSlot
+                key={role} tag={tag} accept=".xlsx,.xls"
+                loaded={Boolean(perf)} fileName={perf?.fileName} infoText={perf ? `${perf.mainRows.length} baris` : undefined}
+                onFiles={(files) => handleProductPerformanceFile(files, role)}
+                onClear={() => clearProductPerformance(role)}
+              />
+            ) : (
+              <LibraryFileSlot key={role} clientId={clientId} platform="shopee"
+                tag={tag}
+                accept=".xlsx,.xls"
+                channel="product_performance" onFiles={(files) => handleProductPerformanceFile(files, role)}
+                loaded={Boolean(perf)}
+                fileName={perf?.fileName}
+                infoText={perf ? `${perf.mainRows.length} baris` : undefined}
+                className="shopee-dz"
+                icon="📦"
+              />
+            );
+          })}
         </div>
       </div>
 
