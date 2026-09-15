@@ -86,3 +86,90 @@
   .mil-ui .manual-slot .manual-slot-warning,
   .mil-ui .manual-slot .library-error { grid-column: 1; }
 }
+
+/* ── Library month picker ("Pilih Periode" dialog) ───────────────────────
+   Portalled into .report-generator-app, so .mil-ui tokens apply. Months are
+   grouped by year in a tile grid; each tile carries its date span and one
+   chip per channel instead of a long blue sentence. */
+.mil-ui .lib-picker-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 1rem; background: rgba(15, 26, 58, .38); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: lib-picker-fade .18s ease-out; }
+.mil-ui .lib-picker { display: flex; flex-direction: column; width: min(780px, 100%); max-height: min(84vh, 760px); overflow: hidden; border: 1px solid rgba(197, 208, 235, .95); border-radius: 20px; background: var(--surface, #fff); box-shadow: 0 30px 80px rgba(15, 26, 58, .28), 0 2px 8px rgba(15, 26, 58, .08); animation: lib-picker-in .22s cubic-bezier(.16, 1, .3, 1); }
+@keyframes lib-picker-fade { from { opacity: 0; } }
+@keyframes lib-picker-in { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+.mil-ui .lib-picker-head { display: flex; align-items: flex-start; gap: .8rem; padding: 1.1rem 1.2rem .9rem; border-bottom: 1px solid var(--border); background: linear-gradient(110deg, #f8faff, #fff); }
+.mil-ui .lib-picker-icon { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px; color: var(--acc); background: var(--acc-100); box-shadow: inset 0 0 0 1px rgba(30, 62, 184, .12); }
+.mil-ui .lib-picker-heading { flex: 1; min-width: 0; }
+.mil-ui .lib-picker-heading h2 { margin: 0; color: var(--text); font-size: 1rem; font-weight: 800; letter-spacing: -.02em; }
+.mil-ui .lib-picker-heading p { margin: .2rem 0 0; color: var(--muted); font-size: .74rem; line-height: 1.45; }
+.mil-ui .lib-picker-close { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; color: var(--muted); border: 1px solid var(--border); border-radius: 9px; background: var(--surface, #fff); cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.mil-ui .lib-picker-close:hover { color: var(--bad, #c81e1e); border-color: rgba(200, 30, 30, .3); background: var(--bad-100, #fef1f0); }
+.mil-ui .lib-picker-tools { display: flex; align-items: center; gap: .75rem; padding: .8rem 1.2rem; border-bottom: 1px solid var(--border); }
+.mil-ui .lib-picker-search { display: flex; flex: 1; align-items: center; gap: .5rem; min-width: 0; padding: .55rem .75rem; color: var(--muted); border: 1px solid var(--border); border-radius: 11px; background: var(--surface, #fff); transition: border-color .15s, box-shadow .15s; }
+.mil-ui .lib-picker-search:focus-within { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(30, 62, 184, .12); }
+.mil-ui .lib-picker-search input { flex: 1; min-width: 0; color: var(--text); border: 0; outline: none; background: transparent; font: inherit; font-size: .82rem; }
+.mil-ui .lib-picker-count { flex-shrink: 0; color: var(--muted); font-size: .7rem; font-weight: 700; }
+.mil-ui .lib-picker-body { flex: 1; min-height: 0; overflow-y: auto; padding: .4rem 1.2rem 1.1rem; scrollbar-width: thin; }
+.mil-ui .lib-picker-year + .lib-picker-year { margin-top: .4rem; }
+.mil-ui .lib-picker-year h3 { position: sticky; top: 0; z-index: 1; margin: 0; padding: .6rem 0 .45rem; color: var(--muted); background: var(--surface, #fff); font-size: .64rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.mil-ui .lib-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .55rem; }
+.mil-ui .lib-picker-month { display: flex; flex-direction: column; gap: .35rem; min-width: 0; padding: .75rem .8rem .8rem; color: var(--text); border: 1px solid var(--border); border-radius: 13px; background: var(--surface, #fff); box-shadow: var(--shadow-sm); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, box-shadow .18s, transform .18s cubic-bezier(.16, 1, .3, 1), background .15s; }
+.mil-ui .lib-picker-month:hover { border-color: var(--acc-300); box-shadow: 0 10px 24px rgba(15, 26, 58, .1); transform: translateY(-1px); }
+.mil-ui .lib-picker-month:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mil-ui .lib-picker-month.is-selected { border-color: var(--acc); background: var(--acc-100); box-shadow: 0 0 0 3px rgba(30, 62, 184, .1); }
+.mil-ui .lib-picker-month-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.mil-ui .lib-picker-month-top strong { font-size: .92rem; font-weight: 800; letter-spacing: -.015em; }
+.mil-ui .lib-picker-current { display: inline-flex; align-items: center; gap: .2rem; padding: .1rem .4rem; color: #fff; border-radius: 99px; background: var(--acc); font-size: .6rem; font-weight: 800; }
+.mil-ui .lib-picker-range { color: var(--muted); font-size: .7rem; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui .lib-picker-chips { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .1rem; }
+.mil-ui .lib-picker-chip { display: inline-flex; align-items: center; gap: .2rem; padding: .14rem .42rem; color: var(--acc-700, #142c82); border-radius: 6px; background: var(--s2); box-shadow: inset 0 0 0 1px var(--border); font-size: .62rem; font-weight: 700; white-space: nowrap; }
+.mil-ui .lib-picker-month.is-selected .lib-picker-chip { background: var(--surface, #fff); }
+.mil-ui .lib-picker-chip b { color: var(--muted); font-weight: 800; }
+.mil-ui .lib-picker-skeleton { height: 108px; border-radius: 13px; background: linear-gradient(90deg, #eef1f7 25%, #f6f8fc 50%, #eef1f7 75%) 0 0 / 200% 100%; animation: lib-picker-shimmer 1.2s linear infinite; }
+@keyframes lib-picker-shimmer { to { background-position: -200% 0; } }
+.mil-ui .lib-picker-empty { display: flex; flex-direction: column; align-items: center; gap: .3rem; padding: 2.2rem 1rem; color: var(--muted); text-align: center; font-size: .75rem; }
+.mil-ui .lib-picker-empty svg { color: var(--acc-300); }
+.mil-ui .lib-picker-empty strong { color: var(--text); font-size: .86rem; }
+.mil-ui .lib-picker-foot { display: flex; align-items: center; gap: .45rem; padding: .65rem 1.2rem; color: var(--muted); border-top: 1px solid var(--border); background: #fbfcff; font-size: .68rem; }
+.mil-ui .lib-picker-foot svg { color: var(--acc); }
+.mil-ui .lib-picker-foot kbd { margin-left: auto; padding: .08rem .38rem; color: var(--muted); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--surface, #fff); font: inherit; font-size: .62rem; font-weight: 700; }
+.mil-ui .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 640px) {
+  .mil-ui .lib-picker-backdrop { align-items: end; padding: 0; }
+  .mil-ui .lib-picker { width: 100%; max-height: 88vh; border-radius: 20px 20px 0 0; }
+  .mil-ui .lib-picker-grid { grid-template-columns: minmax(0, 1fr); }
+  .mil-ui .lib-picker-foot kbd { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mil-ui .lib-picker-backdrop, .mil-ui .lib-picker, .mil-ui .lib-picker-skeleton { animation: none; }
+  .mil-ui .lib-picker-month { transition: none; }
+}
+
+/* ── Saved-period card (SavedSlotCard, under "Pilih dari data tersimpan") ──
+   Drawn like the .library-source-trigger card so the period pick and the
+   per-channel library slots below it read as one family. */
+.mil-ui .saved-src-card { display: flex; align-items: center; gap: .8rem; width: 100%; min-height: 78px; padding: .85rem 1rem; color: var(--text); border: 1px solid var(--border); border-radius: 12px; background: var(--surface, #fff); box-shadow: var(--shadow-sm); font: inherit; text-align: left; }
+.mil-ui .saved-src-card.is-empty { cursor: pointer; transition: border-color .18s, background .18s, box-shadow .18s; }
+.mil-ui .saved-src-card.is-empty:hover { border-color: var(--acc); background: var(--acc-100); box-shadow: var(--shadow); }
+.mil-ui .saved-src-card.is-empty:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mil-ui .saved-src-card.is-filled { border-color: color-mix(in srgb, var(--acc) 45%, var(--border)); background: color-mix(in srgb, var(--acc) 5%, var(--surface, #fff)); }
+.mil-ui .saved-src-icon { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px; color: var(--muted); background: var(--s2); transition: color .18s, background .18s; }
+.mil-ui .saved-src-card.is-empty:hover .saved-src-icon,
+.mil-ui .saved-src-card.is-filled .saved-src-icon { color: var(--acc); background: var(--acc-100); }
+.mil-ui .saved-src-copy { display: grid; flex: 1; min-width: 0; gap: .18rem; }
+.mil-ui .saved-src-copy strong { overflow-wrap: anywhere; font-size: .86rem; font-weight: 700; letter-spacing: -.012em; }
+.mil-ui .saved-src-card.is-filled .saved-src-copy strong { color: var(--acc); font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui .saved-src-copy small { color: var(--muted); font-size: .72rem; line-height: 1.4; overflow-wrap: anywhere; }
+.mil-ui .saved-src-summary { font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui .saved-src-meta { font-size: .68rem !important; }
+.mil-ui .saved-src-go { flex-shrink: 0; color: var(--muted); transition: transform .18s, color .18s; }
+.mil-ui .saved-src-card.is-empty:hover .saved-src-go { color: var(--acc); transform: translateX(2px); }
+.mil-ui .saved-src-actions { display: flex; align-items: center; gap: .3rem; flex-shrink: 0; }
+.mil-ui .saved-src-change { padding: .38rem .75rem; color: var(--acc); border: 1px solid var(--acc-300); border-radius: 8px; background: var(--surface, #fff); font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; transition: background .15s, border-color .15s; }
+.mil-ui .saved-src-change:hover { border-color: var(--acc); background: var(--acc-100); }
+.mil-ui .saved-src-clear { display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); border: 0; border-radius: 8px; background: transparent; cursor: pointer; transition: color .15s, background .15s; }
+.mil-ui .saved-src-clear:hover { color: var(--bad, #c81e1e); background: var(--bad-100, #fef1f0); }
+.mil-ui .saved-src-change:focus-visible,
+.mil-ui .saved-src-clear:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+@media (max-width: 520px) {
+  .mil-ui .saved-src-card.is-filled { flex-wrap: wrap; }
+  .mil-ui .saved-src-card.is-filled .saved-src-actions { width: 100%; justify-content: flex-end; }
+}

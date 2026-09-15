@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { CalendarRange, Check, Database, Search, X } from 'lucide-react';
 import { getPortalContainer } from '../../utils/portalTarget';
 import { InlineNotice } from '../../components/InlineNotice';
 import api from '../../../api/client.js';
 import { formatMonth, type LibraryFile } from './LibraryFileSlot';
-import { formatChannelCoverage } from './savedPeriodLabels';
+import { channelLabel } from './savedPeriodLabels';
+import './librarySource.css';
 
 // One calendar month in the brand's library, regardless of whether it was
-// ever run through Generate — "Pilih Periode" (Shopee) uses this instead of
+// ever run through Generate — "Pilih Periode" uses this instead of
 // SavedPeriodPicker's report_runs-backed list so a month can be reused the
 // moment its files are uploaded to Pengaturan Brand, not only after a first
 // Generate. `channels` counts files per channel (not rows) — enough to tell
@@ -27,11 +29,24 @@ interface LibraryPeriodPickerProps {
   // pass only the channels they actually know how to apply.
   periodChannels: readonly string[];
   clientName?: string;
+  // Display only: which comparison side is being filled, and the month that
+  // side already holds (marked in the grid). Callers that omit them get the
+  // same dialog without those two hints.
+  sideLabel?: string;
+  selectedMonth?: string | null;
   onClose: () => void;
   onPick: (month: LibraryMonth) => void;
 }
 
-export function LibraryPeriodPicker({ clientId, platform, periodChannels, clientName, onClose, onPick }: LibraryPeriodPickerProps) {
+const SHORT_MONTH = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+function rangeText(start: string | null, end: string | null): string {
+  if (!start || !end) return 'Rentang tanggal belum terbaca';
+  const a = new Date(`${start.slice(0, 10)}T00:00:00Z`);
+  const b = new Date(`${end.slice(0, 10)}T00:00:00Z`);
+  return `${SHORT_MONTH.format(a)} – ${SHORT_MONTH.format(b)}`;
+}
+
+export function LibraryPeriodPicker({ clientId, platform, periodChannels, clientName, sideLabel, selectedMonth, onClose, onPick }: LibraryPeriodPickerProps) {
   const [months, setMonths] = useState<LibraryMonth[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -79,42 +94,99 @@ export function LibraryPeriodPicker({ clientId, platform, periodChannels, client
     return months.filter((m) => m.label.toLowerCase().includes(needle));
   }, [months, query]);
 
+  // Grouped by year so a long library reads as a calendar, not a feed.
+  const years = useMemo(() => {
+    const groups = new Map<string, LibraryMonth[]>();
+    for (const m of shown) {
+      const year = m.month.slice(0, 4);
+      groups.set(year, [...(groups.get(year) ?? []), m]);
+    }
+    return [...groups.entries()];
+  }, [shown]);
+
+  const subtitle = [sideLabel ? `Untuk ${sideLabel}` : null, clientName ?? null].filter(Boolean).join(' · ');
+
   return createPortal(
-    <div className="saved-modal-backdrop" onClick={onClose}>
-      <div className="saved-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="saved-modal-head">
-          <div>
-            <div className="saved-modal-title">Perpustakaan Brand{clientName ? ` — ${clientName}` : ''}</div>
-            <div className="saved-modal-sub">Pilih bulan — mengisi setiap channel yang tersedia untuk bulan itu sekaligus</div>
+    <div className="lib-picker-backdrop" onClick={onClose}>
+      <div className="lib-picker" role="dialog" aria-modal="true" aria-labelledby="lib-picker-title" onClick={(e) => e.stopPropagation()}>
+        <header className="lib-picker-head">
+          <span className="lib-picker-icon" aria-hidden="true"><CalendarRange size={18} /></span>
+          <div className="lib-picker-heading">
+            <h2 id="lib-picker-title">Pilih bulan dari perpustakaan</h2>
+            <p>{subtitle ? `${subtitle} — ` : ''}setiap channel yang tersedia di bulan itu terisi sekaligus.</p>
           </div>
-          <button type="button" className="saved-modal-close" onClick={onClose} aria-label="Tutup">
-            ✕
+          <button type="button" className="lib-picker-close" onClick={onClose} aria-label="Tutup">
+            <X size={16} />
           </button>
+        </header>
+
+        <div className="lib-picker-tools">
+          <label className="lib-picker-search">
+            <Search size={15} aria-hidden="true" />
+            <input placeholder="Cari bulan atau tahun…" value={query} autoFocus onChange={(e) => setQuery(e.target.value)} aria-label="Cari bulan" />
+          </label>
+          {months && !error && <span className="lib-picker-count">{shown.length} bulan</span>}
         </div>
 
-        <input className="saved-modal-search" placeholder="Cari bulan…" value={query} autoFocus onChange={(e) => setQuery(e.target.value)} />
-
-        <div className="saved-modal-body">
+        <div className="lib-picker-body">
           {error && <InlineNotice title="Perpustakaan tidak bisa dimuat">{error}</InlineNotice>}
-          {!months && !error && <div className="empty-note">Memuat…</div>}
-          {months && !error && shown.length === 0 && (
-            <div className="empty-note">{query.trim() ? 'Tidak ada bulan yang cocok.' : 'Belum ada file di Pengaturan Brand untuk platform ini.'}</div>
+          {!months && !error && (
+            <div className="lib-picker-grid" aria-busy="true">
+              {[0, 1, 2, 3].map((i) => <span key={i} className="lib-picker-skeleton" />)}
+              <span className="sr-only">Memuat…</span>
+            </div>
           )}
-          {shown.map((m) => (
-            <button
-              key={m.month}
-              type="button"
-              className="saved-card"
-              onClick={() => {
-                onPick(m);
-                onClose();
-              }}
-            >
-              <div className="saved-card-title">{m.label}</div>
-              <div className="saved-card-coverage">{formatChannelCoverage(m.channels)}</div>
-            </button>
+          {months && !error && shown.length === 0 && (
+            <div className="lib-picker-empty">
+              <Database size={22} aria-hidden="true" />
+              <strong>{query.trim() ? 'Tidak ada bulan yang cocok' : 'Belum ada file untuk platform ini'}</strong>
+              <span>{query.trim() ? 'Coba kata kunci lain, misalnya nama bulan atau tahun.' : 'Unggah file melalui Pengaturan Brand → Data & file, lalu buka lagi daftar ini.'}</span>
+            </div>
+          )}
+          {years.map(([year, list]) => (
+            <section key={year} className="lib-picker-year">
+              <h3>{year}</h3>
+              <div className="lib-picker-grid">
+                {list.map((m) => {
+                  const selected = selectedMonth === m.month;
+                  const channels = Object.entries(m.channels).filter(([, n]) => n > 0);
+                  return (
+                    <button
+                      key={m.month}
+                      type="button"
+                      className={`lib-picker-month${selected ? ' is-selected' : ''}`}
+                      aria-pressed={selected}
+                      onClick={() => {
+                        onPick(m);
+                        onClose();
+                      }}
+                    >
+                      <span className="lib-picker-month-top">
+                        <strong>{m.label.replace(` ${year}`, '')}</strong>
+                        {selected && <span className="lib-picker-current"><Check size={12} aria-hidden="true" /> Dipilih</span>}
+                      </span>
+                      <small className="lib-picker-range">{rangeText(m.start, m.end)}</small>
+                      <span className="lib-picker-chips">
+                        {channels.map(([ch, n]) => (
+                          <span key={ch} className="lib-picker-chip">
+                            {channelLabel(ch)}
+                            {n > 1 && <b>×{n}</b>}
+                          </span>
+                        ))}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
           ))}
         </div>
+
+        <footer className="lib-picker-foot">
+          <Database size={13} aria-hidden="true" />
+          <span>Hanya bulan yang punya file di Pengaturan Brand yang ditampilkan.</span>
+          <kbd>Esc</kbd>
+        </footer>
       </div>
     </div>,
     getPortalContainer(),

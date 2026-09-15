@@ -887,7 +887,12 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       </div>
 
       {pickerRole && clientId && (
-        <LibraryPeriodPicker clientId={clientId} platform="shopee" periodChannels={SHOPEE_PERIOD_CHANNELS} onClose={() => setPickerRole(null)} onPick={handlePickMonth} />
+        <LibraryPeriodPicker
+          clientId={clientId} platform="shopee" periodChannels={SHOPEE_PERIOD_CHANNELS}
+          sideLabel={pickerRole === 'old' ? 'Periode Lalu' : 'Periode Ini'}
+          selectedMonth={(pickerRole === 'old' ? oldPickedMonth : curPickedMonth)?.month ?? null}
+          onClose={() => setPickerRole(null)} onPick={handlePickMonth}
+        />
       )}
 
       <div className="source-block">

@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { CalendarCheck, CalendarRange, ChevronRight, X } from 'lucide-react';
+import '../features/reports/librarySource.css';
 
 // Small toggle shown above an upload slot: keep uploading a fresh file, or
 // reuse a period this client already uploaded before (picked via
@@ -60,34 +62,45 @@ interface SavedSlotCardProps {
   hint?: ReactNode;
 }
 
-// Replaces the <Dropzone> visually while a slot is in "saved" mode.
+// Replaces the <Dropzone> visually while a slot is in "saved" mode. Same
+// props and the same three actions (open picker / change / clear) as before —
+// only the drawing changed: the LibraryFileSlot trigger card (icon tile,
+// title + detail, chevron) instead of a dashed box with an emoji, so the
+// "saved" and per-channel library slots on the page read as one family.
 export function SavedSlotCard({ picked, onOpen, onClear, hint }: SavedSlotCardProps) {
   if (!picked) {
     return (
-      <button type="button" className="saved-slot-card empty" onClick={onOpen}>
-        <span className="saved-slot-icon" aria-hidden="true">
-          🗂️
+      <button type="button" className="saved-src-card is-empty" onClick={onOpen}>
+        <span className="saved-src-icon" aria-hidden="true"><CalendarRange size={19} /></span>
+        <span className="saved-src-copy">
+          <strong>Pilih periode tersimpan</strong>
+          <small>{hint ?? 'Buka daftar periode — semua channel yang tersedia terisi sekaligus'}</small>
         </span>
-        <span className="saved-slot-choose">Pilih periode tersimpan…</span>
-        {hint && <span className="saved-slot-hint">{hint}</span>}
+        <ChevronRight size={17} className="saved-src-go" aria-hidden="true" />
       </button>
     );
   }
+  // Meta passes metaLine: '' on purpose (its title already is the
+  // comparison); an empty override means "no footer", not an empty row.
+  const meta = picked.metaLine !== undefined
+    ? picked.metaLine
+    : picked.sourceComparison || picked.savedAt
+      ? `dari “${picked.sourceComparison}” · disimpan ${picked.savedAt}`
+      : '';
   return (
-    <div className="saved-slot-card filled">
-      <div className="saved-slot-main">
-        <div className="saved-slot-title">{picked.title}</div>
-        {picked.summary && <div className="saved-slot-summary">{picked.summary}</div>}
-        <div className="saved-slot-meta">{picked.metaLine ?? `dari “${picked.sourceComparison}” · disimpan ${picked.savedAt}`}</div>
-      </div>
-      <div className="saved-slot-actions">
-        <button type="button" className="btn btn-ghost saved-slot-change" onClick={onOpen}>
-          Ganti
+    <div className="saved-src-card is-filled">
+      <span className="saved-src-icon" aria-hidden="true"><CalendarCheck size={19} /></span>
+      <span className="saved-src-copy">
+        <strong>{picked.title}</strong>
+        {picked.summary && <small className="saved-src-summary">{picked.summary}</small>}
+        {meta && <small className="saved-src-meta">{meta}</small>}
+      </span>
+      <span className="saved-src-actions">
+        <button type="button" className="saved-src-change" onClick={onOpen}>Ganti</button>
+        <button type="button" className="saved-src-clear" title="Hapus pilihan" aria-label="Hapus pilihan" onClick={onClear}>
+          <X size={15} aria-hidden="true" />
         </button>
-        <button type="button" className="saved-slot-clear" title="Hapus pilihan" aria-label="Hapus pilihan" onClick={onClear}>
-          ✕
-        </button>
-      </div>
+      </span>
     </div>
   );
 }
