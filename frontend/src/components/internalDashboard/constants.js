@@ -12,8 +12,10 @@ export const SALES_CHANNELS = [
 export const AD_PLATFORMS = [
   { value: 'meta_nonboost', label: 'Meta — Non-boost (Main Account)' },
   { value: 'meta_boost', label: 'Meta — Boost Post' },
-  { value: 'meta_cpas', label: 'Meta — CPAS' },
+  { value: 'meta_cpas', label: 'Meta — CPAS Shopee' },
+  { value: 'cpas_tokopedia', label: 'Meta — CPAS Tokopedia' },
   { value: 'iklanku_shopee', label: 'Shopee Iklanku' },
+  { value: 'ttam_tiktok', label: 'TikTok Tokopedia Ads Manager (TTAM)' },
   { value: 'gmv_max_tiktok', label: 'TikTok GMV Max' },
   { value: 'google_ads', label: 'Google Ads' },
 ];
