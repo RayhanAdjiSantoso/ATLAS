@@ -1,6 +1,13 @@
 import pool from '../config/db.js';
 
-export async function listBrands() {
+export async function listBrands(allowedBrandId) {
+  if (allowedBrandId) {
+    const result = await pool.query(
+      'SELECT brand_id, brand_name, status::text AS status FROM public.brands WHERE brand_id = $1 ORDER BY brand_name',
+      [allowedBrandId],
+    );
+    return result.rows;
+  }
   const result = await pool.query(
     'SELECT brand_id, brand_name, status::text AS status FROM public.brands ORDER BY brand_name',
   );

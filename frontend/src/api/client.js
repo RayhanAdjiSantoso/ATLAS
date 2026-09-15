@@ -10,6 +10,22 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Backstop for view-only accounts: block every write client-side too, so
+  // stray writes (e.g. Report Generator's autosave effect) never reach the
+  // network. The server enforces this independently (blockWriteIfViewOnly);
+  // this only saves a doomed round-trip.
+  const method = (config.method || 'get').toLowerCase();
+  if (method !== 'get' && method !== 'head') {
+    try {
+      const stored = localStorage.getItem('atlas_user');
+      const storedUser = stored ? JSON.parse(stored) : null;
+      if (storedUser?.isViewOnly) {
+        return Promise.reject(new Error('Akun ini hanya dapat melihat data (view-only).'));
+      }
+    } catch { /* ignore malformed storage, let the request through */ }
+  }
+
   return config;
 });
 

@@ -9,6 +9,7 @@ import {
   ChevronsDownUp, ChevronsUpDown,
 } from 'lucide-react';
 import api from '../api/client';
+import { useAuth } from '../contexts/AuthContext.jsx';
 import DatePicker from '../components/dashboard/DatePicker.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
 import {
@@ -409,7 +410,7 @@ function SectionHead({ title, description, meta, tone }) {
   );
 }
 
-function SaveBar({ profile, saving, dirty, onSave }) {
+function SaveBar({ profile, saving, dirty, onSave, viewOnly }) {
   return (
     <div className="brand-save-bar">
       <span>
@@ -417,9 +418,9 @@ function SaveBar({ profile, saving, dirty, onSave }) {
           ? `Terakhir diperbarui ${new Date(profile.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}${profile.updated_by_name ? ` oleh ${profile.updated_by_name}` : ''}`
           : 'Belum pernah disimpan untuk brand ini'}
       </span>
-      <button type="button" className="btn btn-primary" onClick={onSave} disabled={saving || !dirty}>
+      <button type="button" className="btn btn-primary" onClick={onSave} disabled={viewOnly || saving || !dirty}>
         {saving ? <Loader2 size={16} className="brand-spin" /> : <Save size={16} />}
-        {saving ? 'Menyimpan…' : dirty ? 'Simpan perubahan' : 'Tersimpan'}
+        {viewOnly ? 'Lihat saja' : saving ? 'Menyimpan…' : dirty ? 'Simpan perubahan' : 'Tersimpan'}
       </button>
     </div>
   );
@@ -1159,6 +1160,7 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
 /* ── Page ───────────────────────────────────────────────────────────────── */
 
 export default function BrandSettingsPage() {
+  const { isViewOnly } = useAuth();
   const reduced = useReducedMotion();
   const [brands, setBrands] = useState([]);
   const [brand, setBrand] = useState(null);
@@ -1268,7 +1270,7 @@ export default function BrandSettingsPage() {
   );
 
   const saveProfile = async () => {
-    if (!brand) return;
+    if (!brand || isViewOnly) return;
     setSaving(true);
     try {
       const { data } = await api.put(`/brands/${brand.brand_id}/profile`, draft);
@@ -1285,6 +1287,7 @@ export default function BrandSettingsPage() {
   // form) instead of the page-level flash, which is styled as information and
   // sits far above a form the user has scrolled down to.
   const saveMinute = async (minute, id) => {
+    if (isViewOnly) return { ok: false, error: 'Akun ini hanya dapat melihat data.' };
     if (!brand) return { ok: false, error: 'Pilih brand terlebih dahulu.' };
     setMinuteBusy(true);
     try {
@@ -1312,7 +1315,7 @@ export default function BrandSettingsPage() {
   };
 
   const deleteMinute = async (minute) => {
-    if (!brand) return false;
+    if (!brand || isViewOnly) return false;
     if (!window.confirm(`Hapus catatan meeting ${dateLabel(minute.meeting_date)}? Status to do list ikut terhapus dan tindakan ini tidak dapat dibatalkan.`)) return false;
     setMinuteBusy(true);
     try {
@@ -1333,6 +1336,10 @@ export default function BrandSettingsPage() {
   // narrowed to one — so a file can never land in a period the user did not
   // choose.
   const pickFile = (dataset, month, replaceFile = null) => {
+    if (isViewOnly) {
+      setNotice('Akun ini hanya dapat melihat data.');
+      return;
+    }
     if (!brand) {
       setNotice('Pilih brand terlebih dahulu sebelum mengunggah file.');
       return;
@@ -1382,7 +1389,7 @@ export default function BrandSettingsPage() {
   // Impor ulang memakai byte yang sudah tersimpan di server — tidak menuntut
   // pengguna mengunggah file yang sama untuk kedua kalinya.
   const reimportFile = async (file) => {
-    if (!brand) return;
+    if (!brand || isViewOnly) return;
     setBusyKey(`import-${file.id}`);
     setNotice(null);
     try {
@@ -1405,7 +1412,7 @@ export default function BrandSettingsPage() {
   };
 
   const removeFile = async (file) => {
-    if (!brand) return;
+    if (!brand || isViewOnly) return;
     setBusyKey(fileKey(file.platform, file.channel, file.period_month?.slice(0, 7) ?? null));
     try {
       await api.delete(`/brands/${brand.brand_id}/library/${file.id}`);
@@ -1421,7 +1428,7 @@ export default function BrandSettingsPage() {
   const createBrand = async (event) => {
     event.preventDefault();
     const name = newName.trim();
-    if (!name || creatingBusy) return;
+    if (!name || creatingBusy || isViewOnly) return;
     setCreatingBusy(true);
     try {
       const { data } = await api.post('/brands', { brandName: name });
@@ -1436,6 +1443,7 @@ export default function BrandSettingsPage() {
   };
 
   async function changeStatus(item, status) {
+    if (isViewOnly) return;
     setStatusBusy(item.brand_id);
     setError(null);
     try {
@@ -1490,7 +1498,7 @@ export default function BrandSettingsPage() {
             <small>Setiap perubahan terikat pada satu sumber kebenaran.</small>
           </div>
           <BrandPicker brands={brands} brand={brand} sector={profile?.sector} onSelect={setBrand} reduced={reduced} />
-          {creating ? (
+          {isViewOnly ? null : creating ? (
             <form className="brand-new-form" onSubmit={createBrand}>
               <input
                 value={newName} onChange={(event) => setNewName(event.target.value)}
@@ -1561,7 +1569,7 @@ export default function BrandSettingsPage() {
         </div>
         <div className="brand-list-table"><table><thead><tr><th>Brand</th><th>Status klien</th><th>Pengaturan</th></tr></thead><tbody>
           {brands.filter(b => matchesBrandStatus(b, listStatus) && b.brand_name.toLowerCase().includes(listQuery.trim().toLowerCase())).map(b => <tr key={b.brand_id}>
-            <td>{b.brand_name}</td><td><select className={`brand-status-value is-${b.status || 'unknown'}`} aria-label={`Status ${b.brand_name}`} value={b.status ?? ''} disabled={statusBusy === b.brand_id} onChange={e => changeStatus(b, e.target.value)}>
+            <td>{b.brand_name}</td><td><select className={`brand-status-value is-${b.status || 'unknown'}`} aria-label={`Status ${b.brand_name}`} value={b.status ?? ''} disabled={isViewOnly || statusBusy === b.brand_id} onChange={e => changeStatus(b, e.target.value)}>
               {!b.status && <option value="" disabled>Belum diatur</option>}
               {['active', 'off', 'freeze'].map(status => <option key={status} value={status}>{BRAND_STATUS_LABELS[status]}</option>)}
             </select>{statusBusy === b.brand_id && <span role="status"> Menyimpan…</span>}</td>
@@ -1587,7 +1595,7 @@ export default function BrandSettingsPage() {
               <CircleAlert size={15} />
               <span>Jangan menulis ulang metrics dashboard di sini—berikan konteks yang menjelaskan <em>mengapa</em> angka dapat berubah.</span>
             </div>
-            <SaveBar profile={profile} saving={saving} dirty={dirty} onSave={saveProfile} />
+            <SaveBar profile={profile} saving={saving} dirty={dirty} onSave={saveProfile} viewOnly={isViewOnly} />
           </ViewShell>
         )}
 
@@ -1603,7 +1611,7 @@ export default function BrandSettingsPage() {
                 <Field key={key} label={label} guidance={guidance} value={draft[key]} onChange={setField(key)} />
               ))}
             </div>
-            <SaveBar profile={profile} saving={saving} dirty={dirty} onSave={saveProfile} />
+            <SaveBar profile={profile} saving={saving} dirty={dirty} onSave={saveProfile} viewOnly={isViewOnly} />
           </ViewShell>
         )}
 

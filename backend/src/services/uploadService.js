@@ -31,7 +31,7 @@ const UPLOAD_LIST_QUERY = `
   JOIN users usr ON usr.user_id = u.user_id
 `;
 
-export async function listUploads({ userId, role, filters = {} }) {
+export async function listUploads({ userId, role, allowedBrandId, filters = {} }) {
   const conditions = [];
   const params = [];
   let idx = 1;
@@ -39,6 +39,11 @@ export async function listUploads({ userId, role, filters = {} }) {
   if (role !== 'admin') {
     conditions.push(`u.user_id = $${idx++}`);
     params.push(userId);
+  }
+
+  if (allowedBrandId) {
+    conditions.push(`u.brand_id = $${idx++}`);
+    params.push(allowedBrandId);
   }
 
   if (filters.brand?.length > 0) {
@@ -179,9 +184,12 @@ export async function listUsersForFilter() {
   return result.rows;
 }
 
-export async function listBrandsForFilter() {
-  const result = await pool.query(
-    'SELECT DISTINCT brand_name FROM brands ORDER BY brand_name',
-  );
+export async function listBrandsForFilter(allowedBrandId) {
+  const result = allowedBrandId
+    ? await pool.query(
+        'SELECT DISTINCT brand_name FROM brands WHERE brand_id = $1 ORDER BY brand_name',
+        [allowedBrandId],
+      )
+    : await pool.query('SELECT DISTINCT brand_name FROM brands ORDER BY brand_name');
   return result.rows.map((r) => r.brand_name);
 }

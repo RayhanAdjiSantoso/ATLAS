@@ -34,7 +34,7 @@ function formatDate(iso) {
 }
 
 export default function HistoryPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isViewOnly } = useAuth();
   const [uploads, setUploads] = useState([]);
   const [filters, setFilters] = useState({ brand: [], fileType: [], userId: [], periodStart: '', periodEnd: '' });
   const [filterOptions, setFilterOptions] = useState({ brands: [], users: [] });
@@ -170,7 +170,7 @@ export default function HistoryPage() {
             <tbody>
               {uploads.map((u) => {
                 const st = STATUS_LABELS[u.status] || STATUS_LABELS.pending;
-                const canDelete = isAdmin || u.user_id === user?.userId;
+                const canDelete = !isViewOnly && (isAdmin || u.user_id === user?.userId);
                 const src = SOURCE_LABELS[u.source] || SOURCE_LABELS.dashboard;
                 // Report Generator rows have no file_type (that enum is
                 // Dashboard-specific) — report_channel carries their own

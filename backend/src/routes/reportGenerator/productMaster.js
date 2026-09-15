@@ -20,6 +20,10 @@ productMasterRouter.get('/', async (req, res) => {
     res.status(400).json({ error: 'brandId is required' });
     return;
   }
+  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
+    return;
+  }
   const { rows } = await pool.query(
     'SELECT nama_produk_clean, category, series FROM ads_reports.product_master WHERE brand_id = $1 ORDER BY nama_produk_clean',
     [brandId],
@@ -36,6 +40,10 @@ productMasterRouter.put('/', async (req, res) => {
   const rawEntries = req.body?.entries;
   if (!brandId || !Array.isArray(rawEntries)) {
     res.status(400).json({ error: 'brandId (number) and entries (array) are required' });
+    return;
+  }
+  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
   const entries = [];
@@ -82,6 +90,10 @@ productMasterRouter.post('/', async (req, res) => {
   const series = typeof req.body?.series === 'string' ? req.body.series.trim() : '';
   if (!brandId || !namaProdukClean || !category) {
     res.status(400).json({ error: 'brandId, namaProdukClean, and category are required' });
+    return;
+  }
+  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
   try {

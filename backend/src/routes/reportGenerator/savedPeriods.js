@@ -38,6 +38,10 @@ savedPeriodsRouter.get('/', async (req, res) => {
     res.status(400).json({ error: 'platform must be one of: meta, shopee, tiktok' });
     return;
   }
+  if (req.user.allowedBrandId && clientId !== req.user.allowedBrandId) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
+    return;
+  }
 
   const runs = await pool.query(
     `SELECT id,
