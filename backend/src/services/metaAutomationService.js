@@ -1,8 +1,12 @@
 import { config } from '../config/index.js';
 import { AppError } from '../utils/errors.js';
 
-const MAX_ATTEMPTS = 3;
-const RETRY_DELAY_MS = 1000;
+// Bumped from 3/1000 — the Meta Ads Automation tabs each fire 2-3 of these
+// in parallel on load (tracking + accounts + brands), which is exactly the
+// "concurrent script executions" condition the comment below warns about,
+// so the old budget (~3s across 3 tries) wasn't always enough headroom.
+const MAX_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 1200;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

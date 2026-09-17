@@ -19,21 +19,28 @@ export default function BrandsSection() {
   const [formMessage, setFormMessage] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
     setError('');
-    Promise.all([
-      api.get('/meta-automation/brands'),
-      api.get('/meta-automation/subscriptions'),
-      api.get('/brands'),
-    ])
-      .then(([brandsRes, subsRes, atlasBrandsRes]) => {
-        setBrands(brandsRes.data.brands || []);
-        setSubscriptions(subsRes.data.subscriptions || []);
-        setAtlasBrandNames((atlasBrandsRes.data.brands || []).map((b) => b.brand_name).sort());
-      })
-      .catch((err) => setError(err.response?.data?.message || 'Gagal memuat brand'))
-      .finally(() => setLoading(false));
+    try {
+      // /meta-automation/brands and /subscriptions both hit the SAME Apps
+      // Script Web App — sequential, not Promise.all, so the two requests
+      // never overlap (concurrent calls to one Apps Script project can make
+      // Google's front end serve an interstitial page instead of proxying
+      // through — see metaAutomationService.js). /brands is ATLAS's own
+      // endpoint, unaffected, so it stays independent.
+      const atlasBrandsPromise = api.get('/brands');
+      const brandsRes = await api.get('/meta-automation/brands');
+      const subsRes = await api.get('/meta-automation/subscriptions');
+      const atlasBrandsRes = await atlasBrandsPromise;
+      setBrands(brandsRes.data.brands || []);
+      setSubscriptions(subsRes.data.subscriptions || []);
+      setAtlasBrandNames((atlasBrandsRes.data.brands || []).map((b) => b.brand_name).sort());
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal memuat brand');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(load, []);
@@ -108,7 +115,12 @@ export default function BrandsSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && (
+        <div className="alert alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          <span>{error} — Apps Script kadang sempat membalas halaman "loading" saat baru dipanggil, coba lagi tanpa refresh browser.</span>
+          <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}>Coba Lagi</button>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (

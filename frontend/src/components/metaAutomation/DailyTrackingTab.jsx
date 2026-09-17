@@ -64,21 +64,29 @@ export default function DailyTrackingTab() {
   // existed; the field stays optional in that case rather than blocking save.
   const atlasBrandMatch = atlasBrands.find((b) => b.brand_name === accountSelection.brand);
 
-  const loadAll = () => {
+  const loadAll = async () => {
     setLoading(true);
     setError('');
-    Promise.all([
-      api.get('/meta-automation/tracking'),
-      api.get('/meta-automation/accounts'),
-      api.get('/brands'),
-    ])
-      .then(([trackingRes, accountsRes, atlasBrandsRes]) => {
-        setConfigs(trackingRes.data.configs || []);
-        setAccounts(accountsRes.data.accounts || []);
-        setAtlasBrands(atlasBrandsRes.data.brands || []);
-      })
-      .catch((err) => setError(err.response?.data?.message || 'Gagal memuat data'))
-      .finally(() => setLoading(false));
+    try {
+      // /meta-automation/tracking and /accounts both hit the SAME Apps
+      // Script Web App — firing them at once is exactly the "concurrent
+      // script executions" condition that makes Google's front end serve an
+      // interstitial page instead of proxying through (see
+      // metaAutomationService.js). Sequential, not Promise.all, so the two
+      // requests never overlap. /brands is ATLAS's own endpoint, unaffected,
+      // so it stays independent.
+      const atlasBrandsPromise = api.get('/brands');
+      const trackingRes = await api.get('/meta-automation/tracking');
+      const accountsRes = await api.get('/meta-automation/accounts');
+      const atlasBrandsRes = await atlasBrandsPromise;
+      setConfigs(trackingRes.data.configs || []);
+      setAccounts(accountsRes.data.accounts || []);
+      setAtlasBrands(atlasBrandsRes.data.brands || []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal memuat data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(loadAll, []);
@@ -223,7 +231,12 @@ export default function DailyTrackingTab() {
       </div>
       {runAllMessage && <div className={`alert alert-${runAllMessage.type}`}>{runAllMessage.text}</div>}
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && (
+        <div className="alert alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          <span>{error} — Apps Script kadang sempat membalas halaman "loading" saat baru dipanggil, coba lagi tanpa refresh browser.</span>
+          <button type="button" className="btn btn-secondary" onClick={loadAll} disabled={loading}>Coba Lagi</button>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
