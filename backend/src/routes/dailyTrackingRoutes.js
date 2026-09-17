@@ -2,12 +2,14 @@ import { Router } from 'express';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { requireBrandAccess } from '../middlewares/brandAccess.js';
 import { verifyIngestKey } from '../middlewares/dailyTrackingIngestAuth.js';
+import { uploadDataFile } from '../middlewares/upload.js';
 import * as ctrl from '../controllers/dailyTrackingController.js';
 import {
   channelsQueryValidation,
   addChannelBodyValidation,
   entriesQueryValidation,
   upsertEntriesBodyValidation,
+  importFileBodyValidation,
   metaSyncBodyValidation,
   ingestBodyValidation,
 } from '../validators/dailyTrackingValidators.js';
@@ -40,6 +42,11 @@ router.put(
   '/entries',
   authenticate, requireBrandAccess((req) => req.body.brandId),
   upsertEntriesBodyValidation, ctrl.upsertEntries,
+);
+router.post(
+  '/import',
+  authenticate, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),
+  importFileBodyValidation, ctrl.importFile,
 );
 router.post(
   '/meta-sync',

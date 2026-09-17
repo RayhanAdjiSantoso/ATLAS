@@ -29,6 +29,19 @@ export async function insertCustomChannel(v, db = pool) {
   return rows[0];
 }
 
+// Idempotent variant for bulk file import (dailyTrackingImportParser can
+// re-discover the same custom channel across many rows/imports) — silently
+// a no-op if the channel already exists, unlike insertCustomChannel which
+// the manual "+ Tambah Channel Baru" flow wants to reject as a 409 duplicate.
+export async function upsertCustomChannelIfMissing(v, db = pool) {
+  await db.query(
+    `INSERT INTO daily_tracking_channels (brand_id, kind, channel_key, label, created_by)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (brand_id, kind, channel_key) DO NOTHING`,
+    [v.brandId, v.kind, v.channelKey, v.label, v.userId ?? null],
+  );
+}
+
 // ---------------------------------------------------------------------
 // daily_channel_sales
 // ---------------------------------------------------------------------

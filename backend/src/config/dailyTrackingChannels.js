@@ -31,3 +31,17 @@ export const FIXED_SPEND_KEYS = new Set(FIXED_SPEND_CHANNELS.map((c) => c.key));
 // Collaborative Ads/Shopee catalog) — same pull mechanism as Boost/Non-Boost
 // (campaign-level Meta Graph API insights, H-1), just no name-based split.
 export const META_SYNC_CHANNEL_KEYS = ['meta_boost_post', 'meta_nonboost_post', 'cpas_shopee'];
+
+export const FIXED_SALES_LABELS = Object.fromEntries(FIXED_SALES_CHANNELS.map((c) => [c.key, c.label]));
+export const FIXED_SPEND_LABELS = Object.fromEntries(FIXED_SPEND_CHANNELS.map((c) => [c.key, c.label]));
+
+// Shared by dailyTrackingService (manual "+ Tambah Channel Baru") and
+// dailyTrackingImportParser (a bulk file upload inventing a channel key from
+// a spreadsheet column header it doesn't recognize as a fixed channel).
+export function slugifyChannelLabel(label) {
+  return String(label || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}

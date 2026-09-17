@@ -59,6 +59,19 @@ export const runMetaSync = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
+// POST /api/daily-tracking/import  multipart: file, brandId
+export const importFile = asyncHandler(async (req, res) => {
+  validate(req);
+  if (!req.file) throw new AppError('File wajib diunggah', 400);
+  const result = await service.importFromFile({
+    brandId: Number(req.body.brandId),
+    buffer: req.file.buffer,
+    filename: req.file.originalname,
+    userId: req.user.userId,
+  });
+  res.json(result);
+});
+
 // POST /api/daily-tracking/ingest  { brandId, entryDate, entries }
 // Called by Apps Script's scheduled 1am WIB run — no req.user (see
 // middlewares/dailyTrackingIngestAuth.js).

@@ -27,6 +27,10 @@ export const upsertEntriesBodyValidation = [
   body('spend.*.channelKey').if(body('spend').exists()).isString().notEmpty(),
 ];
 
+export const importFileBodyValidation = [
+  body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+];
+
 export const metaSyncBodyValidation = [
   body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
   body('trackingConfigId').notEmpty().withMessage('trackingConfigId wajib disertakan'),

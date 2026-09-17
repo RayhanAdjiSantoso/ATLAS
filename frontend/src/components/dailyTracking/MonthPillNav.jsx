@@ -14,16 +14,22 @@ function monthLabel(ym) {
   return `${MONTH_LABELS[m - 1]} ${String(y).slice(2)}`;
 }
 
-// A sliding window of WINDOW_SIZE month pills ending at whichever month is
-// furthest along (the selected one, or "now" if the user has paged back) —
-// paging with the arrows shifts the whole window by one month.
+// A sliding window of WINDOW_SIZE month pills that always keeps the selected
+// month visible: it defaults to the WINDOW_SIZE most recent months ending at
+// "now", but slides forward for a future selection and BACKWARD for a past
+// one outside that default range (e.g. backfilling January while "now" is
+// September) — sliding only forward here was the original bug: paging back
+// past the default window's start left no pill active at all.
 export default function MonthPillNav({ month, onChange }) {
   const nowYm = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   })();
-  const windowEnd = month > nowYm ? month : nowYm;
-  const windowStart = shiftMonth(windowEnd, -(WINDOW_SIZE - 1));
+  const defaultStart = shiftMonth(nowYm, -(WINDOW_SIZE - 1));
+  let windowStart;
+  if (month > nowYm) windowStart = shiftMonth(month, -(WINDOW_SIZE - 1));
+  else if (month < defaultStart) windowStart = month;
+  else windowStart = defaultStart;
   const months = [];
   for (let i = 0; i < WINDOW_SIZE; i += 1) months.push(shiftMonth(windowStart, i));
 
