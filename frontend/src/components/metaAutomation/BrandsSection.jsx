@@ -10,6 +10,7 @@ const EMPTY_FORM = { id: '', client: '', type: 'MAIN', token: '' };
 export default function BrandsSection() {
   const [brands, setBrands] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [atlasBrandNames, setAtlasBrandNames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -24,10 +25,12 @@ export default function BrandsSection() {
     Promise.all([
       api.get('/meta-automation/brands'),
       api.get('/meta-automation/subscriptions'),
+      api.get('/brands'),
     ])
-      .then(([brandsRes, subsRes]) => {
+      .then(([brandsRes, subsRes, atlasBrandsRes]) => {
         setBrands(brandsRes.data.brands || []);
         setSubscriptions(subsRes.data.subscriptions || []);
+        setAtlasBrandNames((atlasBrandsRes.data.brands || []).map((b) => b.brand_name).sort());
       })
       .catch((err) => setError(err.response?.data?.message || 'Gagal memuat brand'))
       .finally(() => setLoading(false));
@@ -185,11 +188,16 @@ export default function BrandsSection() {
           </div>
           <div className="form-group">
             <label>Nama Brand</label>
+            {/* Dibatasi ke daftar brand ATLAS (sama seperti pemilih brand di
+                Dashboard Business Overview / Report Generator) — bukan lagi
+                bebas ketik, supaya nama di sini selalu bisa ditautkan ke
+                brand_id ATLAS yang benar (dipakai Daily Tracking untuk
+                memfilter dropdown "Pilih config" per brand). */}
             <BrandCombo
-              options={Array.from(new Set(brands.map((b) => b.client))).sort()}
+              options={atlasBrandNames}
               value={form.client}
-              placeholder="mis. Maiimi"
-              allowCustom
+              placeholder="Pilih brand ATLAS..."
+              allowCustom={false}
               onChange={(v) => setForm((f) => ({ ...f, client: v }))}
             />
           </div>

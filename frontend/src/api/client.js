@@ -15,8 +15,14 @@ api.interceptors.request.use((config) => {
   // stray writes (e.g. Report Generator's autosave effect) never reach the
   // network. The server enforces this independently (blockWriteIfViewOnly);
   // this only saves a doomed round-trip.
+  //
+  // Daily Tracking is a deliberate exception: view-only/client accounts are
+  // allowed to write their own brand's daily sales + ad spend there (the
+  // server enforces the brand lock via requireBrandAccess, not
+  // blockWriteIfViewOnly — see backend/src/routes/dailyTrackingRoutes.js).
   const method = (config.method || 'get').toLowerCase();
-  if (method !== 'get' && method !== 'head') {
+  const isViewOnlyWriteAllowed = /^\/daily-tracking(\/|\?|$)/.test(config.url || '');
+  if (method !== 'get' && method !== 'head' && !isViewOnlyWriteAllowed) {
     try {
       const stored = localStorage.getItem('atlas_user');
       const storedUser = stored ? JSON.parse(stored) : null;
