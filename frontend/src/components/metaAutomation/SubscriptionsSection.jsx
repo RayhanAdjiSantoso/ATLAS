@@ -227,19 +227,23 @@ export default function SubscriptionsSection() {
   const [formMessage, setFormMessage] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
     setError('');
-    Promise.all([
-      api.get('/meta-automation/subscriptions'),
-      api.get('/meta-automation/brands'),
-    ])
-      .then(([subsRes, brandsRes]) => {
-        setSubscriptions(subsRes.data.subscriptions || []);
-        setBrands(brandsRes.data.brands || []);
-      })
-      .catch((err) => setError(err.response?.data?.message || 'Gagal memuat langganan'))
-      .finally(() => setLoading(false));
+    try {
+      // Both hit the SAME Apps Script Web App — sequential, not Promise.all,
+      // so the two requests never overlap (concurrent calls to one Apps
+      // Script project can make Google's front end serve an interstitial
+      // page instead of proxying through — see metaAutomationService.js).
+      const subsRes = await api.get('/meta-automation/subscriptions');
+      const brandsRes = await api.get('/meta-automation/brands');
+      setSubscriptions(subsRes.data.subscriptions || []);
+      setBrands(brandsRes.data.brands || []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal memuat langganan');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(load, []);
@@ -351,7 +355,12 @@ export default function SubscriptionsSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && (
+        <div className="alert alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          <span>{error} — Apps Script kadang sempat membalas halaman "loading" saat baru dipanggil, coba lagi tanpa refresh browser.</span>
+          <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}>Coba Lagi</button>
+        </div>
+      )}
 
       <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
