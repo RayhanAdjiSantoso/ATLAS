@@ -9,6 +9,7 @@ import DailyEntryTable from '../components/dailyTracking/DailyEntryTable.jsx';
 import ChannelSummaryTable from '../components/dailyTracking/ChannelSummaryTable.jsx';
 import AddCustomChannelModal from '../components/dailyTracking/AddCustomChannelModal.jsx';
 import MetaSyncButton from '../components/dailyTracking/MetaSyncButton.jsx';
+import ImportFileButton from '../components/dailyTracking/ImportFileButton.jsx';
 import useAutoSave from '../dailyTracking/lib/useAutoSave.js';
 import { FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS } from '../dailyTracking/lib/constants.js';
 import '../components/dailyTracking/dailyTracking.css';
@@ -131,6 +132,11 @@ export default function DailyTrackingPage() {
       </div>
 
       {loadError && <div className="alert alert-error">{loadError}</div>}
+
+      <ImportFileButton
+        brandId={brandId}
+        onImported={() => { loadChannels(); loadEntries(); }}
+      />
 
       <section className="dt-section">
         <div className="dt-section-head">

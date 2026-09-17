@@ -53,9 +53,9 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                   <>
                     <td>
                       <input
-                        type="number" min="0" inputMode="decimal"
-                        value={row.revenue ?? ''}
-                        onChange={(e) => onCellChange(date, 'revenue', e.target.value)}
+                        type="text" inputMode="numeric"
+                        value={formatThousands(row.revenue)}
+                        onChange={(e) => onCellChange(date, 'revenue', parseThousandsInput(e.target.value))}
                       />
                     </td>
                     <td>

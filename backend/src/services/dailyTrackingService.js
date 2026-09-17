@@ -6,8 +6,9 @@ import { callAppsScript } from './metaAutomationService.js';
 import {
   FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS,
   FIXED_SALES_KEYS, FIXED_SPEND_KEYS,
-  META_SYNC_CHANNEL_KEYS,
+  META_SYNC_CHANNEL_KEYS, slugifyChannelLabel,
 } from '../config/dailyTrackingChannels.js';
+import { parseDailyTrackingFile } from './dailyTrackingImportParser.js';
 
 async function assertBrand(brandId) {
   const brand = await brandService.getBrandById(brandId);
@@ -32,11 +33,7 @@ async function inTransaction(work) {
   }
 }
 
-const slugify = (label) => label
-  .trim()
-  .toLowerCase()
-  .replace(/[^a-z0-9]+/g, '_')
-  .replace(/^_+|_+$/g, '');
+const slugify = slugifyChannelLabel;
 
 // ---------------------------------------------------------------------
 // Channels
@@ -239,6 +236,70 @@ export async function runMetaSyncNow({ brandId, trackingConfigId, userId }) {
     },
     skipped,
   };
+}
+
+// ---------------------------------------------------------------------
+// Bulk file upload ("Upload File Daily Tracking") — a client's own Google
+// Sheet export (CSV/XLS/XLSX), best-effort parsed by
+// dailyTrackingImportParser and written the same way a human bulk-editing
+// the table would: source='manual', locked_manual=TRUE on every spend cell
+// touched, so a later Meta sync never silently overwrites an imported value.
+// ---------------------------------------------------------------------
+export async function importFromFile({ brandId, buffer, filename, userId }) {
+  await assertBrand(brandId);
+  const parsed = parseDailyTrackingFile(buffer, filename);
+
+  return inTransaction(async (db) => {
+    for (const c of parsed.recognizedSales) {
+      if (!c.isCustom) continue;
+      await repo.upsertCustomChannelIfMissing({ brandId, kind: 'sales', channelKey: c.key, label: c.label, userId }, db);
+    }
+    for (const c of parsed.recognizedSpend) {
+      if (!c.isCustom) continue;
+      await repo.upsertCustomChannelIfMissing({ brandId, kind: 'spend', channelKey: c.key, label: c.label, userId }, db);
+    }
+
+    for (const r of parsed.salesRows) {
+      await repo.upsertSalesEntry({
+        brandId, entryDate: r.entryDate, channelKey: r.channelKey,
+        revenue: r.revenue, qtySold: r.qtySold, transaksi: r.transaksi, userId,
+      }, db);
+    }
+    for (const r of parsed.spendRows) {
+      await repo.upsertManualSpendEntry({
+        brandId, entryDate: r.entryDate, channelKey: r.channelKey, amountSpent: r.amount, userId,
+      }, db);
+    }
+
+    const monthsAffected = [...new Set([...parsed.salesRows, ...parsed.spendRows].map((r) => r.entryDate.slice(0, 7)))].sort();
+    for (const month of monthsAffected) {
+      const entryDate = `${month}-01`;
+      const salesCount = parsed.salesRows.filter((r) => r.entryDate.startsWith(month)).length;
+      const spendCount = parsed.spendRows.filter((r) => r.entryDate.startsWith(month)).length;
+      if (salesCount) {
+        await repo.logIngestion({
+          brandId, targetTable: 'daily_channel_sales', entryDate, source: 'manual',
+          rowCount: salesCount, status: 'success', note: `Impor file: ${filename}`, performedBy: userId,
+        }, db);
+      }
+      if (spendCount) {
+        await repo.logIngestion({
+          brandId, targetTable: 'daily_channel_spend', entryDate, source: 'manual',
+          rowCount: spendCount, status: 'success', note: `Impor file: ${filename}`, performedBy: userId,
+        }, db);
+      }
+    }
+
+    return {
+      fileName: filename,
+      dataRowsParsed: parsed.dataRowsParsed,
+      salesSaved: parsed.salesRows.length,
+      spendSaved: parsed.spendRows.length,
+      recognizedSales: parsed.recognizedSales,
+      recognizedSpend: parsed.recognizedSpend,
+      monthsAffected,
+    };
+  });
 }
 
 // Scheduled 1am WIB ingest — called by apps-script/DailyTrackingBoostPost.gs's
