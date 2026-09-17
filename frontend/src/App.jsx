@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import DailyTrackingPage from './pages/DailyTrackingPage.jsx';
 import HistoryPage from './pages/HistoryPage.jsx';
 import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
 import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
@@ -23,6 +24,10 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          {/* No role restriction — internal staff AND client accounts fill
+              this in themselves, so it can't sit behind the admin-only block
+              below like meta-automation/internal-dashboard do. */}
+          <Route path="/daily-tracking" element={<DailyTrackingPage />} />
           {/* Ingest, moved off Business Overview's tab strip. Any logged-in
               user may load their brand's data, same as before — it was an
               unrestricted tab, so restricting it here would take away access

@@ -1,0 +1,251 @@
+import pool from '../config/db.js';
+import { AppError } from '../utils/errors.js';
+import * as brandService from './brandService.js';
+import * as repo from '../repositories/dailyTrackingRepository.js';
+import { callAppsScript } from './metaAutomationService.js';
+import {
+  FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS,
+  FIXED_SALES_KEYS, FIXED_SPEND_KEYS,
+  META_SYNC_CHANNEL_KEYS,
+} from '../config/dailyTrackingChannels.js';
+
+async function assertBrand(brandId) {
+  const brand = await brandService.getBrandById(brandId);
+  if (!brand) throw new AppError('Client tidak ditemukan', 404);
+  return brand;
+}
+
+// Run `work(client)` inside a transaction — mirrors internalDashboardService's
+// inTransaction, so a fact upsert and its ingestion-log row never diverge.
+async function inTransaction(work) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+const slugify = (label) => label
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '');
+
+// ---------------------------------------------------------------------
+// Channels
+// ---------------------------------------------------------------------
+export async function listChannels(brandId) {
+  await assertBrand(brandId);
+  const [customSales, customSpend] = await Promise.all([
+    repo.listCustomChannels(brandId, 'sales'),
+    repo.listCustomChannels(brandId, 'spend'),
+  ]);
+  return {
+    sales: [
+      ...FIXED_SALES_CHANNELS.map((c) => ({ ...c, isCustom: false })),
+      ...customSales.map((c) => ({ key: c.channel_key, label: c.label, isCustom: true })),
+    ],
+    spend: [
+      ...FIXED_SPEND_CHANNELS.map((c) => ({ ...c, isCustom: false })),
+      ...customSpend.map((c) => ({ key: c.channel_key, label: c.label, isCustom: true })),
+    ],
+  };
+}
+
+export async function addCustomChannel({ brandId, kind, label, userId }) {
+  await assertBrand(brandId);
+  if (!['sales', 'spend'].includes(kind)) throw new AppError('kind harus sales atau spend', 400);
+  const trimmed = (label || '').trim();
+  if (!trimmed) throw new AppError('Nama channel wajib diisi', 400);
+
+  const channelKey = slugify(trimmed);
+  if (!channelKey) throw new AppError('Nama channel tidak valid', 400);
+
+  const fixedKeys = kind === 'sales' ? FIXED_SALES_KEYS : FIXED_SPEND_KEYS;
+  if (fixedKeys.has(channelKey)) throw new AppError('Channel itu sudah ada', 409);
+
+  try {
+    const row = await repo.insertCustomChannel({ brandId, kind, channelKey, label: trimmed, userId });
+    return { key: row.channel_key, label: row.label, isCustom: true };
+  } catch (err) {
+    if (err.code === '23505') throw new AppError('Channel itu sudah ada', 409);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Month grid — feeds the entry table, KPI strip, and channel summary table
+// in one round trip.
+// ---------------------------------------------------------------------
+function daysInMonth(month) {
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const days = [];
+  for (let d = 1; d <= last; d += 1) days.push(`${month}-${String(d).padStart(2, '0')}`);
+  return days;
+}
+
+export async function getMonthEntries(brandId, month) {
+  await assertBrand(brandId);
+  const days = daysInMonth(month);
+  const startDate = days[0];
+  const endDate = days[days.length - 1];
+
+  const [salesRows, spendRows] = await Promise.all([
+    repo.listSalesForMonth(brandId, startDate, endDate),
+    repo.listSpendForMonth(brandId, startDate, endDate),
+  ]);
+
+  const sales = {};
+  for (const r of salesRows) {
+    (sales[r.channel_key] ??= {})[r.entry_date] = {
+      revenue: r.revenue == null ? null : Number(r.revenue),
+      qtySold: r.qty_sold,
+      transaksi: r.transaksi,
+    };
+  }
+
+  const spend = {};
+  for (const r of spendRows) {
+    (spend[r.channel_key] ??= {})[r.entry_date] = {
+      amount: r.amount_spent == null ? null : Number(r.amount_spent),
+      source: r.source,
+      lockedManual: r.locked_manual,
+      syncedAt: r.synced_at,
+    };
+  }
+
+  return { days, sales, spend };
+}
+
+// ---------------------------------------------------------------------
+// Manual entry — always sets source='manual', locked_manual=TRUE on any
+// spend row it touches (decision: a human edit permanently overrides
+// whatever the Meta sync last wrote for that cell).
+// ---------------------------------------------------------------------
+const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
+
+export async function upsertEntries({ brandId, entryDate, sales, spend, userId }) {
+  await assertBrand(brandId);
+  if (!Array.isArray(sales) || !sales.length) sales = [];
+  if (!Array.isArray(spend) || !spend.length) spend = [];
+  if (!sales.length && !spend.length) throw new AppError('Tidak ada data untuk disimpan', 400);
+
+  return inTransaction(async (db) => {
+    let salesCount = 0;
+    let spendCount = 0;
+
+    for (const s of sales) {
+      await repo.upsertSalesEntry({
+        brandId, entryDate, channelKey: s.channelKey,
+        revenue: num(s.revenue), qtySold: num(s.qtySold), transaksi: num(s.transaksi),
+        userId,
+      }, db);
+      salesCount += 1;
+    }
+    if (salesCount) {
+      await repo.logIngestion({
+        brandId, targetTable: 'daily_channel_sales', entryDate,
+        source: 'manual', rowCount: salesCount, status: 'success', performedBy: userId,
+      }, db);
+    }
+
+    for (const s of spend) {
+      await repo.upsertManualSpendEntry({
+        brandId, entryDate, channelKey: s.channelKey, amountSpent: num(s.amount), userId,
+      }, db);
+      spendCount += 1;
+    }
+    if (spendCount) {
+      await repo.logIngestion({
+        brandId, targetTable: 'daily_channel_spend', entryDate,
+        source: 'manual', rowCount: spendCount, status: 'success', performedBy: userId,
+      }, db);
+    }
+
+    return { saved: { sales: salesCount, spend: spendCount } };
+  });
+}
+
+// ---------------------------------------------------------------------
+// Meta sync — shared by the manual "Sync Meta Sekarang" button and the
+// scheduled ingest (see routes for which one calls which entry point).
+// Respects locked_manual: a channel already manually overridden is
+// reported as skipped, never overwritten.
+// ---------------------------------------------------------------------
+async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
+  return inTransaction(async (db) => {
+    const applied = [];
+    const skipped = [];
+    for (const e of entries) {
+      if (!META_SYNC_CHANNEL_KEYS.includes(e.channelKey)) { skipped.push(e.channelKey); continue; }
+      const amount = num(e.amount);
+      if (amount == null) { skipped.push(e.channelKey); continue; }
+      const row = await repo.upsertApiSpendEntry({
+        brandId, entryDate, channelKey: e.channelKey, amountSpent: amount, userId,
+      }, db);
+      if (row) applied.push(e.channelKey); else skipped.push(e.channelKey);
+    }
+    await repo.logIngestion({
+      brandId, targetTable: 'daily_channel_spend', entryDate,
+      source: 'meta_api', rowCount: applied.length,
+      status: applied.length === entries.length ? 'success' : applied.length ? 'partial' : 'failed',
+      note: skipped.length ? `skipped (locked_manual atau channel tidak dikenal): ${skipped.join(', ')}` : null,
+      performedBy: userId ?? null,
+    }, db);
+    return { applied, skipped };
+  });
+}
+
+// Manual "Sync Meta Sekarang" — reuses the existing trackingPreview Apps
+// Script action, which already computes {boostSpend, nonBoostSpend} for H-1
+// without writing anywhere (dry-run branch of processTrackingConfig_).
+export async function runMetaSyncNow({ brandId, trackingConfigId, userId }) {
+  await assertBrand(brandId);
+  const preview = await callAppsScript('trackingPreview', { id: trackingConfigId });
+  if (!preview || preview.date == null) {
+    throw new AppError('Apps Script tidak mengembalikan data tracking yang valid', 502);
+  }
+
+  const entryDate = preview.date;
+  const entries = [
+    { channelKey: 'meta_boost_post', amount: preview.boostSpend },
+    { channelKey: 'meta_nonboost_post', amount: preview.nonBoostSpend },
+  ];
+  // cpasSpend is only present when the tracking config has a CPAS ad account
+  // configured (apps-script/DailyTrackingBoostPost.gs's cfg.cpasAccountId) —
+  // null/undefined means "not tracked for this config", not "zero spend".
+  const hasCpas = preview.cpasSpend != null;
+  if (hasCpas) entries.push({ channelKey: 'cpas_shopee', amount: preview.cpasSpend });
+
+  const { applied, skipped } = await applyMetaSpend({ brandId, entryDate, entries, userId });
+
+  return {
+    entryDate,
+    boostSpend: preview.boostSpend,
+    nonBoostSpend: preview.nonBoostSpend,
+    cpasSpend: hasCpas ? preview.cpasSpend : null,
+    applied: {
+      boost: applied.includes('meta_boost_post'),
+      nonBoost: applied.includes('meta_nonboost_post'),
+      cpas: hasCpas ? applied.includes('cpas_shopee') : null,
+    },
+    skipped,
+  };
+}
+
+// Scheduled 1am WIB ingest — called by apps-script/DailyTrackingBoostPost.gs's
+// new postToAtlas_ step (see plan). No ATLAS user/session on this call, so
+// there's no userId to attribute the ingestion log to.
+export async function ingestFromAppsScript({ brandId, entryDate, entries }) {
+  await assertBrand(brandId);
+  if (!Array.isArray(entries) || !entries.length) throw new AppError('entries wajib diisi', 400);
+  return applyMetaSpend({ brandId, entryDate, entries, userId: null });
+}

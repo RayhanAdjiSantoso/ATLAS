@@ -216,7 +216,45 @@ function doGet(e) {
  * action `save`   -> payload sama seperti field form: label, sheetUrl,
  *                    tabName, headerRow, dateHeader, boostHeader,
  *                    nonBoostHeader, accountClient, boostMatch,
- *                    emailOnFailure (sertakan `id` untuk edit yang sudah ada)
+ *                    emailOnFailure (sertakan `id` untuk edit yang sudah ada),
+ *                    ditambah sejak integrasi ATLAS Daily Tracking:
+ *                    atlasBrandId (integer, id brand di tabel public.brands
+ *                    ATLAS — dipakai untuk (a) mem-filter dropdown "Pilih
+ *                    config" di halaman Daily Tracking ATLAS supaya cuma
+ *                    menampilkan config brand yang sedang dibuka, dan (b)
+ *                    tujuan push otomatis jam 01:00, lihat postToAtlas_ di
+ *                    bawah — config TANPA atlasBrandId dilewati saat push,
+ *                    tapi tetap jalan normal untuk penulisan ke Sheet).
+ *
+ *                    Sebuah config bisa untuk akun accountClient BERTIPE
+ *                    MAIN atau BERTIPE CPAS (lihat brandSave di bawah) —
+ *                    satu brand yang punya keduanya biasanya berarti DUA
+ *                    config Daily Tracking terpisah (mis. "Petite Fleur -
+ *                    MAIN" dan "Petite Fleur - CPAS"), bukan satu:
+ *                    - accountClient BERTIPE MAIN: boostHeader,
+ *                      nonBoostHeader, boostMatch WAJIB diisi (klasifikasi
+ *                      Boost/Non-Boost seperti biasa). cpasAccountId di
+ *                      config ini OPSIONAL — kalau diisi (act_... akun CPAS
+ *                      TERPISAH milik brand yang sama), amount spent SEMUA
+ *                      campaign akun itu (H-1, TANPA pembagian nama)
+ *                      digabung sebagai cpasSpend DI CONFIG MAIN INI (jadi
+ *                      satu config sekaligus mengisi ketiganya) — pola ini
+ *                      opsional, dua config terpisah di atas lebih umum.
+ *                    - accountClient BERTIPE CPAS: boostHeader/
+ *                      nonBoostHeader/boostMatch TIDAK DIPAKAI (otomatis
+ *                      null) — TIDAK ADA klasifikasi sama sekali, semua
+ *                      campaign akun itu dijumlah langsung jadi cpasSpend.
+ *                      cpasAccountId di config ini SELALU null (accountClient
+ *                      itu sendiri sudah CPAS-nya). cpasHeader (nama kolom
+ *                      sheet untuk cpasSpend, default 'CPAS Shopee') WAJIB
+ *                      diisi untuk kedua bentuk CPAS di atas.
+ *
+ *                    Halaman Daily Tracking ATLAS men-sync SEMUA config yang
+ *                    atlasBrandId-nya cocok dengan brand yang sedang dibuka
+ *                    dalam satu klik "Sync Meta Sekarang" — jadi brand dengan
+ *                    dua config (MAIN + CPAS) otomatis mengisi Boost Post,
+ *                    Non-Boost Post, DAN CPAS sekaligus, masing-masing dari
+ *                    config-nya sendiri.
  *
  * action `brandSave` -> payload: { id (act_..., wajib, unik), client (nama
  *                    brand, wajib, unik), type ('MAIN'|'CPAS'), token (WAJIB
@@ -255,6 +293,23 @@ function doGet(e) {
  *   value = string acak panjang buatan sendiri. Simpan value yang
  *   sama di sisi ATLAS (mis. environment variable), jangan pernah
  *   ditaruh di kode frontend / kode yang ke-commit ke repo publik.
+ *
+ * SETUP ATLAS_INGEST_URL / ATLAS_INGEST_KEY (sekali saja, manual) —
+ *   ini ARAH SEBALIKNYA dari API_SHARED_KEY di atas: script ini yang
+ *   memanggil KELUAR ke backend ATLAS setiap kali
+ *   updateAllDailyTrackingSpend() berhasil menulis satu brand (lihat
+ *   postToAtlas_ di bawah), supaya angka Boost Post/Non-Boost/CPAS
+ *   yang sama juga masuk ke halaman Daily Tracking ATLAS (Postgres),
+ *   bukan cuma ke cell Google Sheet seperti sebelumnya.
+ *   Editor Apps Script > Project Settings > Script Properties > Add:
+ *     ATLAS_INGEST_URL  = https://<domain-atlas-kamu>/api/daily-tracking/ingest
+ *     ATLAS_INGEST_KEY  = string acak panjang, HARUS SAMA PERSIS dengan
+ *                         env var DAILY_TRACKING_INGEST_API_KEY di backend
+ *                         ATLAS (backend/.env / Vercel env vars).
+ *   Kalau salah satu properti ini kosong, atau config yang diproses
+ *   tidak punya atlasBrandId, push ke ATLAS dilewati diam-diam (tidak
+ *   dianggap error) — penulisan ke Google Sheet tetap jalan seperti
+ *   biasa, tidak terpengaruh.
  *
  * CATATAN Content-Type — kirim body sebagai "text/plain" (BUKAN
  * "application/json") dari sisi ATLAS, walau isinya tetap string
@@ -452,6 +507,39 @@ function uiSaveConfig(cfg) {
   var headerRow = parseInt(cfg.headerRow, 10);
   if (!headerRow || headerRow < 1) headerRow = 3;
 
+  // Config untuk akun bertipe CPAS-nya sendiri (brand dengan MAIN dan CPAS
+  // sebagai dua config Daily Tracking terpisah) TIDAK punya klasifikasi
+  // Boost/Non-Boost sama sekali -- lihat processTrackingConfig_. Bolt-on
+  // cpasAccountId (config MAIN yang menggabungkan CPAS dari akun terpisah)
+  // cuma masuk akal kalau akun primer-nya sendiri MAIN.
+  var isPrimaryCpas = (acct.type || 'MAIN').toUpperCase() === 'CPAS';
+
+  var cpasAccountId = '';
+  var cpasAcct = null;
+  if (!isPrimaryCpas) {
+    cpasAccountId = String(cfg.cpasAccountId || '').trim();
+    if (cpasAccountId) {
+      cpasAcct = findAccountById_(cpasAccountId);
+      if (!cpasAcct) {
+        throw new Error('Akun CPAS "' + cpasAccountId + '" tidak ditemukan.');
+      }
+      if ((cpasAcct.type || 'MAIN') !== 'CPAS') {
+        throw new Error('Akun "' + cpasAccountId + '" bukan bertipe CPAS (tipe: ' + (cpasAcct.type || 'MAIN') + ').');
+      }
+    }
+  }
+
+  // atlasBrandId: opsional (lewat tanpa nilai tetap bisa menulis ke Sheet
+  // seperti biasa — cuma tidak akan ikut push otomatis ke ATLAS/muncul di
+  // dropdown "Pilih config" Daily Tracking ATLAS).
+  var atlasBrandId = (cfg.atlasBrandId === undefined || cfg.atlasBrandId === null || cfg.atlasBrandId === '')
+    ? null : parseInt(cfg.atlasBrandId, 10);
+  if (atlasBrandId !== null && !isFinite(atlasBrandId)) {
+    throw new Error('atlasBrandId harus berupa angka.');
+  }
+
+  var needsCpasHeader = isPrimaryCpas || !!cpasAccountId;
+
   var normalized = {
     id: cfg.id || Utilities.getUuid(),
     label: (cfg.label || '').trim() || cfg.accountClient,
@@ -459,20 +547,28 @@ function uiSaveConfig(cfg) {
     tabName: (cfg.tabName || '').trim(),
     headerRow: headerRow,
     dateHeader: (cfg.dateHeader || 'Date').trim(),
-    boostHeader: (cfg.boostHeader || 'Boost Post').trim(),
-    nonBoostHeader: (cfg.nonBoostHeader || '').trim(),
+    boostHeader: isPrimaryCpas ? null : (cfg.boostHeader || 'Boost Post').trim(),
+    nonBoostHeader: isPrimaryCpas ? null : (cfg.nonBoostHeader || '').trim(),
     accountClient: cfg.accountClient,
-    boostMatch: (cfg.boostMatch || 'profile visit').trim().toLowerCase(),
-    emailOnFailure: !!cfg.emailOnFailure
+    boostMatch: isPrimaryCpas ? null : (cfg.boostMatch || 'profile visit').trim().toLowerCase(),
+    emailOnFailure: !!cfg.emailOnFailure,
+    atlasBrandId: atlasBrandId,
+    cpasAccountId: cpasAccountId || null,
+    cpasHeader: needsCpasHeader ? ((cfg.cpasHeader || 'CPAS Shopee').trim() || 'CPAS Shopee') : null
   };
 
   if (!normalized.tabName) throw new Error('Nama tab wajib diisi.');
-  if (!normalized.nonBoostHeader) throw new Error('Nama kolom non-boost wajib diisi.');
-  if (!normalized.boostMatch) throw new Error('Kata kunci Boost Post wajib diisi.');
+  if (isPrimaryCpas) {
+    if (!normalized.cpasHeader) throw new Error('Nama kolom CPAS wajib diisi.');
+  } else {
+    if (!normalized.nonBoostHeader) throw new Error('Nama kolom non-boost wajib diisi.');
+    if (!normalized.boostMatch) throw new Error('Kata kunci Boost Post wajib diisi.');
+  }
 
-  // Validasi: sheet & tab harus ada, dan ketiga header harus ketemu persis.
+  // Validasi: sheet & tab harus ada, dan setiap header yang relevan untuk
+  // tipe akun ini (termasuk CPAS kalau berlaku) harus ketemu persis.
   var sheet = openTrackingSheet_(normalized);
-  resolveTrackingColumns_(sheet, normalized);
+  resolveTrackingColumns_(sheet, normalized, isPrimaryCpas);
 
   var list = getTrackingConfigs_();
   var idx = -1;
@@ -869,6 +965,16 @@ function processTrackingConfig_(cfg, dryRun) {
       'Client "' + cfg.accountClient + '" tidak ditemukan (bukan akun hardcoded maupun akun dinamis yang terdaftar).');
   }
 
+  // Config bisa dibuat untuk akun bertipe MAIN (klasifikasi Boost/Non-Boost
+  // lewat boostMatch, seperti semula) ATAU langsung untuk akun bertipe CPAS
+  // (satu akun terpisah milik brand yang sama) — kalau primer-nya sendiri
+  // CPAS, TIDAK ADA pembagian nama sama sekali: semua spend akun itu
+  // dijumlah apa adanya jadi satu angka. Dua bentuk ini independen dari
+  // bolt-on cfg.cpasAccountId di bawah (itu untuk kasus SATU config
+  // menggabungkan MAIN + CPAS sekaligus; ini untuk kasus CPAS sebagai
+  // config-nya sendiri, brand punya dua config terpisah).
+  var isPrimaryCpas = (acct.type || 'MAIN').toUpperCase() === 'CPAS';
+
   // --- 1. Ambil insight campaign untuk tanggal H-1 ---
   var rows;
   try {
@@ -878,25 +984,56 @@ function processTrackingConfig_(cfg, dryRun) {
       'Gagal menarik data Meta Ads (' + acct.client + '): ' + e.message);
   }
 
-  // --- 2. Klasifikasi & jumlahkan ---
-  var boostSpend = 0, nonBoostSpend = 0, nCampaign = 0;
-  Object.keys(rows).forEach(function (id) {
-    var name = rows[id].campaign_name || '';
-    var spend = num_(rows[id].spend);
-    nCampaign++;
-    if (name.toLowerCase().indexOf(cfg.boostMatch) > -1) {
-      boostSpend += spend;
-    } else {
-      nonBoostSpend += spend;
+  var boostSpend = null, nonBoostSpend = null, cpasSpend = null, nCampaign = 0;
+
+  if (isPrimaryCpas) {
+    // --- 2a. Akun primer CPAS: jumlah SEMUA campaign, tanpa klasifikasi. ---
+    cpasSpend = 0;
+    Object.keys(rows).forEach(function (id) {
+      cpasSpend += num_(rows[id].spend);
+      nCampaign++;
+    });
+    Logger.log('[%s] %s (CPAS) Amount Spent: %s', cfg.label, cfg.cpasHeader, cpasSpend);
+  } else {
+    // --- 2b. Akun primer MAIN: klasifikasi & jumlahkan seperti semula. ---
+    boostSpend = 0; nonBoostSpend = 0;
+    Object.keys(rows).forEach(function (id) {
+      var name = rows[id].campaign_name || '';
+      var spend = num_(rows[id].spend);
+      nCampaign++;
+      if (name.toLowerCase().indexOf(cfg.boostMatch) > -1) {
+        boostSpend += spend;
+      } else {
+        nonBoostSpend += spend;
+      }
+    });
+    Logger.log('[%s] %s Amount Spent: %s', cfg.label, cfg.boostHeader, boostSpend);
+    Logger.log('[%s] %s Amount Spent: %s', cfg.label, cfg.nonBoostHeader, nonBoostSpend);
+
+    // --- 2c. Bolt-on CPAS opsional (akun TERPISAH, lihat catatan atas). ---
+    if (cfg.cpasAccountId) {
+      var cpasAcct = findAccountById_(cfg.cpasAccountId);
+      if (!cpasAcct) {
+        return failTracking_(cfg, dateStr, dryRun,
+          'Akun CPAS "' + cfg.cpasAccountId + '" tidak ditemukan (mungkin sudah dihapus).');
+      }
+      var cpasRows;
+      try {
+        cpasRows = fetchInsights_(tokenFor_(cpasAcct), cpasAcct.id, 'campaign', { since: dateStr, until: dateStr });
+      } catch (e) {
+        return failTracking_(cfg, dateStr, dryRun,
+          'Gagal menarik data Meta Ads CPAS (' + cpasAcct.client + '): ' + e.message);
+      }
+      cpasSpend = 0;
+      Object.keys(cpasRows).forEach(function (id) { cpasSpend += num_(cpasRows[id].spend); });
+      Logger.log('[%s] %s (CPAS) Amount Spent: %s', cfg.label, cfg.cpasHeader, cpasSpend);
     }
-  });
+  }
 
   if (nCampaign === 0) {
     Logger.log('[%s] Tidak ada baris insight pada %s — API sukses merespons kosong, ' +
-      'akan ditulis sebagai 0/0.', cfg.label, dateStr);
+      'akan ditulis sebagai 0.', cfg.label, dateStr);
   }
-  Logger.log('[%s] %s Amount Spent: %s', cfg.label, cfg.boostHeader, boostSpend);
-  Logger.log('[%s] %s Amount Spent: %s', cfg.label, cfg.nonBoostHeader, nonBoostSpend);
 
   // --- 3. Cari sheet, kolom (by header name), baris (by tanggal) ---
   var sheet;
@@ -908,7 +1045,7 @@ function processTrackingConfig_(cfg, dryRun) {
 
   var cols;
   try {
-    cols = resolveTrackingColumns_(sheet, cfg);
+    cols = resolveTrackingColumns_(sheet, cfg, isPrimaryCpas);
   } catch (e) {
     return failTracking_(cfg, dateStr, dryRun, e.message);
   }
@@ -922,26 +1059,84 @@ function processTrackingConfig_(cfg, dryRun) {
 
   var result = {
     label: cfg.label, date: dateStr, row: row,
-    boostSpend: boostSpend, nonBoostSpend: nonBoostSpend, campaigns: nCampaign
+    boostSpend: boostSpend, nonBoostSpend: nonBoostSpend, campaigns: nCampaign,
+    cpasSpend: cpasSpend
   };
 
   // --- 4. Dry run berhenti di sini, tanpa menulis ---
   if (dryRun) {
-    result.existingBoost = sheet.getRange(row, cols.boostCol).getValue();
-    result.existingNonBoost = sheet.getRange(row, cols.nonBoostCol).getValue();
+    if (cols.boostCol) result.existingBoost = sheet.getRange(row, cols.boostCol).getValue();
+    if (cols.nonBoostCol) result.existingNonBoost = sheet.getRange(row, cols.nonBoostCol).getValue();
+    if (cols.cpasCol) result.existingCpas = sheet.getRange(row, cols.cpasCol).getValue();
     result.status = 'DRY RUN OK';
-    Logger.log('[%s] DRY RUN — baris %s, existing %s=%s %s=%s (TIDAK ditimpa).',
-      cfg.label, row, cfg.boostHeader, result.existingBoost, cfg.nonBoostHeader, result.existingNonBoost);
+    Logger.log('[%s] DRY RUN — baris %s (TIDAK ditimpa). existing: %s',
+      cfg.label, row, JSON.stringify({ boost: result.existingBoost, nonBoost: result.existingNonBoost, cpas: result.existingCpas }));
     return result;
   }
 
   // --- 5. Tulis (idempotent — selalu overwrite baris yang sama) ---
-  sheet.getRange(row, cols.boostCol).setValue(boostSpend);
-  sheet.getRange(row, cols.nonBoostCol).setValue(nonBoostSpend);
+  if (cols.boostCol) sheet.getRange(row, cols.boostCol).setValue(boostSpend);
+  if (cols.nonBoostCol) sheet.getRange(row, cols.nonBoostCol).setValue(nonBoostSpend);
+  if (cols.cpasCol) sheet.getRange(row, cols.cpasCol).setValue(cpasSpend);
   Logger.log('[%s] Status: Success (baris %s)', cfg.label, row);
 
   result.status = 'OK';
+
+  // --- 6. Push ke ATLAS (best-effort — gagal di sini TIDAK mengubah
+  // result.status, Sheet di atas sudah berhasil ditulis dan itu tetap jadi
+  // sumber kebenaran utama kalau push ini gagal). ---
+  postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend);
+
   return result;
+}
+
+/**
+ * Kirim angka hari ini ke POST /api/daily-tracking/ingest ATLAS, supaya
+ * halaman Daily Tracking (Postgres) ikut terisi otomatis, bukan cuma cell
+ * Google Sheet ini. Dilewati diam-diam (bukan error) kalau cfg.atlasBrandId
+ * kosong atau ATLAS_INGEST_URL/ATLAS_INGEST_KEY belum di-set — lihat catatan
+ * setup di komentar atas file ini. Kegagalan jaringan/HTTP di sini TIDAK
+ * PERNAH dilempar sebagai Error: Sheet sudah berhasil ditulis sebelum fungsi
+ * ini dipanggil, jadi itu tetap jadi sumber kebenaran kalau ATLAS lagi down.
+ */
+function postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend) {
+  if (!cfg.atlasBrandId) return;
+
+  var props = PropertiesService.getScriptProperties();
+  var url = props.getProperty('ATLAS_INGEST_URL');
+  var key = props.getProperty('ATLAS_INGEST_KEY');
+  if (!url || !key) {
+    Logger.log('[%s] Push ke ATLAS dilewati — ATLAS_INGEST_URL/ATLAS_INGEST_KEY belum di-set di Script Properties.', cfg.label);
+    return;
+  }
+
+  // boostSpend/nonBoostSpend are null for a config whose PRIMARY account is
+  // CPAS (processTrackingConfig_ never computes them in that case); cpasSpend
+  // is null unless this config is either primary-CPAS or has the MAIN+CPAS
+  // bolt-on. Only send channels this particular config actually produced.
+  var entries = [];
+  if (boostSpend !== null) entries.push({ channelKey: 'meta_boost_post', amount: boostSpend });
+  if (nonBoostSpend !== null) entries.push({ channelKey: 'meta_nonboost_post', amount: nonBoostSpend });
+  if (cpasSpend !== null) entries.push({ channelKey: 'cpas_shopee', amount: cpasSpend });
+  if (!entries.length) return;
+
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'text/plain', // sama alasan seperti doPost() -- hindari CORS preflight
+      payload: JSON.stringify({ brandId: cfg.atlasBrandId, entryDate: dateStr, entries: entries }),
+      headers: { 'X-Ingest-Key': key },
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('[%s] Push ke ATLAS gagal (HTTP %s): %s', cfg.label, code, res.getContentText().slice(0, 300));
+    } else {
+      Logger.log('[%s] Push ke ATLAS berhasil (brand_id %s, %s).', cfg.label, cfg.atlasBrandId, dateStr);
+    }
+  } catch (e) {
+    Logger.log('[%s] Push ke ATLAS gagal (exception): %s', cfg.label, e.message);
+  }
 }
 
 function failTracking_(cfg, dateStr, dryRun, message) {
@@ -973,8 +1168,18 @@ function openTrackingSheet_(cfg) {
   return sheet;
 }
 
-/** Cocokkan header persis dengan nama (trim + case-insensitive). */
-function resolveTrackingColumns_(sheet, cfg) {
+/**
+ * Cocokkan header persis dengan nama (trim + case-insensitive).
+ *
+ * isPrimaryCpas = true (config untuk akun CPAS-nya sendiri, lihat
+ * processTrackingConfig_): cuma dateCol + cpasCol yang dicari/wajib,
+ * boostCol/nonBoostCol tidak relevan sama sekali (null).
+ *
+ * isPrimaryCpas = false (config untuk akun MAIN, seperti semula): dateCol +
+ * boostCol + nonBoostCol wajib; cpasCol cuma dicari (dan wajib) kalau
+ * cfg.cpasAccountId diisi (bolt-on CPAS lewat akun terpisah).
+ */
+function resolveTrackingColumns_(sheet, cfg, isPrimaryCpas) {
   var lastCol = sheet.getLastColumn();
   var headers = sheet.getRange(cfg.headerRow, 1, 1, lastCol).getValues()[0];
 
@@ -985,20 +1190,32 @@ function resolveTrackingColumns_(sheet, cfg) {
     return null;
   };
 
-  var dateCol     = find(cfg.dateHeader);
-  var boostCol    = find(cfg.boostHeader);
-  var nonBoostCol = find(cfg.nonBoostHeader);
-
+  var dateCol = find(cfg.dateHeader);
   var missing = [];
-  if (!dateCol)     missing.push(cfg.dateHeader);
-  if (!boostCol)    missing.push(cfg.boostHeader);
-  if (!nonBoostCol) missing.push(cfg.nonBoostHeader);
+  if (!dateCol) missing.push(cfg.dateHeader);
+
+  var boostCol = null, nonBoostCol = null, cpasCol = null;
+
+  if (isPrimaryCpas) {
+    cpasCol = find(cfg.cpasHeader);
+    if (!cpasCol) missing.push(cfg.cpasHeader);
+  } else {
+    boostCol    = find(cfg.boostHeader);
+    nonBoostCol = find(cfg.nonBoostHeader);
+    if (!boostCol)    missing.push(cfg.boostHeader);
+    if (!nonBoostCol) missing.push(cfg.nonBoostHeader);
+    if (cfg.cpasAccountId) {
+      cpasCol = find(cfg.cpasHeader);
+      if (!cpasCol) missing.push(cfg.cpasHeader);
+    }
+  }
+
   if (missing.length) {
     throw new Error('Header tidak ditemukan di baris ' + cfg.headerRow + ': ' +
       missing.join(', ') + '. Cek ejaan & baris header di form konfigurasi.');
   }
 
-  return { dateCol: dateCol, boostCol: boostCol, nonBoostCol: nonBoostCol };
+  return { dateCol: dateCol, boostCol: boostCol, nonBoostCol: nonBoostCol, cpasCol: cpasCol };
 }
 
 /**
