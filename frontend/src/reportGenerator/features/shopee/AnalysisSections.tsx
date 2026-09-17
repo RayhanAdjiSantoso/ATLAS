@@ -458,21 +458,26 @@ function nestFunnelRows(rows: FunnelTreeRow[]): SymptomNode[] {
   return roots;
 }
 
-function SymptomTreeNode({ node, seq }: { node: SymptomNode; seq: { i: number } }) {
-  const i = seq.i++;
+// No cascade index any more: the tree used to stagger itself in via `--i`,
+// which made it invisible to html2canvas (the clone restarts every CSS
+// animation, so a PNG caught every node still at opacity:0). Depth now reads
+// from weight and the connector rails alone.
+function SymptomTreeNode({ node }: { node: SymptomNode }) {
   return (
     <li className="st-item">
-      <div className={`st-node${node.depth === 0 ? ' st-root' : ''}`} data-depth={node.depth} style={{ '--i': i } as CSSProperties}>
+      <div className={`st-node${node.depth === 0 ? ' st-root' : ''}`} data-depth={node.depth}>
         <span className="st-label">{node.label}</span>
         <span className="st-vals num">
-          {fmtPivotVal(node.oldNum, node.fmt)} <span className="st-arrow">→</span> {fmtPivotVal(node.curNum, node.fmt)}
+          <span className="st-old">{fmtPivotVal(node.oldNum, node.fmt)}</span>
+          <span className="st-arrow" aria-hidden="true">→</span>
+          <span className="st-cur">{fmtPivotVal(node.curNum, node.fmt)}</span>
         </span>
         <DeltaPill cls={node.cls}>{node.delta}</DeltaPill>
       </div>
       {node.children.length > 0 && (
         <ul className="st-children">
           {node.children.map((c) => (
-            <SymptomTreeNode key={c.key} node={c} seq={seq} />
+            <SymptomTreeNode key={c.key} node={c} />
           ))}
         </ul>
       )}
@@ -482,18 +487,20 @@ function SymptomTreeNode({ node, seq }: { node: SymptomNode; seq: { i: number } 
 
 function SymptomTree({ rows, p1, p2 }: { rows: FunnelTreeRow[]; p1: string; p2: string }) {
   const tree = nestFunnelRows(rows);
-  const seq = { i: 0 };
   return (
     <div className="symptom-tree">
+      {/* The head shares the node grid, so these labels sit directly over the
+          column they name at every depth. */}
       <div className="symptom-tree-head">
         <span>Node</span>
-        <span>
-          {p1} → {p2}
+        <span className="st-vals">
+          {p1} <span className="st-arrow" aria-hidden="true">→</span> {p2}
         </span>
+        <span className="st-head-delta">Perubahan</span>
       </div>
       <ul className="st-root-list">
         {tree.map((n) => (
-          <SymptomTreeNode key={n.key} node={n} seq={seq} />
+          <SymptomTreeNode key={n.key} node={n} />
         ))}
       </ul>
     </div>

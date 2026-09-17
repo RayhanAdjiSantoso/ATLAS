@@ -35,7 +35,8 @@ function monthOptions() {
 
 const PLATFORM_LABEL = { meta: 'Meta', shopee: 'Shopee', tiktok: 'TikTok' };
 const DATASET_LABEL = {
-  meta: 'Meta Ads', cpas: 'CPAS', order: 'Order', performance_overview: 'Performance Overview',
+  meta: 'Meta Ads (gabungan)', boost: 'Boost Post', nonboost: 'Non-Boost Post', cpas: 'CPAS',
+  order: 'Order', performance_overview: 'Performance Overview',
   product_performance: 'Product Performance', produk: 'Iklan Produk', produk_otomatis: 'Iklan Produk Otomatis',
   toko: 'Iklan Toko', toko_keyword: 'Iklan Toko — Keyword', live: 'Iklan Live', overview: 'Store Overview',
   tiktok: 'GMV Max', tiktok_order: 'Shop Orders',

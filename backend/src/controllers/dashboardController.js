@@ -14,6 +14,18 @@ async function withCompare(serviceFn, { brandId, startDate, endDate, compareStar
   return { ...data, compare: compareData };
 }
 
+import * as executiveSummary from '../services/executiveSummaryService.js';
+
+// Executive Snapshot: one cross-channel reading (Daily Tracking), unlike every
+// other dashboard endpoint below, which reads the Shopee fact tables.
+export const getExecutiveSummary = asyncHandler(async (req, res) => {
+  const { brandId, startDate, endDate, compareStartDate, compareEndDate } = req.query;
+  if (!brandId || !startDate || !endDate) throw new AppError('brandId, startDate, dan endDate wajib diisi', 400);
+  res.json(await executiveSummary.getExecutiveSummary({
+    brandId: Number(brandId), startDate, endDate, compareStartDate, compareEndDate,
+  }));
+});
+
 // Get list of brands for dropdown
 export const getDashboardFilters = asyncHandler(async (req, res) => {
   const allowedBrandId = req.user.allowedBrandId;

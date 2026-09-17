@@ -7,6 +7,9 @@ import {
   ShoppingBasket,
   Package,
   ListTree,
+  Megaphone,
+  ShoppingBag,
+  Video,
 } from 'lucide-react';
 import { formatPercent } from '../../utils/format.js';
 
@@ -92,6 +95,73 @@ export const DOMAINS = [
     prefetch: false,
   },
 ];
+
+// ── Channels & views ────────────────────────────────────────────────────
+// Business Overview is read channel-first: pick Meta / Shopee / TikTok, then a
+// domain inside it. Only Shopee has fact tables today (the shopee.* importer),
+// so the other two carry the same domain shape with no endpoint — their tabs
+// say "belum ada data" rather than pretending to be empty reports.
+export const CHANNELS = [
+  {
+    id: 'meta',
+    label: 'Meta Ads',
+    hint: 'Boost, Non-Boost & CPAS',
+    accent: '#1e3eb8',
+    Icon: Megaphone,
+    ready: false,
+    note: 'Data Meta belum diimpor ke tabel fakta — file-nya masih berupa arsip di Pengaturan Brand.',
+  },
+  {
+    id: 'shopee',
+    label: 'Shopee',
+    hint: 'Penjualan, funnel & produk',
+    accent: '#ee4d2d',
+    Icon: ShoppingBag,
+    ready: true,
+    note: 'Dibaca dari data Shopee yang sudah diimpor lewat Pengaturan Brand.',
+  },
+  {
+    id: 'tiktok',
+    label: 'TikTok',
+    hint: 'GMV Max & Shop',
+    accent: '#0a0a0a',
+    Icon: Video,
+    ready: false,
+    note: 'Data TikTok belum diimpor ke tabel fakta — file-nya masih berupa arsip di Pengaturan Brand.',
+  },
+];
+
+export const CHANNEL_BY_ID = Object.fromEntries(CHANNELS.map((c) => [c.id, c]));
+
+// The seven analytic domains belong to whichever channel can answer them.
+// Today that is Shopee for all of them; Meta and TikTok list the same domains
+// so the shape of the page is stable once their importers exist.
+export const CHANNEL_DOMAINS = Object.fromEntries(
+  CHANNELS.map((channel) => [
+    channel.id,
+    DOMAINS.filter((d) => d.key !== 'Executive Snapshot')
+      .map((d) => (channel.ready ? d : { ...d, endpoint: null, prefetch: false })),
+  ]),
+);
+
+// The page's top navigation. Executive Snapshot is not a channel — it is the
+// sum of them — but choosing it is the same kind of act as choosing a channel,
+// so it belongs in the same bar rather than floating above it as a permanent
+// header that repeated itself over every channel. It sits leftmost because it
+// is where a reading starts, and it is the only view carrying the Minutes of
+// Meeting workspace.
+export const EXECUTIVE_VIEW = {
+  id: 'snapshot',
+  label: 'Executive Snapshot',
+  hint: 'Ringkasan lintas channel & MOM',
+  accent: '#1e3eb8',
+  Icon: Gauge,
+  ready: true,
+  question: 'Bagaimana performa seluruh channel pada periode ini, dan apa yang disepakati di meeting terakhir?',
+};
+
+export const VIEWS = [EXECUTIVE_VIEW, ...CHANNELS];
+export const VIEW_BY_ID = Object.fromEntries(VIEWS.map((v) => [v.id, v]));
 
 export const DOMAIN_KEYS = DOMAINS.map((d) => d.key);
 export const DOMAIN_BY_KEY = Object.fromEntries(DOMAINS.map((d) => [d.key, d]));

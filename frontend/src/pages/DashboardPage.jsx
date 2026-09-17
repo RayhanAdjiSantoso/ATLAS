@@ -3,19 +3,25 @@ import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
-  ArrowUp, ArrowDown, ArrowUpRight, Minus, ArrowRight, BarChart3, Brain, CalendarDays, Check, CheckCircle2, ChevronDown, Circle,
+  ArrowUpRight, BarChart3, Brain, CalendarDays, Check, CheckCircle2, ChevronDown, Circle,
   CircleAlert, Copy, Database, Download, FileText, ListChecks, Loader2, RefreshCw, Sparkles, UsersRound,
 } from 'lucide-react';
 import FilterPanel from '../components/dashboard/FilterPanel.jsx';
 import DashboardTab from '../components/dashboard/DashboardTab.jsx';
 import { useConsoleData } from '../components/dashboard/useConsoleData.js';
 import {
-  DOMAINS,
+  CHANNELS,
+  CHANNEL_BY_ID,
+  CHANNEL_DOMAINS,
   DOMAIN_BY_KEY,
-  HEADLINES,
+  EXECUTIVE_VIEW,
   STRIP_METRICS,
+  VIEWS,
+  VIEW_BY_ID,
   formatStripValue,
 } from '../components/dashboard/domains.js';
+import { Delta, Figure, Spark } from '../components/dashboard/figures.jsx';
+import ExecutiveSummary from '../components/dashboard/ExecutiveSummary.jsx';
 import '../components/dashboard/console.css';
 import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
@@ -40,61 +46,9 @@ const DASH_EASE = [0.16, 1, 0.3, 1];
 // now lives on its own page (Pengaturan Brand) so every module reads from one
 // place instead of each surface growing an uploader.
 
-// Absent and zero must never look alike: a missing figure is an em dash in the
-// muted tier that says why on hover, a real zero prints like any other number.
-function Figure({ text, absentReason }) {
-  if (text == null) {
-    return (
-      <span className="con-null" title={absentReason || 'Data belum tersedia untuk periode ini'}>
-        &mdash;
-      </span>
-    );
-  }
-  return <>{text}</>;
-}
-
-// Colour carries meaning here and nowhere else on this page. The arrow always
-// follows the raw sign; the colour follows the business reading, so a rising
-// cancellation rate is red even though the number went up.
-function Delta({ value, invert = false }) {
-  if (value == null) return null;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-
-  const flat = Math.abs(n) < 0.05;
-  const rising = n > 0;
-  const good = invert ? !rising : rising;
-  const cls = flat ? 'is-flat' : good ? 'is-up' : 'is-down';
-  const Icon = flat ? Minus : rising ? ArrowUp : ArrowDown;
-
-  return (
-    <span className={`con-delta ${cls}`}>
-      <Icon size={11} strokeWidth={2.6} />
-      {`${n > 0 ? '+' : ''}${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(n)}%`}
-    </span>
-  );
-}
-
-// Bare trend line for the GMV cell. No axes, no tooltip and no library: the
-// full daily chart is one click away in Business Growth, and this only has to
-// say which way the month went.
-function Spark({ values = [] }) {
-  if (values.length < 2) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min;
-  const points = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * 100;
-    const y = span > 0 ? 20 - ((v - min) / span) * 20 : 10;
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  }).join(' ');
-  return (
-    <svg className="con-spark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden focusable="false">
-      <polyline points={points} fill="none" stroke="var(--acc-300)" strokeWidth="1.6"
-        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
+// Figure, Delta and Spark now live in ./figures.jsx — Executive Snapshot needs
+// the same three signatures, and two implementations of "absent is not zero"
+// is one too many for a rule the product depends on.
 
 // The Executive Snapshot KPI row, pinned. It stays whichever domain is
 // focused, which is what lets the snapshot panel below stop repeating it.
@@ -628,43 +582,12 @@ function MinutesOverview({ filters }) {
   );
 }
 
-function ModuleCard({ domain, entry, onOpen, index = 0 }) {
-  // Domains kept out of the idle prefetch (e.g. Root Cause Analysis, which
-  // costs several queries per period) sit at status 'idle' until opened —
-  // that must read as "open to load", not a skeleton that never resolves.
-  const deferred = domain.prefetch === false && entry.status === 'idle';
-  const loading = !deferred && (entry.status === 'loading' || entry.status === 'idle');
-  const failed = entry.status === 'error';
-  const headline = entry.status === 'ready' ? HEADLINES[domain.key](entry.data) : null;
-
-  return (
-    <button type="button" className="con-mod" onClick={onOpen} style={{ '--i': index }}>
-      <div className="con-mod-top">{domain.label}</div>
-
-      <div className="con-mod-val">
-        {loading && <span className="con-skel is-wide" />}
-        {failed && <span className="con-null" title={entry.error}>&mdash;</span>}
-        {deferred && <span className="con-null" title="Belum dimuat">&mdash;</span>}
-        {headline && <Figure text={headline.value} absentReason={headline.caption} />}
-      </div>
-
-      <div className="con-mod-cap">
-        {loading && <span className="con-skel is-narrow" style={{ height: '.7rem' }} />}
-        {failed && 'Gagal dimuat. Buka domain ini untuk mencoba lagi.'}
-        {deferred && domain.question}
-        {headline && headline.caption}
-      </div>
-
-      <div className="con-mod-foot">
-        {headline?.delta != null ? <Delta value={headline.delta} /> : <span>Buka analisis</span>}
-        <ArrowRight size={13} strokeWidth={2.4} />
-      </div>
-    </button>
-  );
-}
-
 export default function DashboardPage() {
-  const [activeKey, setActiveKey] = useSessionState('dashboard:section', 'Executive Snapshot');
+  // View first, domain second. The top bar holds Executive Snapshot and the
+  // three channels; only a channel has domains beneath it. The session key is
+  // unchanged, so a session that remembered 'shopee' still opens on Shopee.
+  const [viewId, setViewId] = useSessionState('dashboard:channel', 'snapshot');
+  const [activeKey, setActiveKey] = useSessionState('dashboard:section', 'Business Growth');
   const [productLevel, setProductLevel] = useSessionState('dashboard:product-level', 'category');
   const reduceMotion = useReducedMotion();
 
@@ -679,9 +602,22 @@ export default function DashboardPage() {
 
   const { read, retry } = useConsoleData({ filters, activeKey, productLevel });
 
-  const active = DOMAIN_BY_KEY[activeKey];
-  const activeEntry = read(activeKey);
-  const others = DOMAINS.filter((d) => d.key !== activeKey);
+  const view = VIEW_BY_ID[viewId] ?? EXECUTIVE_VIEW;
+  const isSnapshot = view.id === EXECUTIVE_VIEW.id;
+  const channel = isSnapshot ? null : CHANNEL_BY_ID[view.id];
+  const channelDomains = channel ? CHANNEL_DOMAINS[channel.id] : [];
+  const domainKey = channelDomains.some((d) => d.key === activeKey)
+    ? activeKey
+    : (channelDomains[0]?.key ?? activeKey);
+  const active = DOMAIN_BY_KEY[domainKey];
+  const activeEntry = read(domainKey);
+
+  // Only a channel view owns the domain selection. The snapshot leaves the
+  // remembered domain untouched, so coming back to a channel lands where it
+  // was left rather than resetting to the first tab.
+  useEffect(() => {
+    if (!isSnapshot && domainKey !== activeKey) setActiveKey(domainKey);
+  }, [isSnapshot, domainKey, activeKey, setActiveKey]);
 
   return (
     <div className="con dashboard-console">
@@ -696,11 +632,11 @@ export default function DashboardPage() {
           >
             <span className="brand-hero-eye"><Sparkles size={13} /> Business intelligence workspace</span>
             <h1>Dashboard Business Overview</h1>
-            <p>Delapan sudut analisis untuk membaca pertumbuhan, pelanggan, transaksi, produk, dan akar perubahan dalam satu ruang kerja.</p>
+            <p>Executive Snapshot merangkum seluruh channel; tab di sebelahnya membuka pembacaan mendalam per channel — Meta Ads, Shopee, dan TikTok.</p>
             <div className="brand-hero-stats">
-              <span><strong>{DOMAINS.length}</strong> domain analisis</span>
+              <span><strong>{CHANNELS.length}</strong> channel</span>
+              <span><strong>{CHANNEL_DOMAINS.shopee.length}</strong> domain per channel</span>
               <span><strong>{filters.compare ? '2' : '1'}</strong> periode dibaca</span>
-              <span><strong>Shopee</strong> sumber data</span>
             </div>
           </motion.div>
 
@@ -725,18 +661,51 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      <LayoutGroup id="dashboard-view-nav">
+        <div className="section-nav-shell is-four">
+        <nav className="brand-view-nav dashboard-channel-nav" aria-label="Tampilan" role="tablist">
+          {VIEWS.map((v) => {
+            const isActive = v.id === view.id;
+            const Icon = v.Icon;
+            return (
+              <button
+                type="button" role="tab" key={v.id}
+                className={`brand-view-tab${isActive ? ' is-active' : ''}`}
+                style={{ '--ch-accent': v.accent }}
+                onClick={() => setViewId(v.id)}
+                aria-selected={isActive}
+              >
+                {isActive && (
+                  <motion.span
+                    className="brand-view-pill"
+                    layoutId="dashboard-active-view"
+                    transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 44, mass: .6 }}
+                  />
+                )}
+                <span className="brand-view-tab-ico" aria-hidden="true"><Icon size={16} /></span>
+                <span className="brand-view-tab-copy">
+                  <strong>{v.label}</strong>
+                  <small>{v.hint}{!v.ready && <span className="dashboard-channel-soon">belum ada data</span>}</small>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+        </div>
+      </LayoutGroup>
+
+      {!isSnapshot && (
       <LayoutGroup id="dashboard-domain-nav">
         <div className="section-nav-shell is-dashboard">
         <nav className="brand-view-nav dashboard-domain-nav" aria-label="Domain analisis" role="tablist">
-          {DOMAINS.map((d) => {
-            const entry = read(d.key);
-            const isActive = d.key === activeKey;
+          {channelDomains.map((d) => {
+            const entry = channel.ready ? read(d.key) : { status: 'idle' };
+            const isActive = d.key === domainKey;
             const Icon = d.Icon;
-            // The dot used to carry load state alone; it now says it in words
-            // too, which also gives every tab a second line of real content.
-            const stateLabel = entry.status === 'ready' ? 'Siap dibaca'
-              : entry.status === 'loading' ? 'Memuat…'
-                : entry.status === 'error' ? 'Gagal dimuat' : 'Belum dimuat';
+            const stateLabel = !channel.ready ? 'Belum ada data'
+              : entry.status === 'ready' ? 'Siap dibaca'
+                : entry.status === 'loading' ? 'Memuat…'
+                  : entry.status === 'error' ? 'Gagal dimuat' : 'Belum dimuat';
             return (
               <button
                 type="button"
@@ -773,55 +742,84 @@ export default function DashboardPage() {
         </nav>
         </div>
       </LayoutGroup>
+      )}
 
       <div className="dashboard-domain-caption">
-        <span>{active.question}</span>
+        <span>{isSnapshot ? EXECUTIVE_VIEW.question : channel.ready ? active.question : channel.note}</span>
         <span className="brand-caption-rule" />
         <Link to="/pengaturan-brand"><Database size={13} /> Data bersumber dari <strong>Pengaturan Brand</strong></Link>
       </div>
 
       <div className="con-body dashboard-body">
         <div className="con-canvas">
-          <KpiStrip entry={read('Executive Snapshot')} />
-          {/* Meeting notes are a brand-level reading, not an analysis domain:
-              they belong beside the executive view, not repeated above every
-              drill-down the user opens. */}
-          {activeKey === 'Executive Snapshot' && <MinutesOverview filters={filters} />}
+          {isSnapshot ? (
+            <>
+              {/* Both readings here are brand-level rather than per-channel:
+                  the snapshot is the sum of the channels, and a meeting record
+                  answers to the brand. That is why they live on this view
+                  instead of repeating above every channel. */}
+              <ExecutiveSummary filters={filters} />
+              <MinutesOverview filters={filters} />
+            </>
+          ) : (
+            <>
+              {channel.ready && <KpiStrip entry={read('Executive Snapshot')} />}
 
-          <section className="con-focus" aria-labelledby="con-focus-title">
-            <div className="con-focus-head">
-              <h2 id="con-focus-title">{active.label}</h2>
-              <p className="con-focus-q">{active.question}</p>
-            </div>
-            {/* Keyed on the domain so the settle animation replays on every
-                exchange, and so a domain's local view state never leaks into
-                the next one. */}
-            <div className="con-focus-body" key={activeKey} data-anim={reduceMotion ? undefined : 'in'}>
-              <DashboardTab
-                activeTab={activeKey}
-                filters={filters}
-                data={activeEntry.data}
-                status={activeEntry.status}
-                error={activeEntry.error}
-                onRetry={() => retry(activeKey)}
-                productPerformanceLevel={productLevel}
-                setProductPerformanceLevel={setProductLevel}
-                onNavigateTab={setActiveKey}
-              />
-            </div>
-          </section>
-
-          <div className="con-mods" key={activeKey} data-anim={reduceMotion ? undefined : 'in'}>
-            {others.map((d, i) => (
-              <ModuleCard
-                key={d.key}
-                index={i}
-                domain={d}
-                entry={read(d.key)}
-                onOpen={() => setActiveKey(d.key)}
-              />
-            ))}
-          </div>
+              <section className="con-focus" aria-labelledby="con-focus-title">
+                <div className="con-focus-head">
+                  <h2 id="con-focus-title">
+                    <span className="con-focus-channel" style={{ '--ch-accent': channel.accent }}>
+                      <i aria-hidden="true" />{channel.label}
+                    </span>
+                    {active.label}
+                  </h2>
+                  <p className="con-focus-q">{channel.ready ? active.question : channel.hint}</p>
+                </div>
+                {channel.ready ? (
+                  // Keyed on the domain so the settle animation replays on every
+                  // exchange, and so a domain's local view state never leaks into
+                  // the next one.
+                  <div className="con-focus-body" key={domainKey} data-anim={reduceMotion ? undefined : 'in'}>
+                    <DashboardTab
+                      activeTab={domainKey}
+                      filters={filters}
+                      data={activeEntry.data}
+                      status={activeEntry.status}
+                      error={activeEntry.error}
+                      onRetry={() => retry(domainKey)}
+                      productPerformanceLevel={productLevel}
+                      setProductPerformanceLevel={setProductLevel}
+                      onNavigateTab={setActiveKey}
+                    />
+                  </div>
+                ) : (
+                  // An empty state that says what has to happen, not just that
+                  // nothing is here. The steps are a real sequence — the file
+                  // has to land before the importer can fill the domains.
+                  <div className="con-focus-body channel-pending">
+                    <div className="channel-pending-main">
+                      <span className="channel-pending-ico" style={{ '--ch-accent': channel.accent }} aria-hidden="true">
+                        <Database size={20} />
+                      </span>
+                      <div>
+                        <strong>{channel.label} belum punya data terimpor</strong>
+                        <p>{channel.note}</p>
+                      </div>
+                    </div>
+                    <ol className="channel-pending-steps">
+                      <li>Unggah file {channel.label} pada Pengaturan Brand</li>
+                      <li>Importer memindahkannya ke tabel fakta</li>
+                      <li>Seluruh domain {channel.label} di atas ikut terisi</li>
+                    </ol>
+                    <p className="channel-pending-note">
+                      Belanja iklan {channel.label} yang sudah diisi di Daily Tracking tetap terbaca pada Executive Snapshot.
+                    </p>
+                    <Link to="/pengaturan-brand" className="mom-head-link">Buka Pengaturan Brand <ArrowUpRight size={13} /></Link>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
         </div>
       </div>
     </div>

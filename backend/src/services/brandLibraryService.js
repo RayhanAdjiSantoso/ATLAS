@@ -14,7 +14,12 @@ import pool from '../config/db.js';
 // handed to the report pipeline later with no translation step.
 
 export const LIBRARY_CHANNELS = {
-  meta: ['meta', 'cpas'],
+  // Split per campaign type (migration-free: `channel` is TEXT, not an enum).
+  // 'meta' stays valid for the combined Boost+Non-Boost exports already in the
+  // library — the Report Generator still reads that channel — while new
+  // uploads are filed as the three the report vocabulary already names
+  // ('boost', 'nonboost', 'cpas_overall' in ads_reports.meta_ad_rows).
+  meta: ['meta', 'boost', 'nonboost', 'cpas'],
   shopee: [
     'order',
     'performance_overview',

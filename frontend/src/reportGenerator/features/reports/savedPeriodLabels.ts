@@ -9,8 +9,10 @@ const CHANNEL_LABELS: Record<string, string> = {
   live: 'Live',
   overview: 'Overview',
   product_performance: 'Product Performance',
-  boost: 'Boost',
-  nonboost: 'Non-Boost',
+  meta: 'Meta Ads (gabungan)',
+  boost: 'Boost Post',
+  nonboost: 'Non-Boost Post',
+  cpas: 'CPAS',
   cpas_overall: 'CPAS',
   tiktok: 'Campaign',
 };

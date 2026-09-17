@@ -22,12 +22,6 @@
 @keyframes ssel-in{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}
 
 
-@keyframes st-node-in{to{opacity:1;transform:none}}
-
-@keyframes st-grow-y{from{transform:scaleY(0)}to{transform:scaleY(1)}}
-
-@keyframes st-grow-x{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-
 @keyframes report-tab-in{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 
 @keyframes rt-bar-in{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:none}}
@@ -618,11 +612,22 @@
   /* ── Symptom Analysis: summary callout ──────────────────────────────────── */
   .sympt-summary{
     border-radius:12px;padding:1rem 1.15rem;margin-bottom:1.3rem;
-    background:var(--s2);border:1px solid var(--border);border-left:3px solid var(--muted2);
+    background:var(--s2);border:1px solid var(--border);
   }
-  .sympt-summary-up{border-left-color:var(--good);background:var(--good-100)}
-  .sympt-summary-down{border-left-color:var(--bad);background:var(--bad-100)}
-  .sympt-summary-headline{font-size:.95rem;font-weight:800;color:var(--text);margin-bottom:.7rem;line-height:1.4}
+  .sympt-summary-up{background:var(--good-100);border-color:rgba(21,128,61,.22)}
+  .sympt-summary-down{background:var(--bad-100);border-color:rgba(200,30,30,.22)}
+  /* Direction reads from a small drawn dot and the headline's own words —
+     the same signal the delta pills use — rather than a coloured bar down
+     the side of the card. */
+  .sympt-summary-headline{
+    display:flex;align-items:flex-start;gap:.55rem;
+    font-size:.95rem;font-weight:800;color:var(--text);margin-bottom:.7rem;line-height:1.4;
+  }
+  .sympt-summary-headline::before{
+    content:'';flex:0 0 auto;width:8px;height:8px;margin-top:.4rem;border-radius:99px;background:var(--muted2);
+  }
+  .sympt-summary-up .sympt-summary-headline::before{background:var(--good)}
+  .sympt-summary-down .sympt-summary-headline::before{background:var(--bad)}
   .sympt-summary-points{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.5rem}
   .sympt-summary-points li{position:relative;padding-left:1.15rem;font-size:.83rem;line-height:1.55;color:var(--text)}
   .sympt-summary-points li::before{content:'→';position:absolute;left:0;top:0;color:var(--shopee-700);font-weight:800}
@@ -645,12 +650,20 @@
     --st-line:#b9c3d6;--st-node-h:34px;
     --st-elbow:calc(var(--st-node-h) / 2 + .18rem);   /* item top → elbow centre */
     --st-indent:18px;
-    --st-step:58ms;                                   /* per-node cascade */
+    --st-val-w:13rem;                                 /* fixed numeric column */
+    --st-pill-w:6rem;
   }
+  /* Head shares the node grid below, so each label sits over the column it
+     names. The label column narrows as the tree indents; the value and delta
+     columns keep a common right edge, which is what lets the eye scan a
+     straight line down the numbers regardless of depth. */
   .symptom-tree-head{
-    display:flex;justify-content:space-between;gap:1rem;font-size:.6rem;font-weight:800;text-transform:uppercase;
-    letter-spacing:.08em;color:var(--muted);padding:0 .55rem .5rem;
+    display:grid;grid-template-columns:minmax(0,1fr) var(--st-val-w) var(--st-pill-w);
+    align-items:end;gap:.7rem;
+    font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+    padding:0 .6rem .45rem;margin-bottom:.35rem;border-bottom:1px solid var(--border);
   }
+  .symptom-tree-head .st-vals,.symptom-tree-head .st-head-delta{justify-content:flex-end;text-align:right;white-space:nowrap}
   .symptom-tree ul{list-style:none}
   .symptom-tree .st-root-list{margin:0;padding:0}
   .symptom-tree .st-children{position:relative;margin:0 0 0 15px;padding:0 0 0 var(--st-indent)}
@@ -660,25 +673,20 @@
   .st-item::before{
     content:'';position:absolute;left:calc(var(--st-indent) * -1);top:0;height:100%;
     width:2px;border-radius:2px;background:var(--st-line);
-    transform-origin:top;animation:st-grow-y .34s var(--ease-out) both;
-    animation-delay:calc(var(--i,0) * var(--st-step));
   }
   .st-item:last-child::before{height:var(--st-elbow)}
   /* …and the elbow out to the node. */
   .st-item > .st-node::before{
     content:'';position:absolute;left:calc(var(--st-indent) * -1);top:var(--st-elbow);
     width:var(--st-indent);height:2px;border-radius:2px;background:var(--st-line);
-    transform-origin:left;animation:st-grow-x .26s var(--ease-out) both;
-    animation-delay:calc(var(--i,0) * var(--st-step) + 130ms);
   }
   .st-node{
-    position:relative;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;
+    position:relative;display:grid;
+    grid-template-columns:minmax(0,1fr) var(--st-val-w) var(--st-pill-w);
+    align-items:center;gap:.7rem;
     min-height:var(--st-node-h);padding:.35rem .6rem;margin:.18rem 0;border-radius:9px;
     background:transparent;border:1px solid transparent;
-    opacity:0;transform:translateX(-8px);
     transition:background .16s var(--ease-out),border-color .16s var(--ease-out),box-shadow .16s var(--ease-out);
-    animation:st-node-in .4s var(--ease-out) forwards;
-    animation-delay:calc(var(--i,0) * var(--st-step) + 210ms);
   }
   .st-node:hover{background:var(--surface);border-color:var(--border)}
   /* Depth 1 = the two things GMV actually decomposes into — give them a card. */
@@ -689,20 +697,27 @@
     background:var(--shopee-100);border-color:var(--shopee-300);
     box-shadow:0 0 0 3px rgba(238,77,45,.06);
   }
-  .st-label{flex:1;min-width:0;font-size:.8rem;font-weight:600;color:var(--text);letter-spacing:-.01em}
+  .st-label{min-width:0;font-size:.8rem;font-weight:600;color:var(--text);letter-spacing:-.01em;overflow-wrap:anywhere}
   .st-node.st-root .st-label{font-weight:800;font-size:.86rem}
   /* One consistent numeric column so the eye can scan straight down. */
   .st-vals{
-    flex-shrink:0;font-size:.68rem;color:var(--muted);font-weight:600;text-align:right;
+    display:flex;align-items:center;justify-content:flex-end;gap:.3rem;min-width:0;
+    font-size:.68rem;color:var(--muted);font-weight:600;
     font-variant-numeric:tabular-nums lining-nums;
   }
-  .st-arrow{color:var(--muted2);padding:0 .1rem}
-  .st-node .delta-pill{flex-shrink:0;min-width:5.1rem;text-align:center}
-  @media (prefers-reduced-motion: reduce){.st-node{opacity:1;transform:none;animation:none}
-  .st-item::before, .st-item > .st-node::before{animation:none}}
-  @media(max-width:560px){.symptom-tree{--st-indent:13px}
-  .st-children{margin-left:10px}
-  .st-vals{width:100%;order:3;text-align:left}}
+  /* The period being read is the one that carries the weight; the old value
+     stays a reference next to it. */
+  .st-cur{color:var(--text);font-weight:750}
+  .st-arrow{color:var(--muted2)}
+  .st-node .delta-pill{width:100%;min-width:0;justify-content:center;padding:.18rem .4rem;font-size:.72rem}
+  @media(max-width:560px){
+    .symptom-tree{--st-indent:13px}
+    .symptom-tree-head{grid-template-columns:minmax(0,1fr) var(--st-pill-w)}
+    .symptom-tree-head .st-vals{display:none}
+    .st-children{margin-left:10px}
+    .st-node{grid-template-columns:minmax(0,1fr) var(--st-pill-w);row-gap:.15rem}
+    .st-vals{grid-column:1 / -1;order:3;justify-content:flex-start}
+  }
   /* ============================================================================
      SHOPEE REPORT — paged results. The ~14 sections are split into 4 tabbed
      pages instead of one long scroll; only the active page renders on screen,
@@ -837,6 +852,19 @@
   .report-tab-panel .sec-block, &.pdf-export-mode .sec-block{animation:none}
   @media print{.sec-block{animation:none!important}}
   @media (prefers-reduced-motion: reduce){.sec-block{animation:none}}
+  /* Export safety net. html2canvas renders a CLONE of the DOM in a detached
+     iframe, and every CSS animation starts over from frame zero in that
+     clone — so anything whose resting state is opacity:0 or scale(0) is
+     captured mid-entrance, or not at all. Waiting longer on screen cannot fix
+     it; the clone has its own clock. Nothing inside the wrapper may animate
+     while an export is running. Both export paths add .pdf-export-mode
+     (downloadSectionPNG adds .png-fit-content on top), so this covers PNG and
+     PDF alike. */
+  &.pdf-export-mode *, &.pdf-export-mode *::before, &.pdf-export-mode *::after{
+    animation:none!important;transition:none!important;
+  }
+  &.pdf-export-mode .reveal, &.pdf-export-mode .hero-reveal{opacity:1!important;transform:none!important}
+  &.pdf-export-mode .home-band-mark{opacity:.07!important}
   /* Heading: gentle vertical wash instead of a flat grey band.
      All values below are plain tokens/hex — no color-mix() — because
      html2canvas (PNG/PDF export) can't parse a color-mix() computed value. */
@@ -934,7 +962,7 @@
   }
   .sympt-panel-head{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem}
   .sympt-panel-title{font-size:.82rem;font-weight:800;color:var(--shopee-700);letter-spacing:-.01em}
-  .sympt-panel .symptom-tree{--st-node-h:38px}
+  .sympt-panel .symptom-tree{--st-node-h:38px;--st-val-w:10.5rem;--st-pill-w:5.6rem}
   .sympt-panel .st-node{background:var(--surface)}
   .sympt-panel .st-label{min-width:0;font-size:.79rem}
   .sympt-panel .st-vals{font-size:.68rem}

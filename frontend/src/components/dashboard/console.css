@@ -268,6 +268,10 @@
 @container (min-width:860px) { .section-nav-shell.is-brand .brand-view-nav { grid-template-columns:repeat(5,minmax(0,1fr)); } }
 /* Business Overview: eight domains */
 @container (min-width:620px) { .section-nav-shell.is-dashboard .brand-view-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+/* Business Overview: Executive Snapshot + three channels. Four tabs split
+   evenly or not at all — 2x2, then one row — so the bar never leaves a
+   stranded tab on a line of its own. */
+@container (min-width:780px) { .section-nav-shell.is-four .brand-view-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @container (min-width:1360px) { .section-nav-shell.is-dashboard .brand-view-nav { grid-template-columns:repeat(8,minmax(0,1fr)); } }
 .brand-view-caption { display:flex; align-items:center; gap:.55rem; min-height:22px; padding:0 .3rem; color:var(--text-muted); font-size:.69rem; font-weight:620; }
 .brand-caption-rule { width:22px; height:1px; background:var(--border); }
@@ -1860,11 +1864,12 @@ html:has(.con-bar) {
 .cc-toolbar-count { margin-left:auto; color:var(--text-muted); font-size:.68rem; font-weight:650; }
 
 .cc-list { display:grid; }
-.cc-row { display:grid; gap:.65rem; padding:.9rem 1.5rem 1rem; border-bottom:1px solid var(--rule); box-shadow:inset 3px 0 0 transparent; transition:background .16s ease; }
+/* Tone is carried by the row's own status pill, which names the state in
+   words — so the row needs no coloured left rule repeating it in colour
+   alone. */
+.cc-row { display:grid; gap:.65rem; padding:.9rem 1.5rem 1rem; border-bottom:1px solid var(--rule); transition:background .16s ease; }
 .cc-row:last-child { border-bottom:0; }
 .cc-row:hover { background:#fcfdff; }
-.cc-row.is-bad { box-shadow:inset 3px 0 0 #c81e1e; }
-.cc-row.is-warn { box-shadow:inset 3px 0 0 #d97706; }
 .cc-row-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem; }
 .cc-row-title { display:flex; flex-wrap:wrap; align-items:center; gap:.55rem; min-width:0; }
 .cc-row-title strong { font-size:.88rem; font-weight:780; letter-spacing:-.014em; }
@@ -1922,3 +1927,164 @@ html:has(.con-bar) {
   .cc-age { grid-column:2; justify-self:start; }
   .cc-toolbar-count { margin-left:0; }
 }
+
+/* ── Executive Snapshot (cross-channel) ────────────────────────────────
+   The monthly report's Sales Performance table, rendered as the opening
+   reading of Business Overview. "—" is a real state here: a metric with no
+   Daily Tracking entry must never render as Rp0. */
+/* ── Executive Snapshot ────────────────────────────────────────────────
+   The cross-channel reading. It wears .con-focus so it is the same kind of
+   object as the focused domain below it — drawing it as a bespoke card is
+   what made it read as a section bolted onto the page. Everything here is
+   only what that shell does not already carry. Numbers use the console's own
+   signatures (the delta pill, the em-dash null, tabular figures) instead of
+   restating them in a private vocabulary. */
+.xs-head { align-items: flex-start; }
+.xs-head-copy { display: grid; gap: .25rem; min-width: 0; }
+.xs-head-copy p { max-width: 62ch; color: var(--text-muted); font-size: .76rem; line-height: 1.5; }
+.xs-head .mom-head-link { flex: 0 0 auto; margin-left: auto; }
+.xs-body { display: grid; gap: 1.25rem; }
+
+/* Loading, empty and error wear the panel too, so the page does not change
+   shape between states. */
+.xs-body.is-state { display: block; }
+.xs-state { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: 1.4rem .15rem; color: var(--text-muted); font-size: .8rem; line-height: 1.55; }
+.xs-state > svg { flex: 0 0 auto; color: var(--acc-300); }
+.xs-state.is-error { color: var(--danger); }
+.xs-state.is-error > svg { color: var(--danger); }
+.xs-state.is-empty { flex-direction: column; align-items: flex-start; gap: .75rem; padding: 2rem .15rem; }
+.xs-state.is-empty span { display: grid; gap: .3rem; max-width: 62ch; }
+.xs-state.is-empty strong { color: var(--text); font-size: .95rem; font-weight: 780; }
+.xs-state button { display: inline-flex; align-items: center; gap: .3rem; padding: .35rem .6rem; color: var(--acc); border: 1px solid var(--acc-300); border-radius: 9px; background: var(--bg-card); font: inherit; font-size: .72rem; font-weight: 720; cursor: pointer; transition: background .18s var(--ease), border-color .18s var(--ease); }
+.xs-state button:hover { background: var(--primary-light); }
+
+/* ── The comparison table ──────────────────────────────────────────────
+   One surface divided by hairlines, like the KPI strip: metric rows grouped
+   by the question they answer, one column per period, the delta pill carrying
+   movement. No fills except the column actually being read. */
+.xs-table-wrap { overflow-x: auto; }
+.xs-table { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums lining-nums; }
+.xs-table th, .xs-table td { padding: .5rem .8rem; text-align: right; white-space: nowrap; }
+.xs-table thead th { padding-bottom: .55rem; color: var(--text-placeholder); border-bottom: 1px solid var(--border); font-size: .63rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; vertical-align: bottom; }
+.xs-table thead th span { display: block; }
+.xs-table thead th small { display: block; margin-top: .2rem; color: var(--text-placeholder); font-size: .62rem; font-weight: 620; letter-spacing: 0; text-transform: none; }
+.xs-table thead th.is-primary { color: var(--acc); }
+.xs-table thead th.is-primary small { color: var(--acc); opacity: .78; }
+.xs-table th:first-child, .xs-table tbody th { text-align: left; }
+
+/* Group label: the Label style over a rule, no fill — rhythm without adding
+   a fourth tint to the surface. */
+.xs-group th { padding: .95rem .8rem .3rem; color: var(--text-placeholder); font-size: .6rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.xs-table tbody:first-of-type .xs-group th { padding-top: .7rem; }
+
+.xs-table tbody th, .xs-table tbody td { border-top: 1px solid var(--rule); }
+.xs-group th, .xs-group + tr th, .xs-group + tr td { border-top: 0; }
+.xs-table tbody th { color: var(--text); font-size: .78rem; font-weight: 720; }
+.xs-table tbody td { color: var(--text); font-size: .82rem; font-weight: 650; }
+/* The period being read is the column every other number is judged against. */
+.xs-table thead th.is-primary, .xs-table tbody td.is-primary { background: #f7f9ff; }
+.xs-table tbody td.is-primary { font-weight: 800; }
+.xs-table tbody tr:not(.xs-group):hover th,
+.xs-table tbody tr:not(.xs-group):hover td { background: #fbfcff; }
+.xs-table tbody tr:not(.xs-group):hover td.is-primary { background: #eef2ff; }
+.xs-delta-cell .con-delta { float: right; }
+
+/* ── Curve and channel split ───────────────────────────────────────────── */
+.xs-split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 1fr); gap: 1.5rem; align-items: start; padding-top: 1.1rem; border-top: 1px solid var(--rule); }
+.xs-chart { margin: 0; min-width: 0; }
+.xs-chart figcaption { margin-bottom: .5rem; color: var(--text-placeholder); font-size: .63rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.xs-chart-plot { position: relative; }
+.xs-chart svg { display: block; width: 100%; height: auto; }
+.xs-chart-plot rect { cursor: crosshair; }
+.xs-chart-grid { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 4 4; }
+.xs-chart-cross { stroke: var(--acc); stroke-width: 1; stroke-dasharray: 2 3; opacity: .55; }
+.xs-chart-peak { fill: var(--bg-card); stroke: var(--acc); stroke-width: 2.4; }
+
+/* Reads both series at one day at once — the comparison is the whole point. */
+.xs-tip {
+  position: absolute; z-index: 5; transform: translate(-50%, -108%);
+  display: grid; gap: .22rem; min-width: 8.5rem; padding: .5rem .6rem;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--bg-card);
+  box-shadow: var(--shadow); pointer-events: none; white-space: nowrap;
+}
+.xs-tip strong { color: var(--text); font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.xs-tip span { display: flex; align-items: center; gap: .38rem; color: var(--text-muted); font-size: .72rem; font-weight: 620; }
+.xs-tip i { flex: 0 0 auto; width: 9px; height: 3px; border-radius: 2px; }
+.xs-tip b { margin-left: auto; color: var(--text); font-weight: 780; font-variant-numeric: tabular-nums lining-nums; }
+.xs-chart-tick { fill: var(--text-placeholder); font-size: 9.5px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.xs-chart-legend { display: flex; flex-wrap: wrap; gap: .85rem; margin-top: .45rem; color: var(--text-muted); font-size: .69rem; font-weight: 650; }
+.xs-chart-legend span { display: inline-flex; align-items: center; gap: .35rem; }
+.xs-chart-legend b { width: 14px; height: 3px; border-radius: 2px; }
+
+.xs-donut { min-width: 0; }
+.xs-donut h3 { margin: 0 0 .5rem; color: var(--text-placeholder); font-size: .63rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+/* DonutChart brings its own .card; inside the focus panel that card is already
+   flattened (see .con .con-focus-body .card), so this stays one depth level. */
+.xs-donut .donut-card { padding: 1rem !important; }
+.xs-donut .donut-layout { gap: 1.1rem !important; }
+/* Spend keeps the list reading, now full width under the split. */
+.xs-body > .xs-break { padding-top: 1.1rem; border-top: 1px solid var(--rule); }
+.xs-body > .xs-break ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .1rem 1.75rem; }
+/* Multi-column: a per-item top rule draws a stray line above the first item of
+   every column, so the block's own rule carries the separation instead. */
+.xs-body > .xs-break li { border-top: 0; }
+.xs-break h3 { margin: 0 0 .35rem; color: var(--text-placeholder); font-size: .63rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.xs-break ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.xs-break li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'name value' 'meter share'; gap: .18rem .6rem; align-items: center; padding: .45rem 0; border-top: 1px solid var(--rule); }
+.xs-break li:first-child { border-top: 0; }
+.xs-break-name { grid-area: name; min-width: 0; color: var(--text); font-size: .74rem; font-weight: 650; overflow-wrap: anywhere; }
+.xs-break li b { grid-area: value; font-size: .76rem; font-weight: 780; font-variant-numeric: tabular-nums lining-nums; text-align: right; white-space: nowrap; }
+/* Share of the period, in the same channel the funnel uses for step
+   conversion: a thin meter, because a proportion cannot be read off a figure. */
+.xs-break-meter { grid-area: meter; display: block; height: 4px; overflow: hidden; border-radius: 99px; background: var(--rule); }
+.xs-break-meter i { display: block; height: 100%; border-radius: 99px; }
+.xs-break-meter i.is-rev { background: var(--acc); }
+.xs-break-meter i.is-spend { background: #7c8db5; }
+.xs-break li small { grid-area: share; color: var(--text-placeholder); font-size: .64rem; font-weight: 700; font-variant-numeric: tabular-nums lining-nums; text-align: right; }
+
+.xs-muted { margin: 0; color: var(--text-placeholder); font-size: .73rem; line-height: 1.5; }
+.xs-note { margin: 0; padding-top: .95rem; color: var(--text-muted); border-top: 1px solid var(--rule); font-size: .72rem; line-height: 1.6; }
+.xs-note strong { color: var(--text); font-weight: 750; }
+
+@media (max-width: 1080px) {
+  .xs-split { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+}
+@media (max-width: 760px) {
+  .xs-head { flex-wrap: wrap; }
+  .xs-head .mom-head-link { margin-left: 0; }
+}
+
+
+/* ── Channel navigation (Business Overview) ────────────────────────────
+   The channel tabs sit above the domain tabs and carry each channel's own
+   accent, so "which channel am I reading" is answered by colour as well as
+   position. A channel with no importer yet says so in its own tab rather
+   than looking like an empty report. */
+.dashboard-channel-nav .brand-view-tab { min-height:58px; }
+.dashboard-channel-nav .brand-view-tab-ico { color:var(--ch-accent, var(--text-muted)); }
+.dashboard-channel-nav .brand-view-tab.is-active .brand-view-tab-ico { color:#fff; }
+.dashboard-channel-nav .brand-view-pill { background:linear-gradient(135deg, var(--ch-accent, var(--acc)) 0%, color-mix(in srgb, var(--ch-accent, var(--acc)) 72%, #ffffff) 100%); box-shadow:0 10px 22px color-mix(in srgb, var(--ch-accent, var(--acc)) 30%, transparent), inset 0 1px rgba(255,255,255,.18); }
+.dashboard-channel-nav .brand-view-tab-copy small { display:flex; align-items:center; gap:.3rem; }
+.dashboard-channel-soon { display:inline-flex; align-items:center; padding:.06rem .34rem; border-radius:99px; background:#fdf3e0; color:#92400e; font-size:.56rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.brand-view-tab.is-active .dashboard-channel-soon { background:rgba(255,255,255,.22); color:#fff; }
+
+/* The channel a focused domain belongs to, named beside its title: a small
+   drawn dot in the channel's own hue — hue-locked identity, never a coloured
+   bar and never a second heading. Scoped to the console so Pengaturan Brand's
+   own .con-focus head keeps its plain title. */
+.dashboard-body .con-focus-head h2 { display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; min-width:0; }
+.con-focus-channel { display:inline-flex; align-items:center; gap:.38rem; padding:.18rem .5rem; color:var(--text-muted); border:1px solid var(--border); border-radius:99px; background:var(--bg-card); font-size:.66rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.con-focus-channel i { width:7px; height:7px; border-radius:99px; background:var(--ch-accent, var(--acc)); }
+
+/* A channel whose data is not imported yet: explain the gap and what closes
+   it, don't fake it. Left-aligned and structured — a centred icon over two
+   centred sentences reads as an error, and this is not an error. */
+.channel-pending { display:grid; justify-items:start; gap:1rem; padding:1.8rem 0 .5rem; text-align:left; }
+.channel-pending-main { display:flex; align-items:flex-start; gap:.8rem; }
+.channel-pending-ico { display:grid; place-items:center; flex:0 0 auto; width:40px; height:40px; color:var(--ch-accent, var(--acc)); border-radius:11px; background:var(--bg-elevated); }
+.channel-pending strong { display:block; color:var(--text); font-size:.98rem; font-weight:780; letter-spacing:-.02em; }
+.channel-pending p { max-width:62ch; margin:.28rem 0 0; color:var(--text-muted); font-size:.78rem; line-height:1.6; }
+.channel-pending-steps { display:grid; width:100%; max-width:62ch; margin:0; padding:0; list-style:none; counter-reset:step; }
+.channel-pending-steps li { display:flex; align-items:center; gap:.6rem; padding:.55rem 0; color:var(--text-muted); border-top:1px solid var(--rule); font-size:.76rem; }
+.channel-pending-steps li::before { counter-increment:step; content:counter(step); display:grid; place-items:center; flex:0 0 auto; width:20px; height:20px; color:var(--text-placeholder); border-radius:99px; background:var(--bg-elevated); font-size:.62rem; font-weight:800; }
+.channel-pending-note { max-width:62ch; margin:0; color:var(--text-placeholder); font-size:.73rem; line-height:1.6; }
