@@ -3,6 +3,7 @@ import { AlertTriangle, BarChart3, CheckCircle2, Compass, Database, Lightbulb, S
 import type { Platform } from '../reports/types';
 import type { SummaryKpi } from '../../lib/summary';
 import { generateAiSummary, saveAiSummaryEdit, type AiSummaryContent, type AiSummaryRecord } from '../reports/api';
+import { useAuth } from '../../../contexts/AuthContext.jsx';
 
 type CompleteSummary = Required<AiSummaryContent>;
 type ListField = Exclude<keyof CompleteSummary, 'diagnosis' | 'objective_alignment'>;
@@ -60,6 +61,7 @@ function actionParts(item: string) {
 }
 
 export function AiSummarySection({ clientId, platform, period, periodDates, kpis, cpasKpis, periodWarning, notes }: AiSummarySectionProps) {
+  const { isViewOnly } = useAuth();
   const [record, setRecord] = useState<AiSummaryRecord | null>(null);
   const [cached, setCached] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -89,7 +91,7 @@ export function AiSummarySection({ clientId, platform, period, periodDates, kpis
   }, [inputSignature]);
 
   async function run(refresh: boolean) {
-    if (!clientId) return;
+    if (!clientId || isViewOnly) return;
     setBusy(true); setError(null);
     try {
       const res = await generateAiSummary({
@@ -104,7 +106,7 @@ export function AiSummarySection({ clientId, platform, period, periodDates, kpis
   }
 
   async function saveEdit() {
-    if (!record || !clientId || !draft) return;
+    if (!record || !clientId || !draft || isViewOnly) return;
     setSaving(true); setError(null);
     try { setRecord(await saveAiSummaryEdit(record.id, clientId, draft)); setDraft(null); }
     catch (err) { setError(err instanceof Error ? err.message : 'Gagal menyimpan suntingan.'); }
@@ -116,8 +118,8 @@ export function AiSummarySection({ clientId, platform, period, periodDates, kpis
       <div className="sec-heading ai-sum-heading">
         <span className="ai-sum-title"><Sparkles size={16} /> AI Consultant Brief</span>
         <span className="ai-sum-tools">
-          {content && !draft && <><button className="btn btn-ghost ai-sum-btn" onClick={() => setDraft(content)} disabled={busy}>Edit</button><button className="btn btn-ghost ai-sum-btn" onClick={() => run(true)} disabled={busy}>{busy ? 'Menganalisis…' : '↻ Analisis ulang'}</button></>}
-          {draft && <><button className="btn btn-ghost ai-sum-btn" onClick={() => setDraft(null)} disabled={saving}>Batal</button><button className="btn ai-sum-btn" onClick={saveEdit} disabled={saving}>{saving ? 'Menyimpan…' : 'Simpan suntingan'}</button></>}
+          {content && !draft && !isViewOnly && <><button className="btn btn-ghost ai-sum-btn" onClick={() => setDraft(content)} disabled={busy}>Edit</button><button className="btn btn-ghost ai-sum-btn" onClick={() => run(true)} disabled={busy}>{busy ? 'Menganalisis…' : '↻ Analisis ulang'}</button></>}
+          {draft && !isViewOnly && <><button className="btn btn-ghost ai-sum-btn" onClick={() => setDraft(null)} disabled={saving}>Batal</button><button className="btn ai-sum-btn" onClick={saveEdit} disabled={saving}>{saving ? 'Menyimpan…' : 'Simpan suntingan'}</button></>}
         </span>
       </div>
 
@@ -132,7 +134,7 @@ export function AiSummarySection({ clientId, platform, period, periodDates, kpis
           <div className="ai-sum-empty-icon"><Sparkles size={24} /></div>
           <div><h4>Ubah angka menjadi arahan keputusan</h4><p>AI akan menguji performa terhadap objective, prioritas, constraint, dan pembelajaran brand, lalu menyusun diagnosis, hipotesis, risiko, dan action plan terukur.</p></div>
           {!clientId && <p className="ai-sum-warn">Pilih brand dulu di bagian atas halaman.</p>}
-          <button className="btn ai-sum-cta" onClick={() => run(false)} disabled={!clientId || busy || !kpis.length}>{busy ? 'Menyusun consultant brief…' : 'Generate Consultant Brief'}</button>
+          <button className="btn ai-sum-cta" onClick={() => run(false)} disabled={isViewOnly || !clientId || busy || !kpis.length}>{busy ? 'Menyusun consultant brief…' : 'Generate Consultant Brief'}</button>
         </div>}
 
         {error && <div className="ai-sum-error"><strong>Ringkasan gagal dibuat.</strong><span>{error}</span><button className="btn btn-ghost ai-sum-btn" onClick={() => run(true)} disabled={busy}>{busy ? 'Mencoba…' : 'Coba lagi'}</button><small>Laporan di atas tidak terpengaruh dan tetap bisa diunduh.</small></div>}

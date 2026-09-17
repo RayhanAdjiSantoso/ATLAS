@@ -11,6 +11,7 @@ import metaAutomationRoutes from './routes/metaAutomationRoutes.js';
 import reportGeneratorRoutes from './routes/reportGeneratorRoutes.js';
 import internalDashboardRoutes from './routes/internalDashboardRoutes.js';
 import controlCenterRoutes from './routes/controlCenterRoutes.js';
+import dailyTrackingRoutes from './routes/dailyTrackingRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,7 @@ app.use('/api/meta-automation', metaAutomationRoutes);
 app.use('/api/report-generator', reportGeneratorRoutes);
 app.use('/api/internal-dashboard', internalDashboardRoutes);
 app.use('/api/control-center', controlCenterRoutes);
+app.use('/api/daily-tracking', dailyTrackingRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

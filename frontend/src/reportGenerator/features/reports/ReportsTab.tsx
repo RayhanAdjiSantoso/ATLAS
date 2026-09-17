@@ -13,6 +13,7 @@ import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import { DEFAULT_PARETO_RANGE, type ParetoRangeSelection, type PerfMetricVars } from '../../lib/shopeeProductAnalysis';
 import { deleteReport, getProductMaster, getReportDetail, getReports, saveProductMasterEntry } from './api';
+import { useAuth } from '../../../contexts/AuthContext.jsx';
 import { reconstructMetaReport, reconstructShopeeDeepDive, reconstructShopeeFunnel, reconstructShopeeReport, reconstructTiktokReport } from './reconstruct';
 import type { Platform, ReportDetail, ReportListItem } from './types';
 
@@ -29,6 +30,7 @@ const PLATFORM_LABELS: Record<Platform, string> = { meta: 'Meta Ads', shopee: 'S
 // live Meta/Shopee/TikTok tabs use (see reconstruct.ts), so no report file
 // re-upload is needed.
 export function ReportsTab({ isActive, clientId }: ReportsTabProps) {
+  const { isViewOnly } = useAuth();
   const [reports, setReports] = useState<ReportListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -65,6 +67,7 @@ export function ReportsTab({ isActive, clientId }: ReportsTabProps) {
   }
 
   async function handleDelete(id: number) {
+    if (isViewOnly) return;
     if (!window.confirm('Hapus laporan ini dari riwayat? Tindakan ini tidak bisa dibatalkan.')) return;
     setDeleteError(null);
     setDeletingId(id);
@@ -112,16 +115,18 @@ export function ReportsTab({ isActive, clientId }: ReportsTabProps) {
                 <div className="report-list-meta">Disimpan {new Date(r.createdAt).toLocaleString('id-ID')}</div>
               </div>
               <div className="report-list-badge">{PLATFORM_LABELS[r.platform]}</div>
-              <span
-                className="report-list-delete"
-                title="Hapus laporan ini"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(r.id);
-                }}
-              >
-                {deletingId === r.id ? '…' : '🗑'}
-              </span>
+              {!isViewOnly && (
+                <span
+                  className="report-list-delete"
+                  title="Hapus laporan ini"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(r.id);
+                  }}
+                >
+                  {deletingId === r.id ? '…' : '🗑'}
+                </span>
+              )}
             </div>
           ))}
         </div>

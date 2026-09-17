@@ -10,6 +10,28 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Backstop for view-only accounts: block every write client-side too, so
+  // stray writes (e.g. Report Generator's autosave effect) never reach the
+  // network. The server enforces this independently (blockWriteIfViewOnly);
+  // this only saves a doomed round-trip.
+  //
+  // Daily Tracking is a deliberate exception: view-only/client accounts are
+  // allowed to write their own brand's daily sales + ad spend there (the
+  // server enforces the brand lock via requireBrandAccess, not
+  // blockWriteIfViewOnly — see backend/src/routes/dailyTrackingRoutes.js).
+  const method = (config.method || 'get').toLowerCase();
+  const isViewOnlyWriteAllowed = /^\/daily-tracking(\/|\?|$)/.test(config.url || '');
+  if (method !== 'get' && method !== 'head' && !isViewOnlyWriteAllowed) {
+    try {
+      const stored = localStorage.getItem('atlas_user');
+      const storedUser = stored ? JSON.parse(stored) : null;
+      if (storedUser?.isViewOnly) {
+        return Promise.reject(new Error('Akun ini hanya dapat melihat data (view-only).'));
+      }
+    } catch { /* ignore malformed storage, let the request through */ }
+  }
+
   return config;
 });
 

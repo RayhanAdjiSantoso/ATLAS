@@ -24,6 +24,28 @@ export async function listClients(db = pool) {
 }
 
 // ---------------------------------------------------------------------
+// brand_sheet_sources (migration 022) — which brands have a live Google
+// Sheets feed the Input Data tab can offer a "Sync dari Sheets" button for.
+// ---------------------------------------------------------------------
+export async function listActiveSheetSources(db = pool) {
+  const { rows } = await db.query(`
+    SELECT s.brand_id, b.brand_name, s.spreadsheet_title, s.is_verified, s.last_synced_at
+    FROM brand_sheet_sources s
+    JOIN brands b ON b.brand_id = s.brand_id
+    WHERE s.is_active
+    ORDER BY b.brand_name
+  `);
+  return rows;
+}
+
+export async function touchSheetSourceSync(brandId, error, db = pool) {
+  await db.query(
+    `UPDATE brand_sheet_sources SET last_synced_at = now(), last_sync_error = $2 WHERE brand_id = $1`,
+    [brandId, error ?? null]
+  );
+}
+
+// ---------------------------------------------------------------------
 // §2.3 client_monthly_metrics
 // ---------------------------------------------------------------------
 const CMM_SELECT = `
@@ -250,8 +272,8 @@ export async function logIngestion(v, db = pool) {
   await db.query(
     `INSERT INTO data_ingestion_log
        (brand_id, target_table, period, source, method, row_count, status, note, pic, performed_by)
-     VALUES ($1, $2, $3, 'manual_form', $4, $5, $6::ingestion_status, $7, $8, $9)`,
-    [v.brandId, v.targetTable, v.period ?? null, v.method, v.rowCount, v.status, v.note ?? null, v.pic ?? null, v.userId ?? null],
+     VALUES ($1, $2, $3, $4::ingestion_source, $5, $6, $7::ingestion_status, $8, $9, $10)`,
+    [v.brandId, v.targetTable, v.period ?? null, v.source ?? 'manual_form', v.method, v.rowCount, v.status, v.note ?? null, v.pic ?? null, v.userId ?? null],
   );
 }
 

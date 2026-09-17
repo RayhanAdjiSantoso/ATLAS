@@ -7,7 +7,7 @@ const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const periodField = (f) => f.matches(PERIOD_RE).withMessage('Periode harus format YYYY-MM');
 
 const SALES_CHANNELS = ['shopee', 'tiktok_shop', 'website', 'offline'];
-const AD_PLATFORMS = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads'];
+const AD_PLATFORMS = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads', 'cpas_tokopedia', 'ttam_tiktok'];
 
 const optInt = (f) => f.optional({ nullable: true }).isInt({ min: 0 }).withMessage('Harus bilangan bulat ≥ 0');
 const optNum = (f) => f.optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Harus angka ≥ 0');
@@ -31,6 +31,11 @@ export const ingestionLogQueryValidation = [
 
 export const idParamValidation = [
   param('id').isInt({ min: 1 }).withMessage('id tidak valid'),
+];
+
+// --- Google Sheets live sync -----------------------------------------
+export const syncFromSheetsBodyValidation = [
+  body('brand_id').isInt({ min: 1 }).withMessage('brand_id wajib disertakan'),
 ];
 
 // --- S1 Executive Overview -----------------------------------------

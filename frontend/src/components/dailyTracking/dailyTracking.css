@@ -1,0 +1,324 @@
+/* Daily Tracking — plain hand-written CSS on the shared tokens from
+   index.css (--primary/--border/--radius/--shadow/--bg-card/--text-muted),
+   same convention as Dashboard/Internal Dashboard rather than the
+   .mil-ui-scoped reportGenerator sub-app. */
+
+.dt-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── Sticky head: brand/month bar + KPI strip stick together as one unit.
+   .main-content only sets overflow-x, which per the CSS overflow spec makes
+   overflow-y compute to auto too — the same scrolling ancestor Dashboard's
+   own sticky .con-bar relies on. */
+.dt-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background: var(--bg);
+  padding-bottom: 0.75rem;
+  margin: 0 -2rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-top: 0.25rem;
+}
+
+/* ── Client bar ─────────────────────────────────────────────────── */
+.dt-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0.85rem 1rem;
+}
+.dt-bar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.dt-bar-field { flex: 1 1 220px; max-width: 320px; min-width: 0; }
+.dt-bar-field label {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-placeholder, var(--text-muted));
+  margin-bottom: 0.3rem;
+}
+
+/* ── Month pill nav ─────────────────────────────────────────────── */
+.dt-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow-x: auto;
+}
+.dt-month-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.dt-month-arrow:hover { border-color: var(--primary); color: var(--primary); }
+.dt-month-pill {
+  flex-shrink: 0;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dt-month-pill:hover { background: var(--primary-light); }
+.dt-month-pill.is-active { background: var(--primary); color: #fff; }
+
+/* ── KPI strip — one bordered surface with hairline dividers, same
+   reasoning as Dashboard's .con-kpis: these six numbers are one reading of
+   one month, not six unrelated facts. ─────────────────────────────── */
+.dt-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.dt-kpi {
+  padding: 0.8rem 0.9rem;
+  border-left: 1px solid var(--border);
+  min-width: 0;
+}
+.dt-kpi:first-child { border-left: none; }
+.dt-kpi-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-placeholder, var(--text-muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-kpi-val {
+  margin-top: 0.3rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-skel {
+  display: inline-block;
+  width: 60%;
+  height: 1em;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #eaeefa 25%, #f4f6fc 50%, #eaeefa 75%) 0 0 / 240% 100%;
+  animation: dt-shimmer 1.5s ease infinite;
+}
+@keyframes dt-shimmer { to { background-position: -240% 0; } }
+
+@media (max-width: 900px) {
+  .dt-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dt-kpi:nth-child(3n + 1) { border-left: none; }
+  .dt-kpi:nth-child(n + 4) { border-top: 1px solid var(--border); }
+}
+@media (max-width: 560px) {
+  .dt-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dt-kpi:nth-child(2n + 1) { border-left: none; }
+  .dt-kpi:nth-child(n + 3) { border-top: 1px solid var(--border); }
+}
+
+/* ── File import ────────────────────────────────────────────────── */
+.dt-import { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
+.dt-import-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+.dt-import-recognized {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  opacity: 0.85;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* ── Sections ───────────────────────────────────────────────────── */
+.dt-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.1rem 1.2rem;
+}
+.dt-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+.dt-section-head h2 { font-size: 1rem; font-weight: 700; color: var(--text); margin: 0; }
+
+/* ── Channel tabs — adapted from reportGenerator's SlotSourceTabs pattern:
+   a role="tablist" strip with one active pill. ────────────────────── */
+.dt-tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+.dt-tab {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dt-tab:hover { border-color: var(--primary); color: var(--primary); }
+.dt-tab.is-active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.dt-tab-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border-style: dashed;
+  color: var(--primary);
+}
+
+/* ── Day-by-day entry table ─────────────────────────────────────── */
+.dt-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.dt-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.dt-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated, #f8fafc);
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-placeholder, var(--text-muted));
+  white-space: nowrap;
+}
+.dt-table tbody tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+.dt-table td { padding: 0.35rem 0.7rem; vertical-align: middle; }
+.dt-table-date { white-space: nowrap; color: var(--text-muted); font-weight: 600; }
+.dt-table input[type='number'] {
+  width: 100%;
+  min-width: 90px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+.dt-table input[type='number']:hover { border-color: var(--border); background: #fff; }
+.dt-table input[type='number']:focus { border-color: var(--primary); background: #fff; outline: none; }
+.dt-table-spend-cell { display: flex; align-items: center; gap: 0.5rem; }
+.dt-table-status-col { width: 90px; white-space: nowrap; }
+.dt-save-status { font-size: 0.68rem; color: var(--text-placeholder); }
+.dt-save-status.is-saved { color: var(--success); }
+.dt-save-status.is-error { color: var(--danger); }
+
+.dt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dt-badge-synced { background: var(--primary-light); color: var(--primary); }
+.dt-badge-locked { background: #fef3c7; color: #92400e; }
+
+/* ── Meta sync control (admin-only) ────────────────────────────── */
+.dt-meta-sync { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.dt-meta-sync select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+.dt-meta-sync .dt-btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+.dt-meta-sync-error { color: var(--danger); font-size: 0.75rem; }
+.dt-meta-sync-result { color: var(--text-muted); font-size: 0.75rem; }
+.dt-spin { animation: dt-spin 0.9s linear infinite; }
+@keyframes dt-spin { to { transform: rotate(360deg); } }
+
+/* ── Channel summary table — Report Generator's Business Overview visual
+   pattern, simplified to one column of totals. ───────────────────── */
+.dt-summary-wrap { display: flex; flex-direction: column; gap: 0.6rem; }
+.dt-summary-title { font-size: 1rem; font-weight: 700; color: var(--text); margin: 0; }
+.dt-summary-table th, .dt-summary-table td { text-align: left; }
+.dt-summary-table th:not(:first-child), .dt-summary-table td:not(:first-child) { text-align: right; }
+.dt-summary-total-row td { font-weight: 800; border-top: 2px solid var(--border); }
+.dt-summary-calc-row td { font-weight: 700; color: var(--primary); }
+
+/* ── Add-custom-channel modal ───────────────────────────────────── */
+.dt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.dt-modal-card {
+  width: 100%;
+  max-width: 380px;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+.dt-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+.dt-modal-head h3 { font-size: 1rem; font-weight: 700; margin: 0; }
+.dt-modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+
+@media (max-width: 600px) {
+  .dt-sticky-head { margin: 0 -1rem; padding-left: 1rem; padding-right: 1rem; }
+}

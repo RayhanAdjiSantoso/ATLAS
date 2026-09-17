@@ -20,6 +20,7 @@ import '../components/dashboard/console.css';
 import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
 import api from '../api/client';
+import { useAuth } from '../contexts/AuthContext.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
 import { MOM_TYPE_LABELS, OVERDUE_DAYS, dateLabel, daysSince, longDateLabel, parseISO, recapPreview, taskGroups, taskStats } from '../components/mom/momModel.js';
 
@@ -238,6 +239,7 @@ function RecapItem({ minute, open, onToggle }) {
 }
 
 function MinutesOverview({ filters }) {
+  const { isViewOnly } = useAuth();
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useSessionState('dashboard:mom-open', true);
   const [allMinutes, setAllMinutes] = useState([]);
@@ -309,6 +311,7 @@ function MinutesOverview({ filters }) {
   const periodLabel = `${dateLabel(filters.startDate)} – ${dateLabel(filters.endDate)}`;
 
   const toggleTask = (minuteId, key, checked) => {
+    if (isViewOnly) return;
     const requestScope = brandScopeRef.current;
     const current = minutesRef.current.find((minute) => minute.id === minuteId);
     if (!current) return;
@@ -335,7 +338,7 @@ function MinutesOverview({ filters }) {
   };
 
   const generate = async () => {
-    if (!selected.length || generating) return;
+    if (!selected.length || generating || isViewOnly) return;
     const requestScope = periodScopeRef.current;
     const ids = [...selected];
     setGenerating(true); setAiError('');
@@ -513,7 +516,7 @@ function MinutesOverview({ filters }) {
                             }))}
                           />
                         </div>
-                        <button type="button" className="btn btn-primary mom-generate" onClick={generate} disabled={!selected.length || generating}>
+                        <button type="button" className="btn btn-primary mom-generate" onClick={generate} disabled={isViewOnly || !selected.length || generating}>
                           {generating ? <Loader2 size={15} className="brand-spin" /> : <Sparkles size={15} />}
                           {generating ? 'Gemini sedang merangkum…' : aiSummary ? 'Buat ulang ringkasan' : 'Buat ringkasan AI'}
                         </button>

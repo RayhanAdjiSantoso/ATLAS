@@ -2,7 +2,7 @@ import { AppError, asyncHandler } from '../utils/errors.js';
 import * as brandService from '../services/brandService.js';
 
 export const listBrands = asyncHandler(async (req, res) => {
-  const brands = await brandService.listBrands();
+  const brands = await brandService.listBrands(req.user.allowedBrandId);
   res.json({ brands });
 });
 

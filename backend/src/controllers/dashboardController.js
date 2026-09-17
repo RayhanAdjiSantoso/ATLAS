@@ -16,9 +16,15 @@ async function withCompare(serviceFn, { brandId, startDate, endDate, compareStar
 
 // Get list of brands for dropdown
 export const getDashboardFilters = asyncHandler(async (req, res) => {
-  const result = await pool.query(
-    'SELECT brand_id, brand_name, status::text AS status FROM public.brands ORDER BY brand_name'
-  );
+  const allowedBrandId = req.user.allowedBrandId;
+  const result = allowedBrandId
+    ? await pool.query(
+        'SELECT brand_id, brand_name, status::text AS status FROM public.brands WHERE brand_id = $1 ORDER BY brand_name',
+        [allowedBrandId],
+      )
+    : await pool.query(
+        'SELECT brand_id, brand_name, status::text AS status FROM public.brands ORDER BY brand_name'
+      );
   res.json({ brands: result.rows });
 });
 

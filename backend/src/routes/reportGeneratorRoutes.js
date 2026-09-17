@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middlewares/auth.js';
+import { blockWriteIfViewOnly } from '../middlewares/brandAccess.js';
 import { reportsRouter } from './reportGenerator/reports.js';
 import { productMasterRouter } from './reportGenerator/productMaster.js';
 import { savedPeriodsRouter } from './reportGenerator/savedPeriods.js';
@@ -15,7 +16,7 @@ import { aiSummaryRouter } from './reportGenerator/aiSummary.js';
 // wrapper, now that this app shares ATLAS's real public.brands table.
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, blockWriteIfViewOnly);
 
 router.use('/reports', reportsRouter);
 router.use('/product-master', productMasterRouter);

@@ -22,6 +22,7 @@ aiSummaryRouter.get('/', async (req, res) => {
   const platform = typeof req.query.platform === 'string' ? req.query.platform : null;
   if (!Number.isInteger(brandId)) return fail(res, 400, 'client_id wajib diisi');
   if (platform && !PLATFORMS.includes(platform)) return fail(res, 400, 'platform tidak dikenal');
+  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) return fail(res, 403, 'Akses ditolak untuk brand ini.');
   res.json({ summaries: await ai.listForBrand(brandId, platform) });
 });
 
@@ -38,6 +39,7 @@ aiSummaryRouter.post('/', async (req, res) => {
   if (!Number.isInteger(brandId)) return fail(res, 400, 'client_id wajib diisi');
   if (!PLATFORMS.includes(platform)) return fail(res, 400, 'platform tidak dikenal');
   if (!performance?.kpis?.length) return fail(res, 400, 'Belum ada data performa untuk diringkas. Generate laporannya dulu.');
+  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) return fail(res, 403, 'Akses ditolak untuk brand ini.');
 
   const brand = await brandService.getBrandById(brandId);
   if (!brand) return fail(res, 404, 'Brand tidak ditemukan');
@@ -107,6 +109,7 @@ aiSummaryRouter.put('/:id', async (req, res) => {
   const id = Number(req.params.id);
   const brandId = Number(req.body?.client_id);
   if (!Number.isInteger(id) || !Number.isInteger(brandId)) return fail(res, 400, 'id dan client_id wajib diisi');
+  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) return fail(res, 403, 'Akses ditolak untuk brand ini.');
   const updated = await ai.saveEdit(id, brandId, req.body?.summary ?? {}, req.user?.userId);
   if (!updated) return fail(res, 404, 'Ringkasan tidak ditemukan');
   res.json({ summary: updated });

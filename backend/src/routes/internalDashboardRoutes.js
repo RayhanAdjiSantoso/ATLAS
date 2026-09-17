@@ -19,6 +19,7 @@ import {
   clientDetailValidation,
   clientRankingQueryValidation,
   dataQualityQueryValidation,
+  syncFromSheetsBodyValidation,
 } from '../validators/internalDashboardValidators.js';
 
 // Internal Dashboard — admin-only, all-clients performance capture.
@@ -30,6 +31,10 @@ const router = Router();
 router.use(authenticate, authorize('admin'));
 
 router.get('/clients', ctrl.listClients);
+
+// Google Sheets live sync
+router.get('/sheet-sources', ctrl.listSheetSyncSources);
+router.post('/sync-from-sheets', syncFromSheetsBodyValidation, ctrl.syncFromSheets);
 
 // S1 — Executive Overview
 router.get('/overview', overviewQueryValidation, ctrl.getOverview);

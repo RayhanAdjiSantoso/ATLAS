@@ -10,6 +10,7 @@ const EMPTY_FORM = { id: '', client: '', type: 'MAIN', token: '' };
 export default function BrandsSection() {
   const [brands, setBrands] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [atlasBrandNames, setAtlasBrandNames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -18,19 +19,28 @@ export default function BrandsSection() {
   const [formMessage, setFormMessage] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
     setError('');
-    Promise.all([
-      api.get('/meta-automation/brands'),
-      api.get('/meta-automation/subscriptions'),
-    ])
-      .then(([brandsRes, subsRes]) => {
-        setBrands(brandsRes.data.brands || []);
-        setSubscriptions(subsRes.data.subscriptions || []);
-      })
-      .catch((err) => setError(err.response?.data?.message || 'Gagal memuat brand'))
-      .finally(() => setLoading(false));
+    try {
+      // /meta-automation/brands and /subscriptions both hit the SAME Apps
+      // Script Web App — sequential, not Promise.all, so the two requests
+      // never overlap (concurrent calls to one Apps Script project can make
+      // Google's front end serve an interstitial page instead of proxying
+      // through — see metaAutomationService.js). /brands is ATLAS's own
+      // endpoint, unaffected, so it stays independent.
+      const atlasBrandsPromise = api.get('/brands');
+      const brandsRes = await api.get('/meta-automation/brands');
+      const subsRes = await api.get('/meta-automation/subscriptions');
+      const atlasBrandsRes = await atlasBrandsPromise;
+      setBrands(brandsRes.data.brands || []);
+      setSubscriptions(subsRes.data.subscriptions || []);
+      setAtlasBrandNames((atlasBrandsRes.data.brands || []).map((b) => b.brand_name).sort());
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal memuat brand');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(load, []);
@@ -105,7 +115,12 @@ export default function BrandsSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && (
+        <div className="alert alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          <span>{error} — Apps Script kadang sempat membalas halaman "loading" saat baru dipanggil, coba lagi tanpa refresh browser.</span>
+          <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}>Coba Lagi</button>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
@@ -185,11 +200,16 @@ export default function BrandsSection() {
           </div>
           <div className="form-group">
             <label>Nama Brand</label>
+            {/* Dibatasi ke daftar brand ATLAS (sama seperti pemilih brand di
+                Dashboard Business Overview / Report Generator) — bukan lagi
+                bebas ketik, supaya nama di sini selalu bisa ditautkan ke
+                brand_id ATLAS yang benar (dipakai Daily Tracking untuk
+                memfilter dropdown "Pilih config" per brand). */}
             <BrandCombo
-              options={Array.from(new Set(brands.map((b) => b.client))).sort()}
+              options={atlasBrandNames}
               value={form.client}
-              placeholder="mis. Maiimi"
-              allowCustom
+              placeholder="Pilih brand ATLAS..."
+              allowCustom={false}
               onChange={(v) => setForm((f) => ({ ...f, client: v }))}
             />
           </div>

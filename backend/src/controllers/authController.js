@@ -45,5 +45,7 @@ export const me = asyncHandler(async (req, res) => {
     email: user.email,
     fullName: user.fullName,
     role: user.role,
+    allowedBrandId: user.allowedBrandId,
+    isViewOnly: user.isViewOnly,
   } });
 });

@@ -9,6 +9,7 @@ import {
   FileBarChart,
   Building2,
   SlidersHorizontal,
+  CalendarCheck,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
@@ -25,6 +26,9 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
   { to: '/dashboard', label: 'Dashboard Business Overview', Icon: LayoutDashboard, group: 'Workspace' },
+  // No adminOnly: both internal staff and client accounts fill this in
+  // themselves, unlike everywhere else a view-only account can only read.
+  { to: '/daily-tracking', label: 'Daily Tracking', Icon: CalendarCheck, group: 'Workspace' },
   // Sits directly under the dashboard it feeds: this is where the data those
   // charts read comes in, and it used to be that page's first tab.
   { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal, group: 'Workspace' },

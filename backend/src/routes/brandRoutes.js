@@ -1,12 +1,16 @@
 import { Router } from 'express';
 import { authenticate } from '../middlewares/auth.js';
 import { uploadDataFile } from '../middlewares/upload.js';
+import { requireBrandAccess, blockWriteIfViewOnly } from '../middlewares/brandAccess.js';
 import * as brandController from '../controllers/brandController.js';
 import * as brandLibraryController from '../controllers/brandLibraryController.js';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, blockWriteIfViewOnly);
+// Every route below except GET/POST '/' has :brandId — routes without it
+// pass straight through (see requireBrandAccess).
+router.use(requireBrandAccess((req) => req.params.brandId));
 
 router.get('/', brandController.listBrands);
 router.post('/', brandController.createBrand);
