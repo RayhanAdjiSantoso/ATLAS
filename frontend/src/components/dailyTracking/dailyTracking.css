@@ -317,6 +317,7 @@
 .dt-meta-sync .dt-btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
 .dt-meta-sync-error { color: var(--danger); font-size: 0.75rem; }
 .dt-meta-sync-result { color: var(--text-muted); font-size: 0.75rem; }
+.dt-meta-sync-loading { display: inline-flex; align-items: center; gap: 0.4rem; }
 .dt-spin { animation: dt-spin 0.9s linear infinite; }
 @keyframes dt-spin { to { transform: rotate(360deg); } }
 

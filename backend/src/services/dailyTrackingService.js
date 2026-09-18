@@ -214,38 +214,51 @@ async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
 export async function runMetaSyncNow({ brandId, trackingConfigId, accountClient, accountType, userId }) {
   await assertBrand(brandId);
 
-  // Cross-check the source's OWN atlasBrandId against the brandId the
-  // caller sent, BEFORE pulling/writing anything — trackingPreview/
-  // accountTrackingPreview don't echo it back in their result, so a caller
-  // mistake (wrong brandId for this config/account) would otherwise write
-  // one brand's Meta spend into another brand's Daily Tracking data with no
-  // error at all. MetaSyncButton only ever offers sources whose atlasBrandId
-  // already matches the open brand, so this never trips in normal use — it
-  // only catches a mismatched call before it can do damage.
-  if (trackingConfigId) {
-    const configs = await callAppsScript('trackingList');
-    const cfg = (configs || []).find((c) => c.id === trackingConfigId);
-    if (!cfg) throw new AppError('Config tracking tidak ditemukan', 404);
-    if (Number(cfg.atlasBrandId) !== Number(brandId)) {
-      throw new AppError('Config ini tertaut ke brand ATLAS yang berbeda dari brand yang sedang dibuka', 403);
-    }
-  } else {
-    const accounts = await callAppsScript('brandList');
-    const acct = (accounts || []).find((a) => a.client === accountClient && (a.type || 'MAIN') === (accountType || 'MAIN'));
-    if (!acct) throw new AppError('Akun Brand & Langganan tidak ditemukan', 404);
-    if (Number(acct.atlasBrandId) !== Number(brandId)) {
-      throw new AppError('Akun ini tertaut ke brand ATLAS yang berbeda dari brand yang sedang dibuka', 403);
-    }
-  }
+  // Vercel's function limit is 60s (vercel.json) and a slow Meta pull can eat
+  // most of it, so every Apps Script call below shares ONE deadline just
+  // under that -- a slow run then fails with a readable message instead of
+  // an opaque platform 504.
+  const deadline = Date.now() + 52000;
 
+  // The preview is read-only (a dry run in Apps Script), so it is safe to
+  // fetch BEFORE the brand cross-check; nothing is written until both have
+  // passed.
   const preview = trackingConfigId
-    ? await callAppsScript('trackingPreview', { id: trackingConfigId })
+    ? await callAppsScript('trackingPreview', { id: trackingConfigId }, { deadline })
     // type is required whenever the same brand has both a MAIN and a CPAS
     // account — accountClient alone is ambiguous (see the long note on
     // findAccount_ in apps-script/DailyTrackingBoostPost.gs).
-    : await callAppsScript('accountTrackingPreview', { client: accountClient, type: accountType });
+    : await callAppsScript('accountTrackingPreview', { client: accountClient, type: accountType }, { deadline });
   if (!preview || preview.date == null) {
     throw new AppError('Apps Script tidak mengembalikan data tracking yang valid', 502);
+  }
+
+  // Cross-check the source's OWN atlasBrandId against the brandId the caller
+  // sent, so a caller mistake (wrong brandId for this config/account) can't
+  // write one brand's Meta spend into another brand's Daily Tracking data
+  // with no error at all. MetaSyncButton only ever offers sources already
+  // linked to the open brand, so this never trips in normal use.
+  // Current Apps Script echoes atlasBrandId in the preview, which costs no
+  // extra round trip; an older deployment doesn't, so fall back to listing
+  // configs/accounts (an extra ~5s Apps Script call) rather than skipping
+  // the check.
+  let sourceBrandId = preview.atlasBrandId;
+  if (sourceBrandId == null) {
+    if (trackingConfigId) {
+      const configs = await callAppsScript('trackingList', undefined, { deadline });
+      sourceBrandId = (configs || []).find((c) => c.id === trackingConfigId)?.atlasBrandId;
+    } else {
+      const accounts = await callAppsScript('brandList', undefined, { deadline });
+      sourceBrandId = (accounts || []).find((a) => a.client === accountClient && (a.type || 'MAIN') === (accountType || 'MAIN'))?.atlasBrandId;
+    }
+  }
+  if (Number(sourceBrandId) !== Number(brandId)) {
+    throw new AppError(
+      trackingConfigId
+        ? 'Config ini tertaut ke brand ATLAS yang berbeda dari brand yang sedang dibuka'
+        : 'Akun ini tertaut ke brand ATLAS yang berbeda dari brand yang sedang dibuka',
+      403,
+    );
   }
 
   const entryDate = preview.date;
