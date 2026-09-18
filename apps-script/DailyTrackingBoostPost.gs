@@ -52,7 +52,7 @@
  *   hal baru, sudah begitu sejak Weekly.gs/Daily.gs.
  *
  * KETERGANTUNGAN — harus ada di project Apps Script yang SAMA:
- *   CONFIG, fetchInsights_, tokenFor_, num_, tz_, openSpreadsheet_,
+ *   CONFIG, fetchJson_, tokenFor_, num_, tz_, openSpreadsheet_,
  *   writeLog_  (semuanya dari Weekly.gs / file v5)
  *   weeklyRun, checkTokens (dari Weekly.gs)
  *   dailyUrgentCheck, resetUrgentCooldown (dari Daily.gs)
@@ -1066,6 +1066,33 @@ function updateAllDailyTrackingSpend() {
 // maupun tombol Test di sidebar
 // ============================================================
 
+/**
+ * Spend H-1 per campaign, hanya kolom yang dipakai Daily Tracking. Sengaja
+ * TIDAK memakai fetchInsights_ (Weekly.gs): itu meminta ~20 kolom termasuk
+ * `actions` dan metrik turunan yang tidak pernah dibaca di sini, dan
+ * payload sebesar itu membuat Meta lambat (terukur 30+ detik pada akun
+ * dengan banyak campaign) serta lebih cepat kena rate limit -- padahal
+ * tombol "Sync Meta Sekarang" ATLAS harus selesai dalam batas 60 detik
+ * function Vercel. Bentuk hasilnya sama: { campaignId: { campaign_name, spend } }.
+ */
+function fetchCampaignSpend_(token, accountId, dateStr) {
+  var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' +
+    accountId + '/insights' +
+    '?fields=' + encodeURIComponent('campaign_id,campaign_name,spend') +
+    '&level=campaign' +
+    '&time_range=' + encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr })) +
+    '&limit=300&access_token=' + encodeURIComponent(token);
+
+  var out = {}, guard = 0;
+  while (url && guard < 25) {
+    guard++;
+    var body = fetchJson_(url);
+    (body.data || []).forEach(function (d) { out[d.campaign_id] = d; });
+    url = (body.paging && body.paging.next) ? body.paging.next : null;
+  }
+  return out;
+}
+
 function processTrackingConfig_(cfg, dryRun) {
   var startedAt = new Date();
   var tz = tz_();
@@ -1099,7 +1126,7 @@ function processTrackingConfig_(cfg, dryRun) {
   // --- 1. Ambil insight campaign untuk tanggal H-1 ---
   var rows;
   try {
-    rows = fetchInsights_(tokenFor_(acct), acct.id, 'campaign', { since: dateStr, until: dateStr });
+    rows = fetchCampaignSpend_(tokenFor_(acct), acct.id, dateStr);
   } catch (e) {
     return failTracking_(cfg, dateStr, dryRun,
       'Gagal menarik data Meta Ads (' + acct.client + '): ' + e.message);
@@ -1140,7 +1167,7 @@ function processTrackingConfig_(cfg, dryRun) {
       }
       var cpasRows;
       try {
-        cpasRows = fetchInsights_(tokenFor_(cpasAcct), cpasAcct.id, 'campaign', { since: dateStr, until: dateStr });
+        cpasRows = fetchCampaignSpend_(tokenFor_(cpasAcct), cpasAcct.id, dateStr);
       } catch (e) {
         return failTracking_(cfg, dateStr, dryRun,
           'Gagal menarik data Meta Ads CPAS (' + cpasAcct.client + '): ' + e.message);
@@ -1181,7 +1208,7 @@ function processTrackingConfig_(cfg, dryRun) {
   var result = {
     label: cfg.label, date: dateStr, row: row,
     boostSpend: boostSpend, nonBoostSpend: nonBoostSpend, campaigns: nCampaign,
-    cpasSpend: cpasSpend
+    cpasSpend: cpasSpend, atlasBrandId: cfg.atlasBrandId || null
   };
 
   // --- 4. Dry run berhenti di sini, tanpa menulis ---
@@ -1303,7 +1330,7 @@ function processAutoAccountTracking_(acct, dryRun) {
 
   var rows;
   try {
-    rows = fetchInsights_(tokenFor_(acct), acct.id, 'campaign', { since: dateStr, until: dateStr });
+    rows = fetchCampaignSpend_(tokenFor_(acct), acct.id, dateStr);
   } catch (e) {
     return { label: label, date: dateStr, status: 'FAILED', error: 'Gagal menarik data Meta Ads (' + acct.client + '): ' + e.message };
   }
@@ -1330,7 +1357,10 @@ function processAutoAccountTracking_(acct, dryRun) {
 
   var result = {
     label: label, date: dateStr, status: dryRun ? 'DRY RUN OK' : 'OK',
-    boostSpend: boostSpend, nonBoostSpend: nonBoostSpend, cpasSpend: cpasSpend, campaigns: nCampaign
+    boostSpend: boostSpend, nonBoostSpend: nonBoostSpend, cpasSpend: cpasSpend, campaigns: nCampaign,
+    // Dikembalikan supaya ATLAS bisa memverifikasi tautan brand dari hasil
+    // preview ini sendiri, tanpa panggilan brandList tambahan.
+    atlasBrandId: acct.atlasBrandId || null
   };
 
   if (dryRun) return result; // tidak ada Sheet untuk dicek "existing", dan tidak push

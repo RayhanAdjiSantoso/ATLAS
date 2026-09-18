@@ -2,6 +2,49 @@ import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import api from '../../api/client.js';
 
+// Last-known source list, kept in localStorage so the button can render the
+// instant the page opens: the two Apps Script lookups that build it have
+// been measured at anywhere from a few seconds to over a minute. It is only
+// a head start — the fetch below always runs and replaces it. Only the
+// fields this component reads are stored. A stale entry is harmless: sync
+// re-validates server-side, and the background refresh corrects the list.
+const CACHE_KEY = 'atlas:daily-tracking:meta-sources';
+
+function readCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CACHE_KEY));
+    if (Array.isArray(raw?.configs) && Array.isArray(raw?.accounts)) return raw;
+  } catch { /* storage unavailable or malformed — behave as if empty */ }
+  return null;
+}
+
+function writeCache(configs, accounts) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      configs: configs.map((c) => ({ id: c.id, label: c.label, atlasBrandId: c.atlasBrandId, accountClient: c.accountClient })),
+      accounts: accounts.map((a) => ({ client: a.client, type: a.type, atlasBrandId: a.atlasBrandId, boostMatch: a.boostMatch })),
+    }));
+  } catch { /* quota/private mode — the cache is optional */ }
+}
+
+// The first pull for an account is often the slow one (Meta/Apps Script cold
+// start, or Google's occasional interstitial page) while an immediate second
+// try usually lands fast. The sync is idempotent — it upserts the same
+// H-1 values and never overwrites manually-locked cells — so one automatic
+// retry on a gateway-type failure is safe. Genuine errors (403 wrong brand,
+// 4xx validation, Apps Script's own message) are not retried.
+async function postSync(body, onRetry) {
+  try {
+    return await api.post('/daily-tracking/meta-sync', body);
+  } catch (err) {
+    const status = err.response?.status;
+    const retriable = !err.response || status === 502 || status === 503 || status === 504;
+    if (!retriable) throw err;
+    onRetry();
+    return api.post('/daily-tracking/meta-sync', body);
+  }
+}
+
 // Only mention a channel this source actually produced — a CPAS-typed
 // source never has boostSpend/nonBoostSpend at all, so showing "Boost:
 // dilewati" for it would misleadingly read as a failure.
@@ -26,11 +69,15 @@ function describeResult(data) {
 // One click runs every source found, so a brand split across both (or with
 // multiple accounts) fills Boost Post, Non-Boost Post and CPAS together.
 export default function MetaSyncButton({ brandId, onSynced }) {
-  const [configs, setConfigs] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+  const [cached] = useState(readCache);
+  const [configs, setConfigs] = useState(cached?.configs || []);
+  const [accounts, setAccounts] = useState(cached?.accounts || []);
+  // True once the live fetch has finished (success or failure) — distinct from
+  // having cached data, which only means we can show something early.
+  const [refreshed, setRefreshed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcomes, setOutcomes] = useState(null);
+  const [note, setNote] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -41,12 +88,16 @@ export default function MetaSyncButton({ brandId, onSynced }) {
         // interstitial page instead of proxying through.
         const trackingRes = await api.get('/meta-automation/tracking');
         const brandsRes = await api.get('/meta-automation/brands');
-        setConfigs(trackingRes.data.configs || []);
-        setAccounts(brandsRes.data.brands || []);
+        const freshConfigs = trackingRes.data.configs || [];
+        const freshAccounts = brandsRes.data.brands || [];
+        setConfigs(freshConfigs);
+        setAccounts(freshAccounts);
+        writeCache(freshConfigs, freshAccounts);
       } catch {
-        // Left empty — the page below already renders a graceful empty state.
+        // A failed refresh keeps whatever the cache gave us; with no cache the
+        // page below renders its graceful empty state.
       } finally {
-        setLoaded(true);
+        setRefreshed(true);
       }
     })();
   }, []);
@@ -80,21 +131,36 @@ export default function MetaSyncButton({ brandId, onSynced }) {
   const handleSync = async () => {
     setBusy(true);
     setOutcomes(null);
+    setNote('');
     const results = [];
     for (const src of sources) {
       try {
-        const res = await api.post('/daily-tracking/meta-sync', { brandId, ...src.payload });
+        const res = await postSync({ brandId, ...src.payload }, () => setNote(`${src.label}: Meta lambat merespons, mencoba ulang otomatis…`));
         results.push({ label: src.label, ok: true, data: res.data });
       } catch (err) {
         results.push({ label: src.label, ok: false, error: err.response?.data?.message || err.message || 'Gagal sync' });
       }
     }
+    setNote('');
     setOutcomes(results);
     setBusy(false);
     onSynced?.();
   };
 
-  if (!loaded) return null;
+  // The two Apps Script lookups above can take several seconds (measured up
+  // to over a minute), and until they finish there may be nothing to offer for
+  // this brand — e.g. no cache yet, or a brand registered since the cache was
+  // written. Show a wait notice rather than an empty gap or a premature "belum
+  // ada sumber"; it resolves into the button or that message. With a cache hit
+  // for this brand, sources is already non-empty and the button shows at once.
+  if (!sources.length && !refreshed) {
+    return (
+      <span className="dt-meta-sync-result dt-meta-sync-loading">
+        <RefreshCw size={13} className="dt-spin" /> Memuat data Meta Ads Automation… mohon tunggu sebentar,
+        tombol &quot;Sync Meta Sekarang&quot; akan muncul otomatis untuk brand yang sudah terdaftar.
+      </span>
+    );
+  }
 
   if (!sources.length) {
     return (
@@ -112,6 +178,7 @@ export default function MetaSyncButton({ brandId, onSynced }) {
         <RefreshCw size={13} className={busy ? 'dt-spin' : ''} /> Sync Meta Sekarang
         {sources.length > 1 ? ` (${sources.length} sumber)` : ''}
       </button>
+      {busy && note && <span className="dt-meta-sync-result">{note}</span>}
       {outcomes && (
         <span className="dt-meta-sync-result">
           {outcomes.map((o) => (
