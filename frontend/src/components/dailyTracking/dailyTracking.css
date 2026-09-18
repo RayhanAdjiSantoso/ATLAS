@@ -9,10 +9,21 @@
   gap: 1.25rem;
 }
 
-/* ── Sticky head: brand/month bar + KPI strip stick together as one unit.
-   .main-content only sets overflow-x, which per the CSS overflow spec makes
-   overflow-y compute to auto too — the same scrolling ancestor Dashboard's
-   own sticky .con-bar relies on. */
+/* ── Sticky head: brand/month bar + KPI strip + section nav stick together
+   as one unit. `.main-content{overflow-x:auto}` makes overflow-y compute to
+   `auto` too (CSS overflow spec), turning .main-content into a scroll
+   container — but it never actually overflows (it grows to fit content
+   instead), so it never scrolls, which neutralizes `position:sticky` on any
+   child instead of pinning it. Report Generator hit this exact issue
+   (see atlas-fit.css) and fixed it by knocking .main-content back out of
+   scroll-container-hood for its own page; same fix here so this sticky
+   head is pinned relative to the real (document-level) scroll. */
+.main-content:has(> .dt-page) {
+  overflow-x: clip;
+  overflow-y: visible;
+  min-width: 0;
+}
+
 .dt-sticky-head {
   position: sticky;
   top: 0;
@@ -26,6 +37,33 @@
   padding-left: 2rem;
   padding-right: 2rem;
   padding-top: 0.25rem;
+}
+
+/* ── Section quick-jump nav — lives inside the sticky head, so it's always
+   reachable while scrolling. Targets get scroll-margin-top (below) equal to
+   the sticky head's own measured height, set as --dt-sticky-h by
+   DailyTrackingPage, so scrollIntoView never parks a section's title
+   underneath this same sticky block. ────────────────────────────── */
+.dt-section-nav {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.dt-section-nav-link {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.dt-section-nav-link:hover { border-color: var(--primary); color: var(--primary); text-decoration: none; }
+
+#dt-section-revenue, #dt-section-spending, #dt-section-summary {
+  scroll-margin-top: calc(var(--dt-sticky-h, 220px) + 0.75rem);
 }
 
 /* ── Client bar ─────────────────────────────────────────────────── */

@@ -48,12 +48,14 @@ export const upsertEntries = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
-// POST /api/daily-tracking/meta-sync  { brandId, trackingConfigId }
+// POST /api/daily-tracking/meta-sync  { brandId, trackingConfigId } OR { brandId, accountClient, accountType }
 export const runMetaSync = asyncHandler(async (req, res) => {
   validate(req);
   const result = await service.runMetaSyncNow({
     brandId: Number(req.body.brandId),
     trackingConfigId: req.body.trackingConfigId,
+    accountClient: req.body.accountClient,
+    accountType: req.body.accountType,
     userId: req.user.userId,
   });
   res.json(result);

@@ -89,7 +89,11 @@ export default function DailyTrackingTab() {
     }
   };
 
-  useEffect(loadAll, []);
+  // Not `useEffect(loadAll, [])` directly: `loadAll` is async and returns a
+  // Promise, which React would treat as the effect's cleanup ("destroy")
+  // function and crash the whole tree the moment it tries to call it —
+  // wrap it so the effect callback itself returns nothing.
+  useEffect(() => { loadAll(); }, []);
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -114,7 +118,12 @@ export default function DailyTrackingTab() {
       boostMatch: cfg.boostMatch || EMPTY_FORM.boostMatch,
       cpasHeader: cfg.cpasHeader || EMPTY_FORM.cpasHeader,
     });
-    const acct = accounts.find((a) => a.client === cfg.accountClient);
+    // Match by client AND type (cfg.accountType, falling back to 'MAIN' for
+    // configs saved before that field existed) — a bare name match is
+    // ambiguous whenever the same brand has both a MAIN and a CPAS account
+    // registered (see the long note on findAccount_ in the .gs file).
+    const wantType = cfg.accountType || 'MAIN';
+    const acct = accounts.find((a) => a.client === cfg.accountClient && (a.type || 'MAIN') === wantType);
     setAccountSelection(acct ? { brand: acct.client, type: acct.type || 'MAIN' } : { brand: '', type: '' });
     setTrackCpas(!!cfg.cpasAccountId);
     setFormMessage(null);
@@ -150,6 +159,10 @@ export default function DailyTrackingTab() {
       const payload = {
         ...form,
         label,
+        // WAJIB, bukan kosmetik: accountClient saja ambigu kalau brand yang
+        // sama punya akun MAIN dan CPAS berdampingan — lihat catatan panjang
+        // di findAccount_ (apps-script/DailyTrackingBoostPost.gs).
+        accountType: accountSelection.type,
         atlasBrandId: atlasBrandMatch ? atlasBrandMatch.brand_id : null,
         // Backend/`.gs` also derive this from the account's own type and
         // will null these out server-side for a CPAS-typed config either
@@ -259,7 +272,7 @@ export default function DailyTrackingTab() {
                 <tr key={c.id}>
                   <td>{c.label}</td>
                   <td>{c.tabName}</td>
-                  <td>{c.accountClient}</td>
+                  <td>{c.accountClient} <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>({c.accountType || 'MAIN'})</span></td>
                   <td>
                     {c.boostHeader
                       ? `${c.boostHeader} / ${c.nonBoostHeader}${c.cpasAccountId ? ` / ${c.cpasHeader}` : ''}`

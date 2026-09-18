@@ -201,12 +201,49 @@ async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
   });
 }
 
-// Manual "Sync Meta Sekarang" — reuses the existing trackingPreview Apps
-// Script action, which already computes {boostSpend, nonBoostSpend} for H-1
-// without writing anywhere (dry-run branch of processTrackingConfig_).
-export async function runMetaSyncNow({ brandId, trackingConfigId, userId }) {
+// Manual "Sync Meta Sekarang" — reuses an existing Apps Script dry-run
+// action, which already computes {boostSpend, nonBoostSpend[, cpasSpend]}
+// for H-1 without writing anywhere. Two sources, mutually exclusive:
+// - trackingConfigId: a config from the Daily Tracking tab (writes to a
+//   Google Sheet too, on the scheduled/real run) — action `trackingPreview`.
+// - accountClient: a brand registered ONLY in Brand & Langganan (no Sheet
+//   at all, see BrandsSection's "Kata Kunci Boost Post") — action
+//   `accountTrackingPreview`. Both return the same {date, boostSpend,
+//   nonBoostSpend, cpasSpend} shape, so the rest of this function doesn't
+//   need to know which source it came from.
+export async function runMetaSyncNow({ brandId, trackingConfigId, accountClient, accountType, userId }) {
   await assertBrand(brandId);
-  const preview = await callAppsScript('trackingPreview', { id: trackingConfigId });
+
+  // Cross-check the source's OWN atlasBrandId against the brandId the
+  // caller sent, BEFORE pulling/writing anything — trackingPreview/
+  // accountTrackingPreview don't echo it back in their result, so a caller
+  // mistake (wrong brandId for this config/account) would otherwise write
+  // one brand's Meta spend into another brand's Daily Tracking data with no
+  // error at all. MetaSyncButton only ever offers sources whose atlasBrandId
+  // already matches the open brand, so this never trips in normal use — it
+  // only catches a mismatched call before it can do damage.
+  if (trackingConfigId) {
+    const configs = await callAppsScript('trackingList');
+    const cfg = (configs || []).find((c) => c.id === trackingConfigId);
+    if (!cfg) throw new AppError('Config tracking tidak ditemukan', 404);
+    if (Number(cfg.atlasBrandId) !== Number(brandId)) {
+      throw new AppError('Config ini tertaut ke brand ATLAS yang berbeda dari brand yang sedang dibuka', 403);
+    }
+  } else {
+    const accounts = await callAppsScript('brandList');
+    const acct = (accounts || []).find((a) => a.client === accountClient && (a.type || 'MAIN') === (accountType || 'MAIN'));
+    if (!acct) throw new AppError('Akun Brand & Langganan tidak ditemukan', 404);
+    if (Number(acct.atlasBrandId) !== Number(brandId)) {
+      throw new AppError('Akun ini tertaut ke brand ATLAS yang berbeda dari brand yang sedang dibuka', 403);
+    }
+  }
+
+  const preview = trackingConfigId
+    ? await callAppsScript('trackingPreview', { id: trackingConfigId })
+    // type is required whenever the same brand has both a MAIN and a CPAS
+    // account — accountClient alone is ambiguous (see the long note on
+    // findAccount_ in apps-script/DailyTrackingBoostPost.gs).
+    : await callAppsScript('accountTrackingPreview', { client: accountClient, type: accountType });
   if (!preview || preview.date == null) {
     throw new AppError('Apps Script tidak mengembalikan data tracking yang valid', 502);
   }
