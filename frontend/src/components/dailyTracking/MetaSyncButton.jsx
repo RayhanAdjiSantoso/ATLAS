@@ -2,37 +2,75 @@ import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import api from '../../api/client.js';
 
-// Only mention a channel this config actually produced — a config for a
-// CPAS-typed account never has boostSpend/nonBoostSpend at all (see
-// apps-script/DailyTrackingBoostPost.gs's isPrimaryCpas branch), so showing
-// "Boost: dilewati" for it would misleadingly read as a failure.
+// Only mention a channel this source actually produced — a CPAS-typed
+// source never has boostSpend/nonBoostSpend at all, so showing "Boost:
+// dilewati" for it would misleadingly read as a failure.
 function describeResult(data) {
   const parts = [];
   if (data.boostSpend != null) parts.push(`Boost ${data.applied?.boost ? 'diisi' : 'dilewati (manual)'}`);
   if (data.nonBoostSpend != null) parts.push(`Non-Boost ${data.applied?.nonBoost ? 'diisi' : 'dilewati (manual)'}`);
   if (data.cpasSpend != null) parts.push(`CPAS ${data.applied?.cpas ? 'diisi' : 'dilewati (manual)'}`);
-  return parts.length ? parts.join(' · ') : 'tidak ada channel yang cocok untuk config ini';
+  return parts.length ? parts.join(' · ') : 'tidak ada channel yang cocok untuk sumber ini';
 }
 
-// Admin-only manual "Sync Meta Sekarang" — reuses the Meta Ads Automation
-// Daily Tracking configs (GET /meta-automation/tracking), filtered to the
-// config(s) linked to the brand currently open on this page
-// (config.atlasBrandId, set on the Meta Ads Automation > Daily Tracking form
-// — see DailyTrackingTab.jsx). A brand with both a MAIN and a CPAS ad
-// account normally has TWO separate configs (e.g. "Petite Fleur - MAIN" and
-// "Petite Fleur - CPAS") — one click here runs every config for this brand
-// so Boost Post, Non-Boost Post and CPAS all get filled together, each from
-// whichever config actually produces it.
+// Admin-only manual "Sync Meta Sekarang" — combines TWO possible sources for
+// the brand currently open on this page, matching apps-script/
+// DailyTrackingBoostPost.gs's updateAllDailyTrackingSpend() exactly:
+// 1. Daily Tracking tab configs (GET /meta-automation/tracking), linked via
+//    config.atlasBrandId — the older, Sheet-writing path.
+// 2. Brand & Langganan accounts (GET /meta-automation/brands) that are
+//    linked via atlasBrandId and have either a Kata Kunci Boost Post (MAIN)
+//    or are typed CPAS — the newer, Sheet-free path (see BrandsSection).
+//    An account already covered by a config in (1) is excluded here so it's
+//    never synced twice.
+// One click runs every source found, so a brand split across both (or with
+// multiple accounts) fills Boost Post, Non-Boost Post and CPAS together.
 export default function MetaSyncButton({ brandId, onSynced }) {
   const [configs, setConfigs] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcomes, setOutcomes] = useState(null);
 
   useEffect(() => {
-    api.get('/meta-automation/tracking').then((res) => setConfigs(res.data.configs || [])).catch(() => {});
+    (async () => {
+      try {
+        // Sequential, not Promise.all — both hit the same Apps Script Web
+        // App, and firing them at once is exactly the "concurrent script
+        // executions" condition that makes Google's front end serve an
+        // interstitial page instead of proxying through.
+        const trackingRes = await api.get('/meta-automation/tracking');
+        const brandsRes = await api.get('/meta-automation/brands');
+        setConfigs(trackingRes.data.configs || []);
+        setAccounts(brandsRes.data.brands || []);
+      } catch {
+        // Left empty — the page below already renders a graceful empty state.
+      } finally {
+        setLoaded(true);
+      }
+    })();
   }, []);
 
   const brandConfigs = configs.filter((c) => Number(c.atlasBrandId) === Number(brandId));
+  const coveredClients = new Set(configs.map((c) => c.accountClient));
+  const brandAccounts = accounts.filter((a) => (
+    Number(a.atlasBrandId) === Number(brandId)
+    && (a.type === 'CPAS' || a.boostMatch)
+    && !coveredClients.has(a.client)
+  ));
+
+  const sources = [
+    ...brandConfigs.map((c) => ({ key: `config:${c.id}`, label: c.label, payload: { trackingConfigId: c.id } })),
+    ...brandAccounts.map((a) => ({
+      // Keyed by client+type, not client alone: the same brand can have a
+      // MAIN and a CPAS account side by side (e.g. "Crabus"), and sending
+      // just the name would be ambiguous server-side (see the long note on
+      // findAccount_ in apps-script/DailyTrackingBoostPost.gs).
+      key: `account:${a.client}:${a.type}`,
+      label: `${a.client} - ${a.type} (Brand & Langganan)`,
+      payload: { accountClient: a.client, accountType: a.type },
+    })),
+  ];
 
   useEffect(() => {
     // A stale result from a previously-viewed brand should never linger.
@@ -43,12 +81,12 @@ export default function MetaSyncButton({ brandId, onSynced }) {
     setBusy(true);
     setOutcomes(null);
     const results = [];
-    for (const cfg of brandConfigs) {
+    for (const src of sources) {
       try {
-        const res = await api.post('/daily-tracking/meta-sync', { brandId, trackingConfigId: cfg.id });
-        results.push({ label: cfg.label, ok: true, data: res.data });
+        const res = await api.post('/daily-tracking/meta-sync', { brandId, ...src.payload });
+        results.push({ label: src.label, ok: true, data: res.data });
       } catch (err) {
-        results.push({ label: cfg.label, ok: false, error: err.response?.data?.message || err.message || 'Gagal sync' });
+        results.push({ label: src.label, ok: false, error: err.response?.data?.message || err.message || 'Gagal sync' });
       }
     }
     setOutcomes(results);
@@ -56,12 +94,14 @@ export default function MetaSyncButton({ brandId, onSynced }) {
     onSynced?.();
   };
 
-  if (!configs.length) return null; // still loading, or Meta Automation isn't configured at all
+  if (!loaded) return null;
 
-  if (!brandConfigs.length) {
+  if (!sources.length) {
     return (
       <span className="dt-meta-sync-error">
-        Belum ada config Meta Ads Automation untuk brand ini — tautkan lewat "Brand ATLAS" di halaman Meta Ads Automation &gt; Daily Tracking.
+        Belum ada sumber Meta Ads Automation untuk brand ini — isi Nama Brand + Kata Kunci Boost
+        Post di Meta Ads Automation &gt; Brand &amp; Langganan (atau tautkan lewat config di tab
+        Daily Tracking).
       </span>
     );
   }
@@ -70,7 +110,7 @@ export default function MetaSyncButton({ brandId, onSynced }) {
     <div className="dt-meta-sync">
       <button type="button" className="btn btn-secondary dt-btn-sm" onClick={handleSync} disabled={busy}>
         <RefreshCw size={13} className={busy ? 'dt-spin' : ''} /> Sync Meta Sekarang
-        {brandConfigs.length > 1 ? ` (${brandConfigs.length} config)` : ''}
+        {sources.length > 1 ? ` (${sources.length} sumber)` : ''}
       </button>
       {outcomes && (
         <span className="dt-meta-sync-result">

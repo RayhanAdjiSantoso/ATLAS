@@ -3,14 +3,21 @@ import { Pencil, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 import BrandCombo from './BrandCombo.jsx';
 
-const EMPTY_FORM = { id: '', client: '', type: 'MAIN', token: '' };
+const EMPTY_FORM = { id: '', client: '', type: 'MAIN', token: '', boostMatch: '' };
 
 // Alur 1 — Tambah Brand ke Database: cuma kredensial ad account, TIDAK
 // ADA pengaturan notifikasi di sini sama sekali. Itu ada di SubscriptionsSection.
+//
+// Sejak transisi menjauh dari Google Sheet: begitu Nama Brand (yang otomatis
+// menautkan ke brand_id ATLAS) dan Kata Kunci Boost Post (akun MAIN saja,
+// CPAS tidak perlu) terisi, brand ini SENDIRI SUDAH CUKUP untuk auto-terisi
+// jam 01:00 WIB di halaman Daily Tracking ATLAS — TIDAK perlu apa pun lagi
+// di tab Daily Tracking (tab itu tetap didukung untuk brand yang masih
+// menulis ke Google Sheet, dua jalur ini independen).
 export default function BrandsSection() {
   const [brands, setBrands] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
-  const [atlasBrandNames, setAtlasBrandNames] = useState([]);
+  const [atlasBrands, setAtlasBrands] = useState([]); // [{brand_id, brand_name}]
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -35,7 +42,7 @@ export default function BrandsSection() {
       const atlasBrandsRes = await atlasBrandsPromise;
       setBrands(brandsRes.data.brands || []);
       setSubscriptions(subsRes.data.subscriptions || []);
-      setAtlasBrandNames((atlasBrandsRes.data.brands || []).map((b) => b.brand_name).sort());
+      setAtlasBrands(atlasBrandsRes.data.brands || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal memuat brand');
     } finally {
@@ -49,13 +56,17 @@ export default function BrandsSection() {
   // wrap it so the effect callback itself returns nothing.
   useEffect(() => { load(); }, []);
 
+  const atlasBrandNames = atlasBrands.map((b) => b.brand_name).sort();
+  const isCpasType = form.type === 'CPAS';
+  const atlasBrandMatch = atlasBrands.find((b) => b.brand_name === form.client);
+
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setFormMessage(null);
   };
 
   const handleEdit = (b) => {
-    setForm({ id: b.id, client: b.client, type: b.type, token: '' });
+    setForm({ id: b.id, client: b.client, type: b.type, token: '', boostMatch: b.boostMatch || '' });
     setFormMessage(null);
   };
 
@@ -79,7 +90,13 @@ export default function BrandsSection() {
     );
     if (!confirmed) return;
 
-    const payload = { client: form.client.trim(), type: form.type, token: form.token.trim() || undefined };
+    const payload = {
+      client: form.client.trim(),
+      type: form.type,
+      token: form.token.trim() || undefined,
+      boostMatch: isCpasType ? undefined : (form.boostMatch.trim() || undefined),
+      atlasBrandId: atlasBrandMatch ? atlasBrandMatch.brand_id : null,
+    };
 
     setSaving(true);
     setFormMessage(null);
@@ -140,6 +157,7 @@ export default function BrandsSection() {
                 <th>Tipe</th>
                 <th>Sumber</th>
                 <th>Token</th>
+                <th>Daily Tracking Otomatis</th>
                 <th>Langganan</th>
                 <th></th>
               </tr>
@@ -147,6 +165,7 @@ export default function BrandsSection() {
             <tbody>
               {brands.map((b) => {
                 const subCount = subscriptions.filter((s) => s.brandId === b.id).length;
+                const autoReady = !!b.atlasBrandId && (b.type === 'CPAS' || !!b.boostMatch);
                 return (
                   <tr key={b.id}>
                     <td>{b.client}</td>
@@ -158,6 +177,14 @@ export default function BrandsSection() {
                       </span>
                     </td>
                     <td><span className={`badge ${b.hasToken ? 'badge-success' : 'badge-danger'}`}>{b.hasToken ? 'Ada' : 'Kosong'}</span></td>
+                    <td>
+                      <span
+                        className={`badge ${autoReady ? 'badge-success' : 'badge-warning'}`}
+                        title={autoReady ? '' : !b.atlasBrandId ? 'Nama brand belum cocok dengan brand ATLAS' : 'Kata Kunci Boost Post belum diisi'}
+                      >
+                        {autoReady ? 'Aktif' : 'Belum lengkap'}
+                      </span>
+                    </td>
                     <td>{subCount}</td>
                     <td>
                       {b.source === 'dynamic' && (
@@ -188,8 +215,11 @@ export default function BrandsSection() {
       <div className="card">
         <h3 style={{ marginBottom: '0.5rem' }}>{form.id && isExistingBrand ? `Edit: ${form.client}` : 'Tambah Brand ke Database'}</h3>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-          Cuma kredensial ad account. Brand ini tidak akan menghasilkan email apa pun sampai ada
-          yang membuat langganan untuknya di tab Langganan.
+          Kredensial ad account, plus (opsional) kata kunci Boost Post — begitu Nama Brand cocok
+          dengan brand ATLAS dan Kata Kunci Boost Post terisi (akun CPAS tidak perlu), brand ini
+          otomatis ikut ditarik & mengisi halaman Daily Tracking ATLAS setiap jam 01:00 WIB, tanpa
+          perlu apa pun lagi di tab Daily Tracking. Belum ada yang dinotifikasi lewat email sampai
+          ada langganan dibuat di tab Langganan.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
@@ -207,8 +237,7 @@ export default function BrandsSection() {
             {/* Dibatasi ke daftar brand ATLAS (sama seperti pemilih brand di
                 Dashboard Business Overview / Report Generator) — bukan lagi
                 bebas ketik, supaya nama di sini selalu bisa ditautkan ke
-                brand_id ATLAS yang benar (dipakai Daily Tracking untuk
-                memfilter dropdown "Pilih config" per brand). */}
+                brand_id ATLAS yang benar. */}
             <BrandCombo
               options={atlasBrandNames}
               value={form.client}
@@ -216,6 +245,12 @@ export default function BrandsSection() {
               allowCustom={false}
               onChange={(v) => setForm((f) => ({ ...f, client: v }))}
             />
+            {form.client && !atlasBrandMatch && (
+              <p style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '0.35rem' }}>
+                Nama brand ini tidak cocok dengan brand ATLAS manapun — Daily Tracking otomatis
+                TIDAK akan aktif untuk brand ini sampai dipilih ulang dari daftar.
+              </p>
+            )}
           </div>
           <div className="form-group">
             <label>Tipe Ad Account</label>
@@ -225,6 +260,22 @@ export default function BrandsSection() {
             </select>
           </div>
         </div>
+
+        {!isCpasType && (
+          <div className="form-group">
+            <label>Kata Kunci Boost Post</label>
+            <input
+              value={form.boostMatch}
+              onChange={(e) => setForm((f) => ({ ...f, boostMatch: e.target.value }))}
+              placeholder="mis. profile visit"
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+              Wajib diisi supaya Boost Post/Non-Boost Post otomatis mengisi Daily Tracking ATLAS
+              jam 01:00 WIB. Campaign yang namanya mengandung kata ini masuk Boost Post, sisanya
+              Non-Boost Post.
+            </p>
+          </div>
+        )}
 
         <div className="form-group">
           <label>Token Meta Ads</label>

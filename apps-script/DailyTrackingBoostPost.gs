@@ -196,12 +196,19 @@ function doGet(e) {
  *   trackingDelete           | { id }           | hapus 1 config brand
  *   trackingPreview          | { id }           | dry run 1 brand, TIDAK menulis ke sheet
  *   trackingRunAll           | -                | JALANKAN untuk SEMUA brand — menulis ke sheet
+ *   accountTrackingPreview   | { client, type } | dry run 1 akun Brand & Langganan (TANPA config
+ *                          |                   | Daily Tracking) -- lihat catatan brandSave di bawah.
+ *                          |                   | `type` ('MAIN'|'CPAS', default 'MAIN') WAJIB
+ *                          |                   | disertakan kalau brand yang sama punya akun MAIN
+ *                          |                   | DAN CPAS -- client saja ambigu (lihat findAccount_).
+ *   accountTrackingRun       | { client, type } | JALANKAN 1 akun Brand & Langganan sungguhan --
+ *                          |                   | push ke ATLAS, TIDAK ada Sheet untuk ditulis
  *   brandList                | -                | list semua brand (hardcoded + dinamis), TANPA
  *                          |                   | setelan notifikasi apa pun -- lihat uiListBrands_
  *   brandSave                | object brand     | tambah/update 1 brand DINAMIS -- id, client, type,
- *                          |                   | token. Lihat uiSaveBrand_. TIDAK ADA lagi threshold/
- *                          |                   | metrik/override di sini sejak v6 -- itu semua pindah
- *                          |                   | ke Langganan.
+ *                          |                   | token, boostMatch, atlasBrandId. Lihat uiSaveBrand_.
+ *                          |                   | TIDAK ADA lagi threshold/metrik/override di sini
+ *                          |                   | sejak v6 -- itu semua pindah ke Langganan.
  *   brandDelete              | { id }           | hapus 1 brand dinamis + CASCADE hapus semua
  *                          |                   | langganannya. Tetap ditolak kalau masih dipakai
  *                          |                   | config Daily Tracking manapun.
@@ -215,9 +222,13 @@ function doGet(e) {
  *
  * action `save`   -> payload sama seperti field form: label, sheetUrl,
  *                    tabName, headerRow, dateHeader, boostHeader,
- *                    nonBoostHeader, accountClient, boostMatch,
- *                    emailOnFailure (sertakan `id` untuk edit yang sudah ada),
- *                    ditambah sejak integrasi ATLAS Daily Tracking:
+ *                    nonBoostHeader, accountClient, accountType, boostMatch,
+ *                    emailOnFailure (sertakan `id` untuk edit yang sudah ada).
+ *                    accountType ('MAIN'|'CPAS', default 'MAIN') WAJIB
+ *                    disertakan bersama accountClient -- satu brand bisa
+ *                    punya akun MAIN dan CPAS dengan client SAMA PERSIS,
+ *                    jadi accountClient saja ambigu (lihat findAccount_).
+ *                    Ditambah sejak integrasi ATLAS Daily Tracking:
  *                    atlasBrandId (integer, id brand di tabel public.brands
  *                    ATLAS — dipakai untuk (a) mem-filter dropdown "Pilih
  *                    config" di halaman Daily Tracking ATLAS supaya cuma
@@ -262,6 +273,23 @@ function doGet(e) {
  *                    ganti token). HANYA brand dinamis yang bisa diedit/
  *                    dihapus lewat action ini — brand hardcoded di
  *                    CONFIG.ACCOUNTS (Weekly.gs) sama sekali tidak tersentuh.
+ *
+ *                    Sejak transisi menjauh dari Google Sheet, payload ini
+ *                    JUGA menerima boostMatch (opsional untuk akun MAIN,
+ *                    diabaikan untuk CPAS) dan atlasBrandId (integer, id
+ *                    brand di public.brands ATLAS — form Brand & Langganan
+ *                    ATLAS otomatis mengisi ini dari nama brand yang dipilih,
+ *                    sama seperti config Daily Tracking). Begitu KEDUANYA
+ *                    terisi (CPAS cukup atlasBrandId saja, boostMatch tidak
+ *                    dipakai), brand ini otomatis ikut ditarik & didorong ke
+ *                    ATLAS setiap jam 01:00 WIB lewat
+ *                    processAutoAccountTracking_ — TANPA perlu config apa pun
+ *                    di tab Daily Tracking sama sekali (tab itu tetap
+ *                    didukung penuh untuk brand yang masih menulis ke Sheet;
+ *                    dua jalur ini independen dan tidak saling menggantikan
+ *                    — kalau sebuah accountClient sudah punya config Daily
+ *                    Tracking, jalur Brand & Langganan ini dilewati untuk
+ *                    akun itu supaya tidak diproses dua kali).
  *
  * action `subscriptionSave` -> payload: { id (opsional, sertakan untuk edit),
  *                    email (wajib saat buat baru, diabaikan saat edit),
@@ -403,6 +431,14 @@ function doPost(e) {
         out = { ok: true, data: updateAllDailyTrackingSpend() };
         break;
 
+      // --- akun Brand & Langganan TANPA config Daily Tracking ---
+      case 'accountTrackingPreview':
+        out = { ok: true, data: uiPreviewAccountTracking_(payload.client, payload.type) };
+        break;
+      case 'accountTrackingRun':
+        out = { ok: true, data: uiRunAccountTracking_(payload.client, payload.type) };
+        break;
+
       default:
         throw new Error('action tidak dikenal: ' + body.action);
     }
@@ -499,9 +535,15 @@ function uiSaveConfig(cfg) {
     throw new Error('Link Google Sheets tidak valid — pastikan link lengkap (mengandung "/d/ID/").');
   }
 
-  var acct = findAccount_(cfg.accountClient);
+  // accountType: WAJIB disertakan bersama accountClient begitu ada payload
+  // baru dari form -- satu client bisa punya akun MAIN dan CPAS dengan nama
+  // SAMA PERSIS, jadi accountClient saja ambigu (lihat catatan panjang di
+  // findAccount_). Default 'MAIN' cuma untuk kompatibilitas config lama yang
+  // disimpan sebelum field ini ada.
+  var accountType = String(cfg.accountType || 'MAIN').toUpperCase();
+  var acct = findAccount_(cfg.accountClient, accountType);
   if (!acct) {
-    throw new Error('Akun "' + cfg.accountClient + '" tidak ditemukan (bukan akun hardcoded maupun akun dinamis yang terdaftar).');
+    throw new Error('Akun "' + cfg.accountClient + '" tipe ' + accountType + ' tidak ditemukan (bukan akun hardcoded maupun akun dinamis yang terdaftar).');
   }
 
   var headerRow = parseInt(cfg.headerRow, 10);
@@ -550,6 +592,7 @@ function uiSaveConfig(cfg) {
     boostHeader: isPrimaryCpas ? null : (cfg.boostHeader || 'Boost Post').trim(),
     nonBoostHeader: isPrimaryCpas ? null : (cfg.nonBoostHeader || '').trim(),
     accountClient: cfg.accountClient,
+    accountType: accountType,
     boostMatch: isPrimaryCpas ? null : (cfg.boostMatch || 'profile visit').trim().toLowerCase(),
     emailOnFailure: !!cfg.emailOnFailure,
     atlasBrandId: atlasBrandId,
@@ -630,10 +673,22 @@ function extractSheetId_(urlOrId) {
   return null;
 }
 
-function findAccount_(clientName) {
+/**
+ * Cari akun by NAMA + TIPE (default 'MAIN' kalau type tidak disertakan --
+ * mayoritas pemanggilan lama). WAJIB dua-duanya, bukan cuma nama: satu brand
+ * bisa punya akun MAIN dan CPAS dengan client SAMA PERSIS (mis. "Crabus" -
+ * MAIN dan "Crabus" - CPAS) -- versi lama fungsi ini cuma cocokkan nama, jadi
+ * kalau dipanggil dua kali dengan nama yang sama (sekali untuk akun MAIN,
+ * sekali untuk akun CPAS) SELALU mengembalikan akun yang sama (yang terakhir
+ * ditemukan getAllAccounts_()), diam-diam salah untuk salah satu panggilan.
+ * Itu sebabnya Sync Meta Sekarang untuk "Crabus - CPAS" ikut menghasilkan
+ * angka Boost/Non-Boost milik akun MAIN, bukan angka CPAS akun CPAS-nya.
+ */
+function findAccount_(clientName, type) {
+  var wantType = String(type || 'MAIN').toUpperCase();
   var found = null;
   getAllAccounts_().forEach(function (a) {
-    if (a.client === clientName) found = a;
+    if (a.client === clientName && (a.type || 'MAIN') === wantType) found = a;
   });
   return found;
 }
@@ -654,7 +709,15 @@ function uiListBrands_() {
       client: a.client,
       type: a.type || 'MAIN',
       source: a.source || 'static',
-      hasToken: !!(a.tokenKey && PropertiesService.getScriptProperties().getProperty(a.tokenKey))
+      hasToken: !!(a.tokenKey && PropertiesService.getScriptProperties().getProperty(a.tokenKey)),
+      // boostMatch + atlasBrandId: begitu keduanya terisi (CPAS cuma butuh
+      // atlasBrandId, tidak butuh boostMatch -- lihat updateAllDailyTrackingSpend),
+      // brand ini otomatis ikut ditarik & didorong ke ATLAS setiap jam 01:00
+      // WIB TANPA perlu config apa pun di tab Daily Tracking sama sekali.
+      // Tab Daily Tracking tetap ada untuk brand yang masih menulis ke Google
+      // Sheet -- dua jalur ini independen, salah satu cukup.
+      boostMatch: a.boostMatch || null,
+      atlasBrandId: a.atlasBrandId || null
     };
   });
 }
@@ -716,7 +779,28 @@ function uiSaveBrand_(payload) {
     PropertiesService.getScriptProperties().setProperty(tokenKey, token);
   }
 
-  var normalized = { id: id, client: client, type: type, tokenKey: tokenKey, source: 'dynamic' };
+  // boostMatch: kata kunci klasifikasi Boost Post, sama persis konsepnya
+  // dengan cfg.boostMatch di tab Daily Tracking -- ini yang membuat brand
+  // ini ikut diproses otomatis jam 01:00 WIB TANPA perlu config Daily
+  // Tracking sama sekali (lihat updateAllDailyTrackingSpend). Opsional:
+  // brand yang dipakai cuma untuk Weekly/Daily alert (bukan Daily Tracking)
+  // boleh dibiarkan kosong.
+  var boostMatch = String(payload.boostMatch || '').trim().toLowerCase();
+
+  // atlasBrandId: opsional juga, tapi WAJIB diisi (dari sisi form ATLAS,
+  // yang otomatis mencocokkan `client` ke brand_id ATLAS) supaya boostMatch
+  // di atas ada gunanya -- tanpa ini, akun boleh punya boostMatch tapi tidak
+  // akan pernah didorong ke ATLAS (tidak tahu ini brand_id berapa).
+  var atlasBrandId = (payload.atlasBrandId === undefined || payload.atlasBrandId === null || payload.atlasBrandId === '')
+    ? null : parseInt(payload.atlasBrandId, 10);
+  if (atlasBrandId !== null && !isFinite(atlasBrandId)) {
+    throw new Error('atlasBrandId harus berupa angka.');
+  }
+
+  var normalized = {
+    id: id, client: client, type: type, tokenKey: tokenKey, source: 'dynamic',
+    boostMatch: boostMatch || null, atlasBrandId: atlasBrandId
+  };
 
   if (idx > -1) list[idx] = normalized; else list.push(normalized);
   saveDynamicAccounts_(list);
@@ -916,12 +1000,6 @@ function updateAllDailyTrackingSpend() {
   var configs = getTrackingConfigs_();
   var ok = [], failed = [];
 
-  if (!configs.length) {
-    Logger.log('Tidak ada konfigurasi brand tersimpan. Buka menu Daily Tracking > ' +
-      'Kelola Konfigurasi Brand untuk menambahkan.');
-    return { ok: ok, failed: failed };
-  }
-
   configs.forEach(function (cfg) {
     try {
       var r = processTrackingConfig_(cfg, false);
@@ -933,6 +1011,40 @@ function updateAllDailyTrackingSpend() {
     }
     Utilities.sleep(300);
   });
+
+  // --- Brand & Langganan -> ATLAS langsung, TANPA config Daily Tracking ---
+  // Transisi menjauh dari Google Sheet: brand yang cuma didaftarkan di
+  // Brand & Langganan (uiSaveBrand_) dengan boostMatch terisi (akun CPAS
+  // cukup atlasBrandId, tidak butuh boostMatch -- lihat catatan di
+  // processAutoAccountTracking_) ikut ditarik & didorong ke ATLAS di sini,
+  // TIDAK menulis ke Sheet sama sekali (tidak ada Sheet untuk ditulis). Tab
+  // Daily Tracking tetap didukung penuh di atas -- ini jalur TAMBAHAN, bukan
+  // pengganti, supaya brand yang sudah pindah pencatatan ke ATLAS tidak
+  // perlu isi apa pun di tab Daily Tracking sama sekali. Akun yang SUDAH
+  // dicakup satu config Daily Tracking dilewati di sini supaya tidak
+  // ditarik & didorong dua kali.
+  var configuredClients = {};
+  configs.forEach(function (c) { configuredClients[c.accountClient] = true; });
+
+  getAllAccounts_().forEach(function (acct) {
+    if (configuredClients[acct.client]) return;
+    var isCpas = (acct.type || 'MAIN').toUpperCase() === 'CPAS';
+    if (!acct.atlasBrandId || (!isCpas && !acct.boostMatch)) return;
+    try {
+      var r2 = processAutoAccountTracking_(acct, false);
+      if (r2.status === 'OK') ok.push(r2); else failed.push(r2);
+    } catch (e) {
+      failed.push({ label: acct.client, status: 'FAILED', error: e.message });
+      Logger.log('[%s] Unexpected error (auto account): %s', acct.client, e.message);
+    }
+    Utilities.sleep(300);
+  });
+
+  if (!ok.length && !failed.length) {
+    Logger.log('Tidak ada brand yang siap diproses -- baik lewat config Daily Tracking ' +
+      'maupun lewat Brand & Langganan (boostMatch + atlasBrandId).');
+    return { ok: ok, failed: failed };
+  }
 
   try {
     // atlasPush ikut dicantumkan per brand supaya "Sheet OK tapi push ke
@@ -965,10 +1077,13 @@ function processTrackingConfig_(cfg, dryRun) {
 
   Logger.log('[%s] Processing date: %s', cfg.label, dateStr);
 
-  var acct = findAccount_(cfg.accountClient);
+  // cfg.accountType: lihat catatan panjang di findAccount_ -- WAJIB disertakan
+  // untuk config yang disimpan setelah perbaikan ini, default 'MAIN' cuma
+  // untuk config lama yang belum punya field ini.
+  var acct = findAccount_(cfg.accountClient, cfg.accountType);
   if (!acct) {
     return failTracking_(cfg, dateStr, dryRun,
-      'Client "' + cfg.accountClient + '" tidak ditemukan (bukan akun hardcoded maupun akun dinamis yang terdaftar).');
+      'Client "' + cfg.accountClient + '" tipe ' + (cfg.accountType || 'MAIN') + ' tidak ditemukan (bukan akun hardcoded maupun akun dinamis yang terdaftar).');
   }
 
   // Config bisa dibuat untuk akun bertipe MAIN (klasifikasi Boost/Non-Boost
@@ -1138,7 +1253,16 @@ function postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend) {
   try {
     var res = UrlFetchApp.fetch(url, {
       method: 'post',
-      contentType: 'text/plain', // sama alasan seperti doPost() -- hindari CORS preflight
+      // 'application/json' di sini, BUKAN 'text/plain' seperti doPost() di
+      // atas -- itu 'text/plain' untuk menghindari kuirk Apps Script sendiri
+      // (Apps Script butuh Content-Type: text/plain untuk menghindari jalur
+      // yang doPost()-nya tidak menangani OPTIONS). Tujuan panggilan INI
+      // adalah server Express ATLAS, bukan Apps Script -- Express cuma
+      // mengisi req.body kalau Content-Type-nya application/json (lihat
+      // express.json() di backend/src/app.js); text/plain di sini membuat
+      // req.body kosong, makanya validasi ATLAS sempat menolak dengan
+      // "brandId wajib disertakan" walau payload JSON-nya sudah benar.
+      contentType: 'application/json',
       payload: JSON.stringify({ brandId: cfg.atlasBrandId, entryDate: dateStr, entries: entries }),
       headers: { 'X-Ingest-Key': key },
       muteHttpExceptions: true
@@ -1155,6 +1279,94 @@ function postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend) {
     Logger.log('[%s] Push ke ATLAS gagal (exception): %s', cfg.label, e.message);
     return 'GAGAL — exception: ' + e.message;
   }
+}
+
+/**
+ * Versi ringan processTrackingConfig_ untuk brand yang HANYA didaftarkan di
+ * Brand & Langganan (uiSaveBrand_), TANPA config Daily Tracking sama sekali
+ * -- tidak ada Sheet untuk dicari/ditulis, jadi cuma langkah 1 (ambil
+ * insight), 2 (klasifikasi/jumlahkan) dan push ke ATLAS yang jalan. Dipakai
+ * baik oleh updateAllDailyTrackingSpend() (semua brand, real run) maupun
+ * oleh uiPreviewAccountTracking_/uiRunAccountTracking_ (satu brand, dipicu
+ * tombol "Sync Meta Sekarang" ATLAS -- lihat doPost()).
+ *
+ * Elligibility (acct.atlasBrandId wajib, acct.boostMatch wajib KECUALI akun
+ * CPAS) sudah dicek oleh pemanggil; fungsi ini tidak mengecek ulang supaya
+ * bisa juga dipanggil untuk dry-run preview sebelum boostMatch tentu terisi.
+ */
+function processAutoAccountTracking_(acct, dryRun) {
+  var tz = tz_();
+  var targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() - 1); // H-1
+  var dateStr = Utilities.formatDate(targetDate, tz, 'yyyy-MM-dd');
+  var label = acct.client + ' - ' + (acct.type || 'MAIN') + ' (Brand & Langganan)';
+
+  var rows;
+  try {
+    rows = fetchInsights_(tokenFor_(acct), acct.id, 'campaign', { since: dateStr, until: dateStr });
+  } catch (e) {
+    return { label: label, date: dateStr, status: 'FAILED', error: 'Gagal menarik data Meta Ads (' + acct.client + '): ' + e.message };
+  }
+
+  var isCpas = (acct.type || 'MAIN').toUpperCase() === 'CPAS';
+  var boostSpend = null, nonBoostSpend = null, cpasSpend = null, nCampaign = 0;
+  var boostMatch = String(acct.boostMatch || '').toLowerCase();
+
+  if (isCpas) {
+    // Sama seperti akun CPAS primer di processTrackingConfig_: TIDAK ADA
+    // pembagian nama sama sekali, semua campaign akun ini dijumlah apa adanya.
+    cpasSpend = 0;
+    Object.keys(rows).forEach(function (id) { cpasSpend += num_(rows[id].spend); nCampaign++; });
+  } else {
+    boostSpend = 0; nonBoostSpend = 0;
+    Object.keys(rows).forEach(function (id) {
+      var name = rows[id].campaign_name || '';
+      var spend = num_(rows[id].spend);
+      nCampaign++;
+      if (boostMatch && name.toLowerCase().indexOf(boostMatch) > -1) boostSpend += spend;
+      else nonBoostSpend += spend;
+    });
+  }
+
+  var result = {
+    label: label, date: dateStr, status: dryRun ? 'DRY RUN OK' : 'OK',
+    boostSpend: boostSpend, nonBoostSpend: nonBoostSpend, cpasSpend: cpasSpend, campaigns: nCampaign
+  };
+
+  if (dryRun) return result; // tidak ada Sheet untuk dicek "existing", dan tidak push
+
+  result.atlasPush = postToAtlas_({ label: label, atlasBrandId: acct.atlasBrandId }, dateStr, boostSpend, nonBoostSpend, cpasSpend);
+  return result;
+}
+
+/**
+ * Cari akun (hardcoded/dinamis) yang eligible untuk processAutoAccountTracking_,
+ * dipakai action accountTrackingPreview/accountTrackingRun. `type` WAJIB
+ * disertakan pemanggil (dari payload ATLAS) -- lihat catatan panjang di
+ * findAccount_ soal kenapa client SAJA ambigu kalau brand yang sama punya
+ * akun MAIN dan CPAS berdampingan (persis kasus Crabus).
+ */
+function findEligibleAutoAccount_(client, type) {
+  var acct = findAccount_(client, type);
+  if (!acct) throw new Error('Akun "' + client + '" tipe ' + (type || 'MAIN') + ' tidak ditemukan.');
+  if (!acct.atlasBrandId) {
+    throw new Error('Brand "' + client + '" belum ditautkan ke brand ATLAS manapun (isi lewat form Brand & Langganan).');
+  }
+  var isCpas = (acct.type || 'MAIN').toUpperCase() === 'CPAS';
+  if (!isCpas && !acct.boostMatch) {
+    throw new Error('Brand "' + client + '" belum diisi Kata Kunci Boost Post (wajib untuk akun MAIN, lihat form Brand & Langganan).');
+  }
+  return acct;
+}
+
+/** Dry run satu akun Brand & Langganan (dipanggil tombol "Sync Meta Sekarang" ATLAS sebelum benar-benar menulis). */
+function uiPreviewAccountTracking_(client, type) {
+  return processAutoAccountTracking_(findEligibleAutoAccount_(client, type), true);
+}
+
+/** Run sungguhan satu akun Brand & Langganan -- push ke ATLAS, TIDAK ada Sheet untuk ditulis sama sekali. */
+function uiRunAccountTracking_(client, type) {
+  return processAutoAccountTracking_(findEligibleAutoAccount_(client, type), false);
 }
 
 function failTracking_(cfg, dateStr, dryRun, message) {
