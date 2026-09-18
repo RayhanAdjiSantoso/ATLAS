@@ -89,7 +89,11 @@ export default function DailyTrackingTab() {
     }
   };
 
-  useEffect(loadAll, []);
+  // Not `useEffect(loadAll, [])` directly: `loadAll` is async and returns a
+  // Promise, which React would treat as the effect's cleanup ("destroy")
+  // function and crash the whole tree the moment it tries to call it —
+  // wrap it so the effect callback itself returns nothing.
+  useEffect(() => { loadAll(); }, []);
 
   const resetForm = () => {
     setForm(EMPTY_FORM);

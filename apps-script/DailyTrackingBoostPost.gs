@@ -935,9 +935,15 @@ function updateAllDailyTrackingSpend() {
   });
 
   try {
+    // atlasPush ikut dicantumkan per brand supaya "Sheet OK tapi push ke
+    // ATLAS gagal" (a) tidak diam-diam tersembunyi di balik status OK, dan
+    // (b) terlihat langsung dari tab Automation Log ATLAS, bukan cuma dari
+    // Executions Apps Script yang tidak pernah dibuka dari sisi ATLAS.
     writeLog_(openSpreadsheet_(), new Date(), failed.length ? 'SEBAGIAN GAGAL' : 'OK',
       '[TRACKING] ' + ok.length + ' sukses, ' + failed.length + ' gagal — ' +
-      ok.concat(failed).map(function (r) { return r.label + ':' + r.status; }).join(', '));
+      ok.concat(failed).map(function (r) {
+        return r.label + ':' + r.status + (r.atlasPush ? ' [ATLAS: ' + r.atlasPush + ']' : '');
+      }).join(', '));
   } catch (e) { /* sheet log tidak terjangkau, abaikan */ }
 
   return { ok: ok, failed: failed };
@@ -1084,8 +1090,12 @@ function processTrackingConfig_(cfg, dryRun) {
 
   // --- 6. Push ke ATLAS (best-effort — gagal di sini TIDAK mengubah
   // result.status, Sheet di atas sudah berhasil ditulis dan itu tetap jadi
-  // sumber kebenaran utama kalau push ini gagal). ---
-  postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend);
+  // sumber kebenaran utama kalau push ini gagal). Statusnya tetap dicatat di
+  // result.atlasPush supaya terlihat di ringkasan [TRACKING] tab Automation
+  // Log — itu satu-satunya tempat kegagalan push ini terlihat DARI ATLAS;
+  // Logger.log di bawah cuma masuk ke Executions Apps Script yang tidak
+  // pernah dibuka dari sisi ATLAS. ---
+  result.atlasPush = postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend);
 
   return result;
 }
@@ -1093,21 +1103,26 @@ function processTrackingConfig_(cfg, dryRun) {
 /**
  * Kirim angka hari ini ke POST /api/daily-tracking/ingest ATLAS, supaya
  * halaman Daily Tracking (Postgres) ikut terisi otomatis, bukan cuma cell
- * Google Sheet ini. Dilewati diam-diam (bukan error) kalau cfg.atlasBrandId
- * kosong atau ATLAS_INGEST_URL/ATLAS_INGEST_KEY belum di-set — lihat catatan
- * setup di komentar atas file ini. Kegagalan jaringan/HTTP di sini TIDAK
- * PERNAH dilempar sebagai Error: Sheet sudah berhasil ditulis sebelum fungsi
- * ini dipanggil, jadi itu tetap jadi sumber kebenaran kalau ATLAS lagi down.
+ * Google Sheet ini. Kegagalan jaringan/HTTP di sini TIDAK PERNAH dilempar
+ * sebagai Error: Sheet sudah berhasil ditulis sebelum fungsi ini dipanggil,
+ * jadi itu tetap jadi sumber kebenaran kalau ATLAS lagi down.
+ *
+ * Selalu mengembalikan sebuah status string singkat (bukan cuma Logger.log,
+ * yang cuma masuk ke Executions Apps Script yang tidak terlihat dari ATLAS):
+ * dipakai oleh updateAllDailyTrackingSpend() supaya "push ke ATLAS gagal"
+ * ikut muncul di ringkasan [TRACKING] tab Automation Log ATLAS, bukan cuma
+ * "Sheet: OK" yang menyembunyikan kegagalan tahap ini.
  */
 function postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend) {
-  if (!cfg.atlasBrandId) return;
+  if (!cfg.atlasBrandId) return 'dilewati (config ini belum ditautkan ke Brand ATLAS)';
 
   var props = PropertiesService.getScriptProperties();
   var url = props.getProperty('ATLAS_INGEST_URL');
   var key = props.getProperty('ATLAS_INGEST_KEY');
   if (!url || !key) {
-    Logger.log('[%s] Push ke ATLAS dilewati — ATLAS_INGEST_URL/ATLAS_INGEST_KEY belum di-set di Script Properties.', cfg.label);
-    return;
+    var missing = !url && !key ? 'ATLAS_INGEST_URL & ATLAS_INGEST_KEY' : !url ? 'ATLAS_INGEST_URL' : 'ATLAS_INGEST_KEY';
+    Logger.log('[%s] Push ke ATLAS dilewati — %s belum di-set di Script Properties.', cfg.label, missing);
+    return 'GAGAL — ' + missing + ' belum di-set di Script Properties';
   }
 
   // boostSpend/nonBoostSpend are null for a config whose PRIMARY account is
@@ -1118,7 +1133,7 @@ function postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend) {
   if (boostSpend !== null) entries.push({ channelKey: 'meta_boost_post', amount: boostSpend });
   if (nonBoostSpend !== null) entries.push({ channelKey: 'meta_nonboost_post', amount: nonBoostSpend });
   if (cpasSpend !== null) entries.push({ channelKey: 'cpas_shopee', amount: cpasSpend });
-  if (!entries.length) return;
+  if (!entries.length) return 'dilewati (tidak ada channel untuk dikirim)';
 
   try {
     var res = UrlFetchApp.fetch(url, {
@@ -1130,12 +1145,15 @@ function postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend) {
     });
     var code = res.getResponseCode();
     if (code < 200 || code >= 300) {
-      Logger.log('[%s] Push ke ATLAS gagal (HTTP %s): %s', cfg.label, code, res.getContentText().slice(0, 300));
-    } else {
-      Logger.log('[%s] Push ke ATLAS berhasil (brand_id %s, %s).', cfg.label, cfg.atlasBrandId, dateStr);
+      var bodySnippet = res.getContentText().slice(0, 200);
+      Logger.log('[%s] Push ke ATLAS gagal (HTTP %s): %s', cfg.label, code, bodySnippet);
+      return 'GAGAL — HTTP ' + code + ': ' + bodySnippet;
     }
+    Logger.log('[%s] Push ke ATLAS berhasil (brand_id %s, %s).', cfg.label, cfg.atlasBrandId, dateStr);
+    return 'OK (' + entries.map(function (e) { return e.channelKey; }).join(', ') + ')';
   } catch (e) {
     Logger.log('[%s] Push ke ATLAS gagal (exception): %s', cfg.label, e.message);
+    return 'GAGAL — exception: ' + e.message;
   }
 }
 
