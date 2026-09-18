@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
 import DailyTrackingClientBar from '../components/dailyTracking/DailyTrackingClientBar.jsx';
 import DailyKpiStrip from '../components/dailyTracking/DailyKpiStrip.jsx';
+import SectionNav from '../components/dailyTracking/SectionNav.jsx';
 import ChannelTabs from '../components/dailyTracking/ChannelTabs.jsx';
 import DailyEntryTable from '../components/dailyTracking/DailyEntryTable.jsx';
 import ChannelSummaryTable from '../components/dailyTracking/ChannelSummaryTable.jsx';
@@ -34,6 +35,21 @@ export default function DailyTrackingPage() {
   const [loading, setLoading] = useState(false);
   const [modalKind, setModalKind] = useState(null); // 'sales' | 'spend' | null
   const [loadError, setLoadError] = useState('');
+
+  // Measured so the section-nav's smooth-scroll targets can reserve exactly
+  // this much space via CSS `scroll-margin-top` — the sticky head's real
+  // height varies (loading vs. loaded KPI strip, month-pill wrapping on
+  // narrow screens), so a hardcoded offset would drift out of sync.
+  const stickyHeadRef = useRef(null);
+  useEffect(() => {
+    const el = stickyHeadRef.current;
+    if (!el) return undefined;
+    const setVar = () => document.documentElement.style.setProperty('--dt-sticky-h', `${el.offsetHeight}px`);
+    setVar();
+    const observer = new ResizeObserver(setVar);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Brands list — GET /brands already filters server-side by allowedBrandId
   // (brandService.listBrands), so a client account only ever sees its own.
@@ -122,13 +138,14 @@ export default function DailyTrackingPage() {
           table scrolls underneath — genuinely position:sticky, unlike
           Dashboard's KpiStrip which is only "sticky" because it never
           unmounts. */}
-      <div className="dt-sticky-head">
+      <div className="dt-sticky-head" ref={stickyHeadRef}>
         <DailyTrackingClientBar
           brands={brands} brandId={brandId} onBrandChange={setBrandId} locked={locked}
           brandStatus={brandStatus} onBrandStatusChange={setBrandStatus}
           month={month} onMonthChange={setMonth}
         />
         <DailyKpiStrip grid={grid} channels={channels} loading={loading} />
+        <SectionNav />
       </div>
 
       {loadError && <div className="alert alert-error">{loadError}</div>}
@@ -138,7 +155,7 @@ export default function DailyTrackingPage() {
         onImported={() => { loadChannels(); loadEntries(); }}
       />
 
-      <section className="dt-section">
+      <section className="dt-section" id="dt-section-revenue">
         <div className="dt-section-head">
           <h2>Revenue Data</h2>
         </div>
@@ -156,7 +173,7 @@ export default function DailyTrackingPage() {
         />
       </section>
 
-      <section className="dt-section">
+      <section className="dt-section" id="dt-section-spending">
         <div className="dt-section-head">
           <h2>Spending Data</h2>
           {isAdmin && <MetaSyncButton brandId={brandId} onSynced={loadEntries} />}
@@ -175,7 +192,9 @@ export default function DailyTrackingPage() {
         />
       </section>
 
-      <ChannelSummaryTable grid={grid} channels={channels} />
+      <div id="dt-section-summary">
+        <ChannelSummaryTable grid={grid} channels={channels} />
+      </div>
 
       {modalKind && (
         <AddCustomChannelModal
