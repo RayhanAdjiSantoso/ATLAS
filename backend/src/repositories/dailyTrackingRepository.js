@@ -71,6 +71,16 @@ export async function upsertSalesEntry(v, db = pool) {
   return rows[0];
 }
 
+// Wipes one brand's whole month. Returns the number of rows deleted.
+export async function deleteSalesForMonth(brandId, startDate, endDate, db = pool) {
+  const { rowCount } = await db.query(
+    `DELETE FROM daily_channel_sales
+     WHERE brand_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
+    [brandId, startDate, endDate],
+  );
+  return rowCount;
+}
+
 // ---------------------------------------------------------------------
 // daily_channel_spend
 // ---------------------------------------------------------------------
@@ -83,6 +93,15 @@ export async function listSpendForMonth(brandId, startDate, endDate, db = pool) 
     [brandId, startDate, endDate],
   );
   return rows;
+}
+
+export async function deleteSpendForMonth(brandId, startDate, endDate, db = pool) {
+  const { rowCount } = await db.query(
+    `DELETE FROM daily_channel_spend
+     WHERE brand_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
+    [brandId, startDate, endDate],
+  );
+  return rowCount;
 }
 
 // A human save. Always wins: source='manual', locked_manual=TRUE, regardless

@@ -189,6 +189,8 @@
 }
 
 /* ── File import ────────────────────────────────────────────────── */
+.dt-toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.6rem; }
+.dt-toolbar > .dt-import { display: contents; }
 .dt-import { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
 .dt-import-alert {
   display: flex;
@@ -356,6 +358,9 @@
   margin-bottom: 0.8rem;
 }
 .dt-modal-head h3 { font-size: 1rem; font-weight: 700; margin: 0; }
+.dt-confirm-text { font-size: 0.9rem; line-height: 1.5; color: var(--text); margin: 0 0 0.8rem; }
+.dt-btn-danger-outline { color: var(--danger); border-color: var(--danger); }
+.dt-btn-danger-outline:hover { background: var(--danger-bg); }
 .dt-modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
 
 @media (max-width: 600px) {
