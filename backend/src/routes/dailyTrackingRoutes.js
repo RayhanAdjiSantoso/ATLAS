@@ -43,6 +43,11 @@ router.put(
   authenticate, requireBrandAccess((req) => req.body.brandId),
   upsertEntriesBodyValidation, ctrl.upsertEntries,
 );
+router.delete(
+  '/entries',
+  authenticate, requireBrandAccess((req) => req.query.brandId),
+  entriesQueryValidation, ctrl.deleteMonthEntries,
+);
 router.post(
   '/import',
   authenticate, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),

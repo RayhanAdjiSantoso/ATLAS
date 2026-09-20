@@ -11,6 +11,7 @@ import ChannelSummaryTable from '../components/dailyTracking/ChannelSummaryTable
 import AddCustomChannelModal from '../components/dailyTracking/AddCustomChannelModal.jsx';
 import MetaSyncButton from '../components/dailyTracking/MetaSyncButton.jsx';
 import ImportFileButton from '../components/dailyTracking/ImportFileButton.jsx';
+import DeleteMonthButton from '../components/dailyTracking/DeleteMonthButton.jsx';
 import useAutoSave from '../dailyTracking/lib/useAutoSave.js';
 import { FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS } from '../dailyTracking/lib/constants.js';
 import '../components/dailyTracking/dailyTracking.css';
@@ -150,10 +151,18 @@ export default function DailyTrackingPage() {
 
       {loadError && <div className="alert alert-error">{loadError}</div>}
 
-      <ImportFileButton
-        brandId={brandId}
-        onImported={() => { loadChannels(); loadEntries(); }}
-      />
+      <div className="dt-toolbar">
+        <ImportFileButton
+          brandId={brandId}
+          onImported={() => { loadChannels(); loadEntries(); }}
+        />
+        <DeleteMonthButton
+          brandId={brandId}
+          brandName={brands.find((b) => b.brand_id === brandId)?.brand_name ?? 'klien ini'}
+          month={month}
+          onDeleted={loadEntries}
+        />
+      </div>
 
       <section className="dt-section" id="dt-section-revenue">
         <div className="dt-section-head">

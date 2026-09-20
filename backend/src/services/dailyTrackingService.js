@@ -123,6 +123,39 @@ export async function getMonthEntries(brandId, month) {
 }
 
 // ---------------------------------------------------------------------
+// Delete a whole month — for a bad import (e.g. wrong dates in the source
+// spreadsheet). Removes every sales + spend row of the brand in that month
+// and leaves an audit row per table. Custom channels are kept: they are
+// brand config, not month data.
+// ---------------------------------------------------------------------
+export async function deleteMonthEntries({ brandId, month, userId }) {
+  await assertBrand(brandId);
+  const days = daysInMonth(month);
+  const startDate = days[0];
+  const endDate = days[days.length - 1];
+
+  return inTransaction(async (db) => {
+    const salesDeleted = await repo.deleteSalesForMonth(brandId, startDate, endDate, db);
+    const spendDeleted = await repo.deleteSpendForMonth(brandId, startDate, endDate, db);
+
+    const note = `Hapus data bulan ${month}`;
+    if (salesDeleted) {
+      await repo.logIngestion({
+        brandId, targetTable: 'daily_channel_sales', entryDate: startDate,
+        source: 'manual', rowCount: salesDeleted, status: 'success', note, performedBy: userId,
+      }, db);
+    }
+    if (spendDeleted) {
+      await repo.logIngestion({
+        brandId, targetTable: 'daily_channel_spend', entryDate: startDate,
+        source: 'manual', rowCount: spendDeleted, status: 'success', note, performedBy: userId,
+      }, db);
+    }
+    return { month, deleted: { sales: salesDeleted, spend: spendDeleted } };
+  });
+}
+
+// ---------------------------------------------------------------------
 // Manual entry — always sets source='manual', locked_manual=TRUE on any
 // spend row it touches (decision: a human edit permanently overrides
 // whatever the Meta sync last wrote for that cell).

@@ -35,6 +35,17 @@ export const listEntries = asyncHandler(async (req, res) => {
   res.json(entries);
 });
 
+// DELETE /api/daily-tracking/entries?brandId=&month=YYYY-MM
+export const deleteMonthEntries = asyncHandler(async (req, res) => {
+  validate(req);
+  const result = await service.deleteMonthEntries({
+    brandId: Number(req.query.brandId),
+    month: req.query.month,
+    userId: req.user.userId,
+  });
+  res.json(result);
+});
+
 // PUT /api/daily-tracking/entries  { brandId, entryDate, sales?, spend? }
 export const upsertEntries = asyncHandler(async (req, res) => {
   validate(req);
