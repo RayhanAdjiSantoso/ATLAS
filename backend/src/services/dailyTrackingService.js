@@ -106,6 +106,7 @@ export async function getMonthEntries(brandId, month) {
       revenue: r.revenue == null ? null : Number(r.revenue),
       qtySold: r.qty_sold,
       transaksi: r.transaksi,
+      notes: r.notes,
     };
   }
 
@@ -160,7 +161,13 @@ export async function deleteMonthEntries({ brandId, month, userId }) {
 // spend row it touches (decision: a human edit permanently overrides
 // whatever the Meta sync last wrote for that cell).
 // ---------------------------------------------------------------------
-const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
+// A lone "-" (mid-typing a negative retur value in the sales table) is not a
+// number yet — treat it as empty rather than handing NaN to Postgres.
+const num = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 export async function upsertEntries({ brandId, entryDate, sales, spend, userId }) {
   await assertBrand(brandId);
@@ -176,6 +183,7 @@ export async function upsertEntries({ brandId, entryDate, sales, spend, userId }
       await repo.upsertSalesEntry({
         brandId, entryDate, channelKey: s.channelKey,
         revenue: num(s.revenue), qtySold: num(s.qtySold), transaksi: num(s.transaksi),
+        notes: s.notes === undefined ? undefined : (String(s.notes ?? '').trim() || null),
         userId,
       }, db);
       salesCount += 1;
@@ -345,7 +353,7 @@ export async function importFromFile({ brandId, buffer, filename, userId }) {
     for (const r of parsed.salesRows) {
       await repo.upsertSalesEntry({
         brandId, entryDate: r.entryDate, channelKey: r.channelKey,
-        revenue: r.revenue, qtySold: r.qtySold, transaksi: r.transaksi, userId,
+        revenue: r.revenue, qtySold: r.qtySold, transaksi: r.transaksi, notes: r.notes, userId,
       }, db);
     }
     for (const r of parsed.spendRows) {

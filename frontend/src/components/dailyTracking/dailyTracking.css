@@ -289,6 +289,7 @@
 }
 .dt-table input[type='number']:hover { border-color: var(--border); background: #fff; }
 .dt-table input[type='number']:focus { border-color: var(--primary); background: #fff; outline: none; }
+.dt-table .dt-notes-input { width: 100%; min-width: 160px; }
 .dt-table-spend-cell { display: flex; align-items: center; gap: 0.5rem; }
 .dt-table-status-col { width: 90px; white-space: nowrap; }
 .dt-save-status { font-size: 0.68rem; color: var(--text-placeholder); }

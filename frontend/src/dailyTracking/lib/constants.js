@@ -20,3 +20,8 @@ export const FIXED_SPEND_CHANNELS = [
 ];
 
 export const META_SYNC_CHANNEL_KEYS = ['meta_boost_post', 'meta_nonboost_post'];
+
+// Sales channels whose daily rows also carry a free-text Notes cell (backend
+// stores notes for any channel; only these show the column). DRC: explains
+// negative retur lines, e.g. "RETUR".
+export const NOTES_SALES_CHANNEL_KEYS = ['drc'];
