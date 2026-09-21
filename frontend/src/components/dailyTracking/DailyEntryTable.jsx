@@ -43,6 +43,7 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
       <table className="dt-table">
         <thead>
           <tr>
+            <th className="dt-table-no">No</th>
             <th>Tanggal</th>
             {kind === 'sales' ? (
               <>
@@ -58,11 +59,12 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
           </tr>
         </thead>
         <tbody>
-          {days.map((date) => {
+          {days.map((date, i) => {
             const row = data?.[date] || {};
             const status = rowStatus(date);
             return (
               <tr key={date}>
+                <td className="dt-table-no">{i + 1}</td>
                 <td className="dt-table-date">{formatDate(date)}</td>
                 {kind === 'sales' ? (
                   <>
