@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
+import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { ReportPages } from '../../components/ReportPages';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { HowTo, HowToStep } from '../../components/HowTo';
@@ -215,6 +216,42 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setCpasSides((prev) => ({ ...prev, [role]: null }));
     setReport(null);
     onInvalidate();
+  }
+
+  // Same contract the Shopee and TikTok tabs already follow: the source tabs
+  // decide which slot appears. Meta rendered the library picker whichever tab
+  // was active, so "Upload file baru" was a switch that changed nothing — and
+  // since it is the DEFAULT source, the upload column looked missing outright.
+  function metaDropzone(target: 'meta' | 'cpas', role: PeriodRole, tag: string) {
+    const f = (target === 'meta' ? metaSides : cpasSides)[role];
+    const setSides = target === 'meta' ? setMetaSides : setCpasSides;
+    const infoText = f ? `${f.rows.length} baris` : undefined;
+    if ((role === 'old' ? oldSource : curSource) === 'upload') {
+      return (
+        <ManualFileSlot
+          tag={tag}
+          accept=".csv,.xlsx,.xls"
+          loaded={Boolean(f)}
+          fileName={f?.fileName}
+          infoText={infoText}
+          onFiles={(files) => handleUpload(files, target, role)}
+          onClear={() => setSides((prev) => ({ ...prev, [role]: null }))}
+        />
+      );
+    }
+    return (
+      <LibraryFileSlot
+        clientId={clientId}
+        platform="meta"
+        channel={target}
+        tag={tag}
+        accept=".csv,.xlsx,.xls"
+        onFiles={(files) => handleUpload(files, target, role)}
+        loaded={Boolean(f)}
+        fileName={f?.fileName}
+        infoText={infoText}
+      />
+    );
   }
 
   async function handleUpload(input: File[], target: 'meta' | 'cpas', role: PeriodRole) {
@@ -464,14 +501,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           <div className="source-label">Meta Ads</div>
         </div>
         <div className="dz-grid-4">
-          <LibraryFileSlot clientId={clientId} platform="meta" channel="meta"
-            tag="Periode Lalu"
-            onFiles={(files) => handleUpload(files, 'meta', 'old')} loaded={Boolean(metaSides.old)}
-            fileName={metaSides.old?.fileName} infoText={metaSides.old ? `${metaSides.old.rows.length} baris` : undefined} />
-          <LibraryFileSlot clientId={clientId} platform="meta" channel="meta"
-            tag="Periode Ini"
-            onFiles={(files) => handleUpload(files, 'meta', 'cur')} loaded={Boolean(metaSides.cur)}
-            fileName={metaSides.cur?.fileName} infoText={metaSides.cur ? `${metaSides.cur.rows.length} baris` : undefined} />
+          {metaDropzone('meta', 'old', 'Periode Lalu')}
+          {metaDropzone('meta', 'cur', 'Periode Ini')}
         </div>
         {uploadError && <InlineNotice title="File ini belum kebaca">{uploadError}</InlineNotice>}
       </div>
@@ -631,22 +662,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           <span className="sec-badge">opsional — kosongkan jika tidak ada data CPAS</span>
         </div>
         <div className="dz-grid-4">
-          <LibraryFileSlot clientId={clientId} platform="meta" channel="cpas"
-            tag="Periode Lalu"
-            accept=".csv,.xlsx,.xls"
-            onFiles={(files) => handleUpload(files, 'cpas', 'old')}
-            loaded={Boolean(cpasSides.old)}
-            fileName={cpasSides.old?.fileName}
-            infoText={cpasSides.old ? `${cpasSides.old.rows.length} baris` : undefined}
-          />
-          <LibraryFileSlot clientId={clientId} platform="meta" channel="cpas"
-            tag="Periode Ini"
-            accept=".csv,.xlsx,.xls"
-            onFiles={(files) => handleUpload(files, 'cpas', 'cur')}
-            loaded={Boolean(cpasSides.cur)}
-            fileName={cpasSides.cur?.fileName}
-            infoText={cpasSides.cur ? `${cpasSides.cur.rows.length} baris` : undefined}
-          />
+          {metaDropzone('cpas', 'old', 'Periode Lalu')}
+          {metaDropzone('cpas', 'cur', 'Periode Ini')}
         </div>
       </div>
 

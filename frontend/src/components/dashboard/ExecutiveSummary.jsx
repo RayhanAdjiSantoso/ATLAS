@@ -35,15 +35,25 @@ const idrAxis = (v) => {
   return `Rp${Math.round(n).toLocaleString('id-ID')}`;
 };
 
-// Seven metrics in one flat run read as a wall. These four groups are the
-// order an analyst actually reads them: what we spent, what came back, how
-// much moved, and what each unit was worth.
-const METRIC_GROUPS = [
-  { label: 'Belanja iklan', keys: ['amountSpent'] },
-  { label: 'Penjualan', keys: ['revenue', 'revenueAll'] },
-  { label: 'Volume', keys: ['qty', 'trx'] },
-  { label: 'Rata-rata per pesanan', keys: ['aov', 'aur'] },
-];
+const HERO_KEY = 'revenue';
+const TILE_ORDER = ['revenueAll', 'amountSpent', 'trx', 'qty', 'aov', 'aur'];
+
+// Current against its comparison as two lengths scaled to the larger of the
+// two. The pair answers "did it move, and by how much" before the eye reaches
+// the percentage, and it degrades honestly — no comparison, no bars.
+function CompareBars({ metric }) {
+  const cur = Number(metric.current);
+  const prev = Number(metric.compare);
+  if (!Number.isFinite(cur) || !Number.isFinite(prev)) return null;
+  const max = Math.max(cur, prev);
+  if (!(max > 0)) return null;
+  return (
+    <div className="xs-bars" aria-hidden="true">
+      <span className="xs-bar is-cur"><i style={{ width: `${(Math.max(0, cur) / max) * 100}%` }} /></span>
+      <span className="xs-bar is-prev"><i style={{ width: `${(Math.max(0, prev) / max) * 100}%` }} /></span>
+    </div>
+  );
+}
 
 function ChannelBreakdown({ title, rows, emptyText, tone }) {
   const total = rows.reduce((sum, r) => sum + (Number(r.value) || 0), 0);
@@ -261,15 +271,9 @@ export default function ExecutiveSummary({ filters }) {
     return () => { alive = false; };
   }, [filters.brandId, filters.startDate, filters.endDate, filters.compare, filters.compareStartDate, filters.compareEndDate, reload]);
 
-  const columns = useMemo(() => {
-    if (!state.data) return [];
-    const { current, compare, lastYear } = state.data;
-    return [
-      { key: 'current', label: `${dateLabel(current.range.start)} – ${dateLabel(current.range.end)}`, sub: 'Periode ini', primary: true },
-      compare && { key: 'compare', label: `${dateLabel(compare.range.start)} – ${dateLabel(compare.range.end)}`, sub: 'Pembanding' },
-      { key: 'lastYear', label: `${dateLabel(lastYear.range.start)} – ${dateLabel(lastYear.range.end)}`, sub: 'Tahun lalu' },
-    ].filter(Boolean);
-  }, [state.data]);
+  // Last year is usually empty for a brand onboarded this year. Rather than
+  // repeat that emptiness on every tile, it is stated once under the grid.
+  const hasLastYear = useMemo(() => (state.data ? state.data.metrics.some((m) => m.lastYear != null) : false), [state.data]);
 
   if (!filters.brandId) {
     return <Shell state><div className="xs-state"><Layers size={20} /><span>Pilih brand untuk melihat ringkasan lintas channel.</span></div></Shell>;
@@ -301,11 +305,14 @@ export default function ExecutiveSummary({ filters }) {
     .filter((c) => c.value != null)
     .map((c) => ({ name: c.label, value: Number(c.value) }));
 
-  const claimed = new Set(METRIC_GROUPS.flatMap((g) => g.keys));
-  const groups = [
-    ...METRIC_GROUPS.map((g) => ({ label: g.label, rows: g.keys.map((k) => byKey[k]).filter(Boolean) })),
-    { label: 'Metrik lain', rows: metrics.filter((m) => !claimed.has(m.key)) },
-  ].filter((g) => g.rows.length);
+  // Revenue is the headline; everything else is a tile. A metric the backend
+  // adds that this order does not name still reaches the screen — it lands at
+  // the end rather than disappearing.
+  const hero = byKey[HERO_KEY] ?? metrics[0];
+  const ordered = TILE_ORDER.map((k) => byKey[k]).filter(Boolean);
+  const named = new Set([HERO_KEY, ...TILE_ORDER]);
+  const rest = [...ordered, ...metrics.filter((m) => !named.has(m.key))];
+  const periodLabel = `${dateLabel(current.range.start)} – ${dateLabel(current.range.end)}`;
 
   if (!hasAnyData) {
     return (
@@ -324,51 +331,52 @@ export default function ExecutiveSummary({ filters }) {
 
   return (
     <Shell>
-      <div className="xs-table-wrap" tabIndex={0} role="region" aria-label="Perbandingan metrik kinerja, geser horizontal untuk melihat seluruh periode">
-        <table className="xs-table">
-          <thead>
-            <tr>
-              <th scope="colgroup" colSpan={2} className="xs-table-heading">Kinerja bisnis<small>Ringkasan per periode</small></th>
-              {columns.map((c) => (
-                <th key={c.key} scope="col" className={c.primary ? 'is-primary' : ''}>
-                  <span>{c.sub}</span>
-                  <small>{c.label}</small>
-                </th>
-              ))}
-              {compare && <th scope="col">Perubahan</th>}
-              <th scope="col">vs Tahun lalu</th>
-            </tr>
-          </thead>
-          {groups.map((group) => {
-            return (
-              <tbody key={group.label}>
-                {group.rows.map((m, rowIndex) => (
-                  <tr key={m.key} className={m.key === 'revenue' || m.key === 'revenueAll' ? 'xs-revenue-row' : undefined}>
-                    {rowIndex === 0 && <th scope="rowgroup" rowSpan={group.rows.length} className="xs-metric-group"><span>{group.label}</span></th>}
-                    <th scope="row">{m.label}</th>
-                    {columns.map((c) => (
-                      <td key={c.key} className={c.primary ? 'is-primary' : ''}>
-                        <Figure text={fmt(m[c.key], m.kind)} absentReason={`${m.label} belum terisi untuk rentang ini.`} />
-                        {columns.filter((column) => m[column.key] != null && Number(m[column.key]) >= 0).length > 1 && m[c.key] != null && Number(m[c.key]) >= 0 && <span className="xs-value-track" aria-hidden="true"><i style={{ width: `${Math.max(0, Number(m[c.key])) / Math.max(1, ...columns.map((column) => Number(m[column.key]) || 0)) * 100}%` }} /></span>}
-                      </td>
-                    ))}
-                    {compare && (
-                      <td className="xs-delta-cell">
-                        <Delta value={m.growthCompare} neutral={m.sentiment === 'neutral'} />
-                        {m.growthCompare == null && <Figure text={null} absentReason="Perlu dua periode berisi data untuk dibandingkan." />}
-                      </td>
-                    )}
-                    <td className="xs-delta-cell">
-                      <Delta value={m.growthLastYear} neutral={m.sentiment === 'neutral'} />
-                      {m.growthLastYear == null && <Figure text={null} absentReason="Belum ada data pada rentang yang sama tahun lalu." />}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            );
-          })}
-        </table>
+      {/* Not a table. A table asks the eye to cross five columns to answer
+          two questions — what is the number, and did it move. One headline
+          figure and a grid of tiles answers both at a glance, and the
+          comparison is a bar rather than a column of digits to subtract. */}
+      <div className="xs-metrics">
+        {hero && (
+          <article className="xs-hero">
+            <header>
+              <span className="xs-hero-label">{hero.label}</span>
+              <span className="xs-hero-period">{periodLabel}</span>
+            </header>
+            <div className="xs-hero-figure">
+              <strong><Figure text={fmt(hero.current, hero.kind)} absentReason={`${hero.label} belum terisi untuk rentang ini.`} /></strong>
+              <Delta value={hero.growthCompare} neutral={hero.sentiment === 'neutral'} />
+            </div>
+            <CompareBars metric={hero} />
+            <footer>
+              {hero.compare != null ? <>Pembanding <b>{fmt(hero.compare, hero.kind)}</b></> : 'Belum ada periode pembanding'}
+              {hero.lastYear != null && <> · Tahun lalu <b>{fmt(hero.lastYear, hero.kind)}</b></>}
+            </footer>
+          </article>
+        )}
+
+        <div className="xs-tiles">
+          {rest.map((m) => (
+            <article className="xs-tile" key={m.key}>
+              <span className="xs-tile-label">{m.label}</span>
+              <div className="xs-tile-figure">
+                <strong><Figure text={fmt(m.current, m.kind)} absentReason={`${m.label} belum terisi untuk rentang ini.`} /></strong>
+                <Delta value={m.growthCompare} neutral={m.sentiment === 'neutral'} />
+              </div>
+              <CompareBars metric={m} />
+              <span className="xs-tile-foot">
+                {m.compare != null ? <>dari <b>{fmt(m.compare, m.kind)}</b></> : 'tanpa pembanding'}
+              </span>
+            </article>
+          ))}
+        </div>
       </div>
+
+      {!hasLastYear && (
+        <p className="xs-lastyear-note">
+          Perbandingan <strong>tahun lalu</strong> belum tersedia untuk rentang ini — kolomnya muncul sendiri begitu Daily Tracking punya data pada rentang yang sama
+          tahun sebelumnya.
+        </p>
+      )}
 
       <div className="xs-split">
         <DailyRevenueChart current={current} compare={compare} />
