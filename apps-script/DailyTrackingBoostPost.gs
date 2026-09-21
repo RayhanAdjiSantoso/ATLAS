@@ -439,6 +439,11 @@ function doPost(e) {
         out = { ok: true, data: uiRunAccountTracking_(payload.client, payload.type) };
         break;
 
+      // --- tarik data Meta Ads bulanan ke ATLAS (lihat MetaAdsMonthly.gs) ---
+      case 'metaAdsEnqueue':
+        out = { ok: true, data: uiEnqueueMetaAds_(payload) };
+        break;
+
       default:
         throw new Error('action tidak dikenal: ' + body.action);
     }
