@@ -42,6 +42,19 @@ export const fetchNow = asyncHandler(async (req, res) => {
   res.status(202).json(result);
 });
 
+// POST /api/meta-ads-insights/library  { brandId, accountType, month }
+// Rebuilds the Data & file library copy of an already-fetched month.
+export const syncLibrary = asyncHandler(async (req, res) => {
+  validate(req);
+  const result = await service.syncLibraryFile({
+    brandId: Number(req.body.brandId),
+    accountType: req.body.accountType,
+    month: req.body.month,
+    userId: req.user.userId,
+  });
+  res.json(result);
+});
+
 // DELETE /api/meta-ads-insights/months?brandId=&accountType=&month=
 export const deleteMonth = asyncHandler(async (req, res) => {
   validate(req);
@@ -83,4 +96,10 @@ export const finishRun = asyncHandler(async (req, res) => {
     note: req.body.note,
   });
   res.json({ ok: true, ...result });
+});
+
+// POST /api/meta-ads-insights/ingest/library  { runId }
+export const syncLibraryFromRun = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json({ ok: true, ...(await service.syncLibraryFromRun(req.body.runId)) });
 });

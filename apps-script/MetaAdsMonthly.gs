@@ -22,6 +22,10 @@
  *   POST /meta-ads-insights/ingest/finish  -> sukses/gagal; saat sukses ATLAS
  *                                             menghapus baris bulan itu yang
  *                                             tidak ikut ditulis run ini
+ *   POST /meta-ads-insights/ingest/library -> (setelah sukses) ATLAS menyimpan
+ *                                             bulan itu ke perpustakaan Data &
+ *                                             file, supaya muncul di grid dan
+ *                                             di Report Generator
  * Kalau run mati di tengah, data lama bulan itu TIDAK tersentuh.
  *
  * Batas waktu: satu eksekusi Apps Script maksimal 6 menit, jadi akun
@@ -265,7 +269,20 @@ function runMetaAdsFetchItem_(item) {
     flush();
 
     atlasIngestPost_('/finish', { runId: runId, status: 'success', rowCount: total });
-    writeMetaAdsLog_(startedAt, 'OK', label + ': ' + total + ' baris');
+
+    // Langkah terpisah dari /finish: menyimpan bulan ini ke perpustakaan
+    // Data & file (file .xlsx yang dibaca Report Generator) butuh menulis
+    // ribuan baris ke Excel, dan tidak boleh membuat run yang datanya sudah
+    // aman tersimpan tampak gagal. Kegagalannya cuma dicatat; tombol
+    // "Simpan ke library" di ATLAS bisa mengulanginya kapan saja.
+    var libraryNote = '';
+    try {
+      var lib = atlasIngestPost_('/library', { runId: runId });
+      if (lib && lib.synced === false) libraryNote = ' | library dilewati: ' + lib.reason;
+    } catch (e) {
+      libraryNote = ' | library GAGAL: ' + e.message;
+    }
+    writeMetaAdsLog_(startedAt, 'OK', label + ': ' + total + ' baris' + libraryNote);
   } catch (e) {
     Logger.log('[%s] Gagal: %s', label, e.message);
     if (runId) {

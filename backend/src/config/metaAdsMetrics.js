@@ -146,9 +146,23 @@ export function requiredActionTypes(extraMetrics) {
   return [...new Set([...groups].flatMap((g) => ACTION_TYPES[g]))];
 }
 
+// Column headers used when the stored data is written back out as an Ads
+// Manager-style file (services/metaAdsLibraryExport.js). Same wording as a
+// real Ads Manager export so the Report Generator's header matching
+// (features/meta/metaReport.ts) treats the file like a manual upload; only
+// the two headers that differ from the catalog label are listed.
+const EXPORT_LABELS = {
+  amount_spent: 'Amount spent (IDR)',
+  purchase_value: 'Purchases conversion value',
+};
+
+export function exportColumns(extraMetrics) {
+  return selectedMetricKeys(extraMetrics).map((key) => ({ key, header: EXPORT_LABELS[key] ?? BY_KEY.get(key).label }));
+}
+
 // Typed columns for the additive core metrics; every other selected metric
 // goes into the `metrics` JSONB.
-const TYPED_KEYS = new Set(['objective', 'amount_spent', 'impressions', 'reach', 'link_clicks', 'purchases', 'purchase_value']);
+export const TYPED_KEYS = new Set(['objective', 'amount_spent', 'impressions', 'reach', 'link_clicks', 'purchases', 'purchase_value']);
 
 // One raw Marketing API row -> the row stored in meta_ads_insights_daily.
 // Returns null for a row that cannot be keyed (missing date/campaign).

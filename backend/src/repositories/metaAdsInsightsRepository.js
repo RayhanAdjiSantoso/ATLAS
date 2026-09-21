@@ -95,6 +95,19 @@ export async function deleteMonthRows({ brandId, accountType, startDate, endDate
   return rowCount;
 }
 
+// Every stored row of one month, oldest first — the source for the library file.
+export async function listRowsForMonth({ brandId, accountType, startDate, endDate }, db = pool) {
+  const { rows } = await db.query(
+    `SELECT entry_date::text AS entry_date, campaign_name, age, gender, objective,
+            amount_spent, impressions, reach, link_clicks, purchases, purchase_value, metrics
+     FROM meta_ads_insights_daily
+     WHERE brand_id = $1 AND account_type = $2 AND entry_date >= $3 AND entry_date <= $4
+     ORDER BY entry_date, campaign_name, age, gender`,
+    [brandId, accountType, startDate, endDate],
+  );
+  return rows;
+}
+
 // Per account type × month: what is actually stored.
 export async function summariseMonths(brandId, db = pool) {
   const { rows } = await db.query(

@@ -4,6 +4,8 @@ import { AppError } from '../utils/errors.js';
 import * as brandService from './brandService.js';
 import * as repo from '../repositories/metaAdsInsightsRepository.js';
 import { callAppsScript } from './metaAutomationService.js';
+import * as library from './brandLibraryService.js';
+import { buildInsightsWorkbook } from './metaAdsLibraryExport.js';
 import {
   metricCatalog, sanitizeExtraMetrics, requiredActionTypes, normalizeInsightRow,
 } from '../config/metaAdsMetrics.js';
@@ -110,11 +112,89 @@ export async function requestFetch({ brandId, accountType, month }) {
   );
 }
 
+// ---------------------------------------------------------------------
+// Pengaturan Brand › Data & file library
+//
+// A fetched month is also filed in the brand's file library (Meta Ads for
+// the MAIN account, CPAS for the CPAS account) as an Ads Manager-style
+// .xlsx, because that library is what the Data & file grid and the Report
+// Generator's "Pilih dari perpustakaan" read. The DB table stays the source
+// of truth; the file is regenerated from it and can be rebuilt any time.
+// ---------------------------------------------------------------------
+const LIBRARY_CHANNEL = { MAIN: 'meta', CPAS: 'cpas' };
+const AUTO_FILE_PREFIX = 'ATLAS-auto_';
+
+const autoFilename = (brandName, accountType, month) => {
+  const slug = String(brandName).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'brand';
+  return `${AUTO_FILE_PREFIX}${LIBRARY_CHANNEL[accountType]}_${slug}_${month}.xlsx`;
+};
+
+async function findSlotParts(brandId, accountType, month) {
+  const parts = await library.listSlotParts(brandId, 'meta', LIBRARY_CHANNEL[accountType], `${month}-01`);
+  return {
+    auto: parts.find((p) => p.original_filename.startsWith(AUTO_FILE_PREFIX)) ?? null,
+    manual: parts.filter((p) => !p.original_filename.startsWith(AUTO_FILE_PREFIX)),
+  };
+}
+
+// Files the month into the library. Never touches a file someone uploaded by
+// hand: those cover the same days, so adding ours next to it would count the
+// month twice, and replacing it would delete their upload.
+export async function syncLibraryFile({ brandId, accountType, month, userId }) {
+  const brand = await assertBrand(brandId);
+  assertAccountType(accountType);
+  const { startDate, endDate } = monthBounds(month);
+
+  const { auto, manual } = await findSlotParts(brandId, accountType, month);
+  if (manual.length) {
+    throw new AppError(
+      `Bulan ${month} sudah punya file manual di Data & file (${manual.map((p) => p.original_filename).join(', ')}). `
+      + 'Hapus file itu dulu jika ingin memakai data hasil tarikan otomatis.', 409,
+    );
+  }
+
+  const rows = await repo.listRowsForMonth({ brandId, accountType, startDate, endDate });
+  if (!rows.length) throw new AppError('Belum ada data tersimpan untuk bulan ini', 404);
+
+  const extraMetrics = await repo.getExtraMetrics(brandId, accountType);
+  const buffer = buildInsightsWorkbook({ month, rows, extraMetrics });
+  const coverage = library.summariseRange({ start: startDate, end: endDate }, month);
+
+  const file = await library.upsertLibraryFile({
+    brandId, platform: 'meta', channel: LIBRARY_CHANNEL[accountType],
+    periodMonth: coverage.periodMonth, periodStart: coverage.periodStart, periodEnd: coverage.periodEnd,
+    coveredDays: coverage.coveredDays, dayBitmap: coverage.dayBitmap, rowCount: rows.length,
+    periodSource: 'declared', partIndex: auto?.part_index ?? 1,
+    filename: autoFilename(brand.brand_name, accountType, month), buffer, userId,
+  });
+  return { fileId: file.id, filename: file.original_filename, rowCount: rows.length };
+}
+
+// Called by Apps Script after a finished run. A month that already has a
+// manual file is reported as a note, not an error: the run itself succeeded.
+export async function syncLibraryFromRun(runId) {
+  const run = await repo.getRun(runId);
+  if (!run) throw new AppError('runId tidak dikenal', 404);
+  if (run.status !== 'success') throw new AppError('Run ini belum selesai dengan sukses', 409);
+  try {
+    return { synced: true, ...(await syncLibraryFile({
+      brandId: run.brand_id, accountType: run.account_type, month: run.month.slice(0, 7), userId: null,
+    })) };
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 409) return { synced: false, reason: err.message };
+    throw err;
+  }
+}
+
 export async function deleteMonth({ brandId, accountType, month }) {
   await assertBrand(brandId);
   assertAccountType(accountType);
   const { startDate, endDate } = monthBounds(month);
   const deleted = await repo.deleteMonthRows({ brandId, accountType, startDate, endDate });
+  // The auto-filed copy goes with it, or the library would keep offering a
+  // month that no longer exists. A manual file is never removed here.
+  const { auto } = await findSlotParts(brandId, accountType, month);
+  if (auto) await library.deleteLibraryFile(brandId, auto.id);
   return { accountType, month, deleted };
 }
 
