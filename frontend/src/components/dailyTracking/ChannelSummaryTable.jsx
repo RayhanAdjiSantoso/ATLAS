@@ -1,9 +1,10 @@
+import SectionToggle from './SectionToggle.jsx';
 import { channelTotal, totalForKind, costPerRevenue, fmtRp, fmtNum, fmtPct } from '../../dailyTracking/lib/summary.js';
 
 // Visual pattern from Report Generator's Business Overview tab, simplified to
 // one column of totals for the selected month (no old/cur period compare) —
 // a plain local <table>, not the scoped TS KpiTable component.
-export default function ChannelSummaryTable({ grid, channels }) {
+export default function ChannelSummaryTable({ kind, grid, channels, open = true, onToggle }) {
   const salesChannels = channels.sales || [];
   const spendChannels = channels.spend || [];
 
@@ -14,7 +15,14 @@ export default function ChannelSummaryTable({ grid, channels }) {
 
   return (
     <div className="dt-summary-wrap">
-      <h3 className="dt-summary-title">Ringkasan per Channel</h3>
+      <SectionToggle
+        as="h3" title="Ringkasan per Channel" bodyId={`dt-body-summary-${kind}`}
+        open={open} onToggle={onToggle}
+      />
+      {open && <div id={`dt-body-summary-${kind}`} className="dt-summary-body">
+
+      {kind === 'sales' && <>
+      <h4 className="dt-summary-subtitle">Revenue Channel</h4>
       <div className="dt-table-wrap">
         <table className="dt-table dt-summary-table">
           <thead>
@@ -23,26 +31,15 @@ export default function ChannelSummaryTable({ grid, channels }) {
               <th>Revenue</th>
               <th>Transaksi</th>
               <th>Qty Terjual</th>
-              <th>Ad Spend</th>
             </tr>
           </thead>
           <tbody>
             {salesChannels.map((c) => (
-              <tr key={`sales-${c.key}`}>
+              <tr key={c.key}>
                 <td>{c.label}</td>
                 <td>{fmtRp(channelTotal(grid, 'sales', c.key, 'revenue'))}</td>
                 <td>{fmtNum(channelTotal(grid, 'sales', c.key, 'transaksi'))}</td>
                 <td>{fmtNum(channelTotal(grid, 'sales', c.key, 'qtySold'))}</td>
-                <td>—</td>
-              </tr>
-            ))}
-            {spendChannels.map((c) => (
-              <tr key={`spend-${c.key}`}>
-                <td>{c.label}</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-                <td>{fmtRp(channelTotal(grid, 'spend', c.key, 'amount'))}</td>
               </tr>
             ))}
             <tr className="dt-summary-total-row">
@@ -50,15 +47,43 @@ export default function ChannelSummaryTable({ grid, channels }) {
               <td>{fmtRp(totalRevenue)}</td>
               <td>{fmtNum(totalTransaksi)}</td>
               <td>{fmtNum(totalQty)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      </>}
+
+      {kind === 'spend' && <>
+      <h4 className="dt-summary-subtitle">Ads Channel</h4>
+      <div className="dt-table-wrap">
+        <table className="dt-table dt-summary-table">
+          <thead>
+            <tr>
+              <th>Channel</th>
+              <th>Ad Spend</th>
+            </tr>
+          </thead>
+          <tbody>
+            {spendChannels.map((c) => (
+              <tr key={c.key}>
+                <td>{c.label}</td>
+                <td>{fmtRp(channelTotal(grid, 'spend', c.key, 'amount'))}</td>
+              </tr>
+            ))}
+            <tr className="dt-summary-total-row">
+              <td>Total</td>
               <td>{fmtRp(totalSpend)}</td>
             </tr>
             <tr className="dt-summary-calc-row">
-              <td colSpan={4}>Cost per Revenue</td>
+              <td>Cost per Revenue</td>
               <td>{fmtPct(costPerRevenue(grid, channels))}</td>
             </tr>
           </tbody>
         </table>
       </div>
+      </>}
+      </div>}
     </div>
   );
 }

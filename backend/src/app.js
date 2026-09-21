@@ -12,6 +12,8 @@ import reportGeneratorRoutes from './routes/reportGeneratorRoutes.js';
 import internalDashboardRoutes from './routes/internalDashboardRoutes.js';
 import controlCenterRoutes from './routes/controlCenterRoutes.js';
 import dailyTrackingRoutes from './routes/dailyTrackingRoutes.js';
+import metaAdsInsightsRoutes from './routes/metaAdsInsightsRoutes.js';
+import metaAdsInsightsIngestRoutes from './routes/metaAdsInsightsIngestRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,6 +25,8 @@ const app = express();
 app.set('query parser', 'extended');
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
+// Before the global parser on purpose: it needs a bigger body limit (see the router).
+app.use('/api/meta-ads-insights/ingest', metaAdsInsightsIngestRoutes);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -39,6 +43,7 @@ app.use('/api/report-generator', reportGeneratorRoutes);
 app.use('/api/internal-dashboard', internalDashboardRoutes);
 app.use('/api/control-center', controlCenterRoutes);
 app.use('/api/daily-tracking', dailyTrackingRoutes);
+app.use('/api/meta-ads-insights', metaAdsInsightsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

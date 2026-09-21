@@ -1,0 +1,48 @@
+/* Meta Ads auto-fetch panel (Pengaturan Brand › Data & file › Meta Ads).
+   Uses the app-wide tokens from index.css so it follows the rest of the page. */
+.maf { margin-top: 1.25rem; padding: 1.1rem 1.25rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); display: flex; flex-direction: column; gap: 1rem; }
+.maf .dt-btn-sm { padding: .4rem .8rem; font-size: .8rem; }
+.maf-head { display: flex; gap: .8rem; align-items: flex-start; }
+.maf-head-icon { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--primary-light); color: var(--primary); }
+.maf-head h3 { font-size: .95rem; font-weight: 700; margin: 0 0 .15rem; }
+.maf-head p { font-size: .8rem; color: var(--text-muted); margin: 0; }
+
+.maf-types { display: flex; gap: .4rem; border-bottom: 1px solid var(--border); }
+.maf-type { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0; padding: .45rem .9rem; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-muted); font-weight: 600; font-size: .85rem; cursor: pointer; }
+.maf-type small { font-size: .68rem; font-weight: 500; color: var(--text-placeholder); }
+.maf-type small.is-on { color: var(--success); }
+.maf-type.is-active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.maf-empty { display: flex; gap: .55rem; align-items: flex-start; padding: .7rem .85rem; border-radius: 10px; background: var(--warning-bg); color: var(--warning); font-size: .8rem; }
+.maf-empty svg { flex: none; margin-top: .15rem; }
+.maf-empty a { color: inherit; text-decoration: underline; }
+
+.maf-block h4 { font-size: .78rem; font-weight: 700; color: var(--text); margin: 0 0 .5rem; }
+.maf-block .maf-sub { margin-top: 1rem; }
+.maf-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.maf-chip { padding: .2rem .55rem; border-radius: 999px; font-size: .72rem; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted); }
+.maf-hint { font-size: .72rem; color: var(--text-muted); margin: .45rem 0 0; }
+.maf-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .35rem .9rem; }
+.maf-option { display: flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--text); cursor: pointer; }
+.maf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .7rem; }
+.maf-actions .maf-hint { margin: 0; }
+.maf-loading { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; }
+
+.maf-table-wrap { overflow-x: auto; }
+.maf-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.maf-table th { text-align: left; font-weight: 700; color: var(--text); padding: .35rem .6rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.maf-table td { padding: .4rem .6rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+
+.maf-runs { list-style: none; display: flex; flex-direction: column; gap: .4rem; font-size: .78rem; }
+.maf-runs li { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .7rem; }
+.maf-run-meta { color: var(--text-muted); font-size: .72rem; }
+.maf-badge { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .5rem; border-radius: 999px; font-size: .7rem; font-weight: 700; }
+.maf-badge.is-running { background: var(--info-bg); color: var(--primary); }
+.maf-badge.is-success { background: var(--success-bg); color: var(--success); }
+.maf-badge.is-failed { background: var(--danger-bg); color: #991b1b; }
+
+.maf-spin { animation: maf-spin .9s linear infinite; }
+@keyframes maf-spin { to { transform: rotate(360deg); } }
+
+.maf-month { width: 220px; }
+.maf-row-actions { display: flex; gap: .25rem; justify-content: flex-end; }

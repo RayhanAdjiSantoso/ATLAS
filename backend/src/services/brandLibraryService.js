@@ -1,4 +1,7 @@
 import * as XLSX from 'xlsx';
+// xlsx is CommonJS: under Node ESM the namespace import above exposes read/
+// utils but NOT SSF — that only exists on the default export.
+import XLSXDefault from 'xlsx';
 import pool from '../config/db.js';
 
 // Pengaturan Brand's data layer: the brand's narrative profile, and the
@@ -354,7 +357,7 @@ function cellToIso(value) {
     return iso(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate());
   }
   if (typeof value === 'number' && value >= SERIAL_MIN && value <= SERIAL_MAX) {
-    const parsed = XLSX.SSF.parse_date_code(value);
+    const parsed = XLSXDefault.SSF.parse_date_code(value);
     return parsed ? iso(parsed.y, parsed.m, parsed.d) : null;
   }
   if (typeof value !== 'string') return null;

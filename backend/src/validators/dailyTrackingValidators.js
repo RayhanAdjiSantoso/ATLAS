@@ -23,6 +23,7 @@ export const upsertEntriesBodyValidation = [
   body('entryDate').matches(DATE_RE).withMessage('entryDate harus format YYYY-MM-DD'),
   body('sales').optional().isArray().withMessage('sales harus array'),
   body('sales.*.channelKey').if(body('sales').exists()).isString().notEmpty(),
+  body('sales.*.notes').optional({ nullable: true }).isString().isLength({ max: 500 }).withMessage('notes maksimal 500 karakter'),
   body('spend').optional().isArray().withMessage('spend harus array'),
   body('spend.*.channelKey').if(body('spend').exists()).isString().notEmpty(),
 ];
@@ -31,9 +32,26 @@ export const importFileBodyValidation = [
   body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
 ];
 
+// Exactly one source: a Daily Tracking tab config (trackingConfigId) or a
+// Brand & Langganan-only account (accountClient + accountType) — see
+// dailyTrackingService.runMetaSyncNow. accountType is required alongside
+// accountClient: the same brand can have both a MAIN and a CPAS account, so
+// the name alone doesn't uniquely identify one (see the long note on
+// findAccount_ in apps-script/DailyTrackingBoostPost.gs).
 export const metaSyncBodyValidation = [
   body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
-  body('trackingConfigId').notEmpty().withMessage('trackingConfigId wajib disertakan'),
+  body().custom((b) => {
+    if (!b.trackingConfigId && !b.accountClient) {
+      throw new Error('trackingConfigId atau accountClient wajib disertakan');
+    }
+    if (b.trackingConfigId && b.accountClient) {
+      throw new Error('Isi trackingConfigId ATAU accountClient, jangan keduanya');
+    }
+    if (b.accountClient && !b.accountType) {
+      throw new Error('accountType wajib disertakan bersama accountClient');
+    }
+    return true;
+  }),
 ];
 
 export const ingestBodyValidation = [

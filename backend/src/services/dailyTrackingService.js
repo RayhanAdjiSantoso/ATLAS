@@ -106,6 +106,7 @@ export async function getMonthEntries(brandId, month) {
       revenue: r.revenue == null ? null : Number(r.revenue),
       qtySold: r.qty_sold,
       transaksi: r.transaksi,
+      notes: r.notes,
     };
   }
 
@@ -123,11 +124,50 @@ export async function getMonthEntries(brandId, month) {
 }
 
 // ---------------------------------------------------------------------
+// Delete a whole month — for a bad import (e.g. wrong dates in the source
+// spreadsheet). Removes every sales + spend row of the brand in that month
+// and leaves an audit row per table. Custom channels are kept: they are
+// brand config, not month data.
+// ---------------------------------------------------------------------
+export async function deleteMonthEntries({ brandId, month, userId }) {
+  await assertBrand(brandId);
+  const days = daysInMonth(month);
+  const startDate = days[0];
+  const endDate = days[days.length - 1];
+
+  return inTransaction(async (db) => {
+    const salesDeleted = await repo.deleteSalesForMonth(brandId, startDate, endDate, db);
+    const spendDeleted = await repo.deleteSpendForMonth(brandId, startDate, endDate, db);
+
+    const note = `Hapus data bulan ${month}`;
+    if (salesDeleted) {
+      await repo.logIngestion({
+        brandId, targetTable: 'daily_channel_sales', entryDate: startDate,
+        source: 'manual', rowCount: salesDeleted, status: 'success', note, performedBy: userId,
+      }, db);
+    }
+    if (spendDeleted) {
+      await repo.logIngestion({
+        brandId, targetTable: 'daily_channel_spend', entryDate: startDate,
+        source: 'manual', rowCount: spendDeleted, status: 'success', note, performedBy: userId,
+      }, db);
+    }
+    return { month, deleted: { sales: salesDeleted, spend: spendDeleted } };
+  });
+}
+
+// ---------------------------------------------------------------------
 // Manual entry — always sets source='manual', locked_manual=TRUE on any
 // spend row it touches (decision: a human edit permanently overrides
 // whatever the Meta sync last wrote for that cell).
 // ---------------------------------------------------------------------
-const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
+// A lone "-" (mid-typing a negative retur value in the sales table) is not a
+// number yet — treat it as empty rather than handing NaN to Postgres.
+const num = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 export async function upsertEntries({ brandId, entryDate, sales, spend, userId }) {
   await assertBrand(brandId);
@@ -143,6 +183,7 @@ export async function upsertEntries({ brandId, entryDate, sales, spend, userId }
       await repo.upsertSalesEntry({
         brandId, entryDate, channelKey: s.channelKey,
         revenue: num(s.revenue), qtySold: num(s.qtySold), transaksi: num(s.transaksi),
+        notes: s.notes === undefined ? undefined : (String(s.notes ?? '').trim() || null),
         userId,
       }, db);
       salesCount += 1;
@@ -201,14 +242,64 @@ async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
   });
 }
 
-// Manual "Sync Meta Sekarang" — reuses the existing trackingPreview Apps
-// Script action, which already computes {boostSpend, nonBoostSpend} for H-1
-// without writing anywhere (dry-run branch of processTrackingConfig_).
-export async function runMetaSyncNow({ brandId, trackingConfigId, userId }) {
+// Manual "Sync Meta Sekarang" — reuses an existing Apps Script dry-run
+// action, which already computes {boostSpend, nonBoostSpend[, cpasSpend]}
+// for H-1 without writing anywhere. Two sources, mutually exclusive:
+// - trackingConfigId: a config from the Daily Tracking tab (writes to a
+//   Google Sheet too, on the scheduled/real run) — action `trackingPreview`.
+// - accountClient: a brand registered ONLY in Brand & Langganan (no Sheet
+//   at all, see BrandsSection's "Kata Kunci Boost Post") — action
+//   `accountTrackingPreview`. Both return the same {date, boostSpend,
+//   nonBoostSpend, cpasSpend} shape, so the rest of this function doesn't
+//   need to know which source it came from.
+export async function runMetaSyncNow({ brandId, trackingConfigId, accountClient, accountType, userId }) {
   await assertBrand(brandId);
-  const preview = await callAppsScript('trackingPreview', { id: trackingConfigId });
+
+  // Vercel's function limit is 60s (vercel.json) and a slow Meta pull can eat
+  // most of it, so every Apps Script call below shares ONE deadline just
+  // under that -- a slow run then fails with a readable message instead of
+  // an opaque platform 504.
+  const deadline = Date.now() + 52000;
+
+  // The preview is read-only (a dry run in Apps Script), so it is safe to
+  // fetch BEFORE the brand cross-check; nothing is written until both have
+  // passed.
+  const preview = trackingConfigId
+    ? await callAppsScript('trackingPreview', { id: trackingConfigId }, { deadline })
+    // type is required whenever the same brand has both a MAIN and a CPAS
+    // account — accountClient alone is ambiguous (see the long note on
+    // findAccount_ in apps-script/DailyTrackingBoostPost.gs).
+    : await callAppsScript('accountTrackingPreview', { client: accountClient, type: accountType }, { deadline });
   if (!preview || preview.date == null) {
     throw new AppError('Apps Script tidak mengembalikan data tracking yang valid', 502);
+  }
+
+  // Cross-check the source's OWN atlasBrandId against the brandId the caller
+  // sent, so a caller mistake (wrong brandId for this config/account) can't
+  // write one brand's Meta spend into another brand's Daily Tracking data
+  // with no error at all. MetaSyncButton only ever offers sources already
+  // linked to the open brand, so this never trips in normal use.
+  // Current Apps Script echoes atlasBrandId in the preview, which costs no
+  // extra round trip; an older deployment doesn't, so fall back to listing
+  // configs/accounts (an extra ~5s Apps Script call) rather than skipping
+  // the check.
+  let sourceBrandId = preview.atlasBrandId;
+  if (sourceBrandId == null) {
+    if (trackingConfigId) {
+      const configs = await callAppsScript('trackingList', undefined, { deadline });
+      sourceBrandId = (configs || []).find((c) => c.id === trackingConfigId)?.atlasBrandId;
+    } else {
+      const accounts = await callAppsScript('brandList', undefined, { deadline });
+      sourceBrandId = (accounts || []).find((a) => a.client === accountClient && (a.type || 'MAIN') === (accountType || 'MAIN'))?.atlasBrandId;
+    }
+  }
+  if (Number(sourceBrandId) !== Number(brandId)) {
+    throw new AppError(
+      trackingConfigId
+        ? 'Config ini tertaut ke brand ATLAS yang berbeda dari brand yang sedang dibuka'
+        : 'Akun ini tertaut ke brand ATLAS yang berbeda dari brand yang sedang dibuka',
+      403,
+    );
   }
 
   const entryDate = preview.date;
@@ -262,7 +353,7 @@ export async function importFromFile({ brandId, buffer, filename, userId }) {
     for (const r of parsed.salesRows) {
       await repo.upsertSalesEntry({
         brandId, entryDate: r.entryDate, channelKey: r.channelKey,
-        revenue: r.revenue, qtySold: r.qtySold, transaksi: r.transaksi, userId,
+        revenue: r.revenue, qtySold: r.qtySold, transaksi: r.transaksi, notes: r.notes, userId,
       }, db);
     }
     for (const r of parsed.spendRows) {

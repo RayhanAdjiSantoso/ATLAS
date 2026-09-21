@@ -12,6 +12,7 @@ import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import DatePicker from '../components/dashboard/DatePicker.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
+import MetaAdsAutoFetchPanel from '../components/brandSettings/MetaAdsAutoFetchPanel.jsx';
 import {
   MOM_TYPES, MOM_TYPE_LABELS, dateLabel, emptyMinute, longDateLabel, parseISO, recapPreview, taskGroups, taskStats,
 } from '../components/mom/momModel.js';
@@ -1049,7 +1050,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
   );
 }
 
-function DataView({ brand, files, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, busyKey, marketId, setMarketId }) {
+function DataView({ brand, files, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
   const platform = PLATFORMS.find((p) => p.id === marketId) ?? PLATFORMS[0];
   const focusMonth = focus ? months.find((m) => m.key === focus) : null;
 
@@ -1158,6 +1159,8 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
             onPick={onPick} onDelete={onDelete} onReimport={onReimport} busyKey={busyKey} focusMonth={focusMonth}
           />
         </AnimatePresence>
+
+        {platform.id === 'meta' && <MetaAdsAutoFetchPanel brand={brand} onLibraryChanged={onLibraryChanged} />}
       </div>
     </>
   );
@@ -1215,6 +1218,15 @@ export default function BrandSettingsPage() {
       })
       .catch(() => alive && setError('Gagal memuat daftar brand.'));
     return () => { alive = false; };
+  }, []);
+
+  // Just the file list, without loadBrand's full-page loading state — used
+  // when a file appears outside the upload flow (Meta Ads auto-fetch).
+  const refreshFiles = useCallback(async (brandId) => {
+    try {
+      const res = await api.get(`/brands/${brandId}/library`);
+      setFiles(res.data.files ?? []);
+    } catch { /* the grid keeps its last known state */ }
   }, []);
 
   const loadBrand = useCallback(async (brandId) => {
@@ -1639,6 +1651,7 @@ export default function BrandSettingsPage() {
               windowStart={windowStart} setWindowStart={(next) => { setWindowStart(next); setFocus(null); }}
               focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
               onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}
+              onLibraryChanged={() => brand && refreshFiles(brand.brand_id)}
               marketId={marketId} setMarketId={setMarketId}
             />
           </ViewShell>

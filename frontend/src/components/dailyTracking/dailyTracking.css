@@ -9,10 +9,21 @@
   gap: 1.25rem;
 }
 
-/* ── Sticky head: brand/month bar + KPI strip stick together as one unit.
-   .main-content only sets overflow-x, which per the CSS overflow spec makes
-   overflow-y compute to auto too — the same scrolling ancestor Dashboard's
-   own sticky .con-bar relies on. */
+/* ── Sticky head: brand/month bar + KPI strip + section nav stick together
+   as one unit. `.main-content{overflow-x:auto}` makes overflow-y compute to
+   `auto` too (CSS overflow spec), turning .main-content into a scroll
+   container — but it never actually overflows (it grows to fit content
+   instead), so it never scrolls, which neutralizes `position:sticky` on any
+   child instead of pinning it. Report Generator hit this exact issue
+   (see atlas-fit.css) and fixed it by knocking .main-content back out of
+   scroll-container-hood for its own page; same fix here so this sticky
+   head is pinned relative to the real (document-level) scroll. */
+.main-content:has(> .dt-page) {
+  overflow-x: clip;
+  overflow-y: visible;
+  min-width: 0;
+}
+
 .dt-sticky-head {
   position: sticky;
   top: 0;
@@ -27,6 +38,29 @@
   padding-right: 2rem;
   padding-top: 0.25rem;
 }
+
+/* ── Page-level tabs (Revenue Data / Spending Data) — live inside the
+   sticky head so switching stays reachable while scrolling. ─────── */
+.dt-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.dt-tab {
+  margin-bottom: -1px;
+  padding: 0.55rem 1.1rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dt-tab:hover { color: var(--primary); }
+.dt-tab.is-active { color: var(--primary); border-bottom-color: var(--primary); }
+.dt-panel { display: flex; flex-direction: column; gap: 1rem; }
 
 /* ── Client bar ─────────────────────────────────────────────────── */
 .dt-bar {
@@ -97,7 +131,8 @@
    one month, not six unrelated facts. ─────────────────────────────── */
 .dt-kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* First card (Total Revenue) gets extra room: it shows the exact figure. */
+  grid-template-columns: minmax(0, 1.7fr) repeat(5, minmax(0, 1fr));
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -129,6 +164,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.dt-kpi-val--full { font-size: clamp(0.8rem, 1.2vw, 1.05rem); }
 .dt-skel {
   display: inline-block;
   width: 60%;
@@ -151,6 +187,8 @@
 }
 
 /* ── File import ────────────────────────────────────────────────── */
+.dt-toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.6rem; }
+.dt-toolbar > .dt-import { display: contents; }
 .dt-import { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
 .dt-import-alert {
   display: flex;
@@ -184,6 +222,22 @@
   gap: 0.6rem;
   margin-bottom: 0.7rem;
 }
+.dt-section-toggle-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text); }
+.dt-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.3rem 0.1rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.dt-section-toggle:hover { color: var(--primary); }
+.dt-section-chevron { transition: transform 0.15s ease; }
+.dt-section-chevron.is-collapsed { transform: rotate(-90deg); }
+.dt-summary-body { display: flex; flex-direction: column; gap: 0.6rem; }
 .dt-section-head h2 { font-size: 1rem; font-weight: 700; color: var(--text); margin: 0; }
 
 /* ── Channel tabs — adapted from reportGenerator's SlotSourceTabs pattern:
@@ -217,40 +271,58 @@
 }
 
 /* ── Day-by-day entry table ─────────────────────────────────────── */
-.dt-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.dt-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
+/* Spreadsheet look: full gridlines, centred cells, cell-style inputs. */
 .dt-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .dt-table thead th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--bg-elevated, #f8fafc);
-  border-bottom: 1px solid var(--border);
-  padding: 0.55rem 0.7rem;
-  text-align: left;
-  font-size: 0.68rem;
+  background: #fff;
+  border-right: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  padding: 0.65rem 0.7rem;
+  text-align: center;
+  font-size: 0.85rem;
   font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-placeholder, var(--text-muted));
+  color: var(--text);
   white-space: nowrap;
 }
-.dt-table tbody tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
-.dt-table td { padding: 0.35rem 0.7rem; vertical-align: middle; }
-.dt-table-date { white-space: nowrap; color: var(--text-muted); font-weight: 600; }
-.dt-table input[type='number'] {
+.dt-table td {
+  padding: 0;
+  height: 2rem;
+  vertical-align: middle;
+  text-align: center;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.dt-table tbody tr:last-child td { border-bottom: 0; }
+.dt-table th:last-child, .dt-table td:last-child { border-right: 0; }
+.dt-table-no { width: 56px; }
+.dt-table-date { white-space: nowrap; padding: 0 0.7rem; }
+.dt-table input {
+  display: block;
   width: 100%;
   min-width: 90px;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  height: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   font: inherit;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
-.dt-table input[type='number']:hover { border-color: var(--border); background: #fff; }
-.dt-table input[type='number']:focus { border-color: var(--primary); background: #fff; outline: none; }
-.dt-table-spend-cell { display: flex; align-items: center; gap: 0.5rem; }
-.dt-table-status-col { width: 90px; white-space: nowrap; }
+.dt-table input::-webkit-outer-spin-button,
+.dt-table input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.dt-table input:hover { background: rgba(0, 0, 0, 0.03); }
+.dt-table input:focus { background: #fff; outline: 2px solid var(--primary); outline-offset: -2px; }
+.dt-table .dt-notes-input { min-width: 160px; text-align: left; }
+.dt-table-spend-cell { position: relative; }
+.dt-table-spend-cell .dt-badge { position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); }
+.dt-table-status-col { width: 90px; white-space: nowrap; padding: 0 0.5rem; }
 .dt-save-status { font-size: 0.68rem; color: var(--text-placeholder); }
 .dt-save-status.is-saved { color: var(--success); }
 .dt-save-status.is-error { color: var(--danger); }
@@ -279,6 +351,7 @@
 .dt-meta-sync .dt-btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
 .dt-meta-sync-error { color: var(--danger); font-size: 0.75rem; }
 .dt-meta-sync-result { color: var(--text-muted); font-size: 0.75rem; }
+.dt-meta-sync-loading { display: inline-flex; align-items: center; gap: 0.4rem; }
 .dt-spin { animation: dt-spin 0.9s linear infinite; }
 @keyframes dt-spin { to { transform: rotate(360deg); } }
 
@@ -286,8 +359,10 @@
    pattern, simplified to one column of totals. ───────────────────── */
 .dt-summary-wrap { display: flex; flex-direction: column; gap: 0.6rem; }
 .dt-summary-title { font-size: 1rem; font-weight: 700; color: var(--text); margin: 0; }
-.dt-summary-table th, .dt-summary-table td { text-align: left; }
-.dt-summary-table th:not(:first-child), .dt-summary-table td:not(:first-child) { text-align: right; }
+.dt-summary-subtitle { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin: 0.4rem 0 0; }
+.dt-summary-table th { text-align: center; }
+.dt-summary-table td { height: auto; padding: 0.45rem 0.7rem; text-align: left; }
+.dt-summary-table td:not(:first-child) { text-align: right; }
 .dt-summary-total-row td { font-weight: 800; border-top: 2px solid var(--border); }
 .dt-summary-calc-row td { font-weight: 700; color: var(--primary); }
 
@@ -317,6 +392,9 @@
   margin-bottom: 0.8rem;
 }
 .dt-modal-head h3 { font-size: 1rem; font-weight: 700; margin: 0; }
+.dt-confirm-text { font-size: 0.9rem; line-height: 1.5; color: var(--text); margin: 0 0 0.8rem; }
+.dt-btn-danger-outline { color: var(--danger); border-color: var(--danger); }
+.dt-btn-danger-outline:hover { background: var(--danger-bg); }
 .dt-modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
 
 @media (max-width: 600px) {

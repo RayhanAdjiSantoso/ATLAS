@@ -47,7 +47,7 @@ export async function upsertCustomChannelIfMissing(v, db = pool) {
 // ---------------------------------------------------------------------
 export async function listSalesForMonth(brandId, startDate, endDate, db = pool) {
   const { rows } = await db.query(
-    `SELECT entry_date::text AS entry_date, channel_key, revenue, qty_sold, transaksi
+    `SELECT entry_date::text AS entry_date, channel_key, revenue, qty_sold, transaksi, notes
      FROM daily_channel_sales
      WHERE brand_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
     [brandId, startDate, endDate],
@@ -58,17 +58,31 @@ export async function listSalesForMonth(brandId, startDate, endDate, db = pool) 
 export async function upsertSalesEntry(v, db = pool) {
   const { rows } = await db.query(
     `INSERT INTO daily_channel_sales
-       (brand_id, entry_date, channel_key, revenue, qty_sold, transaksi, created_by, updated_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+       (brand_id, entry_date, channel_key, revenue, qty_sold, transaksi, notes, created_by, updated_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $8, $7, $7)
      ON CONFLICT (brand_id, entry_date, channel_key) DO UPDATE SET
        revenue    = EXCLUDED.revenue,
        qty_sold   = EXCLUDED.qty_sold,
        transaksi  = EXCLUDED.transaksi,
+       -- notes === undefined means "this caller doesn't manage notes" (a save
+       -- from a channel tab without a Notes column) — keep whatever is stored.
+       notes      = CASE WHEN $9::boolean THEN EXCLUDED.notes ELSE daily_channel_sales.notes END,
        updated_by = EXCLUDED.updated_by
      RETURNING daily_channel_sale_id AS id, (xmax::text = '0') AS was_insert`,
-    [v.brandId, v.entryDate, v.channelKey, v.revenue, v.qtySold, v.transaksi, v.userId],
+    [v.brandId, v.entryDate, v.channelKey, v.revenue, v.qtySold, v.transaksi, v.userId,
+      v.notes === undefined ? null : v.notes, v.notes !== undefined],
   );
   return rows[0];
+}
+
+// Wipes one brand's whole month. Returns the number of rows deleted.
+export async function deleteSalesForMonth(brandId, startDate, endDate, db = pool) {
+  const { rowCount } = await db.query(
+    `DELETE FROM daily_channel_sales
+     WHERE brand_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
+    [brandId, startDate, endDate],
+  );
+  return rowCount;
 }
 
 // ---------------------------------------------------------------------
@@ -83,6 +97,15 @@ export async function listSpendForMonth(brandId, startDate, endDate, db = pool) 
     [brandId, startDate, endDate],
   );
   return rows;
+}
+
+export async function deleteSpendForMonth(brandId, startDate, endDate, db = pool) {
+  const { rowCount } = await db.query(
+    `DELETE FROM daily_channel_spend
+     WHERE brand_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
+    [brandId, startDate, endDate],
+  );
+  return rowCount;
 }
 
 // A human save. Always wins: source='manual', locked_manual=TRUE, regardless

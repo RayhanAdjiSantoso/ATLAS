@@ -4,14 +4,17 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
 import DailyTrackingClientBar from '../components/dailyTracking/DailyTrackingClientBar.jsx';
 import DailyKpiStrip from '../components/dailyTracking/DailyKpiStrip.jsx';
+import SectionTabs from '../components/dailyTracking/SectionTabs.jsx';
+import SectionToggle from '../components/dailyTracking/SectionToggle.jsx';
 import ChannelTabs from '../components/dailyTracking/ChannelTabs.jsx';
 import DailyEntryTable from '../components/dailyTracking/DailyEntryTable.jsx';
 import ChannelSummaryTable from '../components/dailyTracking/ChannelSummaryTable.jsx';
 import AddCustomChannelModal from '../components/dailyTracking/AddCustomChannelModal.jsx';
 import MetaSyncButton from '../components/dailyTracking/MetaSyncButton.jsx';
 import ImportFileButton from '../components/dailyTracking/ImportFileButton.jsx';
+import DeleteMonthButton from '../components/dailyTracking/DeleteMonthButton.jsx';
 import useAutoSave from '../dailyTracking/lib/useAutoSave.js';
-import { FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS } from '../dailyTracking/lib/constants.js';
+import { FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS, NOTES_SALES_CHANNEL_KEYS } from '../dailyTracking/lib/constants.js';
 import '../components/dailyTracking/dailyTracking.css';
 
 function currentMonth() {
@@ -22,6 +25,12 @@ function currentMonth() {
 export default function DailyTrackingPage() {
   const { allowedBrandId, isAdmin } = useAuth();
   const locked = !!allowedBrandId;
+
+  // Expand/collapse per section; remembered for the browser tab.
+  const [collapsed, setCollapsed] = useSessionState('daily-tracking:collapsed', {});
+  const isOpen = (id) => !collapsed[id];
+  const toggleSection = (id) => setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+  const [activeTab, setActiveTab] = useSessionState('daily-tracking:tab', 'sales');
 
   const [brands, setBrands] = useState([]);
   const [brandId, setBrandId] = useSessionState('daily-tracking:client', null);
@@ -87,7 +96,12 @@ export default function DailyTrackingPage() {
       if (kind === 'sales') {
         schedule(saveKey, {
           brandId, entryDate: date,
-          sales: [{ channelKey, revenue: row.revenue, transaksi: row.transaksi, qtySold: row.qtySold }],
+          sales: [{
+            channelKey, revenue: row.revenue, transaksi: row.transaksi, qtySold: row.qtySold,
+            // Only channels that show a Notes cell send it, so saving any other
+            // channel never touches stored notes.
+            ...(NOTES_SALES_CHANNEL_KEYS.includes(channelKey) ? { notes: row.notes ?? null } : {}),
+          }],
         });
       } else {
         schedule(saveKey, {
@@ -129,53 +143,84 @@ export default function DailyTrackingPage() {
           month={month} onMonthChange={setMonth}
         />
         <DailyKpiStrip grid={grid} channels={channels} loading={loading} />
+        <SectionTabs active={activeTab} onChange={setActiveTab} />
       </div>
 
       {loadError && <div className="alert alert-error">{loadError}</div>}
 
-      <ImportFileButton
-        brandId={brandId}
-        onImported={() => { loadChannels(); loadEntries(); }}
-      />
+      <div className="dt-toolbar">
+        <ImportFileButton
+          brandId={brandId}
+          onImported={() => { loadChannels(); loadEntries(); }}
+        />
+        <DeleteMonthButton
+          brandId={brandId}
+          brandName={brands.find((b) => b.brand_id === brandId)?.brand_name ?? 'klien ini'}
+          month={month}
+          onDeleted={loadEntries}
+        />
+      </div>
 
-      <section className="dt-section">
-        <div className="dt-section-head">
-          <h2>Revenue Data</h2>
+      {activeTab === 'sales' ? (
+        <div role="tabpanel" id="dt-panel-sales" aria-labelledby="dt-tab-sales" className="dt-panel">
+          <ChannelSummaryTable
+            kind="sales" grid={grid} channels={channels}
+            open={isOpen('summary-sales')} onToggle={() => toggleSection('summary-sales')}
+          />
+          <section className="dt-section">
+            <div className="dt-section-head">
+              <SectionToggle
+                title="Revenue Data" bodyId="dt-body-revenue"
+                open={isOpen('revenue')} onToggle={() => toggleSection('revenue')}
+              />
+            </div>
+            {isOpen('revenue') && <div id="dt-body-revenue">
+              <ChannelTabs
+                channels={channels.sales}
+                activeKey={activeSalesTab}
+                onSelect={setActiveSalesTab}
+                onAddChannel={() => setModalKind('sales')}
+              />
+              <DailyEntryTable
+                kind="sales" channelKey={activeSalesTab} days={grid.days}
+                data={grid.sales[activeSalesTab]}
+                onCellChange={(date, field, value) => onCellChange('sales', activeSalesTab, date, field, value)}
+                saveStatus={saveStatus}
+              />
+            </div>}
+          </section>
         </div>
-        <ChannelTabs
-          channels={channels.sales}
-          activeKey={activeSalesTab}
-          onSelect={setActiveSalesTab}
-          onAddChannel={() => setModalKind('sales')}
-        />
-        <DailyEntryTable
-          kind="sales" channelKey={activeSalesTab} days={grid.days}
-          data={grid.sales[activeSalesTab]}
-          onCellChange={(date, field, value) => onCellChange('sales', activeSalesTab, date, field, value)}
-          saveStatus={saveStatus}
-        />
-      </section>
-
-      <section className="dt-section">
-        <div className="dt-section-head">
-          <h2>Spending Data</h2>
-          {isAdmin && <MetaSyncButton brandId={brandId} onSynced={loadEntries} />}
+      ) : (
+        <div role="tabpanel" id="dt-panel-spend" aria-labelledby="dt-tab-spend" className="dt-panel">
+          <ChannelSummaryTable
+            kind="spend" grid={grid} channels={channels}
+            open={isOpen('summary-spend')} onToggle={() => toggleSection('summary-spend')}
+          />
+          <section className="dt-section">
+            <div className="dt-section-head">
+              <SectionToggle
+                title="Spending Data" bodyId="dt-body-spending"
+                open={isOpen('spending')} onToggle={() => toggleSection('spending')}
+              />
+              {isAdmin && isOpen('spending') && <MetaSyncButton brandId={brandId} onSynced={loadEntries} />}
+            </div>
+            {isOpen('spending') && <div id="dt-body-spending">
+              <ChannelTabs
+                channels={channels.spend}
+                activeKey={activeSpendTab}
+                onSelect={setActiveSpendTab}
+                onAddChannel={() => setModalKind('spend')}
+              />
+              <DailyEntryTable
+                kind="spend" channelKey={activeSpendTab} days={grid.days}
+                data={grid.spend[activeSpendTab]}
+                onCellChange={(date, field, value) => onCellChange('spend', activeSpendTab, date, field, value)}
+                saveStatus={saveStatus}
+              />
+            </div>}
+          </section>
         </div>
-        <ChannelTabs
-          channels={channels.spend}
-          activeKey={activeSpendTab}
-          onSelect={setActiveSpendTab}
-          onAddChannel={() => setModalKind('spend')}
-        />
-        <DailyEntryTable
-          kind="spend" channelKey={activeSpendTab} days={grid.days}
-          data={grid.spend[activeSpendTab]}
-          onCellChange={(date, field, value) => onCellChange('spend', activeSpendTab, date, field, value)}
-          saveStatus={saveStatus}
-        />
-      </section>
-
-      <ChannelSummaryTable grid={grid} channels={channels} />
+      )}
 
       {modalKind && (
         <AddCustomChannelModal

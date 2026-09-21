@@ -1,4 +1,4 @@
-import { computeKpis, fmtRpShort, fmtNum, fmtPct } from '../../dailyTracking/lib/summary.js';
+import { computeKpis, fmtRp, fmtRpShort, fmtNum, fmtPct } from '../../dailyTracking/lib/summary.js';
 
 // Visual pattern copied from Dashboard's KpiStrip/.con-kpis (one bordered
 // surface divided by hairlines, not free-floating cards) — but genuinely
@@ -9,7 +9,10 @@ import { computeKpis, fmtRpShort, fmtNum, fmtPct } from '../../dailyTracking/lib
 // Six cards, not Dashboard's eight: a manual daily sheet has no
 // unique-customer/CVR/cancellation data to summarize.
 const CARDS = [
-  { key: 'totalRevenue', label: 'Total Revenue (GMV)', fmt: fmtRpShort },
+  // Exact figure, not the compact "Rp1,2 M" form: GMV is the number the team
+  // reconciles against the marketplace dashboards, so rounding hides real
+  // differences. `full` shrinks the font a little so 10+ digit values fit.
+  { key: 'totalRevenue', label: 'Total Revenue (GMV)', fmt: fmtRp, full: true },
   { key: 'totalTransaksi', label: 'Total Transaksi', fmt: fmtNum },
   { key: 'totalQty', label: 'Total Qty Terjual', fmt: fmtNum },
   { key: 'aov', label: 'AOV', fmt: fmtRpShort },
@@ -25,7 +28,7 @@ export default function DailyKpiStrip({ grid, channels, loading }) {
       {CARDS.map((c) => (
         <div className="dt-kpi" key={c.key}>
           <div className="dt-kpi-label">{c.label}</div>
-          <div className="dt-kpi-val">
+          <div className={`dt-kpi-val${c.full ? ' dt-kpi-val--full' : ''}`}>
             {loading ? <span className="dt-skel" /> : c.fmt(kpis[c.key])}
           </div>
         </div>
