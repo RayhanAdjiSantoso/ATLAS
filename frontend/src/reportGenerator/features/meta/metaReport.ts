@@ -29,6 +29,7 @@ import {
   type MetaObjectiveKey,
 } from '../../lib/meta';
 import { findCol, matchDef } from '../../lib/columns';
+import { buildMetaBrandFunnel, buildMetaSalesFunnel, type MetaFunnel } from '../../lib/metaFunnel';
 import { toISODate } from '../../lib/dateFmt';
 import { buildParsedPeriod, comparePeriodDays, daysBetweenInclusive, type ParsedPeriod } from '../../lib/periodLabel';
 import { toSummaryKpi, type SpendEntry, type SummaryKpi } from '../../lib/summary';
@@ -69,6 +70,9 @@ export interface CpasSections {
   genderDemo?: DemoData;
   nv?: OverviewDetailedData;
   rm?: OverviewDetailedData;
+  // Root cause analysis for this channel — the sales funnel, same shape the
+  // Shopee report draws.
+  funnel?: MetaFunnel;
 }
 
 export interface MetaReport {
@@ -108,6 +112,14 @@ export interface MetaReport {
   boostGenderDemo?: DemoData;
   ageDemo?: DemoData;
   genderDemo?: DemoData;
+  // Root cause analysis per channel. Boost Post decomposes Brand
+  // Consideration; the two selling channels decompose GMV.
+  boostFunnel?: MetaFunnel;
+  nonBoostFunnel?: MetaFunnel;
+  // Current-period rows per channel. Creative Analysis breaks these down by
+  // Ad, and it has to be the reported period alone — the combined row set
+  // spans both periods and would silently average two months together.
+  curRows?: { boost: SheetRow[]; nonBoost: SheetRow[]; cpas: SheetRow[] };
   cpas?: CpasSections;
   summary: {
     kpis: SummaryKpi[];
@@ -347,6 +359,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     reachApproxNote,
     summary: { kpis: [], cpasKpis: [], spend: {} },
   };
+  report.curRows = { boost: mBoostCur, nonBoost: mNonCur, cpas: [] };
   const metaKpis: SummaryKpi[] = [];
   const metaSpend: Record<string, SpendEntry | undefined> = {};
 
@@ -356,10 +369,13 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const boostCpr = buildCprRow(ovDefs.boost.cprPair, mBoostOld, mBoostCur);
     if (boostCpr) boostOvRows.push(boostCpr);
     report.boost = { overviewRows: boostOvRows, detailedRows: toDisplayRows(buildKPI(mBoostOld, mBoostCur, mAllCols)), allCols: mAllCols };
+    report.boostFunnel = buildMetaBrandFunnel(mBoostOld, mBoostCur);
     metaKpis.push(...toSummaryRows(boostKpiRows, 'Boost Post'));
     if (boostCpr) metaKpis.push(...toSummaryRows([boostCpr], 'Boost Post'));
     if (mSpentCol) metaSpend.boost = { old: agg(mBoostOld, mSpentCol), cur: agg(mBoostCur, mSpentCol) };
   }
+
+  if (hasNonBoost) report.nonBoostFunnel = buildMetaSalesFunnel(mNonOld, mNonCur);
 
   const nbGroups = hasNonBoost ? groupNonBoostByObjective(mNonOld, mNonCur, metaHeaders, mCampCol) : null;
 
@@ -487,6 +503,8 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       cpasKpis.push(...toSummaryRows(overallKpiRows, 'Overall'));
       if (cSpentCol) metaSpend.cpasOverall = { old: agg(cOld, cSpentCol), cur: agg(cCur, cSpentCol) };
     }
+    cpas.funnel = buildMetaSalesFunnel(cOld, cCur);
+    if (report.curRows) report.curRows.cpas = cCur;
     if (defCpasDemo.length && cAgeCol) cpas.ageDemo = { rows: cCur.filter((r) => !isAllValue(r[cAgeCol])), dimCol: cAgeCol, defaultCols: defCpasDemo, allCols: cAllCols };
     if (defCpasDemo.length && cGenderCol) cpas.genderDemo = { rows: cCur.filter((r) => !isAllValue(r[cGenderCol])), dimCol: cGenderCol, defaultCols: defCpasDemo, allCols: cAllCols };
     if (defCpasNV.length) {

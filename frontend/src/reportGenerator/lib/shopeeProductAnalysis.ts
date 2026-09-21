@@ -297,15 +297,20 @@ export function buildProductRankings(
 //
 // Pareto and Produk Potensial are single-period by design and live below.
 
-export interface ProductChartPairDef {
-  id: 'traffic' | 'visit-atc' | 'atc-purchase';
+// A chart group is a set of metrics that answer one question, not a fixed
+// pair: Traffic is read by reach (Impressions), by volume (Clicks) and by
+// efficiency (CTR). The chart draws ONE of them at a time — the one being
+// sorted by — because a second series the reader did not ask to rank is
+// noise competing with the ranking they did ask for.
+export interface ProductChartGroupDef {
+  id: 'traffic' | 'conversion';
   title: string;
-  a: ProductMetricDef;
-  b: ProductMetricDef;
+  metrics: readonly ProductMetricDef[];
 }
 
 const M = {
   impressions: { key: 'impressions', label: 'Impressions', fmt: 'num', sentiment: 'higher-better' },
+  clicks: { key: 'clicks', label: 'Clicks', fmt: 'num', sentiment: 'higher-better' },
   ctr: { key: 'ctr', label: 'CTR', fmt: 'pct', sentiment: 'higher-better' },
   visitors: { key: 'visitors', label: 'Visitor', fmt: 'num', sentiment: 'higher-better' },
   visitToAtcRate: { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', sentiment: 'higher-better' },
@@ -315,57 +320,52 @@ const M = {
   conversionRate: { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better' },
 } as const satisfies Record<string, ProductMetricDef>;
 
-export const PRODUCT_CHART_PAIRS: readonly ProductChartPairDef[] = [
-  { id: 'traffic', title: 'Traffic Analysis', a: M.impressions, b: M.ctr },
-  { id: 'visit-atc', title: 'Visit → ATC Rate', a: M.visitors, b: M.visitToAtcRate },
-  { id: 'atc-purchase', title: 'ATC → Purchase Rate', a: M.atc, b: M.atcToPurchaseRate },
+export const PRODUCT_CHART_GROUPS: readonly ProductChartGroupDef[] = [
+  { id: 'traffic', title: 'Traffic Analysis', metrics: [M.impressions, M.ctr, M.clicks] },
+  // Visit → ATC and ATC → Purchase used to be two charts of two metrics each.
+  // They answer one question — where conversion leaks — so they are one chart
+  // whose metric picker walks the funnel: overall, then each step.
+  { id: 'conversion', title: 'Conversion Analysis', metrics: [M.conversionRate, M.visitToAtcRate, M.atcToPurchaseRate] },
 ];
 
-export const POTENTIAL_METRICS = { revenue: M.revenue, conversionRate: M.conversionRate };
-
-export interface ProductPairPoint {
+// Parallel arrays indexed by the group's metric order: pct[i] is the
+// %Change of metrics[i]. Null means the product is absent from the older
+// period, so no comparison exists — the chart drops it rather than drawing a
+// 0% bar, which would read as "did not move".
+export interface ProductChartPoint {
   key: string;
   produk: string;
-  aPct: number | null; // %Change of metric A — null when the product is new
-  bPct: number | null;
-  aOld: number | null;
-  aCur: number | null;
-  bOld: number | null;
-  bCur: number | null;
+  pct: (number | null)[];
+  old: (number | null)[];
+  cur: (number | null)[];
 }
 
-// Joins the two metrics' per-product rankings by product key so one chart can
-// draw both bars. Products missing from the older period have a null %Change
-// and are dropped by the chart rather than shown as a 0% bar, which would
-// read as "did not move" when the truth is "no comparison exists".
-export function buildProductPairChange(
+// Joins every metric's per-product ranking by product key, so one chart can
+// switch between them without refetching or re-deriving anything.
+export function buildProductChartPoints(
   oldRecords: ProductPerfRecord[],
   curRecords: ProductPerfRecord[],
-  pair: ProductChartPairDef,
-): ProductPairPoint[] {
-  const aRows = buildProductRanking(oldRecords, curRecords, pair.a.key, pair.a.sentiment);
-  const bByKey = new Map(buildProductRanking(oldRecords, curRecords, pair.b.key, pair.b.sentiment).map((r) => [r.key, r]));
-  return aRows.map((a) => {
-    const b = bByKey.get(a.key);
-    return {
-      key: a.key,
-      produk: a.produk,
-      aPct: a.deltaNum,
-      bPct: b?.deltaNum ?? null,
-      aOld: a.old,
-      aCur: a.cur,
-      bOld: b?.old ?? null,
-      bCur: b?.cur ?? null,
-    };
-  });
+  group: ProductChartGroupDef,
+): ProductChartPoint[] {
+  const perMetric = group.metrics.map(
+    (m) => new Map(buildProductRanking(oldRecords, curRecords, m.key, m.sentiment).map((r) => [r.key, r] as const)),
+  );
+  const lead = buildProductRanking(oldRecords, curRecords, group.metrics[0].key, group.metrics[0].sentiment);
+  return lead.map((r) => ({
+    key: r.key,
+    produk: r.produk,
+    pct: perMetric.map((m) => m.get(r.key)?.deltaNum ?? null),
+    old: perMetric.map((m) => m.get(r.key)?.old ?? null),
+    cur: perMetric.map((m) => m.get(r.key)?.cur ?? null),
+  }));
 }
 
 export type ChartDirection = 'highest' | 'lowest';
 
 // Sorts by the chosen metric's %Change and takes the top N. Products with no
 // %Change for that metric are excluded from the ranking entirely.
-export function rankProductPairs(points: ProductPairPoint[], sortBy: 'a' | 'b', direction: ChartDirection, count: number): ProductPairPoint[] {
-  const pick = (p: ProductPairPoint) => (sortBy === 'a' ? p.aPct : p.bPct);
+export function rankProductPoints(points: ProductChartPoint[], metricIndex: number, direction: ChartDirection, count: number): ProductChartPoint[] {
+  const pick = (p: ProductChartPoint) => p.pct[metricIndex] ?? null;
   return points
     .filter((p) => pick(p) !== null)
     .sort((x, y) => (direction === 'highest' ? (pick(y) as number) - (pick(x) as number) : (pick(x) as number) - (pick(y) as number)))
@@ -383,7 +383,7 @@ export interface PotentialProduct {
 // Top N by revenue in the newest period. "Potensial" is read as "already
 // earning" — revenue leads the sort, conversion rate rides alongside so a
 // high-revenue product converting badly is visible as a headroom case.
-export function buildPotentialProducts(curRecords: ProductPerfRecord[], count = 5): PotentialProduct[] {
+export function buildPotentialProducts(curRecords: ProductPerfRecord[], count = 10): PotentialProduct[] {
   return [...curRecords]
     .filter((r) => r.salesConfirmed > 0)
     .sort((a, b) => b.salesConfirmed - a.salesConfirmed)

@@ -6,7 +6,7 @@ import { useInlineMetricEditor } from '../../hooks/useInlineMetricEditor';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { FunnelTreeRow, FunnelValueRow } from '../../lib/shopeeFunnel';
 import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
-import type { ParetoRangeSelection, ParetoRow, ProductMetricRanking } from '../../lib/shopeeProductAnalysis';
+import type { ParetoRangeSelection, ParetoRow, ProductMetricRanking, ProductRankRow } from '../../lib/shopeeProductAnalysis';
 import { ParetoRangeControl } from './ProductAnalysisCharts';
 
 // ══════════════════════════════════════════════════════
@@ -163,217 +163,46 @@ function DataTable<T>({
 }
 
 // ── Fundamental Analysis ─────────────────────────────────────────────────
-// The flat "Values" list, old vs cur vs %Change (same shape as the reference
-// workbook's left-hand pivot), split into two draggable groups — the metrics
-// an ads strategist works from vs. the ones a client cares about. Drag a row
-// (or tap ⇄) to move it between groups; the choice is session-only.
+// The flat "Values" list — old vs cur vs %Change, the same shape and order as
+// the reference workbook's left-hand pivot.
+// The Values table — ONE table, in the reference workbook's own order, with a
+// firm rule after Amount Spend. Above that rule sits the performance index
+// people read first (GMV, contribution, ROAS, spend); below it, the funnel
+// detail that explains the index. This used to be two separate draggable
+// tables ("Ads Strategist" / "Client"), which read as two different reports
+// of the same account; one table with one rule says "same reading, two
+// altitudes". Definition order IS reading order, so there is no reordering
+// and no regrouping — only renaming, which clients do ask for.
+const FA_CORE_KEYS = new Set(['gmvOverall', 'gmvAds', 'adContribution', 'roas', 'spend']);
 
-// The three headline numbers, pulled straight from the funnel values (no new
-// maths) into a fixed table above the editable groups — a quick read before
-// anyone rearranges the detail.
-const FA_OVERALL_KEYS = ['spend', 'purchases', 'roas'] as const;
+function FundamentalValuesTable({ values, p1, p2 }: { values: FunnelValueRow[]; p1: string; p2: string }) {
+  const lastCore = values.reduce((last, v, i) => (FA_CORE_KEYS.has(v.key) ? i : last), -1);
 
-function OverallAdsTable({ values, p1, p2 }: { values: FunnelValueRow[]; p1: string; p2: string }) {
-  const rows = FA_OVERALL_KEYS.map((k) => values.find((v) => v.key === k)).filter((v): v is FunnelValueRow => Boolean(v));
-  if (!rows.length) return null;
   return (
-    <div className="fa-overall">
-      <div className="fa-overall-head">
-        Overall Ads <span className="sec-badge">3 metrik utama</span>
-      </div>
-      <div className="tbl-scroll">
-      <table className="kpi-table fa-overall-table">
-        <thead>
-          <tr>
-            <th></th>
-            <th>{p1}</th>
-            <th>{p2}</th>
-            <th>Changes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((v) => (
-            <tr key={v.key}>
-              <td>{v.label}</td>
-              <td className="num">{fmtPivotVal(v.oldNum, v.fmt)}</td>
-              <td className="num">{fmtPivotVal(v.curNum, v.fmt)}</td>
-              <td>
-                <DeltaPill cls={v.cls}>{v.delta}</DeltaPill>
-              </td>
+    <div className="fa-values">
+      <div className="fg-scroll">
+        <table className="kpi-table fg-table fa-values-table">
+          <thead>
+            <tr>
+              <th>Values</th>
+              <th>{p1}</th>
+              <th>{p2}</th>
+              <th>Changes</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
-    </div>
-  );
-}
-
-type FgGroup = 'strategist' | 'client';
-
-const FG_DEFAULT: Record<string, FgGroup> = {
-  gmvOverall: 'client', gmvAds: 'client', adContribution: 'client', roas: 'client',
-  purchases: 'client', itemsSold: 'client', aov: 'client', abs: 'client', aur: 'client',
-  spend: 'strategist', impressions: 'strategist', cpm: 'strategist', clicks: 'strategist',
-  ctr: 'strategist', cpc: 'strategist', addToCart: 'strategist', clicksToAtcRate: 'strategist',
-  cpAtc: 'strategist', atcToPurchaseRate: 'strategist', cpp: 'strategist', cvr: 'strategist',
-};
-
-const FG_GROUPS: { id: FgGroup; title: string; sub: string }[] = [
-  { id: 'strategist', title: 'Metrik Ads Strategist', sub: 'lever operasional — media, biaya, funnel' },
-  { id: 'client', title: 'Metrik Client', sub: 'hasil bisnis — omzet, ROAS, order' },
-];
-
-function FundamentalGroupedValues({ values, p1, p2 }: { values: FunnelValueRow[]; p1: string; p2: string }) {
-  const [group, setGroup] = useState<Record<string, FgGroup>>(() => ({ ...FG_DEFAULT }));
-  const [dragKey, setDragKey] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<FgGroup | null>(null);
-  const [moved, setMoved] = useState<string | null>(null);
-  // Session-only reorder rank (within a group, lower sorts first) + rename
-  // overrides, keyed by metric key — same "click label to rename" convention
-  // as ProductRankingSection/DataTable above; reorder here is via ▲▼ instead
-  // of a drag handle since the row is already draggable (to move it between
-  // groups) and a second drag target on the same row would be confusing.
-  const [rank, setRank] = useState<Record<string, number>>({});
-  const [labels, setLabels] = useState<Record<string, string>>({});
-  const editor = useInlineMetricEditor({
-    onRename: (id, label) => setLabels((prev) => ({ ...prev, [id]: label })),
-    onReorder: () => {},
-  });
-
-  const defaultRank = new Map(values.map((v, i) => [v.key, i]));
-  const rankOf = (key: string) => rank[key] ?? defaultRank.get(key) ?? 0;
-  const labelOf = (v: FunnelValueRow) => labels[v.key] ?? v.label;
-
-  const groupOf = (key: string): FgGroup => group[key] ?? FG_DEFAULT[key] ?? 'client';
-  const rowsIn = (g: FgGroup) => values.filter((v) => groupOf(v.key) === g).sort((a, b) => rankOf(a.key) - rankOf(b.key));
-
-  function move(key: string, to: FgGroup) {
-    if (groupOf(key) === to) return;
-    setGroup((prev) => ({ ...prev, [key]: to }));
-    setMoved(key);
-    window.setTimeout(() => setMoved((k) => (k === key ? null : k)), 800);
-  }
-
-  function reorder(g: FgGroup, key: string, dir: -1 | 1) {
-    const siblings = rowsIn(g);
-    const idx = siblings.findIndex((v) => v.key === key);
-    const otherIdx = idx + dir;
-    if (idx === -1 || otherIdx < 0 || otherIdx >= siblings.length) return;
-    const other = siblings[otherIdx];
-    const a = rankOf(key);
-    const b = rankOf(other.key);
-    setRank((prev) => ({ ...prev, [key]: b, [other.key]: a }));
-  }
-
-  return (
-    <div className="fg-wrap">
-      {FG_GROUPS.map((grp) => {
-        const rows = rowsIn(grp.id);
-        const other: FgGroup = grp.id === 'strategist' ? 'client' : 'strategist';
-        return (
-          <div
-            key={grp.id}
-            data-grp={grp.id}
-            className={`fg-group${dropTarget === grp.id && dragKey && groupOf(dragKey) !== grp.id ? ' fg-drop' : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDropTarget(grp.id);
-            }}
-            onDragLeave={() => setDropTarget((d) => (d === grp.id ? null : d))}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (dragKey) move(dragKey, grp.id);
-              setDragKey(null);
-              setDropTarget(null);
-            }}
-          >
-            <div className="fg-group-head">
-              <span className="fg-group-title">{grp.title}</span>
-              <span className="fg-group-sub">{grp.sub}</span>
-              <span className="fg-group-count">{rows.length}</span>
-            </div>
-            <div className="fg-scroll">
-            <table className="kpi-table fg-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>{p1}</th>
-                  <th>{p2}</th>
-                  <th>Changes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((v) => (
-                  <tr
-                    key={v.key}
-                    className={`fg-row${dragKey === v.key ? ' fg-dragging' : ''}${moved === v.key ? ' fg-moved' : ''}`}
-                    draggable
-                    onDragStart={(e) => {
-                      setDragKey(v.key);
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragEnd={() => {
-                      setDragKey(null);
-                      setDropTarget(null);
-                    }}
-                  >
-                    <td>
-                      <span className="fg-row-label">
-                        <span className="fg-handle" aria-hidden>
-                          ⠿
-                        </span>
-                        {editor.editingId === v.key ? (
-                          <input
-                            className="metric-th-input"
-                            autoFocus
-                            value={editor.editingValue}
-                            onChange={(e) => editor.setEditingValue(e.target.value)}
-                            onBlur={editor.commitEdit}
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') editor.commitEdit();
-                              if (e.key === 'Escape') editor.cancelEdit();
-                            }}
-                          />
-                        ) : (
-                          <span className="demo-th-label" title="Klik untuk ganti nama" onClick={() => editor.startEdit(v.key, labelOf(v))}>
-                            {labelOf(v)}
-                          </span>
-                        )}
-                        <button type="button" className="fg-move" title="Naikkan urutan" disabled={rows[0]?.key === v.key} onClick={() => reorder(grp.id, v.key, -1)}>
-                          ▲
-                        </button>
-                        <button type="button" className="fg-move" title="Turunkan urutan" disabled={rows[rows.length - 1]?.key === v.key} onClick={() => reorder(grp.id, v.key, 1)}>
-                          ▼
-                        </button>
-                        <button type="button" className="fg-move" title={`Pindahkan ke ${other === 'strategist' ? 'Ads Strategist' : 'Client'}`} onClick={() => move(v.key, other)}>
-                          ⇄
-                        </button>
-                      </span>
-                    </td>
-                    <td className="num">{fmtPivotVal(v.oldNum, v.fmt)}</td>
-                    <td className="num">{fmtPivotVal(v.curNum, v.fmt)}</td>
-                    <td>
-                      <DeltaPill cls={v.cls}>{v.delta}</DeltaPill>
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="fg-empty">
-                      Tarik metrik ke sini
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </div>
-          </div>
-        );
-      })}
-      <div className="empty-note fg-hint">
-        Tarik baris metrik antar kotak (atau ketuk <strong>⇄</strong>) untuk mengatur mana yang tampil untuk <strong>ads strategist</strong> dan mana untuk <strong>client</strong>. Berlaku sesi ini.
+          </thead>
+          <tbody>
+            {values.map((v, i) => (
+              <tr key={v.key} className={i === lastCore ? 'fa-rule' : undefined}>
+                <td>{v.label}</td>
+                <td className="num">{fmtPivotVal(v.oldNum, v.fmt)}</td>
+                <td className="num">{fmtPivotVal(v.curNum, v.fmt)}</td>
+                <td>
+                  <DeltaPill cls={v.cls}>{v.delta}</DeltaPill>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -389,9 +218,10 @@ export function FundamentalAnalysisSection({
 }: {
   values: FunnelValueRow[];
   liveGmv: { old: number; cur: number; hasData: boolean };
-  // The account-level funnel tree + its plain-language read. Both used to be
-  // their own "Symptom Analysis" section; they belong next to the numbers
-  // they explain, and the narrow table leaves room for exactly that.
+  // The account-level funnel tree and its plain-language read. The read sits
+  // under this section's own table, the same place every channel's read sits
+  // under its own — one rule, applied everywhere, rather than a separate
+  // section that divorced each conclusion from the numbers behind it.
   tree?: FunnelTreeRow[];
   symptom?: SymptomSummary;
   p1: string;
@@ -407,16 +237,12 @@ export function FundamentalAnalysisSection({
       <div style={{ padding: '1.1rem 1.4rem 0' }}>
         <div className="sec-split">
           <div className="sec-split-main">
-            <OverallAdsTable values={values} p1={p1} p2={p2} />
-          </div>
-          {symptom && <SymptomSummaryPanel summary={symptom} />}
-        </div>
-        <div className="sec-split">
-          <div className="sec-split-main">
-            <FundamentalGroupedValues values={values} p1={p1} p2={p2} />
+            <FundamentalValuesTable values={values} p1={p1} p2={p2} />
           </div>
           {tree && <SymptomTreePanel tree={tree} p1={p1} p2={p2} title="Symptom Analysis" badge={`${p1} → ${p2}`} />}
         </div>
+        {symptom && <SymptomSummaryPanel summary={symptom} />}
+
       </div>
       <div className="empty-note" style={{ padding: '.9rem 1.4rem 0' }}>
         <strong>Catatan ATC:</strong> "Tambah ke Keranjang" hanya dilaporkan oleh Iklan Produk (Iklan Toko tidak punya kolomnya). Node
@@ -612,46 +438,38 @@ export function ParetoAnalysisSection({
 }
 
 // ── Traffic / Conversion Analysis ────────────────────────────────────────
-// One table per metric (Clicks / Impressions / CTR — or CVR / Visit→ATC /
-// ATC→Purchase), each ranked by that metric for the current period, with
-// the old value + %Change alongside. When there's no old-period Product
-// Performance file the old/%Change columns are dropped and a prompt to
-// upload it is shown (the section is never hidden entirely).
+// ONE table per analysis, not one table per metric. The three metrics of an
+// analysis describe the SAME products, so three stacked tables forced the
+// reader to find a product three times over just to compare its own numbers.
+// Here each metric is a sortable column: click Impressions to rank by reach,
+// click CTR to rank by efficiency — the product list never moves out from
+// under you, and the comparison is a glance across a row.
 
-function MetricRankingTable({ ranking, label, hasOld, p1, p2 }: { ranking: ProductMetricRanking; label: string; hasOld: boolean; p1: string; p2: string }) {
-  const columns: DataColumn<ProductMetricRanking['rows'][number]>[] = [
-    { id: 'rank', label: '#', thStyle: RANK_TH, tdStyle: RANK_TD, sortValue: (_r, i) => i, render: (_r, i) => i + 1 },
-    { id: 'produk', label: 'Produk', thStyle: PRODUK_TH, tdStyle: { textAlign: 'left' }, sortValue: (r) => r.produk, render: (r) => r.produk },
-  ];
-  if (hasOld) {
-    columns.push({
-      id: 'old',
-      label: `${label} ${p1}`,
-      thStyle: NUM_TH,
-      tdStyle: NUM_TD,
-      sortValue: (r) => r.old,
-      render: (r) => (r.old === null ? '—' : fmtPivotVal(r.old, ranking.fmt)),
-    });
+interface MergedRankRow {
+  key: string;
+  produk: string;
+  by: Record<string, ProductRankRow | undefined>;
+}
+
+function mergeRankings(rankings: ProductMetricRanking[]): MergedRankRow[] {
+  const byKey = new Map<string, MergedRankRow>();
+  for (const ranking of rankings) {
+    for (const row of ranking.rows) {
+      let merged = byKey.get(row.key);
+      if (!merged) {
+        merged = { key: row.key, produk: row.produk, by: {} };
+        byKey.set(row.key, merged);
+      }
+      merged.by[ranking.metric] = row;
+    }
   }
-  columns.push({
-    id: 'cur',
-    label: hasOld ? `${label} ${p2}` : label,
-    thStyle: NUM_TH,
-    tdStyle: NUM_TD,
-    sortValue: (r) => r.cur,
-    render: (r) => (r.cur === null ? '—' : fmtPivotVal(r.cur, ranking.fmt)),
-  });
-  if (hasOld) {
-    columns.push({
-      id: 'delta',
-      label: '%Chg',
-      thStyle: NUM_TH,
-      tdStyle: NUM_TD,
-      sortValue: (r) => r.deltaNum,
-      render: (r) => <DeltaPill cls={r.cls}>{r.delta}</DeltaPill>,
-    });
-  }
-  return <DataTable columns={columns} rows={ranking.rows} rowKey={(r) => r.key} />;
+  // Open on the first metric's own ranking, so the table lands on the reading
+  // its title promises before anyone touches a header.
+  const lead = rankings[0];
+  const leadOrder = new Map(lead ? lead.rows.map((r, i) => [r.key, i] as const) : []);
+  return [...byKey.values()].sort(
+    (a, b) => (leadOrder.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (leadOrder.get(b.key) ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
 export function ProductRankingSection({
@@ -671,14 +489,39 @@ export function ProductRankingSection({
   p1: string;
   p2: string;
 }) {
-  // Session-only metric renames, keyed by metric id — one rename flows to
-  // both the sub-table heading and its column headers.
-  const [labels, setLabels] = useState<Record<string, string>>({});
-  const editor = useInlineMetricEditor({
-    onRename: (id, label) => setLabels((prev) => ({ ...prev, [id]: label })),
-    onReorder: () => {},
-  });
-  const labelFor = (r: ProductMetricRanking) => labels[r.metric] ?? r.label;
+  const rows = mergeRankings(rankings);
+
+  const columns: DataColumn<MergedRankRow>[] = [
+    { id: 'rank', label: '#', thStyle: RANK_TH, tdStyle: RANK_TD, sortValue: (_r, i) => i, render: (_r, i) => i + 1 },
+    { id: 'produk', label: 'Produk', thStyle: PRODUK_TH, tdStyle: { textAlign: 'left' }, sortValue: (r) => r.produk, render: (r) => r.produk },
+  ];
+  for (const ranking of rankings) {
+    columns.push({
+      id: ranking.metric,
+      label: hasOld ? `${ranking.label} ${p2}` : ranking.label,
+      renamable: true,
+      thStyle: NUM_TH,
+      tdStyle: NUM_TD,
+      sortValue: (r) => r.by[ranking.metric]?.cur ?? null,
+      render: (r) => {
+        const cur = r.by[ranking.metric]?.cur;
+        return cur === null || cur === undefined ? '—' : fmtPivotVal(cur, ranking.fmt);
+      },
+    });
+    if (hasOld) {
+      columns.push({
+        id: `${ranking.metric}__delta`,
+        label: `%Chg ${ranking.label}`,
+        thStyle: NUM_TH,
+        tdStyle: NUM_TD,
+        sortValue: (r) => r.by[ranking.metric]?.deltaNum ?? null,
+        render: (r) => {
+          const row = r.by[ranking.metric];
+          return row ? <DeltaPill cls={row.cls}>{row.delta}</DeltaPill> : '—';
+        },
+      });
+    }
+  }
 
   return (
     <div className="sec-block">
@@ -690,6 +533,8 @@ export function ProductRankingSection({
       <div style={{ padding: '.6rem 1.4rem 1.4rem' }}>
         {!hasCur ? (
           <div className="empty-note">Upload file Product Performance periode ini untuk melihat analisis ini.</div>
+        ) : !rows.length ? (
+          <div className="empty-note">Tidak ada produk dengan data pada periode ini.</div>
         ) : (
           <>
             {!hasOld && (
@@ -698,31 +543,10 @@ export function ProductRankingSection({
                 <strong>periode lalu</strong> untuk melihat tren antar periode.
               </div>
             )}
-            {rankings.map((ranking) => (
-              <div key={ranking.metric} style={{ marginBottom: '1.4rem' }}>
-                <div style={{ fontSize: '.78rem', fontWeight: 700, marginBottom: '.4rem' }}>
-                  Ranking berdasarkan{' '}
-                  {editor.editingId === ranking.metric ? (
-                    <input
-                      className="metric-th-input"
-                      autoFocus
-                      value={editor.editingValue}
-                      onChange={(e) => editor.setEditingValue(e.target.value)}
-                      onBlur={editor.commitEdit}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') editor.commitEdit();
-                        if (e.key === 'Escape') editor.cancelEdit();
-                      }}
-                    />
-                  ) : (
-                    <span className="demo-th-label" title="Klik untuk ganti nama metrik" onClick={() => editor.startEdit(ranking.metric, labelFor(ranking))}>
-                      {labelFor(ranking)}
-                    </span>
-                  )}
-                </div>
-                <MetricRankingTable ranking={ranking} label={labelFor(ranking)} hasOld={hasOld} p1={p1} p2={p2} />
-              </div>
-            ))}
+            <p className="chart-caption">
+              Klik judul kolom mana pun untuk mengurutkan — {rankings.map((r) => r.label).join(', ')} berbagi satu tabel agar satu produk bisa dibaca sekaligus.
+            </p>
+            <DataTable columns={columns} rows={rows} rowKey={(r) => r.key} />
           </>
         )}
       </div>

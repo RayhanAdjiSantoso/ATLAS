@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { KpiTable, type KpiRowDisplay } from './KpiTable';
 import { SectionDownloadButton } from './SectionDownloadButton';
 
@@ -16,6 +17,9 @@ interface OverviewDetailedCardProps {
   p1: string;
   p2: string;
   headingClassName?: string;
+  // Rendered beside the table instead of below it — the root cause tree that
+  // explains the numbers belongs next to them, not in a section of its own.
+  aside?: ReactNode;
 }
 
 // Shared by Meta (Boost/Non-Boost/CPAS) and Shopee Ads: a single table
@@ -26,7 +30,7 @@ interface OverviewDetailedCardProps {
 // row here already carries its own resolved `.label` (from
 // displayName()/shopeeLabelFor upstream), so the full universe can be handed
 // straight to KpiTable with no separate label-resolution step needed here.
-export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRows, allCols, p1, p2, headingClassName }: OverviewDetailedCardProps) {
+export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRows, allCols, p1, p2, headingClassName, aside }: OverviewDetailedCardProps) {
   if (!overviewRows.length && !detailedRows.length) return null;
 
   // overviewRows' underlying `col` (present on every row except a computed
@@ -48,7 +52,16 @@ export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRow
         {badge && <span className="sec-badge">{badge}</span>}
         <SectionDownloadButton />
       </div>
-      <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded />
+      {aside ? (
+        <div className="sec-split sec-split-padded">
+          <div className="sec-split-main">
+            <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded />
+          </div>
+          {aside}
+        </div>
+      ) : (
+        <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded />
+      )}
     </div>
   );
 }

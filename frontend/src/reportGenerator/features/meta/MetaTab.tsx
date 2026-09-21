@@ -3,7 +3,6 @@ import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ReportPages } from '../../components/ReportPages';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
-import { DemoBreakdownCard } from '../../components/DemoBreakdownCard';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
 import { SearchSelect } from '../../components/SearchSelect';
@@ -29,6 +28,10 @@ import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
+import { SymptomTreePanel } from '../shopee/AnalysisSections';
+import { MetaSpecialMomentSection } from './MetaSpecialMomentSection';
+import { MetaBreakdownSection } from './MetaBreakdownSection';
+import { BRAND_AUDIENCE_METRICS, BRAND_CREATIVE_METRICS, SALES_AUDIENCE_METRICS, SALES_CREATIVE_METRICS, findAdCol } from '../../lib/metaAudience';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
@@ -684,104 +687,220 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               accent="var(--acc)"
               pages={[
                 {
-                  id: 'boost',
-                  label: 'Boost Post',
-                  hidden: !report.boost && !report.boostAgeDemo && !report.boostGenderDemo,
+                  id: 'ads-performance',
+                  label: 'Ads Performance',
+                  hidden: !hasAnySection,
                   content: (
                     <>
+                      <MetaSpecialMomentSection rows={metaRows ?? []} dayCol={dayCol} />
                       {report.boost && (
-                        <OverviewDetailedCard heading="Boost Post" badge="Meta Ads" overviewRows={report.boost.overviewRows} detailedRows={report.boost.detailedRows} allCols={report.boost.allCols} p1={report.p1} p2={report.p2} />
+                        <OverviewDetailedCard
+                          heading="Boost Post"
+                          badge="Meta Ads"
+                          overviewRows={report.boost.overviewRows}
+                          detailedRows={report.boost.detailedRows}
+                          allCols={report.boost.allCols}
+                          p1={report.p1}
+                          p2={report.p2}
+                          aside={
+                            report.boostFunnel?.hasData ? (
+                              <SymptomTreePanel tree={report.boostFunnel.tree} p1={report.p1} p2={report.p2} title="Root Cause Analysis" badge="Brand Consideration" />
+                            ) : undefined
+                          }
+                        />
+                      )}
+                      {report.nonBoost && (
+                        <OverviewDetailedCard
+                          heading={report.nonBoostSegments ? 'Non-Boost Post · Blended' : 'Non-Boost Post'}
+                          badge={
+                            report.nonBoostSegments
+                              ? report.nonBoostObjectiveSource === 'column'
+                                ? 'total + Amount Spent per objective'
+                                : 'objective dari nama campaign'
+                              : 'Meta Ads'
+                          }
+                          overviewRows={report.nonBoost.overviewRows}
+                          detailedRows={report.nonBoost.detailedRows}
+                          allCols={report.nonBoost.allCols}
+                          p1={report.p1}
+                          p2={report.p2}
+                          aside={
+                            report.nonBoostFunnel?.hasData ? (
+                              <SymptomTreePanel tree={report.nonBoostFunnel.tree} p1={report.p1} p2={report.p2} title="Root Cause Analysis" badge={`${report.p1} → ${report.p2}`} />
+                            ) : undefined
+                          }
+                        />
+                      )}
+                      {report.nonBoostSegments?.map((seg) => (
+                        <OverviewDetailedCard
+                          key={seg.key}
+                          heading={`Non-Boost Post · ${seg.label}`}
+                          badge="Meta Ads"
+                          overviewRows={seg.overview.overviewRows}
+                          detailedRows={seg.overview.detailedRows}
+                          allCols={seg.overview.allCols}
+                          p1={report.p1}
+                          p2={report.p2}
+                        />
+                      ))}
+                      {report.cpas?.overall && (
+                        <OverviewDetailedCard
+                          heading="CPAS Shopee"
+                          badge="Overall"
+                          overviewRows={report.cpas.overall.overviewRows}
+                          detailedRows={report.cpas.overall.detailedRows}
+                          allCols={report.cpas.overall.allCols}
+                          p1={report.cpas.p1}
+                          p2={report.cpas.p2}
+                          aside={
+                            report.cpas.funnel?.hasData ? (
+                              <SymptomTreePanel tree={report.cpas.funnel.tree} p1={report.cpas.p1} p2={report.cpas.p2} title="Root Cause Analysis" badge={`${report.cpas.p1} → ${report.cpas.p2}`} />
+                            ) : undefined
+                          }
+                        />
+                      )}
+                    </>
+                  ),
+                },
+                {
+                  id: 'audience',
+                  label: 'Audience Analysis',
+                  hidden:
+                    !report.ageDemo && !report.genderDemo && !report.cpas?.ageDemo && !report.cpas?.genderDemo && !report.boostAgeDemo && !report.boostGenderDemo && !report.cpas?.nv && !report.cpas?.rm,
+                  content: (
+                    <>
+                      {report.ageDemo && (
+                        <MetaBreakdownSection
+                          heading="Non-Boost Post · Age Breakdown"
+                          badge={`data ${report.p2}`}
+                          rows={report.ageDemo.rows}
+                          dimCol={report.ageDemo.dimCol}
+                          kind="sales"
+                          metrics={SALES_AUDIENCE_METRICS}
+                          prefer="bar"
+                        />
+                      )}
+                      {report.genderDemo && (
+                        <MetaBreakdownSection
+                          heading="Non-Boost Post · Gender Breakdown"
+                          badge={`data ${report.p2}`}
+                          rows={report.genderDemo.rows}
+                          dimCol={report.genderDemo.dimCol}
+                          kind="sales"
+                          metrics={SALES_AUDIENCE_METRICS}
+                          prefer="pie"
+                        />
+                      )}
+                      {report.cpas?.ageDemo && (
+                        <MetaBreakdownSection
+                          heading="CPAS Shopee · Age Breakdown"
+                          badge={`data ${report.cpas.p2}`}
+                          rows={report.cpas.ageDemo.rows}
+                          dimCol={report.cpas.ageDemo.dimCol}
+                          kind="sales"
+                          metrics={SALES_AUDIENCE_METRICS}
+                          prefer="bar"
+                        />
+                      )}
+                      {report.cpas?.genderDemo && (
+                        <MetaBreakdownSection
+                          heading="CPAS Shopee · Gender Breakdown"
+                          badge={`data ${report.cpas.p2}`}
+                          rows={report.cpas.genderDemo.rows}
+                          dimCol={report.cpas.genderDemo.dimCol}
+                          kind="sales"
+                          metrics={SALES_AUDIENCE_METRICS}
+                          prefer="pie"
+                        />
+                      )}
+                      {report.cpas?.nv && (
+                        <OverviewDetailedCard heading="CPAS Shopee · NV" badge="New Visitor" overviewRows={report.cpas.nv.overviewRows} detailedRows={report.cpas.nv.detailedRows} allCols={report.cpas.nv.allCols} p1={report.cpas.p1} p2={report.cpas.p2} />
+                      )}
+                      {report.cpas?.rm && (
+                        <OverviewDetailedCard heading="CPAS Shopee · RM" badge="Re-Marketing" overviewRows={report.cpas.rm.overviewRows} detailedRows={report.cpas.rm.detailedRows} allCols={report.cpas.rm.allCols} p1={report.cpas.p1} p2={report.cpas.p2} />
                       )}
                       {report.boostAgeDemo && (
-                        <DemoBreakdownCard
+                        <MetaBreakdownSection
                           heading="Boost Post · Age Breakdown"
                           badge={`data ${report.p2}`}
                           rows={report.boostAgeDemo.rows}
                           dimCol={report.boostAgeDemo.dimCol}
-                          allCols={report.boostAgeDemo.allCols}
-                          defaultCols={report.boostAgeDemo.defaultCols}
+                          kind="brand"
+                          metrics={BRAND_AUDIENCE_METRICS}
+                          prefer="bar"
                         />
                       )}
                       {report.boostGenderDemo && (
-                        <DemoBreakdownCard
+                        <MetaBreakdownSection
                           heading="Boost Post · Gender Breakdown"
                           badge={`data ${report.p2}`}
                           rows={report.boostGenderDemo.rows}
                           dimCol={report.boostGenderDemo.dimCol}
-                          allCols={report.boostGenderDemo.allCols}
-                          defaultCols={report.boostGenderDemo.defaultCols}
+                          kind="brand"
+                          metrics={BRAND_AUDIENCE_METRICS}
+                          prefer="pie"
                         />
                       )}
                     </>
                   ),
                 },
                 {
-                  id: 'nonboost',
-                  label: 'Non-Boost Post',
-                  hidden: !report.nonBoost && !report.ageDemo && !report.genderDemo,
-                  content: (
-                    <>
-                      {report.nonBoost && report.nonBoostSegments ? (
-                        <>
-                          <OverviewDetailedCard
-                            heading="Non-Boost Post · Blended"
-                            badge={report.nonBoostObjectiveSource === 'column' ? 'total + Amount Spent per objective' : 'objective dari nama campaign'}
-                            overviewRows={report.nonBoost.overviewRows}
-                            detailedRows={report.nonBoost.detailedRows}
-                            allCols={report.nonBoost.allCols}
-                            p1={report.p1}
-                            p2={report.p2}
+                  id: 'creative',
+                  label: 'Creative Analysis',
+                  content: (() => {
+                    const cur = report.curRows;
+                    const nbAd = cur?.nonBoost.length ? findAdCol(cur.nonBoost) : null;
+                    const cpasAd = cur?.cpas.length ? findAdCol(cur.cpas) : null;
+                    const boostAd = cur?.boost.length ? findAdCol(cur.boost) : null;
+                    if (!nbAd && !cpasAd && !boostAd) {
+                      return (
+                        <div className="sec-block">
+                          <div className="sec-heading">Creative Analysis</div>
+                          <div className="empty-note" style={{ margin: '1.1rem 1.4rem 1.4rem' }}>
+                            Bagian ini membandingkan performa per materi iklan. File yang diunggah dipecah per campaign, bukan per <strong>Ad</strong>, jadi belum ada
+                            yang bisa dibandingkan — export ulang dari Meta Ads Reporting dengan breakdown Ad disertakan.
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <>
+                        {nbAd && cur && (
+                          <MetaBreakdownSection
+                            heading="Non-Boost Post · Creative Performance"
+                            badge={`per materi iklan · ${report.p2}`}
+                            rows={cur.nonBoost}
+                            dimCol={nbAd}
+                            kind="sales"
+                            metrics={SALES_CREATIVE_METRICS}
+                            prefer="bar"
                           />
-                          {report.nonBoostSegments.map((seg) => (
-                            <OverviewDetailedCard
-                              key={seg.key}
-                              heading={`Non-Boost Post · ${seg.label}`}
-                              badge="Meta Ads"
-                              overviewRows={seg.overview.overviewRows}
-                              detailedRows={seg.overview.detailedRows}
-                              allCols={seg.overview.allCols}
-                              p1={report.p1}
-                              p2={report.p2}
-                            />
-                          ))}
-                        </>
-                      ) : (
-                        report.nonBoost && (
-                          <OverviewDetailedCard heading="Non-Boost Post" badge="Meta Ads" overviewRows={report.nonBoost.overviewRows} detailedRows={report.nonBoost.detailedRows} allCols={report.nonBoost.allCols} p1={report.p1} p2={report.p2} />
-                        )
-                      )}
-                      {report.ageDemo && (
-                        <DemoBreakdownCard heading="Non-Boost Post · Age Breakdown" badge={`data ${report.p2}`} rows={report.ageDemo.rows} dimCol={report.ageDemo.dimCol} allCols={report.ageDemo.allCols} defaultCols={report.ageDemo.defaultCols} />
-                      )}
-                      {report.genderDemo && (
-                        <DemoBreakdownCard heading="Non-Boost Post · Gender Breakdown" badge={`data ${report.p2}`} rows={report.genderDemo.rows} dimCol={report.genderDemo.dimCol} allCols={report.genderDemo.allCols} defaultCols={report.genderDemo.defaultCols} />
-                      )}
-                    </>
-                  ),
-                },
-                {
-                  id: 'cpas',
-                  label: 'CPAS Marketplace',
-                  hidden: !report.cpas || !Object.keys(report.cpas).length,
-                  content: (
-                    <>
-                      {report.cpas?.overall && (
-                        <OverviewDetailedCard heading="CPAS Marketplace" badge="Overall" overviewRows={report.cpas.overall.overviewRows} detailedRows={report.cpas.overall.detailedRows} allCols={report.cpas.overall.allCols} p1={report.cpas.p1} p2={report.cpas.p2} />
-                      )}
-                      {report.cpas?.ageDemo && (
-                        <DemoBreakdownCard heading="CPAS Marketplace · Age Breakdown" badge={`data ${report.cpas.p2}`} rows={report.cpas.ageDemo.rows} dimCol={report.cpas.ageDemo.dimCol} allCols={report.cpas.ageDemo.allCols} defaultCols={report.cpas.ageDemo.defaultCols} />
-                      )}
-                      {report.cpas?.genderDemo && (
-                        <DemoBreakdownCard heading="CPAS Marketplace · Gender Breakdown" badge={`data ${report.cpas.p2}`} rows={report.cpas.genderDemo.rows} dimCol={report.cpas.genderDemo.dimCol} allCols={report.cpas.genderDemo.allCols} defaultCols={report.cpas.genderDemo.defaultCols} />
-                      )}
-                      {report.cpas?.nv && (
-                        <OverviewDetailedCard heading="CPAS Marketplace · NV" badge="New Visitor" overviewRows={report.cpas.nv.overviewRows} detailedRows={report.cpas.nv.detailedRows} allCols={report.cpas.nv.allCols} p1={report.cpas.p1} p2={report.cpas.p2} />
-                      )}
-                      {report.cpas?.rm && (
-                        <OverviewDetailedCard heading="CPAS Marketplace · RM" badge="Retargeting" overviewRows={report.cpas.rm.overviewRows} detailedRows={report.cpas.rm.detailedRows} allCols={report.cpas.rm.allCols} p1={report.cpas.p1} p2={report.cpas.p2} />
-                      )}
-                    </>
-                  ),
+                        )}
+                        {cpasAd && cur && (
+                          <MetaBreakdownSection
+                            heading="CPAS Shopee · Creative Performance"
+                            badge={`per materi iklan · ${report.cpas?.p2 ?? report.p2}`}
+                            rows={cur.cpas}
+                            dimCol={cpasAd}
+                            kind="sales"
+                            metrics={SALES_CREATIVE_METRICS}
+                            prefer="bar"
+                          />
+                        )}
+                        {boostAd && cur && (
+                          <MetaBreakdownSection
+                            heading="Boost Post · Creative Performance"
+                            badge={`per materi iklan · ${report.p2}`}
+                            rows={cur.boost}
+                            dimCol={boostAd}
+                            kind="brand"
+                            metrics={BRAND_CREATIVE_METRICS}
+                            prefer="bar"
+                          />
+                        )}
+                      </>
+                    );
+                  })(),
                 },
               ]}
             />

@@ -220,22 +220,30 @@ export function buildPivotRows<T>(mOld: T, mCur: T, defs: readonly PivotMetricDe
 
 // "Iklan Shopee Overall" doesn't show %Budget/%Revenue (trivially 100% of
 // itself) — Produk/Toko append them via CHANNEL_METRIC_DEFS below.
+// Order and naming follow Fundamental Analysis exactly, for the metrics a
+// channel export actually carries: the outcome block first (GMV, ROAS, spend),
+// then the funnel detail that explains it. A reader moving from Fundamental to
+// a channel table should not have to re-learn where anything lives, or notice
+// that "Dilihat" and "Impressions" are the same number under two names.
+//
+// Absent here by nature of the source: GMV (Overall) and Ad Contribution are
+// store-level, and the Add-to-Cart trio is not in the ad channel export.
 export const OVERALL_METRIC_DEFS: readonly PivotMetricDef<StandardChannelMetrics>[] = [
-  { key: 'biaya', label: 'Biaya', fmt: 'rp', sentiment: 'neutral' },
-  { key: 'dilihat', label: 'Dilihat', fmt: 'num', sentiment: 'higher-better' },
-  { key: 'cpm', label: 'CPM', fmt: 'rp', sentiment: 'lower-better' },
-  { key: 'klik', label: 'Jumlah Klik', fmt: 'num', sentiment: 'higher-better' },
-  { key: 'ctr', label: '%Klik', fmt: 'pct', sentiment: 'higher-better' },
-  { key: 'cpc', label: 'CPC', fmt: 'rp', sentiment: 'lower-better' },
-  { key: 'pesanan', label: 'Pesanan', fmt: 'num', sentiment: 'higher-better' },
-  { key: 'cvr', label: 'CVR', fmt: 'pct', sentiment: 'higher-better' },
-  { key: 'cpp', label: 'Cost per Purchase', fmt: 'rp', sentiment: 'lower-better' },
-  { key: 'produkTerjual', label: 'Produk Terjual', fmt: 'num', sentiment: 'higher-better' },
-  { key: 'itemsPerOrder', label: 'Items/Order', fmt: 'num', sentiment: 'higher-better' },
-  { key: 'penjualan', label: 'Penjualan', fmt: 'rp', sentiment: 'higher-better' },
-  { key: 'aov', label: 'AOV', fmt: 'rp', sentiment: 'higher-better' },
-  { key: 'aur', label: 'AUR', fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'penjualan', label: 'GMV (Ads)', fmt: 'rp', sentiment: 'higher-better' },
   { key: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better' },
+  { key: 'biaya', label: 'Amount Spend', fmt: 'rp', sentiment: 'neutral' },
+  { key: 'dilihat', label: 'Impressions', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'cpm', label: 'Cost per Miles (CPM)', fmt: 'rp', sentiment: 'lower-better' },
+  { key: 'klik', label: 'Clicks', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'ctr', label: 'Click-Through Rate (CTR)', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'cpc', label: 'Cost per Click (CPC)', fmt: 'rp', sentiment: 'lower-better' },
+  { key: 'pesanan', label: 'Purchases', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'cpp', label: 'Cost per Purchase (CPP)', fmt: 'rp', sentiment: 'lower-better' },
+  { key: 'cvr', label: 'Conversion Rate (CVR)', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'produkTerjual', label: 'Items Sold', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'aov', label: 'Average Order Value (AOV)', fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'itemsPerOrder', label: 'Average Basket Size (ABS)', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'aur', label: 'Average Unit Retail (AUR)', fmt: 'rp', sentiment: 'higher-better' },
 ];
 
 export const CHANNEL_METRIC_DEFS: readonly PivotMetricDef<StandardChannelMetrics>[] = [
@@ -244,16 +252,18 @@ export const CHANNEL_METRIC_DEFS: readonly PivotMetricDef<StandardChannelMetrics
   { key: 'pctRevenue', label: '% Revenue', fmt: 'pct', sentiment: 'higher-better' },
 ];
 
+// Same order as above. Live has no impressions/clicks funnel of its own —
+// Penonton and CPV take that slot, which is why they keep their own names.
 export const LIVE_METRIC_DEFS: readonly PivotMetricDef<LiveChannelMetrics>[] = [
-  { key: 'biaya', label: 'Biaya', fmt: 'rp', sentiment: 'neutral' },
-  { key: 'penonton', label: 'Penonton', fmt: 'num', sentiment: 'higher-better' },
-  { key: 'cpv', label: 'CPV', fmt: 'rp', sentiment: 'lower-better' },
-  { key: 'pesanan', label: 'Pesanan', fmt: 'num', sentiment: 'higher-better' },
-  { key: 'cvr', label: 'CVR', fmt: 'pct', sentiment: 'higher-better' },
-  { key: 'cpp', label: 'Cost per Purchase', fmt: 'rp', sentiment: 'lower-better' },
-  { key: 'penjualan', label: 'Penjualan', fmt: 'rp', sentiment: 'higher-better' },
-  { key: 'aov', label: 'AOV', fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'penjualan', label: 'GMV (Ads)', fmt: 'rp', sentiment: 'higher-better' },
   { key: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better' },
+  { key: 'biaya', label: 'Amount Spend', fmt: 'rp', sentiment: 'neutral' },
+  { key: 'penonton', label: 'Penonton', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'cpv', label: 'Cost per View (CPV)', fmt: 'rp', sentiment: 'lower-better' },
+  { key: 'pesanan', label: 'Purchases', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'cpp', label: 'Cost per Purchase (CPP)', fmt: 'rp', sentiment: 'lower-better' },
+  { key: 'cvr', label: 'Conversion Rate (CVR)', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'aov', label: 'Average Order Value (AOV)', fmt: 'rp', sentiment: 'higher-better' },
   { key: 'pctBudget', label: '% Budget', fmt: 'pct', sentiment: 'neutral' },
   { key: 'pctRevenue', label: '% Revenue', fmt: 'pct', sentiment: 'higher-better' },
 ];

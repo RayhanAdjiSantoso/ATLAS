@@ -33,7 +33,9 @@ function StackedBar({ title, entries, valueOf, total }: { title: string; entries
   );
 }
 
-export function ChannelContributionSection({ mix, periodLabel }: { mix: ChannelMixEntry[]; periodLabel: string }) {
+// `alwaysOpen` is not used in here — SectionAccordion reads it off this
+// element to render the section unfolded and without a toggle.
+export function ChannelContributionSection({ mix, periodLabel }: { mix: ChannelMixEntry[]; periodLabel: string; alwaysOpen?: boolean }) {
   if (mix.length < 1) return null;
 
   const totalSpend = mix.reduce((s, e) => s + e.spend, 0);

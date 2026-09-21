@@ -11,22 +11,22 @@ import { buildSymptomSummary, type SymptomSummary } from '../../lib/shopeeFunnel
 import {
   buildPareto,
   buildPotentialProducts,
-  buildProductPairChange,
+  buildProductChartPoints,
   buildProductRankings,
   CONVERSION_METRIC_DEFS,
   DEFAULT_PARETO_RANGE,
   hasVisitorsCol,
   mergeProductPerfBySales,
   parseProductPerfRows,
-  PRODUCT_CHART_PAIRS,
+  PRODUCT_CHART_GROUPS,
   selectParetoMonths,
   TRAFFIC_METRIC_DEFS,
   type ParetoRangeSelection,
   type ParetoRow,
   type PotentialProduct,
-  type ProductChartPairDef,
+  type ProductChartGroupDef,
   type ProductMetricRanking,
-  type ProductPairPoint,
+  type ProductChartPoint,
   type ProductPerfMonth,
 } from '../../lib/shopeeProductAnalysis';
 import { findShopeeCol, parseShopeeNum } from '../../lib/shopeeAds';
@@ -88,6 +88,11 @@ export interface ChannelMixEntry {
 export interface ChannelFunnel {
   key: 'produk' | 'toko' | 'live';
   label: string;
+  // The same 21 funnel values Fundamental Analysis reads, scoped to this
+  // channel. The channel tables used to come from a different source that
+  // carried a shorter, differently-named metric set, so moving between
+  // Fundamental and a channel meant re-learning the table.
+  values: FunnelValueRow[];
   tree: FunnelTreeRow[];
   symptom: SymptomSummary;
 }
@@ -113,7 +118,7 @@ export interface ShopeeFunnelReport {
   // Product Analysis charts: one %Change series per metric pair, plus the
   // single-period Top 5. Keyed by pair id so the section can look one up
   // without depending on array order.
-  productCharts: { pair: ProductChartPairDef; points: ProductPairPoint[] }[];
+  productCharts: { group: ProductChartGroupDef; points: ProductChartPoint[] }[];
   potentialProducts: PotentialProduct[];
   // False when the export has no plain "Pengunjung Produk" column — the
   // Visit → ATC chart says so rather than drawing a row of zero bars.
@@ -173,7 +178,7 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     if (!(so.impressions || sc.impressions || so.clicks || sc.clicks)) return null;
     const co = funnelMetrics(so, input.omzetOld);
     const cc = funnelMetrics(sc, input.omzetCur);
-    return { key, label, tree: buildFunnelTree(co, cc), symptom: buildSymptomSummary(co, cc) };
+    return { key, label, values: buildFunnelValues(co, cc), tree: buildFunnelTree(co, cc), symptom: buildSymptomSummary(co, cc) };
   };
   const channels = [
     channelFunnel('produk', 'Iklan Produk', input.produkOld, input.produkCur),
@@ -193,8 +198,8 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     conversion: buildProductRankings(perfOld, perfCur, CONVERSION_METRIC_DEFS),
     hasProductPerfCur: perfCur.length > 0,
     hasProductPerfOld: perfOld.length > 0,
-    productCharts: PRODUCT_CHART_PAIRS.map((pair) => ({ pair, points: buildProductPairChange(perfOld, perfCur, pair) })),
-    potentialProducts: buildPotentialProducts(perfCur, 5),
+    productCharts: PRODUCT_CHART_GROUPS.map((group) => ({ group, points: buildProductChartPoints(perfOld, perfCur, group) })),
+    potentialProducts: buildPotentialProducts(perfCur, 10),
     hasVisitorsCol: input.productPerfCur ? hasVisitorsCol(input.productPerfCur) : false,
     paretoAvailableMonths: [...new Set(allMonths.map((m) => m.month))].sort(),
   };

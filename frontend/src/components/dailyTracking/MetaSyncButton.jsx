@@ -61,7 +61,7 @@ function describeResult(data) {
 // DailyTrackingBoostPost.gs's updateAllDailyTrackingSpend() exactly:
 // 1. Daily Tracking tab configs (GET /meta-automation/tracking), linked via
 //    config.atlasBrandId — the older, Sheet-writing path.
-// 2. Brand & Langganan accounts (GET /meta-automation/brands) that are
+// 2. Meta Automation accounts (GET /meta-automation/brands) that are
 //    linked via atlasBrandId and have either a Kata Kunci Boost Post (MAIN)
 //    or are typed CPAS — the newer, Sheet-free path (see BrandsSection).
 //    An account already covered by a config in (1) is excluded here so it's
@@ -118,7 +118,7 @@ export default function MetaSyncButton({ brandId, onSynced }) {
       // just the name would be ambiguous server-side (see the long note on
       // findAccount_ in apps-script/DailyTrackingBoostPost.gs).
       key: `account:${a.client}:${a.type}`,
-      label: `${a.client} - ${a.type} (Brand & Langganan)`,
+      label: `${a.client} - ${a.type} (Meta Automation)`,
       payload: { accountClient: a.client, accountType: a.type },
     })),
   ];
@@ -166,7 +166,7 @@ export default function MetaSyncButton({ brandId, onSynced }) {
     return (
       <span className="dt-meta-sync-error">
         Belum ada sumber Meta Ads Automation untuk brand ini — isi Nama Brand + Kata Kunci Boost
-        Post di Meta Ads Automation &gt; Brand &amp; Langganan (atau tautkan lewat config di tab
+        Post di Pengaturan Brand &gt; Meta Automation (atau tautkan lewat config di tab
         Daily Tracking).
       </span>
     );

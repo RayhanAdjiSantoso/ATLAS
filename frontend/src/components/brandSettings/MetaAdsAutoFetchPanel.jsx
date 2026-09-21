@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { CalendarClock, Check, CircleAlert, FolderInput, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
@@ -46,10 +45,13 @@ function runState(run) {
 
 // Auto-fetch of Meta Ads / CPAS insights into ATLAS. Lives under Data & file
 // › Meta Ads. An account is eligible exactly when it is registered in Meta
-// Ads Automation › Brand & Langganan and linked to this ATLAS brand — the
+// Brand › Meta Automation and linked to this ATLAS brand — the
 // same rule Daily Tracking's auto-fill uses. Admin only: it reaches the Meta
 // tokens held in Apps Script.
-export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged }) {
+// `onOpenAutomation` switches Pengaturan Brand to its Meta Automation
+// section — the registry this panel depends on now lives on the same page,
+// so the two pointers below are buttons rather than links.
+export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenAutomation }) {
   const { isAdmin, isViewOnly } = useAuth();
   const brandId = brand?.brand_id;
 
@@ -194,7 +196,7 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged }) {
           <h3>Tarik otomatis dari Meta</h3>
           <p>
             Tiap tanggal 1, ATLAS menarik data bulan sebelumnya per campaign, umur, gender, dan hari untuk akun yang
-            sudah terdaftar di <Link to="/meta-automation">Meta Ads Automation › Brand &amp; Langganan</Link>.
+            sudah terdaftar di bagian <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini.
           </p>
         </div>
       </header>
@@ -225,7 +227,7 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged }) {
           <CircleAlert size={16} />
           <span>
             Brand ini belum punya akun {typeLabel} yang tertaut. Daftarkan dulu di{' '}
-            <Link to="/meta-automation">Meta Ads Automation › Brand &amp; Langganan</Link> (pilih tipe {type}, dan pastikan
+            <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini (pilih tipe {type}, dan pastikan
             nama brand-nya cocok dengan brand ini) agar penarikan otomatis berjalan.
           </span>
         </div>

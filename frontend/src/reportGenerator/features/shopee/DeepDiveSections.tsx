@@ -10,9 +10,9 @@ import { DAILY_TREND_BUILTIN_METRICS, dailyTrendSelectionId, dailyTrendSelection
 import { ITEM_BUILTIN_METRICS, metricSelectionId, metricSelectionLabel, type KeywordPivotRow, type MetricSelection, type ProdukPivotRow } from '../../lib/shopeeDeepDiveItemPivot';
 import { fmtPivotVal, type PivotFmt, type PivotRow } from '../../lib/shopeeDeepDivePivot';
 import { PERFORMANCE_BUILTIN_METRICS, type PerfMetricVars, type PerformancePivotRow } from '../../lib/shopeeProductAnalysis';
-import type { FunnelTreeRow } from '../../lib/shopeeFunnel';
-import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
+import type { FunnelTreeRow, FunnelValueRow } from '../../lib/shopeeFunnel';
 import type { SheetRow } from '../../lib/types';
+import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import { SymptomSummaryPanel, SymptomTreePanel } from './AnalysisSections';
 
 // ══════════════════════════════════════════════════════
@@ -28,6 +28,7 @@ export function ChannelPivotSection({
   title,
   badge,
   rows,
+  values,
   p1,
   p2,
   tree,
@@ -36,6 +37,10 @@ export function ChannelPivotSection({
   title: string;
   badge: string;
   rows: PivotRow[];
+  // Preferred when the channel reports the funnel columns; `rows` is the
+  // fallback for a channel that does not (Iklan Live reports viewers, not
+  // impressions, so it keeps its own shorter set).
+  values?: FunnelValueRow[];
   p1: string;
   p2: string;
   // This channel's own funnel tree + read. The table is capped narrow, so the
@@ -44,7 +49,9 @@ export function ChannelPivotSection({
   tree?: FunnelTreeRow[];
   symptom?: SymptomSummary;
 }) {
-  const kpiRows: KpiRowDisplay[] = rows.map((r) => ({ id: r.key, label: r.label, old: r.old, cur: r.cur, delta: r.delta, cls: r.cls }));
+  const kpiRows: KpiRowDisplay[] = values
+    ? values.map((v) => ({ id: v.key, label: v.label, old: fmtPivotVal(v.oldNum, v.fmt), cur: fmtPivotVal(v.curNum, v.fmt), delta: v.delta, cls: v.cls }))
+    : rows.map((r) => ({ id: r.key, label: r.label, old: r.old, cur: r.cur, delta: r.delta, cls: r.cls }));
   const table = (
     <KpiTable rows={kpiRows} p1={p1} p2={p2} emptyMessage="Semua metrik disembunyikan — pilih dari '+ Tambah metrik' untuk menampilkannya kembali." padded />
   );
@@ -61,7 +68,7 @@ export function ChannelPivotSection({
             <SymptomTreePanel tree={tree} p1={p1} p2={p2} title="Symptom Analysis" badge={title} />
           </div>
           {symptom && (
-            <div style={{ padding: '0 1.4rem 1.2rem' }}>
+            <div style={{ padding: '1.3rem 1.4rem 1.2rem' }}>
               <SymptomSummaryPanel summary={symptom} />
             </div>
           )}

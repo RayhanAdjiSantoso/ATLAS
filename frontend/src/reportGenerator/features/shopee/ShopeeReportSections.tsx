@@ -87,6 +87,7 @@ export function ShopeeReportSections({
             rows={deepDive.produk}
             p1={report.p1}
             p2={report.p2}
+            values={channelFunnel('produk')?.values}
             tree={channelFunnel('produk')?.tree}
             symptom={channelFunnel('produk')?.symptom}
           />
@@ -97,6 +98,7 @@ export function ShopeeReportSections({
               rows={deepDive.toko}
               p1={report.p1}
               p2={report.p2}
+              values={channelFunnel('toko')?.values}
               tree={channelFunnel('toko')?.tree}
               symptom={channelFunnel('toko')?.symptom}
             />
@@ -108,11 +110,12 @@ export function ShopeeReportSections({
               rows={deepDive.live}
               p1={report.p1}
               p2={report.p2}
+              values={channelFunnel('live')?.values}
               tree={channelFunnel('live')?.tree}
               symptom={channelFunnel('live')?.symptom}
             />
           )}
-          {funnelReport && <ChannelContributionSection mix={funnelReport.channelMix} periodLabel={report.p2} />}
+          {funnelReport && <ChannelContributionSection mix={funnelReport.channelMix} periodLabel={report.p2} alwaysOpen />}
           {report.productOverviewRows && (
             <div className="sec-block">
               <div className="sec-heading shopee-heading">
@@ -136,10 +139,10 @@ export function ShopeeReportSections({
       hidden: !funnelReport,
       content: funnelReport ? (
         <>
-          {funnelReport.productCharts.map(({ pair, points }) => (
+          {funnelReport.productCharts.map(({ group, points }) => (
             <ProductChangeChartSection
-              key={pair.id}
-              pair={pair}
+              key={group.id}
+              group={group}
               points={points}
               hasCur={funnelReport.hasProductPerfCur}
               hasOld={funnelReport.hasProductPerfOld}

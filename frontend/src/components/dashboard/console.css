@@ -265,7 +265,7 @@
 .brand-view-pill { position:absolute; z-index:-1; inset:0; border-radius:13px; background:linear-gradient(135deg,var(--acc) 0%,#2f54d4 100%); box-shadow:0 10px 22px rgba(30,62,184,.3),inset 0 1px rgba(255,255,255,.18); }
 /* Pengaturan Brand: five sections */
 @container (min-width:560px) { .section-nav-shell.is-brand .brand-view-nav { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-@container (min-width:860px) { .section-nav-shell.is-brand .brand-view-nav { grid-template-columns:repeat(5,minmax(0,1fr)); } }
+@container (min-width:1100px) { .section-nav-shell.is-brand .brand-view-nav { grid-template-columns:repeat(6,minmax(0,1fr)); } }
 /* Business Overview: eight domains */
 @container (min-width:620px) { .section-nav-shell.is-dashboard .brand-view-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 /* Business Overview: Executive Snapshot + three channels. Four tabs split
@@ -294,6 +294,17 @@
 .brand-workspace-foot { display:flex; align-items:flex-start; gap:.52rem; padding:.85rem 1.5rem; color:var(--text-muted); border-top:1px solid var(--rule); background:#fbfcff; font-size:.72rem; line-height:1.5; }
 .brand-workspace-foot svg { flex:0 0 auto; color:var(--acc); margin-top:.05rem; }
 .brand-workspace-foot em { color:var(--text); font-style:normal; font-weight:750; }
+
+/* ── Meta Automation section ──────────────────────────────────────────────
+   The sub-view switcher reuses the drawn filter chips the MoM type filter
+   already uses, so this section introduces no new control vocabulary. */
+.brand-meta-subnav { padding:1.1rem 1.5rem 0; }
+.brand-meta-body { padding:1.25rem 1.5rem 1.5rem; }
+/* A pointer to another section of this same page: a button, because nothing
+   navigates — a link that does not go anywhere is a small lie. */
+.brand-inline-link { padding:0; color:var(--acc); border:0; background:none; font:inherit; font-weight:750; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+.brand-inline-link:hover { color:var(--primary-hover); }
+.brand-inline-link:focus-visible { outline:2px solid var(--acc); outline-offset:2px; border-radius:4px; }
 
 .brand-context-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); background:rgba(255,255,255,.6); }
 .brand-field { display:grid; gap:.28rem; padding:1.05rem 1.5rem 1.15rem; border-bottom:1px solid var(--rule); transition:background .2s ease; }

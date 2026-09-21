@@ -1,4 +1,4 @@
-import { Children, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 // Everything sticky above the report stacks: site header → report-type rail →
 // the report's own tab bar. Measure whichever is lowest rather than hardcode a
@@ -37,6 +37,12 @@ const prefersReduced = () => window.matchMedia?.('(prefers-reduced-motion: reduc
 // just sit a layer above it.
 export function SectionAccordion({ children, defaultOpen = 0 }: { children: ReactNode; defaultOpen?: number }) {
   const items = Children.toArray(children).filter(Boolean);
+  // A child may opt out of folding entirely by carrying `alwaysOpen`. Some
+  // sections lose their job the moment they can be collapsed — the
+  // cross-channel contribution read is the only place the channels are
+  // compared, and behind a click it is simply missed. Such a section renders
+  // with no toggle and no height clamp, and never becomes the open index.
+  const statics = items.map((child) => isValidElement(child) && (child.props as { alwaysOpen?: boolean }).alwaysOpen === true);
   const [open, setOpen] = useState(defaultOpen);
   const refs = useRef<(HTMLDivElement | null)[]>([]);
   // Scroll only for a click, never for the initial render.
@@ -51,6 +57,7 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
   // name, and the overlay is sized to the heading so it never covers content.
   useLayoutEffect(() => {
     items.forEach((_, i) => {
+      if (statics[i]) return;
       const wrap = refs.current[i];
       const block = blockOf(i);
       if (!wrap || !block) return;
@@ -76,6 +83,7 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
 
   useLayoutEffect(() => {
     items.forEach((_, i) => {
+      if (statics[i]) return;
       const block = blockOf(i);
       if (!block) return;
       const isOpen = open === i;
@@ -159,23 +167,29 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
           ref={(el) => {
             refs.current[i] = el;
           }}
-          className={`sec-acc-item${open === i ? ' open' : ''}`}
-          onClickCapture={(e) => {
-            const el = e.target as HTMLElement;
-            // Mouse fallback for any part of the heading the overlay doesn't
-            // cover. Never the export buttons living in it, and never the
-            // overlay itself — that has its own handler and would double-fire.
-            if (!el.closest('.sec-heading') || el.closest('button') || el.closest('a')) return;
-            e.preventDefault();
-            toggle(i);
-          }}
+          className={`sec-acc-item${statics[i] ? ' is-static' : open === i ? ' open' : ''}`}
+          onClickCapture={
+            statics[i]
+              ? undefined
+              : (e) => {
+                  const el = e.target as HTMLElement;
+                  // Mouse fallback for any part of the heading the overlay doesn't
+                  // cover. Never the export buttons living in it, and never the
+                  // overlay itself — that has its own handler and would double-fire.
+                  if (!el.closest('.sec-heading') || el.closest('button') || el.closest('a')) return;
+                  e.preventDefault();
+                  toggle(i);
+                }
+          }
         >
-          <button
-            type="button"
-            className="sec-acc-toggle"
-            aria-expanded={open === i}
-            onClick={() => toggle(i)}
-          />
+          {!statics[i] && (
+            <button
+              type="button"
+              className="sec-acc-toggle"
+              aria-expanded={open === i}
+              onClick={() => toggle(i)}
+            />
+          )}
           {child}
         </div>
       ))}

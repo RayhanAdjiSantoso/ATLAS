@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import WeeklyDailyTab from '../components/metaAutomation/WeeklyDailyTab.jsx';
 import DailyTrackingTab from '../components/metaAutomation/DailyTrackingTab.jsx';
-import BrandsAndSubscriptionsTab from '../components/metaAutomation/BrandsAndSubscriptionsTab.jsx';
 
-const TABS = ['Weekly & Daily', 'Daily Tracking', 'Brand & Langganan'];
+// Brand & Langganan moved to Pengaturan Brand › Meta Automation: registering
+// an ad account is brand setup, and keeping it here meant configuring a brand
+// and registering its account were two separate pages.
+const TABS = ['Weekly & Daily', 'Daily Tracking'];
 
 const TAB_COMPONENTS = {
   'Weekly & Daily': WeeklyDailyTab,
   'Daily Tracking': DailyTrackingTab,
-  'Brand & Langganan': BrandsAndSubscriptionsTab,
 };
 
 export default function MetaAutomationPage() {

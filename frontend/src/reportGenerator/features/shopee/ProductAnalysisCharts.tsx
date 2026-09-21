@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { ParetoChart } from '../../components/ParetoChart';
+import { PotentialParetoChart } from '../../components/PotentialParetoChart';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SegmentedToggle, type SegmentedOption } from '../../components/SegmentedToggle';
 import { formatMonth } from '../reports/LibraryFileSlot';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import {
-  POTENTIAL_METRICS,
-  rankProductPairs,
+  rankProductPoints,
   type ChartDirection,
   type ParetoRangeSelection,
   type ParetoRow,
   type PotentialProduct,
-  type ProductChartPairDef,
-  type ProductPairPoint,
+  type ProductChartGroupDef,
+  type ProductChartPoint,
 } from '../../lib/shopeeProductAnalysis';
 
 // ── Pareto's "which months" control — shared by the chart card here and the
@@ -83,7 +83,6 @@ export function ParetoRangeControl({ range, months, onChange }: { range: ParetoR
 // ══════════════════════════════════════════════════════
 
 const SERIES_A = '#ee4d2d'; // Shopee orange — the section's own identity
-const SERIES_B = '#0f1a3a'; // ink — a second value, not a second brand
 
 // Bars are percentage changes, so they carry a sign and the axis crosses zero.
 function fmtPctChange(v: number): string {
@@ -114,7 +113,7 @@ const COUNTS = [
 
 // ── #1–3: paired %Change charts ──────────────────────────────────────────
 export function ProductChangeChartSection({
-  pair,
+  group,
   points,
   hasCur,
   hasOld,
@@ -122,8 +121,8 @@ export function ProductChangeChartSection({
   p1,
   p2,
 }: {
-  pair: ProductChartPairDef;
-  points: ProductPairPoint[];
+  group: ProductChartGroupDef;
+  points: ProductChartPoint[];
   hasCur: boolean;
   hasOld: boolean;
   missingVisitorsCol: boolean;
@@ -131,31 +130,34 @@ export function ProductChangeChartSection({
   p2: string;
 }) {
   const [direction, setDirection] = useState<ChartDirection>('highest');
-  const [sortBy, setSortBy] = useState<'a' | 'b'>('a');
+  const [metricIdx, setMetricIdx] = useState('0');
   const [count, setCount] = useState<'5' | '10'>('5');
 
-  const badge = `${pair.a.label} & ${pair.b.label} · %Change ${p1} → ${p2}`;
+  const idx = Number(metricIdx);
+  const metric = group.metrics[idx] ?? group.metrics[0];
+  const badge = `${group.metrics.map((m) => m.label).join(' · ')} · %Change ${p1} → ${p2}`;
 
   if (!hasCur) {
     return (
-      <SectionShell title={`Visualisasi ${pair.title}`} badge={badge}>
+      <SectionShell title={`Visualisasi ${group.title}`} badge={badge}>
         <div className="empty-note">Upload file Product Performance periode ini untuk melihat visualisasi ini.</div>
       </SectionShell>
     );
   }
   if (!hasOld) {
     return (
-      <SectionShell title={`Visualisasi ${pair.title}`} badge={badge}>
+      <SectionShell title={`Visualisasi ${group.title}`} badge={badge}>
         <div className="empty-note">
           Grafik ini membandingkan dua periode. Upload juga file <strong>Product Performance periode lalu</strong> agar %Change bisa dihitung.
         </div>
       </SectionShell>
     );
   }
-  // Only the Visit → ATC pair reads the plain "Pengunjung Produk" column.
-  if (missingVisitorsCol && pair.a.key === 'visitors') {
+  // Only the Visit → ATC group reads the plain "Pengunjung Produk" column.
+  // Visit → ATC is derived from the plain "Pengunjung Produk" column.
+  if (missingVisitorsCol && group.metrics.some((m) => m.key === 'visitors' || m.key === 'visitToAtcRate')) {
     return (
-      <SectionShell title={`Visualisasi ${pair.title}`} badge={badge}>
+      <SectionShell title={`Visualisasi ${group.title}`} badge={badge}>
         <div className="empty-note">
           Kolom <strong>Pengunjung Produk</strong> tidak ada di file Product Performance yang diupload, jadi metrik Visitor tidak bisa dihitung. Export ulang dari Shopee
           Seller Center dengan kolom tersebut disertakan.
@@ -164,21 +166,17 @@ export function ProductChangeChartSection({
     );
   }
 
-  const shown = rankProductPairs(points, sortBy, direction, Number(count));
-  const sortedLabel = sortBy === 'a' ? pair.a.label : pair.b.label;
+  const shown = rankProductPoints(points, idx, direction, Number(count));
 
   return (
-    <SectionShell title={`Visualisasi ${pair.title}`} badge={badge}>
+    <SectionShell title={`Visualisasi ${group.title}`} badge={badge}>
       <div className="chart-controls">
         <SegmentedToggle label="Urutan" options={DIRECTIONS} value={direction} onChange={setDirection} accent="var(--shopee-700)" />
         <SegmentedToggle
           label="Urut berdasarkan"
-          options={[
-            { value: 'a' as const, label: pair.a.label },
-            { value: 'b' as const, label: pair.b.label },
-          ]}
-          value={sortBy}
-          onChange={setSortBy}
+          options={group.metrics.map((m, i) => ({ value: String(i), label: m.label }))}
+          value={metricIdx}
+          onChange={setMetricIdx}
           accent="var(--shopee-700)"
         />
         <SegmentedToggle label="Tampilkan" options={COUNTS} value={count} onChange={setCount} accent="var(--shopee-700)" />
@@ -189,22 +187,19 @@ export function ProductChangeChartSection({
       ) : (
         <>
           <p className="chart-caption">
-            {count} produk dengan %Change <strong>{sortedLabel}</strong> {direction === 'highest' ? 'tertinggi' : 'terendah'}. Kedua metrik tetap ditampilkan
-            berdampingan agar bisa dibandingkan.
+            {count} produk dengan %Change <strong>{metric.label}</strong> {direction === 'highest' ? 'tertinggi' : 'terendah'}.
           </p>
           <GroupedBarChart
             labels={shown.map((p) => p.produk)}
-            series={[
-              { label: pair.a.label, values: shown.map((p) => p.aPct), color: SERIES_A },
-              { label: pair.b.label, values: shown.map((p) => p.bPct), color: SERIES_B },
-            ]}
+            series={[{ label: metric.label, values: shown.map((p) => p.pct[idx]), color: SERIES_A }]}
             formatValue={fmtPctChange}
             zeroLine
             height={340}
-            ariaLabel={`${pair.title}: %Change ${pair.a.label} dan ${pair.b.label} untuk ${count} produk teratas`}
+            ariaLabel={`${group.title}: %Change ${metric.label} untuk ${count} produk teratas`}
           />
           <p className="chart-foot">
-            Batang adalah <strong>persentase perubahan</strong> {p1} → {p2}, bukan angka absolut — keduanya sama-sama persen sehingga bisa berbagi satu sumbu.
+            Batang adalah <strong>persentase perubahan</strong> {p1} → {p2}, bukan angka absolut. Hanya metrik yang sedang diurutkan yang digambar — ganti metrik di atas
+            untuk membaca yang lain.
           </p>
         </>
       )}
@@ -262,37 +257,19 @@ export function ParetoChartSection({
 // ── #5: Produk Potensial (Top 5) ─────────────────────────────────────────
 export function PotentialProductsSection({ products, hasData, periodLabel }: { products: PotentialProduct[]; hasData: boolean; periodLabel: string }) {
   return (
-    <SectionShell title="Visualisasi Produk Potensial" badge={`Top 5 · Revenue & Conversion Rate · ${periodLabel}`}>
+    <SectionShell title="Visualisasi Produk Potensial" badge={`Revenue & Conversion Rate · ${periodLabel}`}>
       {!hasData ? (
         <div className="empty-note">Upload file Product Performance periode ini untuk melihat produk potensial.</div>
       ) : !products.length ? (
         <div className="empty-note">Tidak ada produk dengan penjualan pada periode ini.</div>
       ) : (
         <>
-          <p className="chart-caption">Lima produk dengan revenue tertinggi, dengan conversion rate masing-masing di sebelahnya — urutan produknya sama di kedua grafik.</p>
-          <div className="chart-pair">
-            <div className="chart-pair-item">
-              <GroupedBarChart
-                labels={products.map((p) => p.produk)}
-                series={[{ label: POTENTIAL_METRICS.revenue.label, values: products.map((p) => p.revenue), color: SERIES_A }]}
-                formatValue={(v) => fmtPivotVal(v, 'rp')}
-                height={280}
-                ariaLabel="Revenue lima produk teratas"
-              />
-            </div>
-            <div className="chart-pair-item">
-              <GroupedBarChart
-                labels={products.map((p) => p.produk)}
-                series={[{ label: POTENTIAL_METRICS.conversionRate.label, values: products.map((p) => p.conversionRate), color: SERIES_B }]}
-                formatValue={(v) => fmtPivotVal(v, 'pct')}
-                height={280}
-                ariaLabel="Conversion rate lima produk teratas"
-              />
-            </div>
-          </div>
+          <p className="chart-caption">{products.length} produk dengan revenue tertinggi, diurutkan menurun.</p>
+          <PotentialParetoChart products={products} />
           <p className="chart-foot">
-            Dua grafik terpisah, bukan satu grafik dengan dua sumbu: Revenue dalam rupiah dan Conversion Rate dalam persen tidak bisa dibandingkan panjang batangnya
-            secara jujur pada satu skala.
+            Batang adalah revenue (sumbu kiri) — satu-satunya seri yang panjangnya jadi ukuran. Titik <strong>Conversion Rate</strong> memakai sumbu kanan yang
+            diskalakan mengikuti CVR tertinggi pada periode ini, bukan 0–100%, supaya selisih antar produk terbaca. Batang tinggi dengan titik CVR rendah adalah
+            produk yang sudah menghasilkan tapi konversinya masih punya ruang.
           </p>
         </>
       )}

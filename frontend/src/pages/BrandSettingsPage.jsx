@@ -6,8 +6,9 @@ import {
   Archive, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
   CloudUpload, Database, Download, FileSpreadsheet, Layers3, Loader2, Plus, RefreshCw, Save,
   Search, Sparkles, Trash2, Upload, UsersRound, PenLine, NotebookPen, Circle, CheckCircle2,
-  ChevronsDownUp, ChevronsUpDown,
+  ChevronsDownUp, ChevronsUpDown, Megaphone,
 } from 'lucide-react';
+import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import DatePicker from '../components/dashboard/DatePicker.jsx';
@@ -131,6 +132,7 @@ const VIEWS = [
   { id: 'direction', hint: 'Arah kerja', label: 'Current direction', Icon: Layers3, note: 'Arah kerja yang membingkai keputusan' },
   { id: 'mom', hint: 'Recap & to do list', label: 'Minutes of Meeting', Icon: UsersRound, note: 'Recap dan tindak lanjut setiap pertemuan' },
   { id: 'data', hint: 'Perpustakaan file', label: 'Data & file', Icon: Archive, note: 'Satu perpustakaan sumber untuk semua modul' },
+  { id: 'meta-automation', hint: 'Ad account & laporan', label: 'Meta Automation', Icon: Megaphone, note: 'Daftarkan ad account Meta dan penerima laporan otomatisnya' },
 ];
 
 
@@ -1050,7 +1052,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
   );
 }
 
-function DataView({ brand, files, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
+function DataView({ brand, files, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, onOpenAutomation, busyKey, marketId, setMarketId }) {
   const platform = PLATFORMS.find((p) => p.id === marketId) ?? PLATFORMS[0];
   const focusMonth = focus ? months.find((m) => m.key === focus) : null;
 
@@ -1160,7 +1162,7 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
           />
         </AnimatePresence>
 
-        {platform.id === 'meta' && <MetaAdsAutoFetchPanel brand={brand} onLibraryChanged={onLibraryChanged} />}
+        {platform.id === 'meta' && <MetaAdsAutoFetchPanel brand={brand} onLibraryChanged={onLibraryChanged} onOpenAutomation={onOpenAutomation} />}
       </div>
     </>
   );
@@ -1650,10 +1652,17 @@ export default function BrandSettingsPage() {
               brand={brand} files={files} months={months} axis={axis}
               windowStart={windowStart} setWindowStart={(next) => { setWindowStart(next); setFocus(null); }}
               focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
+              onOpenAutomation={() => setActiveView('meta-automation')}
               onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}
               onLibraryChanged={() => brand && refreshFiles(brand.brand_id)}
               marketId={marketId} setMarketId={setMarketId}
             />
+          </ViewShell>
+        )}
+
+        {activeView === 'meta-automation' && (
+          <ViewShell viewId="meta-automation" reduced={reduced}>
+            <MetaAutomationSection />
           </ViewShell>
         )}
       </AnimatePresence>
