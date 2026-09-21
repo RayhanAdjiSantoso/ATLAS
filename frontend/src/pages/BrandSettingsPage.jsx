@@ -12,6 +12,7 @@ import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import DatePicker from '../components/dashboard/DatePicker.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
+import MetaAdsAutoFetchPanel from '../components/brandSettings/MetaAdsAutoFetchPanel.jsx';
 import {
   MOM_TYPES, MOM_TYPE_LABELS, dateLabel, emptyMinute, longDateLabel, parseISO, recapPreview, taskGroups, taskStats,
 } from '../components/mom/momModel.js';
@@ -1152,6 +1153,8 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
             onPick={onPick} onDelete={onDelete} onReimport={onReimport} busyKey={busyKey} focusMonth={focusMonth}
           />
         </AnimatePresence>
+
+        {platform.id === 'meta' && <MetaAdsAutoFetchPanel brand={brand} />}
       </div>
     </>
   );
