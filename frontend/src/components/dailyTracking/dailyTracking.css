@@ -135,7 +135,8 @@
    one month, not six unrelated facts. ─────────────────────────────── */
 .dt-kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* First card (Total Revenue) gets extra room: it shows the exact figure. */
+  grid-template-columns: minmax(0, 1.7fr) repeat(5, minmax(0, 1fr));
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -167,6 +168,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.dt-kpi-val--full { font-size: clamp(0.8rem, 1.2vw, 1.05rem); }
 .dt-skel {
   display: inline-block;
   width: 60%;
