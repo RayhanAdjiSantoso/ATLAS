@@ -36,3 +36,8 @@ dist/
 
 # Local UI/UX skill pack (ui-ux-pro-max) — reference data, not app code.
 frontend/.claude/skills/
+
+# Local agent tooling from other CLIs (skills, hooks) — not app code, same
+# category as the skill packs above: reinstalled locally, never committed.
+.agents/
+.codex/
