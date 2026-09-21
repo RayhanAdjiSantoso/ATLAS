@@ -1,0 +1,13 @@
+-- =====================================================================
+-- 026 — Daily Tracking: allow negative sales values (returns / RETUR)
+--
+-- A return (retur) is booked in the source sheets as a negative line on
+-- the channel it was refunded through — e.g. Drc: -Rp679,000 / Qty -1 /
+-- Transaksi -1, with "RETUR" in Notes. Total Revenue in those sheets
+-- already nets the return out, so ATLAS has to store it as-is instead of
+-- rejecting the whole file import on ck_dcs_nonneg (migration 024).
+--
+-- Only the sales table is relaxed. daily_channel_spend keeps its own
+-- ck_dcp_nonneg: an ad spend amount is never legitimately negative.
+-- =====================================================================
+ALTER TABLE daily_channel_sales DROP CONSTRAINT IF EXISTS ck_dcs_nonneg;

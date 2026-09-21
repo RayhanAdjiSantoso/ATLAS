@@ -23,6 +23,7 @@ export const upsertEntriesBodyValidation = [
   body('entryDate').matches(DATE_RE).withMessage('entryDate harus format YYYY-MM-DD'),
   body('sales').optional().isArray().withMessage('sales harus array'),
   body('sales.*.channelKey').if(body('sales').exists()).isString().notEmpty(),
+  body('sales.*.notes').optional({ nullable: true }).isString().isLength({ max: 500 }).withMessage('notes maksimal 500 karakter'),
   body('spend').optional().isArray().withMessage('spend harus array'),
   body('spend.*.channelKey').if(body('spend').exists()).isString().notEmpty(),
 ];

@@ -13,7 +13,7 @@ import MetaSyncButton from '../components/dailyTracking/MetaSyncButton.jsx';
 import ImportFileButton from '../components/dailyTracking/ImportFileButton.jsx';
 import DeleteMonthButton from '../components/dailyTracking/DeleteMonthButton.jsx';
 import useAutoSave from '../dailyTracking/lib/useAutoSave.js';
-import { FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS } from '../dailyTracking/lib/constants.js';
+import { FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS, NOTES_SALES_CHANNEL_KEYS } from '../dailyTracking/lib/constants.js';
 import '../components/dailyTracking/dailyTracking.css';
 
 function currentMonth() {
@@ -104,7 +104,12 @@ export default function DailyTrackingPage() {
       if (kind === 'sales') {
         schedule(saveKey, {
           brandId, entryDate: date,
-          sales: [{ channelKey, revenue: row.revenue, transaksi: row.transaksi, qtySold: row.qtySold }],
+          sales: [{
+            channelKey, revenue: row.revenue, transaksi: row.transaksi, qtySold: row.qtySold,
+            // Only channels that show a Notes cell send it, so saving any other
+            // channel never touches stored notes.
+            ...(NOTES_SALES_CHANNEL_KEYS.includes(channelKey) ? { notes: row.notes ?? null } : {}),
+          }],
         });
       } else {
         schedule(saveKey, {

@@ -19,6 +19,7 @@ import {
 const DATE_HEADER = /^(tanggal|date)$/i;
 const QTY_HEADER = /qty|kuantitas|pcs/i;
 const TX_HEADER = /transaksi|transaction/i;
+const NOTES_HEADER = /^(notes?|catatan)$/i;
 
 // Aggregate/derived columns that ride along in these sheets but are never
 // themselves a channel to import — everything here gets recomputed by ATLAS
@@ -99,9 +100,14 @@ function classifyHeaderRow(headerRow) {
     const next1 = norm[i + 1] || '';
     const next2 = norm[i + 2] || '';
     if (QTY_HEADER.test(next1) && TX_HEADER.test(next2)) {
-      revenueChannels.push({ revCol: i, qtyCol: i + 1, txCol: i + 2, rawLabel: norm[i] });
+      // A Notes column sitting right after the triplet belongs to this channel
+      // (e.g. Drc's "RETUR"). A Notes column anywhere else (commonly right
+      // after Tanggal) is not tied to a channel and stays ignored.
+      const notesCol = NOTES_HEADER.test(norm[i + 3] || '') ? i + 3 : null;
+      revenueChannels.push({ revCol: i, qtyCol: i + 1, txCol: i + 2, notesCol, rawLabel: norm[i] });
       consumed.add(i); consumed.add(i + 1); consumed.add(i + 2);
-      i += 2;
+      if (notesCol !== null) consumed.add(notesCol);
+      i += notesCol !== null ? 3 : 2;
     }
   }
 
@@ -223,11 +229,14 @@ export function parseDailyTrackingFile(buffer, originalFilename = 'file') {
       const revenue = parseAmount(row[ch.revCol]);
       const qtySold = parseAmount(row[ch.qtyCol]);
       const transaksi = parseAmount(row[ch.txCol]);
-      if (revenue == null && qtySold == null && transaksi == null) continue;
+      // undefined = this channel has no Notes column in the file (leave stored
+      // notes alone); null = column exists but the cell is blank.
+      const notes = ch.notesCol == null ? undefined : (String(row[ch.notesCol] ?? '').trim() || null);
+      if (revenue == null && qtySold == null && transaksi == null && !notes) continue;
       anyValue = true;
       const mapped = mapChannel(ch.rawLabel, REVENUE_SYNONYMS);
       recognized.sales.set(mapped.key, { label: mapped.isCustom ? mapped.label : FIXED_SALES_LABELS[mapped.key], isCustom: mapped.isCustom });
-      salesRows.push({ entryDate, channelKey: mapped.key, revenue, qtySold, transaksi });
+      salesRows.push({ entryDate, channelKey: mapped.key, revenue, qtySold, transaksi, notes });
     }
     for (const ch of currentMap.spendChannels) {
       const amount = parseAmount(row[ch.col]);
