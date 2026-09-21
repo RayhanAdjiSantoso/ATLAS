@@ -45,3 +45,4 @@
 @keyframes maf-spin { to { transform: rotate(360deg); } }
 
 .maf-month { width: 220px; }
+.maf-row-actions { display: flex; gap: .25rem; justify-content: flex-end; }

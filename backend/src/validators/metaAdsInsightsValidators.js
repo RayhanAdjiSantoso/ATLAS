@@ -14,6 +14,8 @@ export const saveConfigValidation = [
 
 export const fetchNowValidation = [brandId(body), accountType(body), month(body)];
 
+export const syncLibraryValidation = [brandId(body), accountType(body), month(body)];
+
 export const deleteMonthValidation = [brandId(query), accountType(query), month(query)];
 
 // ── ingest (Apps Script) ─────────────────────────────────────────────
@@ -33,4 +35,8 @@ export const finishValidation = [
   body('status').isIn(['success', 'failed']).withMessage('status harus success atau failed'),
   body('rowCount').isInt({ min: 0 }).withMessage('rowCount harus angka >= 0'),
   body('note').optional({ nullable: true }).isString().isLength({ max: 500 }),
+];
+
+export const libraryRunValidation = [
+  body('runId').isString().notEmpty().withMessage('runId wajib diisi'),
 ];

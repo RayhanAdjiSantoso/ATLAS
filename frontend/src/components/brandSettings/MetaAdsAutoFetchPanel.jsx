@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarClock, Check, CircleAlert, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, CircleAlert, FolderInput, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import SelectMenu from '../common/SelectMenu.jsx';
@@ -49,7 +49,7 @@ function runState(run) {
 // Ads Automation › Brand & Langganan and linked to this ATLAS brand — the
 // same rule Daily Tracking's auto-fill uses. Admin only: it reaches the Meta
 // tokens held in Apps Script.
-export default function MetaAdsAutoFetchPanel({ brand }) {
+export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged }) {
   const { isAdmin, isViewOnly } = useAuth();
   const brandId = brand?.brand_id;
 
@@ -64,6 +64,7 @@ export default function MetaAdsAutoFetchPanel({ brand }) {
   const [notice, setNotice] = useState('');
   const pollUntil = useRef(0);
   const pollTimer = useRef(null);
+  const libraryTimer = useRef(null);
 
   const loadOverview = useCallback(async () => {
     if (!brandId) return null;
@@ -93,7 +94,7 @@ export default function MetaAdsAutoFetchPanel({ brand }) {
     return () => { cancelled = true; };
   }, [isAdmin, brandId, loadOverview]);
 
-  useEffect(() => () => clearTimeout(pollTimer.current), []);
+  useEffect(() => () => { clearTimeout(pollTimer.current); clearTimeout(libraryTimer.current); }, []);
 
   // After "Tarik sekarang" the run finishes minutes later in Apps Script, so
   // watch the log until nothing is running any more (or give up quietly).
@@ -103,10 +104,17 @@ export default function MetaAdsAutoFetchPanel({ brand }) {
     const tick = async () => {
       const data = await loadOverview();
       const active = data?.runs.some((r) => r.status === 'running' && Date.now() - new Date(r.startedAt).getTime() <= STALE_RUN_MS);
-      if (active !== false && Date.now() < pollUntil.current) pollTimer.current = setTimeout(tick, POLL_MS);
+      if (active !== false && Date.now() < pollUntil.current) {
+        pollTimer.current = setTimeout(tick, POLL_MS);
+        return;
+      }
+      // Apps Script files the month into the library a moment AFTER it
+      // reports the run finished, so look again shortly after the first refresh.
+      onLibraryChanged?.();
+      libraryTimer.current = setTimeout(() => onLibraryChanged?.(), 8000);
     };
     pollTimer.current = setTimeout(tick, POLL_MS);
-  }, [loadOverview]);
+  }, [loadOverview, onLibraryChanged]);
 
   const catalog = overview?.catalog ?? [];
   const defaults = useMemo(() => catalog.filter((m) => m.group === 'default'), [catalog]);
@@ -147,12 +155,26 @@ export default function MetaAdsAutoFetchPanel({ brand }) {
     } finally { setBusy(''); }
   };
 
+  // Rebuilds the Data & file library copy of a fetched month — for months
+  // fetched before that step existed, or when it was skipped or failed.
+  const syncLibrary = async (row) => {
+    setBusy(`lib:${row.accountType}:${row.month}`); setNotice(''); setError('');
+    try {
+      await api.post('/meta-ads-insights/library', { brandId, accountType: row.accountType, month: row.month });
+      setNotice(`${monthName(row.month)} disimpan ke Data & file — sekarang bisa dipilih di Report Generator.`);
+      onLibraryChanged?.();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal menyimpan ke Data & file');
+    } finally { setBusy(''); }
+  };
+
   const deleteMonth = async (row) => {
     if (!window.confirm(`Hapus data Meta Ads ${monthName(row.month)} (${row.accountType === 'CPAS' ? 'CPAS' : 'Meta Ads'})? Tidak bisa dikembalikan.`)) return;
     setBusy(`del:${row.accountType}:${row.month}`); setNotice(''); setError('');
     try {
       await api.delete('/meta-ads-insights/months', { params: { brandId, accountType: row.accountType, month: row.month } });
       await loadOverview();
+      onLibraryChanged?.();
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menghapus data');
     } finally { setBusy(''); }
@@ -254,7 +276,7 @@ export default function MetaAdsAutoFetchPanel({ brand }) {
               <button type="button" className="btn btn-primary dt-btn-sm" onClick={fetchNow} disabled={!canAct || busy === 'fetch'}>
                 {busy === 'fetch' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Tarik {typeLabel}
               </button>
-              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta.</small>
+              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta. Hasilnya juga disimpan ke Data & file (Meta Ads / CPAS) dan bisa dipilih di Report Generator.</small>
             </div>
           </div>
 
@@ -278,7 +300,14 @@ export default function MetaAdsAutoFetchPanel({ brand }) {
                         <td>{row.campaignCount}</td>
                         <td>{idr(row.amountSpent)}</td>
                         <td>{dateTime(row.fetchedAt)}</td>
-                        <td>
+                        <td className="maf-row-actions">
+                          <button
+                            type="button" className="btn btn-icon" title="Simpan ke Data & file"
+                            aria-label={`Simpan ${monthName(row.month)} ke Data & file`}
+                            onClick={() => syncLibrary(row)} disabled={readOnly || busy === `lib:${row.accountType}:${row.month}`}
+                          >
+                            {busy === `lib:${row.accountType}:${row.month}` ? <Loader2 size={14} className="maf-spin" /> : <FolderInput size={14} />}
+                          </button>
                           <button
                             type="button" className="btn btn-icon" aria-label={`Hapus ${monthName(row.month)}`}
                             onClick={() => deleteMonth(row)} disabled={readOnly || busy === `del:${row.accountType}:${row.month}`}
