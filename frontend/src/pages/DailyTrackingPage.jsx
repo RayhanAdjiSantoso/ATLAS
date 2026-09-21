@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
 import DailyTrackingClientBar from '../components/dailyTracking/DailyTrackingClientBar.jsx';
 import DailyKpiStrip from '../components/dailyTracking/DailyKpiStrip.jsx';
-import SectionNav from '../components/dailyTracking/SectionNav.jsx';
+import SectionTabs from '../components/dailyTracking/SectionTabs.jsx';
+import SectionToggle from '../components/dailyTracking/SectionToggle.jsx';
 import ChannelTabs from '../components/dailyTracking/ChannelTabs.jsx';
 import DailyEntryTable from '../components/dailyTracking/DailyEntryTable.jsx';
 import ChannelSummaryTable from '../components/dailyTracking/ChannelSummaryTable.jsx';
@@ -25,6 +26,12 @@ export default function DailyTrackingPage() {
   const { allowedBrandId, isAdmin } = useAuth();
   const locked = !!allowedBrandId;
 
+  // Expand/collapse per section; remembered for the browser tab.
+  const [collapsed, setCollapsed] = useSessionState('daily-tracking:collapsed', {});
+  const isOpen = (id) => !collapsed[id];
+  const toggleSection = (id) => setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+  const [activeTab, setActiveTab] = useSessionState('daily-tracking:tab', 'sales');
+
   const [brands, setBrands] = useState([]);
   const [brandId, setBrandId] = useSessionState('daily-tracking:client', null);
   const [brandStatus, setBrandStatus] = useSessionState('daily-tracking:brand-status', 'active');
@@ -36,21 +43,6 @@ export default function DailyTrackingPage() {
   const [loading, setLoading] = useState(false);
   const [modalKind, setModalKind] = useState(null); // 'sales' | 'spend' | null
   const [loadError, setLoadError] = useState('');
-
-  // Measured so the section-nav's smooth-scroll targets can reserve exactly
-  // this much space via CSS `scroll-margin-top` — the sticky head's real
-  // height varies (loading vs. loaded KPI strip, month-pill wrapping on
-  // narrow screens), so a hardcoded offset would drift out of sync.
-  const stickyHeadRef = useRef(null);
-  useEffect(() => {
-    const el = stickyHeadRef.current;
-    if (!el) return undefined;
-    const setVar = () => document.documentElement.style.setProperty('--dt-sticky-h', `${el.offsetHeight}px`);
-    setVar();
-    const observer = new ResizeObserver(setVar);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   // Brands list — GET /brands already filters server-side by allowedBrandId
   // (brandService.listBrands), so a client account only ever sees its own.
@@ -144,14 +136,14 @@ export default function DailyTrackingPage() {
           table scrolls underneath — genuinely position:sticky, unlike
           Dashboard's KpiStrip which is only "sticky" because it never
           unmounts. */}
-      <div className="dt-sticky-head" ref={stickyHeadRef}>
+      <div className="dt-sticky-head">
         <DailyTrackingClientBar
           brands={brands} brandId={brandId} onBrandChange={setBrandId} locked={locked}
           brandStatus={brandStatus} onBrandStatusChange={setBrandStatus}
           month={month} onMonthChange={setMonth}
         />
         <DailyKpiStrip grid={grid} channels={channels} loading={loading} />
-        <SectionNav />
+        <SectionTabs active={activeTab} onChange={setActiveTab} />
       </div>
 
       {loadError && <div className="alert alert-error">{loadError}</div>}
@@ -169,46 +161,66 @@ export default function DailyTrackingPage() {
         />
       </div>
 
-      <section className="dt-section" id="dt-section-revenue">
-        <div className="dt-section-head">
-          <h2>Revenue Data</h2>
+      {activeTab === 'sales' ? (
+        <div role="tabpanel" id="dt-panel-sales" aria-labelledby="dt-tab-sales" className="dt-panel">
+          <ChannelSummaryTable
+            kind="sales" grid={grid} channels={channels}
+            open={isOpen('summary-sales')} onToggle={() => toggleSection('summary-sales')}
+          />
+          <section className="dt-section">
+            <div className="dt-section-head">
+              <SectionToggle
+                title="Revenue Data" bodyId="dt-body-revenue"
+                open={isOpen('revenue')} onToggle={() => toggleSection('revenue')}
+              />
+            </div>
+            {isOpen('revenue') && <div id="dt-body-revenue">
+              <ChannelTabs
+                channels={channels.sales}
+                activeKey={activeSalesTab}
+                onSelect={setActiveSalesTab}
+                onAddChannel={() => setModalKind('sales')}
+              />
+              <DailyEntryTable
+                kind="sales" channelKey={activeSalesTab} days={grid.days}
+                data={grid.sales[activeSalesTab]}
+                onCellChange={(date, field, value) => onCellChange('sales', activeSalesTab, date, field, value)}
+                saveStatus={saveStatus}
+              />
+            </div>}
+          </section>
         </div>
-        <ChannelTabs
-          channels={channels.sales}
-          activeKey={activeSalesTab}
-          onSelect={setActiveSalesTab}
-          onAddChannel={() => setModalKind('sales')}
-        />
-        <DailyEntryTable
-          kind="sales" channelKey={activeSalesTab} days={grid.days}
-          data={grid.sales[activeSalesTab]}
-          onCellChange={(date, field, value) => onCellChange('sales', activeSalesTab, date, field, value)}
-          saveStatus={saveStatus}
-        />
-      </section>
-
-      <section className="dt-section" id="dt-section-spending">
-        <div className="dt-section-head">
-          <h2>Spending Data</h2>
-          {isAdmin && <MetaSyncButton brandId={brandId} onSynced={loadEntries} />}
+      ) : (
+        <div role="tabpanel" id="dt-panel-spend" aria-labelledby="dt-tab-spend" className="dt-panel">
+          <ChannelSummaryTable
+            kind="spend" grid={grid} channels={channels}
+            open={isOpen('summary-spend')} onToggle={() => toggleSection('summary-spend')}
+          />
+          <section className="dt-section">
+            <div className="dt-section-head">
+              <SectionToggle
+                title="Spending Data" bodyId="dt-body-spending"
+                open={isOpen('spending')} onToggle={() => toggleSection('spending')}
+              />
+              {isAdmin && isOpen('spending') && <MetaSyncButton brandId={brandId} onSynced={loadEntries} />}
+            </div>
+            {isOpen('spending') && <div id="dt-body-spending">
+              <ChannelTabs
+                channels={channels.spend}
+                activeKey={activeSpendTab}
+                onSelect={setActiveSpendTab}
+                onAddChannel={() => setModalKind('spend')}
+              />
+              <DailyEntryTable
+                kind="spend" channelKey={activeSpendTab} days={grid.days}
+                data={grid.spend[activeSpendTab]}
+                onCellChange={(date, field, value) => onCellChange('spend', activeSpendTab, date, field, value)}
+                saveStatus={saveStatus}
+              />
+            </div>}
+          </section>
         </div>
-        <ChannelTabs
-          channels={channels.spend}
-          activeKey={activeSpendTab}
-          onSelect={setActiveSpendTab}
-          onAddChannel={() => setModalKind('spend')}
-        />
-        <DailyEntryTable
-          kind="spend" channelKey={activeSpendTab} days={grid.days}
-          data={grid.spend[activeSpendTab]}
-          onCellChange={(date, field, value) => onCellChange('spend', activeSpendTab, date, field, value)}
-          saveStatus={saveStatus}
-        />
-      </section>
-
-      <div id="dt-section-summary">
-        <ChannelSummaryTable grid={grid} channels={channels} />
-      </div>
+      )}
 
       {modalKind && (
         <AddCustomChannelModal
