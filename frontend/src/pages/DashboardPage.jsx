@@ -694,14 +694,15 @@ export default function DashboardPage() {
         </div>
       </LayoutGroup>
 
+      <div className={isSnapshot ? undefined : "channel-workspace"} style={channel ? { '--ch-accent': channel.accent } : undefined}>
       {!isSnapshot && (
       <LayoutGroup id="dashboard-domain-nav">
-        <div className="section-nav-shell is-dashboard">
+        <div className="section-nav-shell is-dashboard channel-domain-rail">
+        <h2 className="channel-rail-title">Analisis {channel.label}</h2>
         <nav className="brand-view-nav dashboard-domain-nav" aria-label="Domain analisis" role="tablist">
           {channelDomains.map((d) => {
             const entry = channel.ready ? read(d.key) : { status: 'idle' };
             const isActive = d.key === domainKey;
-            const Icon = d.Icon;
             const stateLabel = !channel.ready ? 'Belum ada data'
               : entry.status === 'ready' ? 'Siap dibaca'
                 : entry.status === 'loading' ? 'Memuat…'
@@ -725,7 +726,6 @@ export default function DashboardPage() {
                       : { type: 'spring', stiffness: 520, damping: 44, mass: .6 }}
                   />
                 )}
-                <span className="brand-view-tab-ico" aria-hidden="true"><Icon size={16} /></span>
                 <span className="brand-view-tab-copy">
                   <strong>{d.label}</strong>
                   <small>
@@ -765,7 +765,7 @@ export default function DashboardPage() {
             <>
               {channel.ready && <KpiStrip entry={read('Executive Snapshot')} />}
 
-              <section className="con-focus" aria-labelledby="con-focus-title">
+              <section className="con-focus channel-analysis" aria-labelledby="con-focus-title">
                 <div className="con-focus-head">
                   <h2 id="con-focus-title">
                     <span className="con-focus-channel" style={{ '--ch-accent': channel.accent }}>
@@ -779,7 +779,7 @@ export default function DashboardPage() {
                   // Keyed on the domain so the settle animation replays on every
                   // exchange, and so a domain's local view state never leaks into
                   // the next one.
-                  <div className="con-focus-body" key={domainKey} data-anim={reduceMotion ? undefined : 'in'}>
+                  <div className="con-focus-body" key={`${channel.id}:${domainKey}`} data-anim={reduceMotion ? undefined : 'in'}>
                     <DashboardTab
                       activeTab={domainKey}
                       filters={filters}
@@ -821,6 +821,7 @@ export default function DashboardPage() {
             </>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

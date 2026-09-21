@@ -289,7 +289,7 @@ function renderExecutiveSnapshot(data, { onNavigateTab, stripOwnsKpis = false } 
             mode the strip shows the main period alone, so both columns keep
             their own grid and no comparison figure goes missing. */}
         {!stripOwnsKpis && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
             <KpiCard title="GMV (Penjualan)" value={kpis.gmv?.value} type="currency" growth={kpis.gmv?.growth} sparkline={gmvSparkline} note="Tren harian GMV lengkap ada di tab Business Growth." />
             <KpiCard title="Transaksi" value={kpis.transactions?.value} type="number" growth={kpis.transactions?.growth} />
             <KpiCard title="Produk Terjual (Unit)" value={kpis.unitsSold?.value} type="number" growth={kpis.unitsSold?.growth} />
@@ -304,7 +304,7 @@ function renderExecutiveSnapshot(data, { onNavigateTab, stripOwnsKpis = false } 
         {/* Best/Worst Performing Day per metric */}
         <div className="card" style={{ padding: '1.25rem' }}>
           <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Hari Performa Terbaik &amp; Terburuk</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem' }}>
             <BestWorstDayCard label="GMV" trends={trends} metric="gmv" formatValue={formatCurrency} />
             <BestWorstDayCard label="Transaksi" trends={trends} metric="transactions" formatValue={formatNumber} />
             <BestWorstDayCard label="AOV" trends={trends} metric="aov" formatValue={formatCurrency} />
@@ -329,7 +329,7 @@ function renderExecutiveSnapshot(data, { onNavigateTab, stripOwnsKpis = false } 
         </div>
 
         {/* Buyer composition / Top &amp; bottom product highlight */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'stretch' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem', alignItems: 'stretch' }}>
           <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <h3 style={{ fontSize: '1rem', color: 'var(--text)' }}>Komposisi Pembeli</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -561,7 +561,7 @@ function buildGrowthHeadline(summary) {
 function GrowthHeadlineCard({ headline, hasCompare }) {
   if (!headline) {
     return (
-      <div className="card" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <div className="card channel-growth-hint" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
           {hasCompare
             ? 'Belum cukup data pada periode pembanding untuk menghitung perubahan performa.'
@@ -614,7 +614,7 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
     const headline = buildGrowthHeadline(summary);
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className="channel-growth" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* 1. Insight -- the direct answer to "how is the business doing" */}
         <GrowthHeadlineCard headline={headline} hasCompare={!!compareRange} />
@@ -625,7 +625,7 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
             of stacking the comparison period's cards underneath. */}
         {compareRange ? (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
+            <div className="channel-comparison-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
               <PeriodHeader title="Periode Utama" range={`${formatDateLabel(startDate)} - ${formatDateLabel(endDate)}`} />
               <PeriodHeader title="Periode Pembanding" range={`${formatDateLabel(compareRange.startDate)} - ${formatDateLabel(compareRange.endDate)}`} />
 
@@ -650,7 +650,7 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
               <strong style={{ color: 'var(--text)' }}>Periode Utama:</strong> {formatDateLabel(startDate)} - {formatDateLabel(endDate)}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+            <div className="channel-growth-metrics">
               <KpiCard title="GMV (Penjualan)" value={summary?.gmv?.value} type="currency" />
               <KpiCard title="Transaksi" value={summary?.transactions?.value} type="number" />
               <KpiCard
@@ -667,8 +667,8 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
         <div>
           <BestWorstLegend showPoor />
           {compareRange ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem', marginTop: '0.75rem' }}>
-              <LineChart data={trends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={gmvExtremes.bestDates} worstDates={gmvExtremes.worstDates} poorDates={gmvPoorDates} />
+            <div className="channel-comparison-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem', marginTop: '0.75rem' }}>
+              <LineChart fluid data={trends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={gmvExtremes.bestDates} worstDates={gmvExtremes.worstDates} poorDates={gmvPoorDates} />
               <LineChart data={cmpTrends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={cmpGmvExtremes.bestDates} worstDates={cmpGmvExtremes.worstDates} />
 
               <LineChart data={trends} metric="transactions" title="Tren Transaksi" bestDates={txExtremes.bestDates} worstDates={txExtremes.worstDates} poorDates={txPoorDates} />
@@ -686,8 +686,8 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
               <LineChart data={cmpTrends} metric="aov" title="Tren AOV (Average Order Value)" bestDates={cmpAovExtremes.bestDates} worstDates={cmpAovExtremes.worstDates} />
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
-              <LineChart data={trends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={gmvExtremes.bestDates} worstDates={gmvExtremes.worstDates} poorDates={gmvPoorDates} />
+            <div className="channel-growth-charts">
+              <LineChart fluid data={trends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={gmvExtremes.bestDates} worstDates={gmvExtremes.worstDates} poorDates={gmvPoorDates} />
               <LineChart data={trends} metric="transactions" title="Tren Transaksi" bestDates={txExtremes.bestDates} worstDates={txExtremes.worstDates} poorDates={txPoorDates} />
               <LineChart
                 data={trends}
@@ -708,10 +708,10 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
             read off this one shared function so the dates/values can never
             diverge. Paired main | compare like the sections above. */}
         {compareRange ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
+          <div className="channel-comparison-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
             <div className="card" style={{ padding: '1.25rem' }}>
               <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Hari Performa Terbaik &amp; Terburuk</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem' }}>
                 <BestWorstDayCard label="GMV" trends={trends} metric="gmv" formatValue={formatCurrency} />
                 <BestWorstDayCard label="Transaksi" trends={trends} metric="transactions" formatValue={formatNumber} />
                 <BestWorstDayCard label="AOV" trends={trends} metric="aov" formatValue={formatCurrency} />
@@ -719,7 +719,7 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
             </div>
             <div className="card" style={{ padding: '1.25rem' }}>
               <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Hari Performa Terbaik &amp; Terburuk</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem' }}>
                 <BestWorstDayCard label="GMV" trends={cmpTrends} metric="gmv" formatValue={formatCurrency} />
                 <BestWorstDayCard label="Transaksi" trends={cmpTrends} metric="transactions" formatValue={formatNumber} />
                 <BestWorstDayCard label="AOV" trends={cmpTrends} metric="aov" formatValue={formatCurrency} />
@@ -729,7 +729,7 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
         ) : (
           <div className="card" style={{ padding: '1.25rem' }}>
             <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Hari Performa Terbaik &amp; Terburuk</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem' }}>
               <BestWorstDayCard label="GMV" trends={trends} metric="gmv" formatValue={formatCurrency} />
               <BestWorstDayCard label="Transaksi" trends={trends} metric="transactions" formatValue={formatNumber} />
               <BestWorstDayCard label="AOV" trends={trends} metric="aov" formatValue={formatCurrency} />
@@ -742,7 +742,7 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
             own compareRange dates already bound exactly what getGrowthMetrics()
             fetched for it (no extra out-of-range calendar padding to mark). */}
         {compareRange ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
+          <div className="channel-comparison-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
             <CalendarHeatmap
               data={trends}
               title="Kalender Intensitas Penjualan (GMV)"
@@ -915,7 +915,7 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
             Pengunjung" figure). Both use a different counting basis than the
             "Total Traffic" (product clicks) breakdown below -- noted via
             tooltip so the three aren't assumed to be the same number. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '1rem' }}>
           <KpiCard
             title="Impression (Iklan)"
             value={kpis.impressions?.value}
@@ -936,7 +936,7 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
             main | compare when a comparison period is active (same pattern
             as Business Growth). */}
         {comparePeriod ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
+          <div className="channel-traffic-pair has-period-heads" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
             <PeriodHeader title="Periode Utama" range={`${formatDateLabel(startDate)} - ${formatDateLabel(endDate)}`} />
             <PeriodHeader title="Periode Pembanding" range={`${formatDateLabel(comparePeriod.range.startDate)} - ${formatDateLabel(comparePeriod.range.endDate)}`} />
             <TrafficOverviewCard overview={trafficOverview} />
@@ -956,7 +956,7 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
           </div>
           <GrainWarning warning={funnelGrainWarning} />
           {comparePeriod ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
+            <div className="channel-traffic-pair has-period-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
               <FunnelChart data={funnel} title="Analisis Corong Konversi (Funnel)" />
               <FunnelChart data={comparePeriod.funnel} title="Analisis Corong Konversi (Funnel)" />
               <FunnelRateCard funnelRates={funnelRates} />
@@ -967,7 +967,7 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
                whose bars need room to be read, while the ratio card is four
                numbers that fit anything. An even split squeezed the funnel's
                bar track down to a few dozen pixels. */
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1.55fr) minmax(230px, 1fr)', gap: '1rem' }}>
+            <div className="channel-funnel-grid">
               <FunnelChart data={funnel} title="Analisis Corong Konversi (Funnel)" />
               <FunnelRateCard funnelRates={funnelRates} />
             </div>
@@ -975,7 +975,7 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
         </div>
 
         {/* Growth Driver + Bottleneck insight */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1rem' }}>
           {growthDriver ? (
             <InsightCard tone={growthDriver.tone} label={growthDriver.label} detail={growthDriver.detail} />
           ) : (
@@ -993,12 +993,12 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
         <div>
           <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text)', marginBottom: '0.75rem' }}>Detail Sumber Traffic per Channel</div>
           {comparePeriod ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '0.75rem' }}>
+            <div className="channel-traffic-pair" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '0.75rem' }}>
               <div>
                 <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
                   Periode Utama ({formatDateLabel(startDate)} - {formatDateLabel(endDate)})
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '1rem' }}>
                   <DonutChart data={trafficSources.universal || []} title="Traffic Source [Universal]" />
                   <DonutChart data={trafficSources.shopping || []} title="Traffic Source [Shopping]" />
                   <DonutChart data={trafficSources.live || []} title="Traffic Source [Live]" />
@@ -1010,7 +1010,7 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
                 <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
                   Periode Pembanding ({formatDateLabel(comparePeriod.range.startDate)} - {formatDateLabel(comparePeriod.range.endDate)})
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '1rem' }}>
                   <DonutChart data={comparePeriod.trafficSources?.universal || []} title="Traffic Source [Universal]" />
                   <DonutChart data={comparePeriod.trafficSources?.shopping || []} title="Traffic Source [Shopping]" />
                   <DonutChart data={comparePeriod.trafficSources?.live || []} title="Traffic Source [Live]" />
@@ -1020,7 +1020,7 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
               </div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '1rem' }}>
               <DonutChart data={trafficSources.universal || []} title="Traffic Source [Universal]" />
               <DonutChart data={trafficSources.shopping || []} title="Traffic Source [Shopping]" />
               <DonutChart data={trafficSources.live || []} title="Traffic Source [Live]" />
@@ -1261,7 +1261,7 @@ function RepeatCycleComparisonTable({ comparison = [] }) {
 // can reuse the same markup instead of duplicating it inline.
 function RepeatCycleStatsGrid({ stats = {} }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: '0.75rem' }}>
       <KpiCard title="Pelanggan Repeat (1x → 2x)" value={stats.customerCount} type="number" />
       <KpiCard title="Rata-rata Jarak Beli (Hari)" value={stats.avgDays} type="number" />
       <KpiCard title="Median Jarak Beli (Hari)" value={stats.medianDays} type="number" />
@@ -1297,7 +1297,7 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
         {/* 1. Customer Health -- at-a-glance: total customers, retention (if
             a comparison period is active), and the dynamic segment-change
             headline. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', alignItems: 'stretch' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '1rem', alignItems: 'stretch' }}>
           <KpiCard title="Total Pelanggan (Ter-RFM)" value={totalCustomers} type="number" />
           <KpiCard
             title="Pelanggan Kembali"
@@ -1532,7 +1532,7 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.5rem' }}>
                 <DonutChart
                   data={[
                     { name: '1x Transaksi', value: repeatCustomerRate.customersSingle },
@@ -1573,7 +1573,7 @@ function renderTransactionBehavior(data) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* Discount KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
           <KpiCard title="Diskon Dari Penjual" value={discounts.sellerDiscount} type="currency" />
           <KpiCard title="Voucher Ditanggung Shopee" value={discounts.shopeeVoucher} type="currency" />
           <KpiCard title="Voucher Ditanggung Penjual" value={discounts.sellerVoucher} type="currency" />
@@ -1584,13 +1584,13 @@ function renderTransactionBehavior(data) {
         </div>
 
         {/* Map Chart & Top Cities */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.5rem' }}>
           <IndonesiaMapChart data={provinces} />
           <HorizontalBarChart data={cities} nameKey="city" valueKey="sales" title="Top 10 Kota (Penjualan)" />
         </div>
 
         {/* Payments, Shippings & Durations */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.5rem' }}>
           <div className="card" style={{ padding: '1.25rem' }}>
             <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem', color: 'var(--text)' }}>Metode Pembayaran (Sales Share)</h3>
             <DonutChart data={paymentData} title="" centerLabel="Total Penjualan" valueFormatter={formatCurrency} />
@@ -1688,7 +1688,7 @@ function renderBasketAnalysis(data) {
         {/* Stats cards -- "Total Pelanggan Unik" sudah ada di tab Executive
             Snapshot (query & filter identik: status 'Selesai', COUNT DISTINCT
             customer_id), jadi tidak dihitung ulang & ditampilkan di sini. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '1rem' }}>
           <KpiCard title="Total Transaksi (Pesanan)" value={stats.totalTransactions} type="number" />
           <KpiCard title="Total Produk Terjual (Unit)" value={stats.totalItems} type="number" />
           <KpiCard title="Rerata Unit / Transaksi" value={stats.avgItemsPerTransaction} type="number" />
@@ -1755,7 +1755,7 @@ function renderBasketAnalysis(data) {
         </div>
 
         {/* First & Second Purchase Product */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.5rem' }}>
           <RankedCustomerCountTable title="Top 10 Produk Pembelian Pertama" rows={topFirstProducts} />
           <RankedCustomerCountTable title="Top 10 Produk Pembelian Kedua (Repeat Purchase)" rows={topSecondProducts} />
         </div>
@@ -1922,7 +1922,7 @@ function renderProductPerformance(data, { productPerformanceLevel = 'category', 
 
         <GrainWarning warning={grainWarning} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '1.5rem' }}>
           <HorizontalBarChart
             data={topByQuantity}
             nameKey="label"
@@ -1945,7 +1945,7 @@ function renderProductPerformance(data, { productPerformanceLevel = 'category', 
         <ContributionTable rows={contributions} levelNoun={levelNoun} />
 
         {/* Growth driver vs declining-contribution products */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '1.5rem' }}>
           <ProductTrendTable
             title={`Growth Driver — ${levelNoun} Pendorong Pertumbuhan`}
             rows={growthDrivers}
@@ -1991,7 +1991,7 @@ function DomainSkeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }} aria-busy="true" aria-live="polite">
       <span className="sr-only">Memuat analisis domain ini...</span>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '.85rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))', gap: '.85rem' }}>
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="card" style={{ padding: '1rem' }}>
             <span className="con-skel is-narrow" style={{ height: '.6rem' }} />
@@ -2105,14 +2105,14 @@ export default function DashboardTab({
   const rowCount = Math.max(mainSections.length, compareSections.length);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1.5rem', alignItems: 'stretch' }}>
+    <div className="channel-domain-comparison">
       <PeriodHeader title="Periode Utama" range={`${formatDateLabel(filters.startDate)} - ${formatDateLabel(filters.endDate)}`} />
       <PeriodHeader title="Periode Pembanding" range={`${formatDateLabel(filters.compareStartDate)} - ${formatDateLabel(filters.compareEndDate)}`} />
 
       {Array.from({ length: rowCount }, (_, i) => (
         <Fragment key={i}>
-          <div style={{ minWidth: 0 }}>{mainSections[i] || null}</div>
-          <div style={{ minWidth: 0 }}>{compareSections[i] || null}</div>
+          <div className="channel-period-section"><span className="channel-period-label">Periode utama · {formatDateLabel(filters.startDate)} – {formatDateLabel(filters.endDate)}</span>{mainSections[i] || null}</div>
+          <div className="channel-period-section"><span className="channel-period-label">Periode pembanding · {formatDateLabel(filters.compareStartDate)} – {formatDateLabel(filters.compareEndDate)}</span>{compareSections[i] || null}</div>
         </Fragment>
       ))}
     </div>

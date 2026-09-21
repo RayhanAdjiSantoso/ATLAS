@@ -35,9 +35,11 @@ function describeArc(cx, cy, r, startAngle, endAngle) {
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
 }
 
-export default function DonutChart({ data = [], title = 'Sumber Traffic', onSelectSegment, centerLabel = 'Total Klik', valueFormatter = (v) => new Intl.NumberFormat('id-ID').format(v) }) {
+export default function DonutChart({ data = [], title = 'Sumber Traffic', onSelectSegment, centerLabel = 'Total Klik', variant, centerValueFormatter, valueFormatter = (v) => new Intl.NumberFormat('id-ID').format(v) }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
 
+  const snapshot = variant === 'snapshot';
+  const centerFormat = centerValueFormatter ?? valueFormatter;
   const radius = 70;
   const strokeWidth = 24;
   const center = 100;
@@ -96,14 +98,15 @@ export default function DonutChart({ data = [], title = 'Sumber Traffic', onSele
   }
 
   return (
-    <div className="card donut-card" style={{ padding: '1.25rem' }}>
+    <div className={`card donut-card${snapshot ? ' donut-snapshot' : ''}`} style={{ padding: '1.25rem' }}>
       {title && <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>{title}</h3>}
 
       <div className="donut-layout" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
         
         {/* SVG Donut */}
-        <div style={{ position: 'relative', width: '200px', height: '200px' }}>
-          <svg viewBox="0 0 200 200" width="100%" height="100%">
+        <div className="donut-ring" style={{ position: 'relative', width: '200px', height: '200px' }}>
+          <svg viewBox="0 0 200 200" width="100%" height="100%" role="img" aria-label={`${centerLabel}: ${valueFormatter(total)}`}>
+            <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--rule, #e7ebf5)" strokeWidth={strokeWidth} />
             {soleIndex >= 0 ? (
               // One category holds the whole total: draw the closed ring.
               <circle
@@ -119,14 +122,14 @@ export default function DonutChart({ data = [], title = 'Sumber Traffic', onSele
                 onClick={() => handleSegmentClick(segments[soleIndex].name)}
               />
             ) : (
-              segments.map((seg, idx) => (
+              segments.map((seg, idx) => seg.percent > 0 && (
                 <path
                   key={idx}
                   d={describeArc(center, center, radius, seg.startAngle, seg.endAngle)}
                   fill="none"
                   stroke={seg.color}
                   strokeWidth={hoveredIndex === idx ? strokeWidth + 4 : strokeWidth}
-                  strokeLinecap="round"
+                  strokeLinecap={snapshot ? "butt" : "round"}
                   style={{
                     cursor: 'pointer',
                     transition: 'stroke-width 0.2s',
@@ -142,7 +145,7 @@ export default function DonutChart({ data = [], title = 'Sumber Traffic', onSele
           {/* Center text -- shows the grand total by default; swaps to the
               hovered segment's name + actual value so hovering the chart
               reveals the real number behind the percentage, not just the %. */}
-          <div style={{
+          <div className="donut-center" style={{
             position: 'absolute',
             top: '50%',
             left: '50%',
@@ -157,7 +160,7 @@ export default function DonutChart({ data = [], title = 'Sumber Traffic', onSele
                   {segments[hoveredIndex].name}
                 </div>
                 <div style={{ fontSize: '1.15rem', fontWeight: '700', color: segments[hoveredIndex].color }}>
-                  {valueFormatter(segments[hoveredIndex].value)}
+                  {centerFormat(segments[hoveredIndex].value)}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   {formatPercent(segments[hoveredIndex].percent * 100)}
@@ -167,19 +170,26 @@ export default function DonutChart({ data = [], title = 'Sumber Traffic', onSele
               <>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{centerLabel}</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text)' }}>
-                  {valueFormatter(total)}
+                  {centerFormat(total)}
                 </div>
               </>
             )}
           </div>
         </div>
 
+        {snapshot && <div className="donut-exact"><span>{hoveredIndex != null ? segments[hoveredIndex]?.name : centerLabel}</span><strong>{valueFormatter(hoveredIndex != null ? segments[hoveredIndex]?.value : total)}</strong></div>}
+
         {/* Legend */}
-        <div style={{ flex: 1, minWidth: '150px' }}>
+        <div className="donut-legend" style={{ flex: 1, minWidth: '150px' }}>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {segments.map((seg, idx) => (
               <li 
                 key={idx}
+                tabIndex={0}
+                role={onSelectSegment ? 'button' : undefined}
+                onFocus={() => setHoveredIndex(idx)}
+                onBlur={() => setHoveredIndex(null)}
+                onKeyDown={(e) => { if (onSelectSegment && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleSegmentClick(seg.name); } }}
                 style={{ 
                   display: 'flex', 
                   alignItems: 'center', 
@@ -200,7 +210,7 @@ export default function DonutChart({ data = [], title = 'Sumber Traffic', onSele
                   <span style={{ color: 'var(--text-muted)', fontWeight: hoveredIndex === idx ? '600' : 'normal', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{seg.name}</span>
                 </div>
                 <strong style={{ color: 'var(--text)', flexShrink: 0, whiteSpace: 'nowrap', textAlign: 'right' }}>
-                  {hoveredIndex === idx
+                  {hoveredIndex === idx && !snapshot
                     ? `${valueFormatter(seg.value)} · ${formatPercent(seg.percent * 100)}`
                     : formatPercent(seg.percent * 100)}
                 </strong>

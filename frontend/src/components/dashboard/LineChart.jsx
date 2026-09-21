@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Info } from 'lucide-react';
 
 // Bright yellow for the "poor performing" (below-average) tier -- distinct
@@ -62,10 +62,20 @@ function computeYDomain(vals) {
 
 const EMPTY_SET = new Set();
 
-export default function LineChart({ data = [], metric = 'gmv', title = 'Tren', onSelectDate, bestDates = EMPTY_SET, worstDates = EMPTY_SET, poorDates = EMPTY_SET, note = null }) {
+export default function LineChart({ data = [], metric = 'gmv', title = 'Tren', onSelectDate, bestDates = EMPTY_SET, worstDates = EMPTY_SET, poorDates = EMPTY_SET, note = null, fluid = false }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
 
-  const width = 600;
+  const plotRef = useRef(null);
+  const [measuredWidth, setMeasuredWidth] = useState(600);
+  useEffect(() => {
+    if (!fluid || !plotRef.current) return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      setMeasuredWidth(Math.max(240, Math.round(entry.contentRect.width)));
+    });
+    observer.observe(plotRef.current);
+    return () => observer.disconnect();
+  }, [fluid, data.length === 0]);
+  const width = fluid ? measuredWidth : 600;
   const height = 280;
   const paddingLeft = 60;
   const paddingRight = 20;
@@ -105,7 +115,7 @@ export default function LineChart({ data = [], metric = 'gmv', title = 'Tren', o
     const yTicks = Array.from({ length: tickCount + 1 }, (_, i) => domainMin + i * step);
 
     return { points, xCoords, yCoords, domainMin, domainMax, yTicks };
-  }, [data, metric]);
+  }, [data, metric, chartWidth]);
 
   const pathD = useMemo(() => {
     if (points.length === 0) return '';
@@ -173,7 +183,7 @@ export default function LineChart({ data = [], metric = 'gmv', title = 'Tren', o
         )}
       </h3>
 
-      <div style={{ position: 'relative', width: '100%', height: `${height}px` }}>
+      <div ref={plotRef} style={{ position: 'relative', width: '100%', height: `${height}px` }}>
         <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
           <defs>
             <linearGradient id={`line-grad-${metric}`} x1="0" y1="0" x2="0" y2="1">

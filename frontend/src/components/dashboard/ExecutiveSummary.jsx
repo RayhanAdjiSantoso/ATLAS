@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, CircleAlert, Database, Layers, Loader2, RefreshCw } from 'lucide-react';
 import api from '../../api/client';
@@ -88,6 +88,7 @@ function runsOf(points) {
 
 function DailyRevenueChart({ current, compare }) {
   const [hoverDay, setHoverDay] = useState(null);
+  const areaId = useId();
 
   const series = [
     { key: 'current', label: 'Periode ini', color: 'var(--acc)', dash: null, points: current?.daily ?? [] },
@@ -104,14 +105,20 @@ function DailyRevenueChart({ current, compare }) {
   const x = (day) => pad.left + ((day - 1) / Math.max(1, maxDay - 1)) * (width - pad.left - pad.right);
   const y = (value) => baseY - (value / (maxRevenue || 1)) * (height - pad.top - pad.bottom);
 
-  const linePath = (points) => runsOf(points)
-    .map((run) => `M${run.map((p) => `${x(p.dayIndex).toFixed(1)},${y(p.revenue).toFixed(1)}`).join('L')}`)
-    .join(' ');
+  // Horizontal Bézier controls stay between consecutive values: smooth,
+  // without inventing peaks or connecting days with missing data.
+  const curve = (run) => run.map((p, i) => {
+    if (!i) return `M${x(p.dayIndex)},${y(p.revenue)}`;
+    const prev = run[i - 1];
+    const mid = (x(prev.dayIndex) + x(p.dayIndex)) / 2;
+    return `C${mid},${y(prev.revenue)} ${mid},${y(p.revenue)} ${x(p.dayIndex)},${y(p.revenue)}`;
+  }).join(' ');
+  const linePath = (points) => runsOf(points).map(curve).join(' ');
   const areaPath = (points) => runsOf(points).filter((run) => run.length > 1)
-    .map((run) => `M${x(run[0].dayIndex).toFixed(1)},${baseY}L${run.map((p) => `${x(p.dayIndex).toFixed(1)},${y(p.revenue).toFixed(1)}`).join('L')}L${x(run[run.length - 1].dayIndex).toFixed(1)},${baseY}Z`)
+    .map((run) => `${curve(run)} L${x(run.at(-1).dayIndex)},${baseY} L${x(run[0].dayIndex)},${baseY}Z`)
     .join(' ');
 
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => t * maxRevenue);
+  const ticks = maxRevenue > 0 ? [0, 0.25, 0.5, 0.75, 1].map((t) => t * maxRevenue) : [0];
   const dayTicks = [...new Set([1, Math.round(maxDay / 4), Math.round(maxDay / 2), Math.round((maxDay * 3) / 4), maxDay])]
     .filter((d) => d >= 1 && d <= maxDay);
 
@@ -137,11 +144,11 @@ function DailyRevenueChart({ current, compare }) {
 
   return (
     <figure className="xs-chart">
-      <figcaption>Revenue harian</figcaption>
+      <figcaption><span>Revenue harian</span>{peak && <small>Puncak · Hari {peak.dayIndex} <b>{idr(peak.revenue)}</b></small>}</figcaption>
       <div className="xs-chart-plot">
         <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Grafik revenue harian periode ini dibanding pembanding">
           <defs>
-            <linearGradient id="xs-area" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={areaId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--acc)" stopOpacity=".22" />
               <stop offset="100%" stopColor="var(--acc)" stopOpacity="0" />
             </linearGradient>
@@ -154,7 +161,7 @@ function DailyRevenueChart({ current, compare }) {
             </g>
           ))}
 
-          {main && <path d={areaPath(main.points)} fill="url(#xs-area)" />}
+          {main && <path d={areaPath(main.points)} fill={`url(#${areaId})`} />}
 
           {[...series].reverse().map((s) => (
             <path key={s.key} d={linePath(s.points)} fill="none" stroke={s.color} strokeWidth="2.2"
@@ -183,12 +190,14 @@ function DailyRevenueChart({ current, compare }) {
 
           {days.map((d) => (
             <rect key={d.day} x={x(d.day) - slot / 2} y={pad.top} width={Math.max(slot, 2)} height={baseY - pad.top}
+              tabIndex={0} role="img" aria-label={`Hari ${d.day}: ${series.map((s) => `${s.label} ${d[s.key] == null ? 'belum ada data' : idr(d[s.key])}`).join(', ')}`}
+              onFocus={() => setHoverDay(d.day)} onBlur={() => setHoverDay(null)}
               fill="transparent" onMouseEnter={() => setHoverDay(d.day)} onMouseLeave={() => setHoverDay(null)} />
           ))}
         </svg>
 
         {active && (
-          <div className="xs-tip" style={{ left: `${(x(active.day) / width) * 100}%`, top: `${(pad.top / height) * 100}%` }}>
+          <div className="xs-tip" style={{ left: `${Math.max(25, Math.min(75, (x(active.day) / width) * 100))}%`, top: `${(pad.top / height) * 100}%` }}>
             <strong>Hari {active.day}</strong>
             {series.map((s) => (
               <span key={s.key}>
@@ -256,8 +265,8 @@ export default function ExecutiveSummary({ filters }) {
     if (!state.data) return [];
     const { current, compare, lastYear } = state.data;
     return [
-      compare && { key: 'compare', label: `${dateLabel(compare.range.start)} – ${dateLabel(compare.range.end)}`, sub: 'Pembanding' },
       { key: 'current', label: `${dateLabel(current.range.start)} – ${dateLabel(current.range.end)}`, sub: 'Periode ini', primary: true },
+      compare && { key: 'compare', label: `${dateLabel(compare.range.start)} – ${dateLabel(compare.range.end)}`, sub: 'Pembanding' },
       { key: 'lastYear', label: `${dateLabel(lastYear.range.start)} – ${dateLabel(lastYear.range.end)}`, sub: 'Tahun lalu' },
     ].filter(Boolean);
   }, [state.data]);
@@ -282,7 +291,6 @@ export default function ExecutiveSummary({ filters }) {
 
   const { metrics, current, compare, hasAnyData } = state.data;
   const byKey = Object.fromEntries(metrics.map((m) => [m.key, m]));
-  const span = 1 + columns.length + (compare ? 1 : 0) + 1;
 
   // Grouping is a reading order, never a filter: a metric the backend adds
   // that no group claims still has to reach the screen, so the leftovers get
@@ -316,11 +324,11 @@ export default function ExecutiveSummary({ filters }) {
 
   return (
     <Shell>
-      <div className="xs-table-wrap">
+      <div className="xs-table-wrap" tabIndex={0} role="region" aria-label="Perbandingan metrik kinerja, geser horizontal untuk melihat seluruh periode">
         <table className="xs-table">
           <thead>
             <tr>
-              <th scope="col">Metrik</th>
+              <th scope="colgroup" colSpan={2} className="xs-table-heading">Kinerja bisnis<small>Ringkasan per periode</small></th>
               {columns.map((c) => (
                 <th key={c.key} scope="col" className={c.primary ? 'is-primary' : ''}>
                   <span>{c.sub}</span>
@@ -334,15 +342,14 @@ export default function ExecutiveSummary({ filters }) {
           {groups.map((group) => {
             return (
               <tbody key={group.label}>
-                <tr className="xs-group">
-                  <th scope="colgroup" colSpan={span}>{group.label}</th>
-                </tr>
-                {group.rows.map((m) => (
-                  <tr key={m.key}>
+                {group.rows.map((m, rowIndex) => (
+                  <tr key={m.key} className={m.key === 'revenue' || m.key === 'revenueAll' ? 'xs-revenue-row' : undefined}>
+                    {rowIndex === 0 && <th scope="rowgroup" rowSpan={group.rows.length} className="xs-metric-group"><span>{group.label}</span></th>}
                     <th scope="row">{m.label}</th>
                     {columns.map((c) => (
                       <td key={c.key} className={c.primary ? 'is-primary' : ''}>
                         <Figure text={fmt(m[c.key], m.kind)} absentReason={`${m.label} belum terisi untuk rentang ini.`} />
+                        {columns.filter((column) => m[column.key] != null && Number(m[column.key]) >= 0).length > 1 && m[c.key] != null && Number(m[c.key]) >= 0 && <span className="xs-value-track" aria-hidden="true"><i style={{ width: `${Math.max(0, Number(m[c.key])) / Math.max(1, ...columns.map((column) => Number(m[column.key]) || 0)) * 100}%` }} /></span>}
                       </td>
                     ))}
                     {compare && (
@@ -375,6 +382,8 @@ export default function ExecutiveSummary({ filters }) {
               data={donutData}
               title=""
               centerLabel="Total Revenue"
+              variant="snapshot"
+              centerValueFormatter={idrAxis}
               valueFormatter={(v) => idr(v) ?? '—'}
             />
           ) : (
