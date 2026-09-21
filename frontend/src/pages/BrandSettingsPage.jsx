@@ -59,14 +59,12 @@ const PLATFORMS = [
     wash: '#4f7cff',
     tint: 'rgba(79,124,255,.13)',
     datasets: [
-      // One export per campaign type, matching the classification the Report
-      // Generator already applies ('boost' / 'nonboost' / CPAS). The combined
-      // file stays listed as a legacy slot so months uploaded before the split
-      // remain visible and re-usable.
-      { channel: 'boost', name: 'Boost Post', hint: 'Export Ads Manager · kampanye Boost Post', kind: 'core' },
-      { channel: 'nonboost', name: 'Non-Boost Post', hint: 'Export Ads Manager · kampanye Non-Boost Post', kind: 'core' },
+      // One export, split downstream. The Report Generator already classifies
+      // every row as Boost or Non-Boost from its campaign name, so asking for
+      // two uploads made the user separate by hand what the file already
+      // answers — and let two halves of the same month arrive out of step.
+      { channel: 'meta', name: 'Meta Ads', hint: 'Export Ads Manager · Boost & Non-Boost dipisah otomatis dari isi file', kind: 'core' },
       { channel: 'cpas', name: 'CPAS', hint: 'CPAS Shopee/Tokopedia · breakdown umur, gender & bulan', kind: 'core' },
-      { channel: 'meta', name: 'Meta Ads (gabungan)', hint: 'Format lama: satu file berisi Boost & Non-Boost', kind: 'extra' },
     ],
   },
   {
