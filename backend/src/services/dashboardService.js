@@ -1,7 +1,8 @@
 import * as dashboardRepo from '../repositories/dashboardRepository.js';
 import { computeRfmAnalysis, RFM_SEGMENTS, SEGMENT_ACTIONS } from './rfm/rfmAnalysis.js';
 import { computeProductPerformance } from './productPerformance/productPerformanceAnalysis.js';
-import { snapshotGrainWarning } from '../utils/dateGrain.js';
+import { snapshotGrain, snapshotGrainWarning } from '../utils/dateGrain.js';
+import { getMonthlyShopStats, CHANNEL_LABELS } from './shopeeMonthly/monthlyShopStats.js';
 
 // Root Cause Analysis tab — GMV decomposition tree. Kept in its own module
 // (the tree layout + traffic-source section mapping is sizeable); re-exported
@@ -97,14 +98,25 @@ async function getProductRanking({ brandId, startDate, endDate, level = 'categor
   return computeProductPerformance(rawRows, { level, windowStartDate: startDate });
 }
 
+// Shopee's monthly totals for the range, but only when the range is exactly
+// one calendar month — any other range has no Shopee-side figure to match.
+async function monthlyTotalsFor(brandId, startDate, endDate) {
+  if (!startDate || !endDate) return null;
+  const { isWholeCalendarMonth, monthsSpanned } = snapshotGrain(startDate, endDate);
+  if (!isWholeCalendarMonth) return null;
+  const stats = await getMonthlyShopStats(brandId, monthsSpanned[0]).catch(() => null);
+  return stats?.available ? stats.stages['Pesanan Dibayar'].totals : null;
+}
+
 export async function getExecutiveSnapshot({ brandId, startDate, endDate, compareStartDate, compareEndDate }) {
-  const [current, discountData, uniqueCustomers, productRanking, funnelSnapshot, trend] = await Promise.all([
+  const [current, discountData, uniqueCustomers, productRanking, funnelSnapshot, trend, hasOrders] = await Promise.all([
     dashboardRepo.getExecutiveMetrics(brandId, startDate, endDate),
     dashboardRepo.getDiscountSummary(brandId, startDate, endDate),
     dashboardRepo.getUniqueCustomerCount(brandId, startDate, endDate),
     getProductRanking({ brandId, startDate, endDate, level: 'category' }),
     dashboardRepo.getFunnelSnapshot(brandId, startDate, endDate),
     dashboardRepo.getGrowthMetrics(brandId, startDate, endDate),
+    dashboardRepo.hasOrderData(brandId, startDate, endDate),
   ]);
 
   // Top/bottom product highlight, read straight off Product Performance's
@@ -114,23 +126,30 @@ export async function getExecutiveSnapshot({ brandId, startDate, endDate, compar
   const bottomProductRow = productRanking.contributions[productRanking.contributions.length - 1] || null;
 
   // Calculate derived values for current period
+  // Gross, as Shopee's Performa Toko prints it; net rides along below it.
   const gmv = Number(current.gmv || 0);
   const tx = Number(current.transactions || 0);
-  const txGross = Number(current.transactions_gross || 0);
+  const gmvNet = Number(current.gmv_net || 0);
+  const txNet = Number(current.transactions_net || 0);
   const visitors = Number(current.visitors || 0);
   const unitsSold = Number(current.units_sold || 0);
   const cancelledOrders = Number(current.cancelled_orders || 0);
   // Average of the daily "Tingkat Konversi Pesanan" column (Pesanan Dibayar
   // sheet) over the selected range — read as-is, not recomputed, since it's
   // not reproducible from total_orders/total_visitors (verified separately).
-  const cvr = Number(Number(current.cvr || 0).toFixed(4));
+  //
+  // Exception: when the range is exactly one calendar month and that
+  // month's export is stored, Shopee's own monthly figure (orders over
+  // unique monthly visitors) replaces the daily average — that is the number
+  // on the Performa Toko screen for "Per Bulan".
+  const monthly = await monthlyTotalsFor(brandId, startDate, endDate);
+  const cvr = monthly?.cvr != null ? Number(monthly.cvr.toFixed(4)) : Number(Number(current.cvr || 0).toFixed(4));
 
+  // Same as Shopee's "Penjualan per Pesanan": gross sales over gross orders.
   const aov = tx > 0 ? Number((gmv / tx).toFixed(2)) : 0;
-  // Denominator is the gross (pre-cancellation) order count, not the net
-  // `tx` above — Tingkat Pembatalan means "% of paid orders that got
-  // cancelled", which requires cancelled orders to still be part of the
-  // denominator they're a fraction of.
-  const cancellationRate = txGross > 0 ? Number((cancelledOrders / txGross).toFixed(4)) : 0;
+  // Tingkat Pembatalan: "% of paid orders that got cancelled", so the
+  // denominator is the gross order count the cancelled ones are part of.
+  const cancellationRate = tx > 0 ? Number((cancelledOrders / tx).toFixed(4)) : 0;
   const totalDiscount = Object.values(discountData || {}).reduce((sum, v) => sum + Number(v || 0), 0);
 
   const funnelProductPageVisitors = Number(funnelSnapshot.funnel?.product_page_visitors || 0);
@@ -156,31 +175,39 @@ export async function getExecutiveSnapshot({ brandId, startDate, endDate, compar
   let comparison = null;
 
   if (compareStartDate && compareEndDate) {
-    const [previous, prevDiscountData, prevUniqueCustomers] = await Promise.all([
+    const [previous, prevDiscountData, prevUniqueCustomers, prevHasOrders] = await Promise.all([
       dashboardRepo.getExecutiveMetrics(brandId, compareStartDate, compareEndDate),
       dashboardRepo.getDiscountSummary(brandId, compareStartDate, compareEndDate),
       dashboardRepo.getUniqueCustomerCount(brandId, compareStartDate, compareEndDate),
+      dashboardRepo.hasOrderData(brandId, compareStartDate, compareEndDate),
     ]);
     const pGmv = Number(previous.gmv || 0);
     const pTx = Number(previous.transactions || 0);
-    const pTxGross = Number(previous.transactions_gross || 0);
+
     const pUnitsSold = Number(previous.units_sold || 0);
     const pCancelledOrders = Number(previous.cancelled_orders || 0);
     const pTotalDiscount = Object.values(prevDiscountData || {}).reduce((sum, v) => sum + Number(v || 0), 0);
 
     const pAov = pTx > 0 ? Number((pGmv / pTx).toFixed(2)) : 0;
-    const pCvr = Number(Number(previous.cvr || 0).toFixed(4));
-    const pCancellationRate = pTxGross > 0 ? Number((pCancelledOrders / pTxGross).toFixed(4)) : 0;
+    const pMonthly = await monthlyTotalsFor(brandId, compareStartDate, compareEndDate);
+    const pCvr = pMonthly?.cvr != null ? Number(pMonthly.cvr.toFixed(4)) : Number(Number(previous.cvr || 0).toFixed(4));
+    const pCancellationRate = pTx > 0 ? Number((pCancelledOrders / pTx).toFixed(4)) : 0;
+    const pGmvNet = Number(previous.gmv_net || 0);
+    const pTxNet = Number(previous.transactions_net || 0);
 
     comparison = {
       gmvGrowth: calculateGrowth(gmv, pGmv),
+      gmvNetGrowth: calculateGrowth(gmvNet, pGmvNet),
       transactionsGrowth: calculateGrowth(tx, pTx),
-      unitsSoldGrowth: calculateGrowth(unitsSold, pUnitsSold),
+      transactionsNetGrowth: calculateGrowth(txNet, pTxNet),
+      // Order-export metrics only compare when both periods have the export;
+      // otherwise a missing upload would read as a -100% / +100% swing.
+      unitsSoldGrowth: hasOrders && prevHasOrders ? calculateGrowth(unitsSold, pUnitsSold) : null,
       aovGrowth: calculateGrowth(aov, pAov),
       cvrGrowth: calculateGrowth(cvr, pCvr),
       cancellationRateGrowth: calculateGrowth(cancellationRate, pCancellationRate),
-      uniqueCustomersGrowth: calculateGrowth(uniqueCustomers, prevUniqueCustomers),
-      totalDiscountGrowth: calculateGrowth(totalDiscount, pTotalDiscount),
+      uniqueCustomersGrowth: hasOrders && prevHasOrders ? calculateGrowth(uniqueCustomers, prevUniqueCustomers) : null,
+      totalDiscountGrowth: hasOrders && prevHasOrders ? calculateGrowth(totalDiscount, pTotalDiscount) : null,
     };
   }
 
@@ -206,14 +233,32 @@ export async function getExecutiveSnapshot({ brandId, startDate, endDate, compar
 
   return {
     kpis: {
-      gmv: { value: gmv, growth: comparison?.gmvGrowth ?? null },
-      transactions: { value: tx, growth: comparison?.transactionsGrowth ?? null },
-      unitsSold: { value: unitsSold, growth: comparison?.unitsSoldGrowth ?? null },
+      gmv: {
+        value: gmv,
+        growth: comparison?.gmvGrowth ?? null,
+        net: {
+          value: gmvNet,
+          cancelled: Number(current.cancelled_sales || 0),
+          returned: Number(current.returned_sales || 0),
+          growth: comparison?.gmvNetGrowth ?? null,
+        },
+      },
+      transactions: {
+        value: tx,
+        growth: comparison?.transactionsGrowth ?? null,
+        net: {
+          value: txNet,
+          cancelled: cancelledOrders,
+          returned: Number(current.returned_orders || 0),
+          growth: comparison?.transactionsNetGrowth ?? null,
+        },
+      },
+      unitsSold: { value: hasOrders ? unitsSold : null, growth: comparison?.unitsSoldGrowth ?? null },
       aov: { value: aov, growth: comparison?.aovGrowth ?? null },
-      cvr: { value: cvr, growth: comparison?.cvrGrowth ?? null },
+      cvr: { value: cvr, growth: comparison?.cvrGrowth ?? null, basis: monthly?.cvr != null ? 'monthly' : 'daily-average' },
       cancellationRate: { value: cancellationRate, growth: comparison?.cancellationRateGrowth ?? null },
-      uniqueCustomers: { value: uniqueCustomers, growth: comparison?.uniqueCustomersGrowth ?? null },
-      totalDiscount: { value: totalDiscount, growth: comparison?.totalDiscountGrowth ?? null },
+      uniqueCustomers: { value: hasOrders ? uniqueCustomers : null, growth: comparison?.uniqueCustomersGrowth ?? null },
+      totalDiscount: { value: hasOrders ? totalDiscount : null, growth: comparison?.totalDiscountGrowth ?? null },
     },
     buyerComposition: {
       newBuyers: Number(current.new_buyers || 0),
@@ -327,14 +372,6 @@ export async function getBusinessGrowth({ brandId, startDate, endDate, compareSt
   };
 }
 
-// The only channel that represents Shopee's own paid advertising -- the
-// existing getFunnelSnapshot() impression query already treats it this way
-// (`tc.channel_name = 'Iklan Shopee'`), so Organic/Ads splitting below
-// reuses that same established convention rather than inventing a new one.
-// Every other channel (Halaman Produk/Live Penjual/Video Penjual/Affiliate)
-// is organic/non-paid discovery traffic.
-const ADS_CHANNEL_NAME = 'Iklan Shopee';
-
 const FUNNEL_STAGE_RATES = [
   { key: 'atcRate', label: 'Product Visitor → Add to Cart' },
   { key: 'poRate', label: 'Add to Cart → Checkout' },
@@ -347,53 +384,123 @@ function ratePointsDiff(current, previous) {
   return Number(((Number(current || 0) - Number(previous || 0)) * 100).toFixed(2));
 }
 
-// Builds one period's full traffic+funnel snapshot from the raw repo rows.
-// Pure/stateless so it's reused identically for the main and comparison
-// periods -- one calculation, never two divergent ones.
-function buildTrafficFunnelSnapshot(rawData, executiveMetrics) {
-  const productPageVisitors = Number(rawData.funnel?.product_page_visitors || 0);
-  const cartVisitors = Number(rawData.funnel?.cart_visitors || 0);
-  const buyersCreated = Number(rawData.funnel?.buyers_created || 0);
-  const buyersReady = Number(rawData.funnel?.buyers_ready_to_ship || 0);
+const ID_MONTHS = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+];
 
-  // Group traffic source clicks by sections as defined in mapping rules
-  const sources = rawData.trafficSources || [];
+// Traffic & Funnel is a monthly view. Its headline figures (unique visitors,
+// unique buyers, each channel's subtotal) exist only as Shopee's monthly
+// totals, so any selected range is read as the calendar month its end date
+// falls in.
+function resolveMonth(endDate) {
+  const month = String(endDate).slice(0, 7);
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return {
+    month,
+    label: `${ID_MONTHS[m - 1]} ${y}`,
+    startDate: `${month}-01`,
+    endDate: `${month}-${String(last).padStart(2, '0')}`,
+  };
+}
 
-  const filterBySubSources = (channelName, subSourceList) => sources
-    .filter((s) => s.channel === channelName && subSourceList.includes(s.sub_source))
-    .map((s) => ({ name: s.sub_source, value: Number(s.clicks) }));
+// Store-sales channels in Shopee's own order ("Rincian Kontribusi Penjualan
+// Toko"). These four add up to Total Penjualan. Iklan Shopee is NOT one of
+// them: Shopee reports it as a separate lens over the same sales (an order
+// from a product-page visit that came through an ad counts in both), which is
+// why it sits apart and never shares a 100% bar with these.
+const STORE_CHANNELS = ['productPage', 'live', 'video', 'affiliate'];
 
-  // Organic vs Ads totals reuse these exact same rows -- no separate query.
-  // "Semua" is a pre-aggregated per-channel total some sheets include;
-  // excluding it means summing every remaining row can't double-count.
-  // Channels with no "Semua" row (Iklan Shopee) are unaffected since
-  // there's nothing to exclude.
-  const sumClicks = (predicate) => sources
-    .filter((s) => s.sub_source !== 'Semua' && predicate(s))
-    .reduce((sum, s) => sum + Number(s.clicks || 0), 0);
-  const organicClicks = sumClicks((s) => s.channel !== ADS_CHANNEL_NAME);
-  const adsClicks = sumClicks((s) => s.channel === ADS_CHANNEL_NAME);
+const pctOf = (part, whole) => (whole > 0 && part != null ? Number(((part / whole) * 100).toFixed(1)) : null);
+const growthOf = (cur, prev) => (cur == null || prev == null ? null : calculateGrowth(cur, prev));
+
+const MONTHLY_UNAVAILABLE = {
+  'no-upload': 'File Performance Overview (shop-stats) bulan ini belum di-upload di Pengaturan Brand.',
+  'split-upload': 'Data bulan ini berasal dari beberapa file terpisah, sehingga total bulanan Shopee tidak bisa dibaca. Upload ulang satu file untuk 1 bulan penuh.',
+  'no-raw-file': 'File asli bulan ini tidak tersimpan. Upload ulang file Performance Overview di Pengaturan Brand.',
+};
+
+// One month's traffic snapshot. Every figure is Shopee's own monthly total
+// from the shop-stats export, never a sum of daily unique counts.
+async function buildMonthlyTraffic(brandId, period) {
+  const [stats, funnelSnapshot, dailyImpressions] = await Promise.all([
+    getMonthlyShopStats(brandId, period.month),
+    dashboardRepo.getFunnelSnapshot(brandId, period.startDate, period.endDate),
+    dashboardRepo.getDailyAdImpressions(brandId, period.startDate, period.endDate),
+  ]);
+
+  const stage = stats.available ? stats.stages['Pesanan Dibayar'] : null;
+  const totals = stage?.totals || {};
+  const channels = stage?.channels || {};
+  const salesBySource = stage?.salesBySource || {};
+
+  const productPageVisitors = Number(funnelSnapshot.funnel?.product_page_visitors || 0);
+  const cartVisitors = Number(funnelSnapshot.funnel?.cart_visitors || 0);
+  const buyersCreated = Number(funnelSnapshot.funnel?.buyers_created || 0);
+  const buyersReady = Number(funnelSnapshot.funnel?.buyers_ready_to_ship || 0);
+
+  const dailyImpressionTotal = dailyImpressions.reduce((sum, d) => sum + d.value, 0);
+  const totalSales = salesBySource.total ?? null;
+  const totalClicks = STORE_CHANNELS.reduce((sum, k) => sum + (Number(channels[k]?.total?.clicks) || 0), 0);
 
   return {
-    impressions: Number(rawData.impressions || 0),
-    visitors: Number(executiveMetrics.visitors || 0),
-    traffic: {
-      total: organicClicks + adsClicks,
-      organic: organicClicks,
-      ads: adsClicks,
+    period: {
+      ...period,
+      available: stats.available,
+      unavailableReason: stats.available ? null : MONTHLY_UNAVAILABLE[stats.reason] || null,
+      coveredStart: stats.coveredStart || null,
+      coveredEnd: stats.coveredEnd || null,
+      isPartialMonth: Boolean(stats.isPartialMonth),
     },
-    trafficSources: {
-      universal: filterBySubSources('Halaman Produk', ['Toko', 'Pencarian', 'Rekomendasi', 'Lainnya']),
-      shopping: filterBySubSources('Halaman Produk', ['Promosi', 'Keranjang', 'Pesanan Saya', 'Chat']),
-      live: filterBySubSources('Live Penjual', ['Halaman Utama Shopee Live', 'Tab Live', 'Video']),
-      video: filterBySubSources('Video Penjual', ['Halaman Utama Shopee Video', 'Tab Video', 'Profil Kreator', 'Rekomendasi']),
-      affiliate: filterBySubSources('Affiliate', ['Video Affiliate', 'Live Affiliate']),
-    },
-    // Total-traffic funnel -- product_performance_summary (its source) has
-    // no channel/sub-source column at all, so this cannot be split into
-    // Organic vs Ads without fabricating an attribution the data doesn't
-    // support. Kept at total-traffic level on purpose; the frontend labels
-    // it as such explicitly.
+    impressions: channels.ads?.total?.impressions ?? (dailyImpressions.length ? dailyImpressionTotal : null),
+    dailyImpressions,
+    visitors: totals.visitors ?? null,
+    clicks: totals.clicks ?? null,
+    buyers: totals.buyers ?? null,
+    salesContribution: stage ? {
+      total: totalSales,
+      store: STORE_CHANNELS.map((key) => ({
+        key,
+        label: CHANNEL_LABELS[key],
+        value: salesBySource[key] ?? null,
+        pct: pctOf(salesBySource[key], totalSales),
+      })),
+      ads: {
+        value: salesBySource.ads ?? null,
+        pct: pctOf(salesBySource.ads, totalSales),
+        spend: channels.ads?.total?.spend ?? null,
+        roas: channels.ads?.total?.roas ?? null,
+      },
+    } : null,
+    trafficByChannel: stage ? {
+      total: totalClicks,
+      channels: STORE_CHANNELS.map((key) => ({
+        key,
+        label: CHANNEL_LABELS[key],
+        value: channels[key]?.total?.clicks ?? null,
+        pct: pctOf(channels[key]?.total?.clicks, totalClicks),
+      })),
+    } : null,
+    // Clicks per sub-source inside each channel, for the detail donuts.
+    trafficSources: Object.fromEntries(STORE_CHANNELS.map((key) => [
+      key,
+      (channels[key]?.subs || [])
+        .filter((r) => Number(r.clicks) > 0)
+        .map((r) => ({ name: r.name, value: Number(r.clicks), sales: r.sales })),
+    ])),
+    adsBreakdown: (channels.ads?.subs || []).map((r) => ({
+      name: r.name,
+      sales: r.sales,
+      impressions: r.impressions,
+      orders: r.orders,
+      spend: r.spend,
+      roas: r.roas,
+      pct: pctOf(r.sales, salesBySource.ads),
+    })),
+    // Funnel stages come from the monthly Product Performance export, which
+    // has no shop-level row: each stage is the sum of every product's own
+    // monthly unique count.
     funnel: [
       { name: 'Kunjungan Produk', value: productPageVisitors },
       { name: 'Tambah Keranjang', value: cartVisitors },
@@ -409,47 +516,40 @@ function buildTrafficFunnelSnapshot(rawData, executiveMetrics) {
   };
 }
 
-// "Which traffic source is driving the change" -- same wording conventions
-// established for Business Growth's headline (didorong oleh / dipengaruhi),
-// reimplemented independently here since Business Growth's own logic must
-// stay untouched in this phase. Picks the driver by absolute click
-// contribution (not growth% alone), so a small channel swinging +200% can't
-// outrank a dominant channel that actually moved more traffic in absolute
-// terms.
+// "Which channel is driving the traffic change": the channel with the
+// largest absolute click change in the same direction as the total, so a
+// small channel swinging +200% can't outrank a dominant one that moved more
+// traffic.
 const TRAFFIC_STABLE_THRESHOLD_PCT = 1;
 
 function buildTrafficGrowthDriver(current, previous) {
-  if (!previous) return null;
+  if (!previous?.trafficByChannel || !current?.trafficByChannel) return null;
 
-  const totalGrowth = calculateGrowth(current.traffic.total, previous.traffic.total);
-  const organicGrowth = calculateGrowth(current.traffic.organic, previous.traffic.organic);
-  const adsGrowth = calculateGrowth(current.traffic.ads, previous.traffic.ads);
-
+  const totalGrowth = calculateGrowth(current.trafficByChannel.total, previous.trafficByChannel.total);
   const isStable = Math.abs(totalGrowth) < TRAFFIC_STABLE_THRESHOLD_PCT;
   const tone = isStable ? 'stable' : totalGrowth > 0 ? 'up' : 'down';
   const label = tone === 'up' ? 'Traffic meningkat' : tone === 'down' ? 'Traffic menurun' : 'Traffic relatif stabil';
 
   if (isStable) {
-    return { tone, label, detail: `Total traffic hanya berubah ${formatPct(Math.abs(totalGrowth))} dibandingkan periode sebelumnya.` };
+    return { tone, label, detail: `Total klik produk hanya berubah ${formatPct(Math.abs(totalGrowth))} dibandingkan bulan pembanding.` };
+  }
+
+  const prevBy = Object.fromEntries(previous.trafficByChannel.channels.map((c) => [c.key, Number(c.value || 0)]));
+  let driver = null;
+  for (const c of current.trafficByChannel.channels) {
+    const delta = Number(c.value || 0) - (prevBy[c.key] || 0);
+    if (Math.sign(delta) !== Math.sign(totalGrowth)) continue;
+    if (!driver || Math.abs(delta) > Math.abs(driver.delta)) driver = { ...c, delta, growth: calculateGrowth(c.value, prevBy[c.key]) };
   }
 
   const verb = totalGrowth > 0 ? 'naik' : 'turun';
-  let detail = `Total traffic ${verb} ${formatPct(Math.abs(totalGrowth))} dibandingkan periode sebelumnya`;
-
-  const organicSupports = Math.sign(organicGrowth) === Math.sign(totalGrowth) && Math.abs(organicGrowth) >= TRAFFIC_STABLE_THRESHOLD_PCT;
-  const adsSupports = Math.sign(adsGrowth) === Math.sign(totalGrowth) && Math.abs(adsGrowth) >= TRAFFIC_STABLE_THRESHOLD_PCT;
-  const phrase = tone === 'up' ? 'terutama didorong oleh peningkatan' : 'terutama disebabkan oleh penurunan';
-  const organicContribution = Math.abs(current.traffic.organic - previous.traffic.organic);
-  const adsContribution = Math.abs(current.traffic.ads - previous.traffic.ads);
-
-  if (organicSupports && (!adsSupports || organicContribution >= adsContribution)) {
-    detail += `, ${phrase} Organic Traffic sebesar ${formatPct(Math.abs(organicGrowth))}.`;
-  } else if (adsSupports) {
-    detail += `, ${phrase} Ads Traffic sebesar ${formatPct(Math.abs(adsGrowth))}.`;
+  let detail = `Total klik produk ${verb} ${formatPct(Math.abs(totalGrowth))} dibandingkan bulan pembanding`;
+  if (driver) {
+    const phrase = tone === 'up' ? 'terutama didorong oleh peningkatan' : 'terutama disebabkan oleh penurunan';
+    detail += `, ${phrase} klik dari ${driver.label} sebesar ${formatPct(Math.abs(driver.growth))}.`;
   } else {
     detail += '.';
   }
-
   return { tone, label, detail };
 }
 
@@ -471,14 +571,14 @@ function buildFunnelBottleneck(currentRates, previousRates) {
       return {
         tone: 'down',
         label: `Funnel bottleneck: ${worst.label}`,
-        detail: `Conversion rate ${formatPct(worst.currentRate * 100)}, turun ${formatNum(Math.abs(worst.diff))} pp dibandingkan periode sebelumnya (${formatPct(worst.previousRate * 100)}).`,
+        detail: `Conversion rate ${formatPct(worst.currentRate * 100)}, turun ${formatNum(Math.abs(worst.diff))} pp dibandingkan bulan pembanding (${formatPct(worst.previousRate * 100)}).`,
         hasComparison: true,
       };
     }
     return {
       tone: 'stable',
       label: 'Funnel bottleneck',
-      detail: 'Tidak ada tahap funnel yang mengalami penurunan conversion rate dibandingkan periode sebelumnya.',
+      detail: 'Tidak ada tahap funnel yang mengalami penurunan conversion rate dibandingkan bulan pembanding.',
       hasComparison: true,
     };
   }
@@ -491,91 +591,79 @@ function buildFunnelBottleneck(currentRates, previousRates) {
   return {
     tone: 'stable',
     label: `Tahap dengan conversion rate terendah: ${weakest.label}`,
-    detail: `Conversion rate ${formatPct(weakest.rate * 100)} pada periode ini. Aktifkan "Bandingkan Periode" untuk melihat perubahan dibanding periode sebelumnya.`,
+    detail: `Conversion rate ${formatPct(weakest.rate * 100)} pada bulan ini. Aktifkan "Bandingkan Periode" untuk melihat perubahan dibanding bulan sebelumnya.`,
     hasComparison: false,
   };
 }
 
-// Doesn't use the generic withCompare() helper other tabs use (independent
-// calls, side-by-side rendering only) -- computing a growth driver and a
-// bottleneck needs both periods' numbers at once, so this follows the same
-// single-call-with-both-periods pattern Business Growth and Executive
-// Snapshot already use.
+// Attach growth against the comparison month to every figure that has one.
+function withGrowth(cur, prev) {
+  const byKey = (list) => Object.fromEntries((list || []).map((x) => [x.key, x]));
+  const prevStore = byKey(prev?.salesContribution?.store);
+  const prevChannels = byKey(prev?.trafficByChannel?.channels);
+  return {
+    ...cur,
+    salesContribution: cur.salesContribution && {
+      ...cur.salesContribution,
+      growth: growthOf(cur.salesContribution.total, prev?.salesContribution?.total),
+      store: cur.salesContribution.store.map((c) => ({ ...c, growth: growthOf(c.value, prevStore[c.key]?.value) })),
+      ads: { ...cur.salesContribution.ads, growth: growthOf(cur.salesContribution.ads.value, prev?.salesContribution?.ads?.value) },
+    },
+    trafficByChannel: cur.trafficByChannel && {
+      ...cur.trafficByChannel,
+      growth: growthOf(cur.trafficByChannel.total, prev?.trafficByChannel?.total),
+      channels: cur.trafficByChannel.channels.map((c) => ({ ...c, growth: growthOf(c.value, prevChannels[c.key]?.value) })),
+    },
+  };
+}
+
+// Doesn't use the generic withCompare() helper other tabs use -- a growth
+// driver and a bottleneck need both months' numbers at once, so this follows
+// the single-call-with-both-periods pattern Business Growth and Executive
+// Snapshot use.
 export async function getTrafficAndFunnel({ brandId, startDate, endDate, compareStartDate, compareEndDate }) {
-  const [rawData, executiveMetrics] = await Promise.all([
-    dashboardRepo.getTrafficAndFunnelMetrics(brandId, startDate, endDate),
-    dashboardRepo.getExecutiveMetrics(brandId, startDate, endDate),
+  const period = resolveMonth(endDate);
+  const comparePeriodRange = compareStartDate && compareEndDate ? resolveMonth(compareEndDate) : null;
+  const hasCompare = comparePeriodRange && comparePeriodRange.month !== period.month;
+
+  const [current, previous] = await Promise.all([
+    buildMonthlyTraffic(brandId, period),
+    hasCompare ? buildMonthlyTraffic(brandId, comparePeriodRange) : null,
   ]);
-  const snapshot = buildTrafficFunnelSnapshot(rawData, executiveMetrics);
+
+  const snapshot = withGrowth(current, previous);
 
   // Named comparePeriod, not `compare` -- the frontend's generic tab wrapper
   // checks `data.compare` to trigger its own side-by-side split-render for
   // every other tab. This response builds its own main|compare pairing
   // internally, so a field literally named `compare` would make the generic
   // wrapper ALSO kick in and double-render everything.
-  let comparePeriod = null;
-  let trafficGrowthDriver = null;
-
-  if (compareStartDate && compareEndDate) {
-    const [prevRawData, prevExecutiveMetrics] = await Promise.all([
-      dashboardRepo.getTrafficAndFunnelMetrics(brandId, compareStartDate, compareEndDate),
-      dashboardRepo.getExecutiveMetrics(brandId, compareStartDate, compareEndDate),
-    ]);
-    const prevSnapshot = buildTrafficFunnelSnapshot(prevRawData, prevExecutiveMetrics);
-    const prevTotal = prevSnapshot.traffic.total;
-
-    comparePeriod = {
-      range: { startDate: compareStartDate, endDate: compareEndDate },
-      impressions: prevSnapshot.impressions,
-      visitors: prevSnapshot.visitors,
-      trafficOverview: {
-        total: { value: prevTotal },
-        organic: { value: prevSnapshot.traffic.organic, pct: prevTotal > 0 ? Number((prevSnapshot.traffic.organic / prevTotal * 100).toFixed(1)) : 0 },
-        ads: { value: prevSnapshot.traffic.ads, pct: prevTotal > 0 ? Number((prevSnapshot.traffic.ads / prevTotal * 100).toFixed(1)) : 0 },
-      },
-      funnel: prevSnapshot.funnel,
-      funnelRates: prevSnapshot.funnelRates,
-      trafficSources: prevSnapshot.trafficSources,
-    };
-
-    trafficGrowthDriver = buildTrafficGrowthDriver(snapshot, prevSnapshot);
-  }
-
-  const funnelBottleneck = buildFunnelBottleneck(snapshot.funnelRates, comparePeriod?.funnelRates ?? null);
-  const totalClicks = snapshot.traffic.total;
+  const comparePeriod = previous ? {
+    range: { startDate: previous.period.startDate, endDate: previous.period.endDate },
+    ...previous,
+  } : null;
 
   return {
+    period: {
+      ...snapshot.period,
+      adjusted: startDate !== period.startDate || endDate !== period.endDate,
+    },
     kpis: {
-      impressions: { value: snapshot.impressions, growth: comparePeriod ? calculateGrowth(snapshot.impressions, comparePeriod.impressions) : null },
-      visitors: { value: snapshot.visitors, growth: comparePeriod ? calculateGrowth(snapshot.visitors, comparePeriod.visitors) : null },
+      impressions: { value: snapshot.impressions, growth: growthOf(snapshot.impressions, previous?.impressions), daily: snapshot.dailyImpressions },
+      visitors: { value: snapshot.visitors, growth: growthOf(snapshot.visitors, previous?.visitors) },
+      clicks: { value: snapshot.clicks, growth: growthOf(snapshot.clicks, previous?.clicks) },
+      buyers: { value: snapshot.buyers, growth: growthOf(snapshot.buyers, previous?.buyers) },
     },
-    trafficOverview: {
-      total: { value: totalClicks, growth: comparePeriod ? calculateGrowth(totalClicks, comparePeriod.trafficOverview.total.value) : null },
-      organic: {
-        value: snapshot.traffic.organic,
-        pct: totalClicks > 0 ? Number((snapshot.traffic.organic / totalClicks * 100).toFixed(1)) : 0,
-        growth: comparePeriod ? calculateGrowth(snapshot.traffic.organic, comparePeriod.trafficOverview.organic.value) : null,
-      },
-      ads: {
-        value: snapshot.traffic.ads,
-        pct: totalClicks > 0 ? Number((snapshot.traffic.ads / totalClicks * 100).toFixed(1)) : 0,
-        growth: comparePeriod ? calculateGrowth(snapshot.traffic.ads, comparePeriod.trafficOverview.ads.value) : null,
-      },
-    },
+    salesContribution: snapshot.salesContribution,
+    trafficByChannel: snapshot.trafficByChannel,
     trafficSources: snapshot.trafficSources,
+    adsBreakdown: snapshot.adsBreakdown,
     funnel: snapshot.funnel,
     funnelRates: snapshot.funnelRates,
-    // Impressions + traffic-source clicks re-aggregate from daily_channel_
-    // performance (range-exact). The funnel stages/rates are the exception --
-    // product_performance_summary is monthly-only. Warn when the range isn't
-    // one whole calendar month.
-    funnelGrainWarning: snapshotGrainWarning(
-      startDate, endDate, 'Corong konversi (Kunjungan Produk → Tambah Keranjang → Pesanan) beserta rasionya',
-    ),
     comparePeriod,
     insights: {
-      trafficGrowthDriver,
-      funnelBottleneck,
+      trafficGrowthDriver: buildTrafficGrowthDriver(snapshot, previous),
+      funnelBottleneck: buildFunnelBottleneck(snapshot.funnelRates, previous?.funnelRates ?? null),
     },
   };
 }

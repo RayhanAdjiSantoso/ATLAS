@@ -1,4 +1,5 @@
-import { ArrowUp, ArrowDown, Info } from 'lucide-react';
+import { ArrowUp, ArrowDown } from 'lucide-react';
+import { InfoTip } from './figures.jsx';
 import { formatPercent } from '../../utils/format.js';
 
 // Tiny inline trend line for a KPI card -- purely presentational (no axes,
@@ -25,9 +26,9 @@ function Sparkline({ values = [] }) {
   );
 }
 
-export default function KpiCard({ title, value, type = 'number', growth = null, note = null, sparkline = null, invert = false }) {
+export default function KpiCard({ title, value, type = 'number', growth = null, note = null, sparkline = null, invert = false, sub = null, absentReason = null, growthLabel = 'vs periode lalu' }) {
   const formatValue = (val, t) => {
-    if (val == null) return '-';
+    if (val == null) return null;
 
     switch (t) {
       case 'currency':
@@ -56,19 +57,18 @@ export default function KpiCard({ title, value, type = 'number', growth = null, 
       <div>
         <div className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{title}</span>
-          {note && (
-            <span title={note} style={{ display: 'inline-flex', color: 'var(--text-muted)', cursor: 'help' }}>
-              <Info size={14} />
-            </span>
-          )}
+          <InfoTip text={note} />
         </div>
         <div className="value" style={{ marginTop: '0.5rem', wordBreak: 'break-all' }}>
-          {formatValue(value, type)}
+          {value == null
+            ? <span className="con-null" title={absentReason || 'Data belum tersedia untuk periode ini'}>&mdash;</span>
+            : formatValue(value, type)}
         </div>
+        {sub && <div className="kpi-card-sub">{sub}</div>}
         {sparkline && <Sparkline values={sparkline} />}
       </div>
 
-      {growth !== null && (
+      {growth != null && (
         <div 
           className="growth" 
           style={{ 
@@ -86,7 +86,7 @@ export default function KpiCard({ title, value, type = 'number', growth = null, 
           }}
         >
           {isRising ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-          <span>{formatPercent(Math.abs(growth), 1)} vs periode lalu</span>
+          <span>{formatPercent(Math.abs(growth), 1)} {growthLabel}</span>
         </div>
       )}
     </div>

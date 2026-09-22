@@ -1,5 +1,6 @@
 import * as dashboardRepo from '../../repositories/dashboardRepository.js';
-import { snapshotGrainWarning } from '../../utils/dateGrain.js';
+import { snapshotGrain, snapshotGrainWarning } from '../../utils/dateGrain.js';
+import { getMonthlyShopStats } from '../shopeeMonthly/monthlyShopStats.js';
 
 // ===========================================================================
 // Root Cause Analysis — GMV decomposition tree
@@ -101,7 +102,7 @@ const TRAFFIC_SECTIONS = [
     channel: 'Video Penjual',
     subSources: [
       { db: 'Profil Kreator', label: 'Creator Profile (Profil Kreator)' },
-      { db: '__feature_video__', label: 'Feature Video', placeholder: true },
+      { db: 'Fitur Video', label: 'Feature Video (Fitur Video)' },
       { db: 'Halaman Utama Shopee Video', label: 'Homepage Video' },
       { db: 'Rekomendasi', label: 'Recommendation' },
       { db: 'Pencarian', label: 'Search (Pencarian)' },
@@ -123,9 +124,11 @@ const TRAFFIC_SECTIONS = [
   },
 ];
 
-const PAID_TRAFFIC_NOTE =
-  'Data ads spend & impression Shopee Ads belum terintegrasi ke ATLAS — menunggu konfirmasi tim terkait sumber data.';
-const FEATURE_VIDEO_NOTE = 'Belum dipetakan ke sumber data — menunggu klarifikasi lebih lanjut.';
+const ORDER_FILE_ABSENT = 'Butuh file Order (Pesanan) Shopee dengan pesanan berstatus Selesai pada periode ini. Upload di Pengaturan Brand.';
+const CPAS_NOTE =
+  'Data CPAS (iklan Meta yang diarahkan ke Shopee) belum tersambung ke tree ini. Sumbernya ada di Meta Ads, bukan di file Shopee.';
+const ADS_CTR_NOTE =
+  'File Performance Overview Shopee tidak menyertakan klik untuk bagian Iklan Shopee (hanya Ads Impression, Pesanan, Biaya, ROAS), jadi CTR iklan belum bisa dihitung.';
 
 function ctrChild(idPrefix, impressions, clicks) {
   return node(`${idPrefix}-ctr`, 'CTR', {
@@ -176,14 +179,7 @@ function buildTrafficSourceTree(rows) {
     const subNodes = section.subSources.map((spec) => {
       const subId = `traffic-${section.id}-${slug(spec.label)}`;
       if (spec.placeholder) {
-        return node(subId, spec.label, {
-          placeholder: true,
-          note: FEATURE_VIDEO_NOTE,
-          children: [
-            node(`${subId}-impressions`, 'Impressions', { unit: 'count', placeholder: true }),
-            node(`${subId}-ctr`, 'CTR', { unit: 'percent', placeholder: true }),
-          ],
-        });
+        return node(subId, spec.label, { placeholder: true });
       }
       let impr = (bySub.get(spec.db)?.impressions) ?? 0;
       let clicks = (bySub.get(spec.db)?.clicks) ?? 0;
@@ -233,42 +229,79 @@ function buildTrafficSourceTree(rows) {
     children: sectionNodes,
   });
 
-  const paid = node('traffic-paid', 'Paid Traffic', {
-    placeholder: true,
-    note: PAID_TRAFFIC_NOTE,
+  return { overall, overallImpressions };
+}
+
+// Paid traffic: Iklan Shopee from the shop-stats file (Ads Impression and
+// Pengeluaran Iklan per ad type). Impressions = Budget ÷ CPM × 1.000, so the
+// budget and the price paid per thousand views are its two drivers.
+function buildPaidTrafficTree(adRows) {
+  const rows = adRows.map((r) => ({
+    type: r.ad_type,
+    impressions: n(r.impressions) ?? 0,
+    spend: n(r.spend),
+    sales: n(r.sales) ?? 0,
+  }));
+  const hasAds = rows.length > 0;
+  const impressions = rows.reduce((s, r) => s + r.impressions, 0);
+  const spendRows = rows.filter((r) => r.spend != null);
+  const spend = spendRows.length ? spendRows.reduce((s, r) => s + r.spend, 0) : null;
+  const sales = rows.reduce((s, r) => s + r.sales, 0);
+  const cpm = spend != null && impressions > 0 ? (spend / impressions) * 1000 : null;
+  const absent = hasAds ? null : 'Belum ada data Iklan Shopee untuk periode ini.';
+
+  const perType = rows
+    .filter((r) => r.impressions > 0 || (r.spend ?? 0) > 0)
+    .map((r) => {
+      const id = `traffic-paid-ads-${slug(r.type)}`;
+      const typeCpm = r.spend != null && r.impressions > 0 ? (r.spend / r.impressions) * 1000 : null;
+      return node(id, r.type, {
+        unit: 'count',
+        value: r.impressions,
+        sublabel: 'Ads Impression',
+        formula: 'Budget ÷ CPM × 1.000',
+        children: [
+          node(`${id}-budget`, 'Budget', { unit: 'idr', value: r.spend, sublabel: 'Pengeluaran Iklan' }),
+          node(`${id}-cpm`, 'CPM', { unit: 'idr', value: round(typeCpm, 2), sublabel: 'Biaya per 1.000 impression', formula: 'Budget ÷ Impression × 1.000' }),
+          node(`${id}-roas`, 'ROAS', { unit: 'ratio', value: r.spend ? round(r.sales / r.spend, 2) : null, sublabel: 'Penjualan iklan ÷ Budget', formula: 'Penjualan dari iklan ÷ Budget' }),
+        ],
+      });
+    });
+
+  const adsEcosystem = node('traffic-paid-ads-ecosystem', 'Shopee Ads Ecosystem', {
+    unit: 'count',
+    value: hasAds ? impressions : null,
+    absentReason: absent,
+    sublabel: 'Σ Ads Impression Iklan Shopee',
+    formula: 'Budget ÷ CPM × 1.000',
     children: [
-      node('traffic-paid-ads-ecosystem', 'Shopee Ads Ecosystem', {
-        placeholder: true,
-        note: PAID_TRAFFIC_NOTE,
-        children: [
-          node('traffic-paid-ads-ecosystem-impressions', 'Impressions', {
-            placeholder: true,
-            children: [
-              node('traffic-paid-ads-ecosystem-budget', 'Budget', { unit: 'idr', placeholder: true }),
-              node('traffic-paid-ads-ecosystem-cpm', 'CPM', { unit: 'idr', placeholder: true }),
-            ],
-          }),
-          node('traffic-paid-ads-ecosystem-ctr', 'CTR', { unit: 'percent', placeholder: true }),
-        ],
+      node('traffic-paid-ads-ecosystem-budget', 'Budget', { unit: 'idr', value: spend, absentReason: absent, sublabel: 'Σ Pengeluaran Iklan' }),
+      node('traffic-paid-ads-ecosystem-cpm', 'CPM', { unit: 'idr', value: round(cpm, 2), absentReason: absent, sublabel: 'Biaya per 1.000 impression', formula: 'Budget ÷ Impression × 1.000' }),
+      node('traffic-paid-ads-ecosystem-ctr', 'CTR', { unit: 'percent', placeholder: true, note: ADS_CTR_NOTE }),
+      node('traffic-paid-ads-ecosystem-roas', 'ROAS', {
+        unit: 'ratio',
+        value: spend ? round(sales / spend, 2) : null,
+        absentReason: absent,
+        sublabel: 'Penjualan dari iklan ÷ Budget',
+        formula: 'Penjualan dari iklan ÷ Budget',
       }),
-      node('traffic-paid-cpas', 'CPAS Shopee Ecosystem', {
-        placeholder: true,
-        note: PAID_TRAFFIC_NOTE,
-        children: [
-          node('traffic-paid-cpas-impressions', 'Impressions', {
-            placeholder: true,
-            children: [
-              node('traffic-paid-cpas-budget', 'Budget', { unit: 'idr', placeholder: true }),
-              node('traffic-paid-cpas-cpm', 'CPM', { unit: 'idr', placeholder: true }),
-            ],
-          }),
-          node('traffic-paid-cpas-ctr', 'CTR', { unit: 'percent', placeholder: true }),
-        ],
-      }),
+      ...(perType.length ? [node('traffic-paid-ads-types', 'Per jenis iklan', {
+        unit: 'count',
+        value: impressions,
+        sublabel: `${perType.length} jenis iklan aktif`,
+        children: perType,
+      })] : []),
     ],
   });
 
-  return { overall, paid, overallImpressions };
+  return node('traffic-paid', 'Paid Traffic', {
+    unit: 'count',
+    value: hasAds ? impressions : null,
+    absentReason: absent,
+    sublabel: 'Σ impression berbayar',
+    note: 'Iklan Shopee dibaca dari file Performance Overview (bagian Iklan Shopee). CPAS menyusul dari Meta Ads.',
+    children: [adsEcosystem, node('traffic-paid-cpas', 'CPAS Shopee Ecosystem', { placeholder: true, note: CPAS_NOTE })],
+  });
 }
 
 function slug(s) {
@@ -281,16 +314,25 @@ function slug(s) {
 }
 
 export async function getRootCauseAnalysis({ brandId, startDate, endDate }) {
-  const [exec, funnelSnapshot, channelRows, basket] = await Promise.all([
+  const { isWholeCalendarMonth, monthsSpanned } = snapshotGrain(startDate, endDate);
+  const [exec, funnelSnapshot, channelRows, adRows, basket, monthly] = await Promise.all([
     dashboardRepo.getExecutiveMetrics(brandId, startDate, endDate),
     dashboardRepo.getFunnelSnapshot(brandId, startDate, endDate),
     dashboardRepo.getChannelTrafficBreakdown(brandId, startDate, endDate),
+    dashboardRepo.getAdsBreakdown(brandId, startDate, endDate),
     dashboardRepo.getBasketUnitMetrics(brandId, startDate, endDate),
+    isWholeCalendarMonth ? getMonthlyShopStats(brandId, monthsSpanned[0]).catch(() => null) : null,
   ]);
 
   const gmv = n(exec.gmv);
   const orders = n(exec.transactions);
-  const visitors = n(exec.visitors); // Total Pengunjung (Pesanan Dibayar)
+  // Unique visitors exist only as Shopee's monthly total; adding up daily
+  // unique counts would count a returning visitor once per day. Outside a
+  // whole calendar month the node says so instead of showing a sum.
+  const visitors = monthly?.available ? n(monthly.stages['Pesanan Dibayar'].totals.visitors) : null;
+  const visitorsAbsent = isWholeCalendarMonth
+    ? 'Total pengunjung unik bulan ini belum tersedia. Upload file Performance Overview 1 bulan penuh di Pengaturan Brand.'
+    : 'Pengunjung unik hanya tersedia per 1 bulan kalender penuh (angka Shopee tidak bisa dipecah per hari). Pilih periode 1 bulan untuk melihatnya.';
   const aov = div(gmv, orders);
 
   // Conversion Rate branch — Product Performance funnel (Pesanan Dibuat
@@ -309,15 +351,16 @@ export async function getRootCauseAnalysis({ brandId, startDate, endDate }) {
   const abs = div(totalUnits, ordersCount);
   const aur = div(discountedRevenue, totalUnits);
 
-  const { overall: overallTrafficNode, paid: paidTrafficNode } = buildTrafficSourceTree(channelRows);
+  const { overall: overallTrafficNode } = buildTrafficSourceTree(channelRows);
+  const paidTrafficNode = buildPaidTrafficTree(adRows);
 
   const trafficNode = node('traffic', 'Traffic', {
     unit: 'count',
     value: visitors,
-    sublabel: 'Total Pengunjung (Pesanan Dibayar) — pengunjung unik',
-    absentReason: visitors == null ? 'Data pengunjung belum tersedia untuk periode ini.' : null,
+    sublabel: 'Total Pengunjung unik 1 bulan (Shopee)',
+    absentReason: visitors == null ? visitorsAbsent : null,
     note:
-      'Angka "Traffic" adalah pengunjung unik toko. Anak-anaknya ("Overall Traffic" + "Paid Traffic") diukur dalam impresi produk — satuan berbeda, jadi keduanya tidak saling menjumlah.',
+      'Angka "Traffic" adalah pengunjung unik toko selama 1 bulan, dari baris total bulanan file Performance Overview. Anak-anaknya ("Overall Traffic" + "Paid Traffic") diukur dalam impression — satuan berbeda, jadi keduanya tidak saling menjumlah.',
     children: [overallTrafficNode, paidTrafficNode],
   });
 
@@ -393,12 +436,14 @@ export async function getRootCauseAnalysis({ brandId, startDate, endDate }) {
       node('aov-abs', 'ABS (Average Basket Size)', {
         unit: 'unit_per_order',
         value: round(abs, 4),
+        absentReason: abs == null ? ORDER_FILE_ABSENT : null,
         sublabel: 'Σ Jumlah / Σ Pesanan (Selesai) — unit per pesanan',
         formula: 'Σ Jumlah / Σ Pesanan',
       }),
       node('aov-aur', 'AUR (Average Unit Retail)', {
         unit: 'idr_per_unit',
         value: round(aur, 2),
+        absentReason: aur == null ? ORDER_FILE_ABSENT : null,
         sublabel: 'Σ (Harga Setelah Diskon × Jumlah) / Σ Jumlah',
         formula: 'Σ (Harga Setelah Diskon × Jumlah) / Σ Jumlah',
       }),

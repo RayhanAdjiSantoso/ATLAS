@@ -20,7 +20,7 @@ import {
   VIEW_BY_ID,
   formatStripValue,
 } from '../components/dashboard/domains.js';
-import { Delta, Figure, Spark } from '../components/dashboard/figures.jsx';
+import { Delta, Figure, InfoTip, Spark } from '../components/dashboard/figures.jsx';
 import ExecutiveSummary from '../components/dashboard/ExecutiveSummary.jsx';
 import '../components/dashboard/console.css';
 import atlasIcon from '../assets/atlas-icon.png';
@@ -50,6 +50,13 @@ const DASH_EASE = [0.16, 1, 0.3, 1];
 // the same three signatures, and two implementations of "absent is not zero"
 // is one too many for a rule the product depends on.
 
+// "batal −Rp7.555.050 · retur −Rp1.885.150" — what separates the gross
+// headline from its net line.
+function netBreakdown(net, kind) {
+  const f = (v) => formatStripValue(v, kind);
+  return `Setelah dikurangi batal −${f(net.cancelled || 0)} dan retur −${f(net.returned || 0)}`;
+}
+
 // The Executive Snapshot KPI row, pinned. It stays whichever domain is
 // focused, which is what lets the snapshot panel below stop repeating it.
 function KpiStrip({ entry }) {
@@ -66,11 +73,17 @@ function KpiStrip({ entry }) {
           <div className="con-kpi" key={m.key}>
             <div className="con-kpi-label">
               {m.label}
-              {m.note && <span className="con-kpi-note" title={m.note} aria-label={m.note}>i</span>}
+              <InfoTip text={m.note} />
             </div>
             <div className="con-kpi-val">
-              {loading ? <span className="con-skel is-wide" /> : <Figure text={text} />}
+              {loading ? <span className="con-skel is-wide" /> : <Figure text={text} absentReason={m.absent} />}
             </div>
+            {!loading && m.net && metric?.net?.value != null && (
+              <div className="con-kpi-net" title={netBreakdown(metric.net, m.kind)}>
+                Net {formatStripValue(metric.net.value, m.kind)}
+                <Delta value={metric.net.growth} />
+              </div>
+            )}
             <div className="con-kpi-foot">
               {loading
                 ? <span className="con-skel is-narrow" style={{ height: '.7rem' }} />

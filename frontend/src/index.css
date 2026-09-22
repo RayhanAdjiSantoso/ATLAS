@@ -581,3 +581,50 @@ tr:hover td { background: var(--primary-light); }
 .sidebar-link { position: relative; }
 .sidebar-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: auto; padding: 0 6px; color: #fff; border-radius: 99px; background: #dc2626; box-shadow: 0 0 0 2px #fff; font-size: 0.64rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .sidebar.collapsed:not(.peek) .sidebar-badge { position: absolute; top: 3px; right: 5px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 0.56rem; }
+
+/* ── Metric source tooltip (InfoTip in components/dashboard/figures.jsx) ──
+   Global rather than in console.css: the portal renders into <body>, and the
+   same ? appears on KPI cards outside the Business Overview console. */
+button.con-kpi-note {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border, #cbd5e1);
+  background: transparent;
+  color: var(--text-placeholder, #94a3b8);
+  font: 800 .58rem/1 inherit;
+  font-family: inherit;
+  cursor: help;
+  flex-shrink: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+button.con-kpi-note:hover,
+button.con-kpi-note:focus-visible { border-color: var(--primary, #2563eb); color: var(--primary, #2563eb); outline: none; }
+.con-tip {
+  position: fixed;
+  z-index: 10000;
+  padding: .65rem .8rem;
+  border-radius: 8px;
+  background: #111827;
+  color: #f8fafc;
+  font-size: .74rem;
+  font-weight: 450;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: pre-line;
+  box-shadow: 0 12px 28px -10px rgba(15, 23, 42, .45);
+  pointer-events: none;
+}
+.con-tip.is-above { transform: translateY(-100%); }
+.kpi-card-sub {
+  margin-top: .3rem;
+  font-size: .74rem;
+  color: var(--text-muted, #64748b);
+  line-height: 1.45;
+}

@@ -1,3 +1,5 @@
+import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 
 // The three figure signatures of the console, in one place.
@@ -65,5 +67,56 @@ export function Spark({ values = [] }) {
       <polyline points={points} fill="none" stroke="var(--acc-300)" strokeWidth="1.6"
         strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
+  );
+}
+
+// "Where does this number come from" — the ? beside a metric. Rendered in a
+// portal with fixed positioning because the strips and cards it sits in clip
+// their overflow, and a native title= tooltip takes a second to appear and
+// can't hold more than one line. `text` may use \n for separate lines.
+const TIP_WIDTH = 300;
+export function InfoTip({ text, className = 'con-kpi-note' }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+  if (!text) return null;
+
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const vw = window.innerWidth;
+    const left = Math.min(Math.max(r.left + r.width / 2 - TIP_WIDTH / 2, 8), vw - TIP_WIDTH - 8);
+    const below = r.bottom + 8;
+    // Flip above when the trigger sits in the bottom third of the viewport.
+    const above = r.top > window.innerHeight * 0.66;
+    setPos({ left, top: above ? r.top - 8 : below, above });
+  };
+  const hide = () => setPos(null);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={ref}
+        className={className}
+        aria-label={text}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        onClick={(e) => { e.stopPropagation(); if (pos) hide(); else show(); }}
+      >
+        ?
+      </button>
+      {pos && createPortal(
+        <div
+          className={`con-tip${pos.above ? ' is-above' : ''}`}
+          role="tooltip"
+          style={{ left: pos.left, top: pos.top, width: TIP_WIDTH }}
+        >
+          {text}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

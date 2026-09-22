@@ -153,11 +153,17 @@ export function useConsoleData({ filters, activeKey, productLevel }) {
     };
   }, [load, read, activeKey, filters.brandId]);
 
-  // Abort anything outstanding when the console unmounts.
+  // Abort anything outstanding when the console unmounts, and drop those
+  // entries in the same tick: React StrictMode (dev) unmounts and remounts
+  // right away, and a remount that still saw "loading" would never refetch.
   useEffect(() => {
     const live = controllers.current;
+    const entries = cache.current;
     return () => {
-      for (const controller of live.values()) controller.abort();
+      for (const [key, controller] of live.entries()) {
+        controller.abort();
+        if (entries.get(key)?.status === 'loading') entries.delete(key);
+      }
       live.clear();
     };
   }, []);

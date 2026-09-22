@@ -7,12 +7,13 @@ export async function getExecutiveMetrics(brandId, startDate, endDate) {
   // data and confirmed they already INCLUDE orders later cancelled
   // (cancelled_orders / cancelled_sales_idr) or returned (returned_orders /
   // returned_sales_idr) — those are subset breakdowns, not already
-  // subtracted. gmv/transactions below are net (gross minus cancelled minus
-  // returned) so "Transaksi"/"GMV" reflect orders that actually stuck, and
-  // AOV (= gmv / transactions) stays on a consistent net/net basis.
-  // transactions_gross is kept separately for Tingkat Pembatalan, which by
-  // definition wants "cancelled as a fraction of all orders that were paid",
-  // not of the already-cancelled-excluded net count.
+  // subtracted.
+  //
+  // gmv/transactions are that gross figure on purpose: it is what Shopee's
+  // own Performa Toko prints as "Penjualan" / "Pesanan", and brands check
+  // ATLAS against that screen. The net figure (gross minus cancelled minus
+  // returned) travels alongside as gmv_net/transactions_net and is shown
+  // under the headline, never instead of it.
   // Tingkat Konversi (cvr): straight average of the daily "Tingkat Konversi
   // Pesanan" column for the 'Pesanan Dibayar' stage. Verified this figure is
   // NOT reproducible from total_orders/total_visitors in the same row (off
@@ -21,9 +22,13 @@ export async function getExecutiveMetrics(brandId, startDate, endDate) {
   // not a raw count that can be summed.
   const orderPerfQuery = `
     SELECT
-      COALESCE(SUM(total_sales_idr) - SUM(cancelled_sales_idr) - SUM(returned_sales_idr), 0) AS gmv,
-      COALESCE(SUM(total_orders) - SUM(cancelled_orders) - SUM(returned_orders), 0) AS transactions,
-      COALESCE(SUM(total_orders), 0) AS transactions_gross,
+      COALESCE(SUM(total_sales_idr), 0) AS gmv,
+      COALESCE(SUM(total_orders), 0) AS transactions,
+      COALESCE(SUM(total_sales_idr) - SUM(cancelled_sales_idr) - SUM(returned_sales_idr), 0) AS gmv_net,
+      COALESCE(SUM(total_orders) - SUM(cancelled_orders) - SUM(returned_orders), 0) AS transactions_net,
+      COALESCE(SUM(cancelled_sales_idr), 0) AS cancelled_sales,
+      COALESCE(SUM(returned_sales_idr), 0) AS returned_sales,
+      COUNT(*)::int AS days_with_data,
       COALESCE(SUM(total_visitors), 0) AS visitors,
       COALESCE(SUM(cancelled_orders), 0) AS cancelled_orders,
       COALESCE(SUM(returned_orders), 0) AS returned_orders,
@@ -77,15 +82,15 @@ export async function getExecutiveMetrics(brandId, startDate, endDate) {
 }
 
 export async function getGrowthMetrics(brandId, startDate, endDate) {
-  // Daily trends for Line Chart & Sales Calendar. Net (gross minus cancelled
-  // minus returned) — matches getExecutiveMetrics' orderPerfQuery, so the
+  // Daily trends for Line Chart & Sales Calendar. Gross, like Shopee's
+  // Performa Toko chart — matches getExecutiveMetrics' orderPerfQuery, so the
   // per-day trend sums back up to the same GMV/Transaksi KPI totals shown
-  // on Executive Snapshot instead of a gross figure that no longer agrees.
+  // on Executive Snapshot.
   const trendQuery = `
     SELECT
       dop.report_date::text AS date,
-      COALESCE(SUM(dop.total_sales_idr) - SUM(dop.cancelled_sales_idr) - SUM(dop.returned_sales_idr), 0) AS gmv,
-      COALESCE(SUM(dop.total_orders) - SUM(dop.cancelled_orders) - SUM(dop.returned_orders), 0) AS transactions
+      COALESCE(SUM(dop.total_sales_idr), 0) AS gmv,
+      COALESCE(SUM(dop.total_orders), 0) AS transactions
     FROM shopee.daily_order_performance dop
     JOIN shopee.order_pipeline_stages ops ON ops.stage_id = dop.stage_id
     WHERE dop.brand_id = $1
@@ -139,6 +144,28 @@ export async function getFunnelSnapshot(brandId, startDate, endDate) {
     impressions: Number(impRes.rows[0]?.impressions || 0),
     funnel: funnelRes.rows[0],
   };
+}
+
+// Daily Iklan Shopee impressions. Impressions are additive, so unlike the
+// unique visitor counts they can be broken down per day. products_viewed on
+// the Iklan Shopee rows is the file's "Ads Impression" column (the one column
+// the daily importer does map correctly for that section).
+export async function getDailyAdImpressions(brandId, startDate, endDate) {
+  const query = `
+    SELECT dcp.report_date::text AS date, COALESCE(SUM(dcp.products_viewed), 0)::bigint AS impressions
+    FROM shopee.daily_channel_performance dcp
+    JOIN shopee.order_pipeline_stages ops ON ops.stage_id = dcp.stage_id
+    JOIN shopee.traffic_channels tc ON tc.channel_id = dcp.channel_id
+    WHERE dcp.brand_id = $1
+      AND dcp.report_date >= $2
+      AND dcp.report_date <= $3
+      AND ops.stage_name = 'Pesanan Dibayar'
+      AND tc.channel_name = 'Iklan Shopee'
+    GROUP BY dcp.report_date
+    ORDER BY dcp.report_date
+  `;
+  const res = await pool.query(query, [brandId, startDate, endDate]);
+  return res.rows.map((r) => ({ date: r.date, value: Number(r.impressions) }));
 }
 
 export async function getTrafficAndFunnelMetrics(brandId, startDate, endDate) {
@@ -210,6 +237,23 @@ export async function getDiscountSummary(brandId, startDate, endDate) {
   ]);
 
   return { ...discRes.rows[0], ...itemDiscRes.rows[0] };
+}
+
+// Whether the brand uploaded an Order export covering any day of the range.
+// Produk Terjual, Pelanggan Unik and Total Diskon only exist in that export;
+// without it their SUM/COUNT reads 0, which would claim "nothing sold" when
+// the truth is "not uploaded". Callers use this to report them as absent.
+export async function hasOrderData(brandId, startDate, endDate) {
+  const query = `
+    SELECT EXISTS (
+      SELECT 1 FROM shopee.orders o
+      WHERE o.brand_id = $1
+        AND o.order_created_at < ($3::date + INTERVAL '1 day')
+        AND COALESCE(o.order_completed_at, o.order_created_at) >= $2
+    ) AS has_orders
+  `;
+  const res = await pool.query(query, [brandId, startDate, endDate]);
+  return Boolean(res.rows[0]?.has_orders);
 }
 
 // Distinct paying customers in the period (completed orders only).
@@ -888,6 +932,33 @@ export async function getChannelTrafficBreakdown(brandId, startDate, endDate) {
       AND ops.stage_name = 'Pesanan Siap Dikirim'
       AND tss.sub_source_name <> 'Semua'
     GROUP BY tc.channel_name, tss.sub_source_name
+  `;
+  const res = await pool.query(query, [brandId, startDate, endDate]);
+  return res.rows;
+}
+
+// Iklan Shopee per ad type: Ads Impression, Pengeluaran Iklan, and the sales
+// and orders Shopee attributes to ads, at 'Pesanan Dibayar' so the sales
+// agree with the GMV node above them. Needs migration 028 (ad_spend_idr).
+export async function getAdsBreakdown(brandId, startDate, endDate) {
+  const query = `
+    SELECT
+      tss.sub_source_name AS ad_type,
+      COALESCE(SUM(dcp.products_viewed), 0)::bigint AS impressions,
+      SUM(dcp.ad_spend_idr)::numeric AS spend,
+      COALESCE(SUM(dcp.sales_idr), 0)::numeric AS sales,
+      COALESCE(SUM(dcp.total_orders), 0)::numeric AS orders
+    FROM shopee.daily_channel_performance dcp
+    JOIN shopee.order_pipeline_stages ops ON ops.stage_id = dcp.stage_id
+    JOIN shopee.traffic_channels tc ON tc.channel_id = dcp.channel_id
+    JOIN shopee.traffic_sub_sources tss ON tss.sub_source_id = dcp.sub_source_id
+    WHERE dcp.brand_id = $1
+      AND dcp.report_date >= $2
+      AND dcp.report_date <= $3
+      AND ops.stage_name = 'Pesanan Dibayar'
+      AND tc.channel_name = 'Iklan Shopee'
+    GROUP BY tss.sub_source_name
+    ORDER BY SUM(dcp.sales_idr) DESC
   `;
   const res = await pool.query(query, [brandId, startDate, endDate]);
   return res.rows;

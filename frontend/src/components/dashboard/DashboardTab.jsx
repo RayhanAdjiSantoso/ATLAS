@@ -1,6 +1,7 @@
 import { useState, Children, Fragment } from 'react';
 import { Download, Building2, Inbox, RotateCcw } from 'lucide-react';
 import KpiCard from './KpiCard.jsx';
+import { InfoTip } from './figures.jsx';
 import LineChart from './LineChart.jsx';
 import DonutChart from './DonutChart.jsx';
 import FunnelChart from './FunnelChart.jsx';
@@ -778,87 +779,180 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
 }
 
 const formatTrafficNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0);
+const formatIdrFull = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(val) || 0);
 
-// Compact single-visual "kontribusi traffic": Total + a 2-segment proportion
-// bar (Organic vs Ads) + the two figures with their % share, in one card
-// instead of a separate chart per number -- reuses the same colored-segment
-// bar visual language as e.g. RFM's segment distribution bars.
-function TrafficOverviewCard({ overview, title = 'Total Traffic' }) {
-  const total = overview?.total?.value ?? 0;
-  const organic = overview?.organic ?? { value: 0, pct: 0 };
-  const ads = overview?.ads ?? { value: 0, pct: 0 };
-  const organicPct = total > 0 ? organic.pct : 0;
-  const adsPct = total > 0 ? ads.pct : 0;
+const SHOP_STATS_SRC = 'file Performance Overview Shopee (shop-stats) bulan ini, yang di-upload di Pengaturan Brand';
 
-  const growthBadge = (growth) => {
-    if (growth == null) return null;
-    const positive = growth >= 0;
-    return (
-      <span style={{ fontSize: '0.72rem', fontWeight: '700', color: positive ? 'var(--success)' : 'var(--danger)' }}>
-        {positive ? '+' : ''}{growth}%
-      </span>
-    );
-  };
+// Store channels in Shopee's own order and colours. Iklan Shopee is not one
+// of them; it gets its own colour because it is a separate lens.
+const CHANNEL_COLORS = {
+  productPage: '#1e3eb8',
+  live: '#00a3c2',
+  video: '#f5a623',
+  affiliate: '#7c3aed',
+  ads: '#0d9488',
+};
 
+const TRAFFIC_NOTES = {
+  impressions: `Sumber: ${SHOP_STATS_SRC}, bagian "Iklan Shopee", kolom "Ads Impression", dijumlah untuk semua jenis iklan.\nImpression bisa dijumlah, jadi grafik kecil di bawahnya memecahnya per hari.`,
+  visitors: `Sumber: ${SHOP_STATS_SRC}, sheet "Pesanan Dibayar", baris total bulan, kolom "Total Pengunjung".\nIni pengunjung UNIK selama 1 bulan: orang yang datang berkali-kali dihitung sekali. Karena itu angka ini tidak bisa dipecah per hari, dan tidak sama dengan jumlah pengunjung harian.`,
+  clicks: `Sumber: ${SHOP_STATS_SRC}, sheet "Pesanan Dibayar", baris total bulan, kolom "Produk Diklik".\nSama dengan "Produk Diklik" di Performa Toko, dan sama dengan jumlah klik keempat channel di kartu Traffic per Channel.`,
+  buyers: `Sumber: ${SHOP_STATS_SRC}, sheet "Pesanan Dibayar", baris total bulan, kolom "Pembeli".\nPembeli UNIK selama 1 bulan, bukan penjumlahan pembeli harian.`,
+  sales: `Sumber: ${SHOP_STATS_SRC}, sheet "Sumber Kunjungan" (Pesanan Dibayar), baris total bulan.\nSama dengan "Rincian Kontribusi Penjualan Toko" di Performa Toko: Halaman Produk + Live Penjual + Video Penjual + Live & Video Affiliate = Total Penjualan (100%).`,
+  ads: `Sumber: ${SHOP_STATS_SRC}, kolom "Penjualan dari Iklan Shopee".\nSama dengan "Kontribusi Penjualan Iklan" di Performa Toko. Ini lensa terpisah: pesanan dari Halaman Produk yang datang lewat iklan juga dihitung di sini, jadi persentasenya tidak dijumlah dengan rincian toko.`,
+  traffic: `Sumber: ${SHOP_STATS_SRC}, bagian "Asal Penjualan", kolom "Produk Diklik" pada baris total tiap channel.\nIklan Shopee tidak punya kolom klik di file ini (isinya Ads Impression, Pesanan, Biaya, ROAS), jadi dibahas di tabel Iklan Shopee.`,
+  adsTable: `Sumber: ${SHOP_STATS_SRC}, bagian "Iklan Shopee": Penjualan, Ads Impression, Total Pesanan, Pengeluaran Iklan, dan ROAS per jenis iklan untuk 1 bulan.`,
+  funnel: 'Sumber: file Product Performance Shopee bulanan (parentskudetail). Tiap tahap = jumlah angka unik per produk: Pengunjung Produk (Kunjungan) → Pengunjung yang Menambahkan ke Keranjang → Pembeli (Pesanan Dibuat) → Pembeli (Pesanan Siap Dikirim).\nShopee tidak menyediakan angka unik tingkat toko untuk tahap-tahap ini, jadi pengunjung yang melihat 2 produk terhitung 2 kali. Karena itu Kunjungan Produk tidak sama dengan Product Visitor di atas.',
+};
+
+// Growth badge in the same tone rules as the KPI cards.
+function GrowthPill({ value }) {
+  if (value == null) return null;
+  const up = value >= 0;
   return (
-    <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{title}</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text)' }}>{formatTrafficNumber(total)}</div>
-        </div>
-        {growthBadge(overview?.total?.growth)}
-      </div>
+    <span className={`tf-growth ${up ? 'is-up' : 'is-down'}`}>
+      {up ? '▲' : '▼'} {formatPercent(Math.abs(value), 1)}
+    </span>
+  );
+}
 
-      {/* Organic vs Ads proportion bar */}
-      <div style={{ height: '10px', borderRadius: '999px', overflow: 'hidden', display: 'flex', background: 'var(--bg-elevated)' }}>
-        <div style={{ width: `${organicPct}%`, background: 'var(--primary)' }} title={`Organic: ${formatPercent(organicPct)}`} />
-        <div style={{ width: `${adsPct}%`, background: '#8b5cf6' }} title={`Ads: ${formatPercent(adsPct)}`} />
+// One whole bar of parts that sum to 100%, the parts listed underneath with
+// their value, share and change vs the comparison month.
+function ShareBar({ items, format }) {
+  return (
+    <>
+      <div className="tf-bar">
+        {items.map((it) => (
+          <div
+            key={it.key}
+            style={{ width: `${it.pct || 0}%`, background: CHANNEL_COLORS[it.key] }}
+            title={`${it.label}: ${formatPercent(it.pct || 0, 1)}`}
+          />
+        ))}
       </div>
+      <div className="tf-parts">
+        {items.map((it) => (
+          <div className="tf-part" key={it.key}>
+            <div className="tf-part-name">
+              <i style={{ background: CHANNEL_COLORS[it.key] }} />
+              {it.label}
+            </div>
+            <div className="tf-part-val">{it.value == null ? <span className="con-null">&mdash;</span> : format(it.value)}</div>
+            <div className="tf-part-meta">
+              <span>{it.pct == null ? '—' : formatPercent(it.pct, 1)}</span>
+              <GrowthPill value={it.growth} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span style={{ width: '9px', height: '9px', borderRadius: '2px', background: 'var(--primary)', display: 'inline-block' }} />
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Organic</span>
-          </div>
-          <div style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--text)' }}>{formatTrafficNumber(organic.value)}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{formatPercent(organicPct)}</span>
-            {growthBadge(organic.growth)}
-          </div>
+// Laid out like Shopee's "Sumber Kunjungan" block: the store breakdown that
+// adds up to Total Penjualan, and Iklan Shopee beside it on its own.
+function SalesContributionCard({ data }) {
+  if (!data) return null;
+  const ads = data.ads || {};
+  return (
+    <div className="card tf-sales">
+      <div className="tf-sales-store">
+        <div className="tf-head">
+          <h3>Rincian Kontribusi Penjualan Toko</h3>
+          <InfoTip text={TRAFFIC_NOTES.sales} />
         </div>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span style={{ width: '9px', height: '9px', borderRadius: '2px', background: '#8b5cf6', display: 'inline-block' }} />
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Ads</span>
-          </div>
-          <div style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--text)' }}>{formatTrafficNumber(ads.value)}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{formatPercent(adsPct)}</span>
-            {growthBadge(ads.growth)}
-          </div>
+        <div className="tf-total">
+          <span>Total Penjualan (100%)</span>
+          <strong>{formatIdrFull(data.total)}</strong>
+          <GrowthPill value={data.growth} />
         </div>
+        <ShareBar items={data.store} format={formatIdrFull} />
+      </div>
+      <div className="tf-sales-ads">
+        <div className="tf-head">
+          <h3>Kontribusi Penjualan Iklan</h3>
+          <InfoTip text={TRAFFIC_NOTES.ads} />
+        </div>
+        <div className="tf-ads-label"><i style={{ background: CHANNEL_COLORS.ads }} />Iklan Shopee</div>
+        <strong className="tf-ads-val">{ads.value == null ? <span className="con-null">&mdash;</span> : formatIdrFull(ads.value)}</strong>
+        <div className="tf-ads-pct">
+          {ads.pct == null ? '—' : `${formatPercent(ads.pct, 1)} dari Total Penjualan`}
+          <GrowthPill value={ads.growth} />
+        </div>
+        <div className="tf-ring" style={{ '--p': ads.pct || 0, '--c': CHANNEL_COLORS.ads }} aria-hidden />
+        <dl className="tf-ads-kv">
+          <div><dt>Biaya iklan</dt><dd>{ads.spend == null ? '—' : formatIdrFull(ads.spend)}</dd></div>
+          <div><dt>ROAS</dt><dd>{ads.roas == null ? '—' : new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(ads.roas)}</dd></div>
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+function TrafficByChannelCard({ data }) {
+  if (!data) return null;
+  return (
+    <div className="card tf-traffic">
+      <div className="tf-head">
+        <h3>Traffic per Channel (Produk Diklik)</h3>
+        <InfoTip text={TRAFFIC_NOTES.traffic} />
+      </div>
+      <div className="tf-total">
+        <span>Total klik produk</span>
+        <strong>{formatTrafficNumber(data.total)}</strong>
+        <GrowthPill value={data.growth} />
+      </div>
+      <ShareBar items={data.channels} format={formatTrafficNumber} />
+    </div>
+  );
+}
+
+function AdsBreakdownTable({ rows = [] }) {
+  if (!rows.length) return null;
+  const nf = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
+  return (
+    <div className="card">
+      <div className="tf-head">
+        <h3>Rincian Iklan Shopee per Jenis Iklan</h3>
+        <InfoTip text={TRAFFIC_NOTES.adsTable} />
+      </div>
+      <div className="tf-table-wrap">
+        <table className="tf-table">
+          <thead>
+            <tr><th>Jenis iklan</th><th>Penjualan</th><th>Porsi</th><th>Ads Impression</th><th>Pesanan</th><th>Biaya iklan</th><th>ROAS</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.name}>
+                <td>{r.name}</td>
+                <td>{r.sales == null ? '—' : formatIdrFull(r.sales)}</td>
+                <td>{r.pct == null ? '—' : formatPercent(r.pct, 1)}</td>
+                <td>{r.impressions == null ? '—' : formatTrafficNumber(r.impressions)}</td>
+                <td>{r.orders == null ? '—' : nf.format(r.orders)}</td>
+                <td>{r.spend == null ? '—' : formatIdrFull(r.spend)}</td>
+                <td>{r.roas == null ? '—' : nf.format(r.roas)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
 function FunnelRateCard({ funnelRates = {} }) {
-  // Four rows, not a 2x2 grid. These labels are long — "CVR Funnel (Siap Kirim
-  // ÷ Product Visitor)" — and in the narrow column beside the funnel a 2x2
-  // wrapped each cell to a different height, so four peer metrics stopped
-  // reading as peers. Rows let the label run and keep the numbers in one
-  // right-aligned tabular column you can compare down.
+  // Four rows, not a 2x2 grid: the labels are long and a 2x2 wrapped each
+  // cell to a different height, so four peer metrics stopped reading as
+  // peers. Rows keep the numbers in one right-aligned column.
   const rows = [
-    { key: 'atcRate', label: 'ATC Rate', sub: 'Keranjang / Visitor' },
-    { key: 'poRate', label: 'PO Rate', sub: 'Checkout / ATC' },
-    { key: 'coRate', label: 'CO Rate', sub: 'Siap Kirim / Checkout' },
+    { key: 'atcRate', label: 'ATC Rate', sub: 'Keranjang / Kunjungan Produk', note: 'Pengunjung yang Menambahkan ke Keranjang ÷ Pengunjung Produk (Kunjungan), dari file Product Performance bulanan.' },
+    { key: 'poRate', label: 'PO Rate', sub: 'Pesanan Dibuat / Keranjang', note: 'Pembeli (Pesanan Dibuat) ÷ Pengunjung yang Menambahkan ke Keranjang, dari file Product Performance bulanan.' },
+    { key: 'coRate', label: 'CO Rate', sub: 'Siap Kirim / Pesanan Dibuat', note: 'Pembeli (Pesanan Siap Dikirim) ÷ Pembeli (Pesanan Dibuat), dari file Product Performance bulanan.' },
     {
       key: 'cvr',
       label: 'CVR Funnel',
-      sub: 'Siap Kirim / Product Visitor',
-      note: "CVR Funnel = Pesanan Siap Dikirim ÷ Product Visitor, dihitung dari tahapan funnel di tab ini. Berbeda dari 'CVR Pesanan' di tab Executive Snapshot, yang merupakan rata-rata harian 'Tingkat Konversi Pesanan' yang dilaporkan Shopee langsung -- kedua angka ini tidak dapat dibandingkan 1:1.",
+      sub: 'Siap Kirim / Kunjungan Produk',
+      note: "Pembeli (Pesanan Siap Dikirim) ÷ Pengunjung Produk (Kunjungan), dihitung dari tahapan funnel di tab ini. Berbeda dari 'CVR Pesanan' di ringkasan atas (angka Shopee: Pesanan ÷ Pengunjung toko), jadi keduanya tidak bisa dibandingkan 1:1.",
     },
   ];
 
@@ -867,9 +961,9 @@ function FunnelRateCard({ funnelRates = {} }) {
       <h3 style={{ fontSize: '1rem', color: 'var(--text)' }}>Metrik Rasio Funnel</h3>
       <div className="con-ratelist">
         {rows.map((r) => (
-          <div className="con-rate" key={r.key} title={r.note} style={r.note ? { cursor: 'help' } : undefined}>
+          <div className="con-rate" key={r.key}>
             <div className="con-rate-name">
-              {r.label}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.35rem' }}>{r.label}<InfoTip text={r.note} /></span>
               <span>{r.sub}</span>
             </div>
             <div className="con-rate-val">{formatPercent((funnelRates[r.key] || 0) * 100, 2)}</div>
@@ -881,8 +975,7 @@ function FunnelRateCard({ funnelRates = {} }) {
 }
 
 // Growth driver / bottleneck insight card -- same colored-callout visual
-// language as Business Growth's headline card, reimplemented locally since
-// Business Growth's own component/logic must stay untouched in this phase.
+// language as Business Growth's headline card.
 function InsightCard({ tone, label, detail }) {
   const toneColor = tone === 'up' ? 'var(--success)' : tone === 'down' ? 'var(--danger)' : 'var(--text-muted)';
   const toneBg = tone === 'up' ? 'var(--success-bg)' : tone === 'down' ? 'var(--danger-bg)' : 'var(--bg-elevated)';
@@ -897,76 +990,116 @@ function InsightCard({ tone, label, detail }) {
   );
 }
 
-// TAB 3: TRAFFIC & FUNNEL
-function renderTrafficFunnel(data, { startDate, endDate } = {}) {
+const TRAFFIC_SOURCE_GROUPS = [
+  ['productPage', 'Halaman Produk'],
+  ['live', 'Live Penjual'],
+  ['video', 'Video Penjual'],
+  ['affiliate', 'Live & Video Affiliate'],
+];
+
+// TAB 3: TRAFFIC & FUNNEL — always one calendar month. The headline figures
+// are Shopee's own monthly totals (unique visitors, unique buyers, channel
+// subtotals), which don't exist for an arbitrary date range.
+function renderTrafficFunnel(data) {
     const {
-      kpis = {}, trafficOverview = {}, trafficSources = {}, funnel = [], funnelRates = {},
-      comparePeriod = null, insights = {}, funnelGrainWarning = null,
+      period = {}, kpis = {}, salesContribution = null, trafficByChannel = null, trafficSources = {},
+      adsBreakdown = [], funnel = [], funnelRates = {}, comparePeriod = null, insights = {},
     } = data || {};
 
     const growthDriver = insights.trafficGrowthDriver;
     const bottleneck = insights.funnelBottleneck;
+    const dailyImpressions = (kpis.impressions?.daily || []).map((d) => d.value);
+    const vsLabel = comparePeriod ? `vs ${comparePeriod.period?.label || 'bulan pembanding'}` : 'vs periode lalu';
+    const unavailable = period.unavailableReason;
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-        {/* Supporting context -- Impression (Ads-only, from getFunnelSnapshot's
-            impression query) and Product Visitor (Shopee's own "Total
-            Pengunjung" figure). Both use a different counting basis than the
-            "Total Traffic" (product clicks) breakdown below -- noted via
-            tooltip so the three aren't assumed to be the same number. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '1rem' }}>
+        <div className="tf-period">
+          <div>
+            <span className="tf-period-kicker">Periode data · per bulan</span>
+            <strong>{period.label || '—'}</strong>
+            {period.isPartialMonth && period.coveredEnd && (
+              <em>Data baru sampai {formatDateLabel(period.coveredEnd)} (bulan berjalan)</em>
+            )}
+          </div>
+          <p>
+            Traffic &amp; Funnel selalu dihitung untuk 1 bulan kalender penuh, mengikuti angka bulanan di Shopee Performa Toko.
+            {period.adjusted && ' Rentang tanggal yang dipilih disesuaikan ke bulan dari tanggal akhirnya.'}
+            {comparePeriod && ` Pembanding: ${comparePeriod.period?.label}.`}
+          </p>
+        </div>
+
+        {unavailable && (
+          <div className="tf-warn">{unavailable}</div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))', gap: '1rem' }}>
           <KpiCard
             title="Impression (Iklan)"
             value={kpis.impressions?.value}
             type="number"
             growth={kpis.impressions?.growth ?? null}
-            note="Jumlah tayang produk pada channel Iklan Shopee (Ads) saja. Basis hitung berbeda dari 'Total Traffic' (klik produk seluruh channel) di bawah."
+            growthLabel={vsLabel}
+            sparkline={dailyImpressions.length > 1 ? dailyImpressions : null}
+            sub={dailyImpressions.length > 1 ? 'Tren harian 1 bulan' : null}
+            note={TRAFFIC_NOTES.impressions}
           />
           <KpiCard
-            title="Product Visitor"
+            title="Product Visitor (unik)"
             value={kpis.visitors?.value}
             type="number"
             growth={kpis.visitors?.growth ?? null}
-            note="Total Pengunjung yang dilaporkan Shopee (daily_order_performance). Basis hitung berbeda dari 'Total Traffic' (klik produk per channel) di bawah, dan dari 'Kunjungan Produk' pada funnel."
+            growthLabel={vsLabel}
+            sub="Total pengunjung unik per bulan, tidak bisa dipecah per hari"
+            absentReason={unavailable}
+            note={TRAFFIC_NOTES.visitors}
+          />
+          <KpiCard
+            title="Produk Diklik"
+            value={kpis.clicks?.value}
+            type="number"
+            growth={kpis.clicks?.growth ?? null}
+            growthLabel={vsLabel}
+            absentReason={unavailable}
+            note={TRAFFIC_NOTES.clicks}
+          />
+          <KpiCard
+            title="Pembeli (unik)"
+            value={kpis.buyers?.value}
+            type="number"
+            growth={kpis.buyers?.growth ?? null}
+            growthLabel={vsLabel}
+            sub="Pembeli unik per bulan"
+            absentReason={unavailable}
+            note={TRAFFIC_NOTES.buyers}
           />
         </div>
 
-        {/* Traffic Overview + Organic vs Ads -- one compact visual, paired
-            main | compare when a comparison period is active (same pattern
-            as Business Growth). */}
-        {comparePeriod ? (
-          <div className="channel-traffic-pair has-period-heads" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
-            <PeriodHeader title="Periode Utama" range={`${formatDateLabel(startDate)} - ${formatDateLabel(endDate)}`} />
-            <PeriodHeader title="Periode Pembanding" range={`${formatDateLabel(comparePeriod.range.startDate)} - ${formatDateLabel(comparePeriod.range.endDate)}`} />
-            <TrafficOverviewCard overview={trafficOverview} />
-            <TrafficOverviewCard overview={comparePeriod.trafficOverview} />
-          </div>
-        ) : (
-          <TrafficOverviewCard overview={trafficOverview} />
-        )}
+        <SalesContributionCard data={salesContribution} />
 
-        {/* Funnel -- total-traffic level only. product_performance_summary
-            (its source) has no channel/sub-source breakdown, so Organic vs
-            Ads cannot be attributed per stage without fabricating a number
-            the data doesn't support -- labeled explicitly instead. */}
+        <div className="tf-split">
+          <TrafficByChannelCard data={trafficByChannel} />
+          <AdsBreakdownTable rows={adsBreakdown} />
+        </div>
+
         <div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            Funnel di bawah merepresentasikan <strong>total seluruh traffic</strong> (Organic + Ads gabungan) — data pada tahap Kunjungan Produk/Tambah Keranjang/Pesanan tidak tersedia terpecah per sumber traffic. Angka funnel bersumber dari laporan Product Performance <strong>bulanan</strong>.
+          <div className="tf-head" style={{ marginBottom: '.75rem' }}>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Funnel mencakup <strong>seluruh traffic</strong> (organik + iklan) untuk {period.label || 'bulan ini'}. Tahap-tahapnya tidak tersedia per sumber traffic.
+            </div>
+            <InfoTip text={TRAFFIC_NOTES.funnel} />
           </div>
-          <GrainWarning warning={funnelGrainWarning} />
           {comparePeriod ? (
             <div className="channel-traffic-pair has-period-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
+              <PeriodHeader title="Bulan Utama" range={period.label} />
+              <PeriodHeader title="Bulan Pembanding" range={comparePeriod.period?.label} />
               <FunnelChart data={funnel} title="Analisis Corong Konversi (Funnel)" />
               <FunnelChart data={comparePeriod.funnel} title="Analisis Corong Konversi (Funnel)" />
               <FunnelRateCard funnelRates={funnelRates} />
               <FunnelRateCard funnelRates={comparePeriod.funnelRates} />
             </div>
           ) : (
-            /* The funnel takes the larger share: it is the only chart here
-               whose bars need room to be read, while the ratio card is four
-               numbers that fit anything. An even split squeezed the funnel's
-               bar track down to a few dozen pixels. */
             <div className="channel-funnel-grid">
               <FunnelChart data={funnel} title="Analisis Corong Konversi (Funnel)" />
               <FunnelRateCard funnelRates={funnelRates} />
@@ -974,60 +1107,27 @@ function renderTrafficFunnel(data, { startDate, endDate } = {}) {
           )}
         </div>
 
-        {/* Growth Driver + Bottleneck insight */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1rem' }}>
           {growthDriver ? (
             <InsightCard tone={growthDriver.tone} label={growthDriver.label} detail={growthDriver.detail} />
           ) : (
-            <InsightCard tone="stable" label="Traffic Growth Driver" detail={'Aktifkan "Bandingkan Periode" pada filter untuk melihat sumber traffic mana yang mendorong perubahan.'} />
+            <InsightCard tone="stable" label="Traffic Growth Driver" detail={'Aktifkan "Bandingkan Periode" pada filter untuk melihat channel mana yang mendorong perubahan klik dibanding bulan sebelumnya.'} />
           )}
           {bottleneck && (
             <InsightCard tone={bottleneck.tone} label={bottleneck.label} detail={bottleneck.detail} />
           )}
         </div>
 
-        {/* Detail: sub-source breakdown per channel -- supporting detail
-            beneath the Organic/Ads headline above, paired main | compare
-            when a comparison period is active (same pattern as Traffic
-            Overview above). */}
         <div>
-          <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text)', marginBottom: '0.75rem' }}>Detail Sumber Traffic per Channel</div>
-          {comparePeriod ? (
-            <div className="channel-traffic-pair" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '0.75rem' }}>
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                  Periode Utama ({formatDateLabel(startDate)} - {formatDateLabel(endDate)})
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '1rem' }}>
-                  <DonutChart data={trafficSources.universal || []} title="Traffic Source [Universal]" />
-                  <DonutChart data={trafficSources.shopping || []} title="Traffic Source [Shopping]" />
-                  <DonutChart data={trafficSources.live || []} title="Traffic Source [Live]" />
-                  <DonutChart data={trafficSources.video || []} title="Traffic Source [Video]" />
-                  <DonutChart data={trafficSources.affiliate || []} title="Traffic Source [Affiliate]" />
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                  Periode Pembanding ({formatDateLabel(comparePeriod.range.startDate)} - {formatDateLabel(comparePeriod.range.endDate)})
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '1rem' }}>
-                  <DonutChart data={comparePeriod.trafficSources?.universal || []} title="Traffic Source [Universal]" />
-                  <DonutChart data={comparePeriod.trafficSources?.shopping || []} title="Traffic Source [Shopping]" />
-                  <DonutChart data={comparePeriod.trafficSources?.live || []} title="Traffic Source [Live]" />
-                  <DonutChart data={comparePeriod.trafficSources?.video || []} title="Traffic Source [Video]" />
-                  <DonutChart data={comparePeriod.trafficSources?.affiliate || []} title="Traffic Source [Affiliate]" />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '1rem' }}>
-              <DonutChart data={trafficSources.universal || []} title="Traffic Source [Universal]" />
-              <DonutChart data={trafficSources.shopping || []} title="Traffic Source [Shopping]" />
-              <DonutChart data={trafficSources.live || []} title="Traffic Source [Live]" />
-              <DonutChart data={trafficSources.video || []} title="Traffic Source [Video]" />
-              <DonutChart data={trafficSources.affiliate || []} title="Traffic Source [Affiliate]" />
-            </div>
-          )}
+          <div className="tf-head" style={{ marginBottom: '0.75rem' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text)' }}>Detail Sumber Traffic per Channel ({period.label})</div>
+            <InfoTip text={`Sumber: ${SHOP_STATS_SRC}, bagian "Asal Penjualan": kolom "Produk Diklik" per sumber kunjungan di dalam tiap channel, total 1 bulan.`} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '1rem' }}>
+            {TRAFFIC_SOURCE_GROUPS.map(([key, label]) => (
+              <DonutChart key={key} data={trafficSources[key] || []} title={label} />
+            ))}
+          </div>
         </div>
 
       </div>
