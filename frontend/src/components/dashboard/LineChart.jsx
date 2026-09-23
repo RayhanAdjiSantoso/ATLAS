@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Info } from 'lucide-react';
+import { InfoTip } from './figures.jsx';
 
 // Bright yellow for the "poor performing" (below-average) tier -- distinct
 // from the design system's --warning token (a muted amber meant for
@@ -62,7 +62,7 @@ function computeYDomain(vals) {
 
 const EMPTY_SET = new Set();
 
-export default function LineChart({ data = [], metric = 'gmv', title = 'Tren', onSelectDate, bestDates = EMPTY_SET, worstDates = EMPTY_SET, poorDates = EMPTY_SET, note = null, fluid = false }) {
+export default function LineChart({ data = [], metric = 'gmv', title = 'Tren', onSelectDate, bestDates = EMPTY_SET, worstDates = EMPTY_SET, poorDates = EMPTY_SET, note = null, fluid = false, flat = false }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
 
   const plotRef = useRef(null);
@@ -166,21 +166,20 @@ export default function LineChart({ data = [], metric = 'gmv', title = 'Tren', o
 
   if (data.length === 0) {
     return (
-      <div className="card" style={{ height: `${height}px`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+      <div className={flat ? 'dsec-chart-empty' : 'card'} style={{ height: `${height}px`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
         Belum ada data untuk grafik
       </div>
     );
   }
 
   return (
-    <div className="card chart-card" style={{ padding: '1.25rem', position: 'relative' }}>
-      <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+    <div
+      className={flat ? 'dsec-chart' : 'card chart-card'}
+      style={flat ? { position: 'relative' } : { padding: '1.25rem', position: 'relative' }}
+    >
+      <h3 className={flat ? 'dsec-chart-title' : undefined} style={flat ? undefined : { fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
         {title}
-        {note && (
-          <span title={note} style={{ display: 'inline-flex', color: 'var(--text-muted)', cursor: 'help' }}>
-            <Info size={13} />
-          </span>
-        )}
+        {note && <InfoTip text={note} />}
       </h3>
 
       <div ref={plotRef} style={{ position: 'relative', width: '100%', height: `${height}px` }}>

@@ -2334,8 +2334,8 @@ html:has(.con-bar) {
 .con-kpi-val { font-variant-numeric: tabular-nums; text-overflow: clip; }
 .channel-workspace .con-kpi-val { font-size: clamp(.95rem, 1.3vw, 1.4rem); }
 
-/* ── Traffic & Funnel (monthly) ─────────────────────────────────────── */
-.tf-period {
+/* ── Section kit — shared building blocks for every Business Overview domain ─────────────────────────────────────── */
+.dsec-period {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 6px 24px;
@@ -2344,12 +2344,12 @@ html:has(.con-bar) {
   border-radius: 10px;
   background: var(--primary-light, #eef2ff);
 }
-.tf-period > div { display: grid; gap: 2px; }
-.tf-period-kicker { font-size: .62rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
-.tf-period strong { font-size: 1.15rem; letter-spacing: -.02em; color: var(--text); }
-.tf-period em { font-style: normal; font-size: .72rem; color: var(--warning, #b45309); }
-.tf-period p { margin: 0; font-size: .76rem; line-height: 1.6; color: var(--text-muted); }
-.tf-warn {
+.dsec-period > div { display: grid; gap: 2px; }
+.dsec-period-kicker { font-size: .62rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.dsec-period strong { font-size: 1.15rem; letter-spacing: -.02em; color: var(--text); }
+.dsec-period em { font-style: normal; font-size: .72rem; color: var(--warning, #b45309); }
+.dsec-period p { margin: 0; font-size: .76rem; line-height: 1.6; color: var(--text-muted); }
+.dsec-warn {
   padding: 12px 16px;
   border-radius: 10px;
   border: 1px solid #f5d08a;
@@ -2358,27 +2358,33 @@ html:has(.con-bar) {
   font-size: .78rem;
   line-height: 1.55;
 }
-.tf-head { display: flex; align-items: center; gap: .45rem; }
-.tf-head h3 { margin: 0; font-size: .92rem; color: var(--text); letter-spacing: -.01em; }
-.tf-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem .75rem; margin: 14px 0 12px; }
-.tf-total > span { font-size: .74rem; color: var(--text-muted); }
-.tf-total strong { font-size: clamp(1.2rem, 1.8vw, 1.6rem); letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--text); }
-.tf-growth { font-size: .7rem; font-weight: 700; padding: .08rem .4rem; border-radius: 999px; white-space: nowrap; }
-.tf-growth.is-up { color: var(--success); background: var(--success-bg); }
-.tf-growth.is-down { color: var(--danger); background: var(--danger-bg); }
-.tf-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--bg-elevated); gap: 2px; }
-.tf-bar > div { min-width: 0; }
-.tf-parts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 14px; }
-.tf-part { padding: 4px 14px; border-left: 1px solid var(--rule, var(--border)); min-width: 0; }
-.tf-part:first-child { border-left: 0; padding-left: 0; }
-.tf-part-name { display: flex; align-items: center; gap: .4rem; font-size: .72rem; color: var(--text-muted); }
-.tf-part-name i, .tf-ads-label i { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; display: inline-block; }
-.tf-part-val { margin-top: 4px; font-size: clamp(.8rem, 1.05vw, .95rem); font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tf-part-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; margin-top: 2px; font-size: .72rem; color: var(--text-muted); }
+.dsec-panel { padding: 20px !important; }
+.dsec-head { display: flex; align-items: center; gap: .45rem; margin-bottom: 2px; }
+.dsec-head h3 { margin: 0; font-size: .92rem; color: var(--text); letter-spacing: -.01em; }
+.dsec-head-action { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.dsec-head-action select, .dsec-head-action button { font: inherit; font-size: .74rem; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
+.dsec-grid { display: grid; gap: 1rem; }
+.dsec-empty { margin: 12px 0 0; padding: 18px; border: 1px dashed var(--border); border-radius: 10px; text-align: center; font-size: .76rem; color: var(--text-placeholder); }
+.dsec-total > i { font-style: normal; font-size: .72rem; color: var(--text-placeholder); flex-basis: 100%; }
+.dsec-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem .75rem; margin: 14px 0 12px; }
+.dsec-total > span { font-size: .74rem; color: var(--text-muted); }
+.dsec-total strong { font-size: clamp(1.2rem, 1.8vw, 1.6rem); letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--text); }
+.dsec-growth { font-size: .7rem; font-weight: 700; padding: .08rem .4rem; border-radius: 999px; white-space: nowrap; }
+.dsec-growth.is-up { color: var(--success); background: var(--success-bg); }
+.dsec-growth.is-down { color: var(--danger); background: var(--danger-bg); }
+.dsec-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--bg-elevated); gap: 2px; }
+.dsec-bar > div { min-width: 0; }
+.dsec-parts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 0; margin-top: 14px; }
+.dsec-part { padding: 4px 14px; border-left: 1px solid var(--rule, var(--border)); min-width: 0; }
+.dsec-part:first-child { border-left: 0; padding-left: 0; }
+.dsec-part-name { display: flex; align-items: center; gap: .4rem; font-size: .72rem; color: var(--text-muted); }
+.dsec-part-name i, .dsec-ads-label i { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; display: inline-block; }
+.dsec-part-val { margin-top: 4px; font-size: clamp(.8rem, 1.05vw, .95rem); font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dsec-part-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; margin-top: 2px; font-size: .72rem; color: var(--text-muted); }
 
-.tf-sales { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 0; padding: 0 !important; overflow: hidden; }
-.tf-sales-store { padding: 20px; min-width: 0; }
-.tf-sales-ads {
+.dsec-sales { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 0; padding: 0 !important; overflow: hidden; }
+.dsec-sales-store { padding: 20px; min-width: 0; }
+.dsec-sales-ads {
   position: relative;
   padding: 20px;
   border-left: 1px solid var(--border);
@@ -2387,10 +2393,10 @@ html:has(.con-bar) {
   align-content: start;
   gap: 6px;
 }
-.tf-ads-label { display: flex; align-items: center; gap: .4rem; margin-top: 10px; font-size: .74rem; color: var(--text-muted); }
-.tf-ads-val { font-size: clamp(1.1rem, 1.7vw, 1.6rem); letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
-.tf-ads-pct { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; font-size: .76rem; color: var(--text-muted); }
-.tf-ring {
+.dsec-ads-label { display: flex; align-items: center; gap: .4rem; margin-top: 10px; font-size: .74rem; color: var(--text-muted); }
+.dsec-ads-val { font-size: clamp(1.1rem, 1.7vw, 1.6rem); letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+.dsec-ads-pct { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; font-size: .76rem; color: var(--text-muted); }
+.dsec-ring {
   position: absolute;
   top: 18px;
   right: 18px;
@@ -2401,23 +2407,53 @@ html:has(.con-bar) {
   -webkit-mask: radial-gradient(circle, transparent 13px, #000 14px);
           mask: radial-gradient(circle, transparent 13px, #000 14px);
 }
-.tf-ads-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); }
-.tf-ads-kv dt { font-size: .66rem; color: var(--text-muted); }
-.tf-ads-kv dd { margin: 2px 0 0; font-size: .8rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.dsec-ads-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); }
+.dsec-ads-kv dt { font-size: .66rem; color: var(--text-muted); }
+.dsec-ads-kv dd { margin: 2px 0 0; font-size: .8rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 
-.tf-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-.tf-table-wrap { overflow-x: auto; margin-top: 12px; }
-.tf-table { width: 100%; border-collapse: collapse; font-size: .74rem; font-variant-numeric: tabular-nums; }
-.tf-table th { text-align: right; font-weight: 650; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.tf-table td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--rule, var(--border)); color: var(--text); white-space: nowrap; }
-.tf-table th:first-child, .tf-table td:first-child { text-align: left; white-space: normal; min-width: 190px; }
+.dsec-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.dsec-table-wrap { overflow-x: auto; margin-top: 12px; }
+.dsec-table { width: 100%; border-collapse: collapse; font-size: .74rem; font-variant-numeric: tabular-nums; }
+.dsec-table th { text-align: right; font-weight: 650; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.dsec-table td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--rule, var(--border)); color: var(--text); white-space: nowrap; }
+.dsec-table tbody tr:last-child td { border-bottom: 0; }
+.dsec-table tbody tr:hover td { background: var(--bg-elevated, #f7f8fc); }
+.dsec-table.is-dense th, .dsec-table.is-dense td { padding: 5px 7px; font-size: .72rem; }
+.dsec-table th .con-kpi-note { margin-left: 4px; vertical-align: middle; }
+
+/* Main | compare pairing, one grid so both sides share column widths. */
+.dsec-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.25rem; row-gap: .75rem; align-items: start; }
+.dsec-pair-head { font-size: .66rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--acc); padding-bottom: 6px; border-bottom: 2px solid var(--acc); }
+.dsec-pair-head.is-cmp { color: var(--text-placeholder); border-bottom-color: var(--border); }
+@media (max-width: 860px) { .dsec-pair { grid-template-columns: minmax(0, 1fr); } .dsec-pair-head.is-cmp { margin-top: 12px; } }
+.dsec-table th:first-child, .dsec-table td:first-child { text-align: left; white-space: normal; min-width: 190px; }
 
 @media (max-width: 1100px) {
-  .tf-sales { grid-template-columns: minmax(0, 1fr); }
-  .tf-sales-ads { border-left: 0; border-top: 1px solid var(--border); }
+  .dsec-sales { grid-template-columns: minmax(0, 1fr); }
+  .dsec-sales-ads { border-left: 0; border-top: 1px solid var(--border); }
 }
 @media (max-width: 700px) {
-  .tf-period { grid-template-columns: minmax(0, 1fr); }
-  .tf-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
-  .tf-part:nth-child(odd) { border-left: 0; padding-left: 0; }
+  .dsec-period { grid-template-columns: minmax(0, 1fr); }
+  .dsec-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
+  .dsec-part:nth-child(odd) { border-left: 0; padding-left: 0; }
 }
+
+/* A chart nested inside a dsec Panel: the Panel already supplies the card,
+   so the chart drops its own frame and keeps only its title. */
+.dsec-chart { padding: 0; }
+.dsec-chart-title { display: flex; align-items: center; gap: .4rem; margin: 0 0 10px; font-size: .8rem; font-weight: 650; color: var(--text-muted); }
+.dsec-chart-empty { display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 10px; font-size: .76rem; color: var(--text-placeholder); }
+.dsec-stack { display: flex; flex-direction: column; gap: 18px; }
+.dsec-panel > .dsec-head + .dsec-stack { margin-top: 12px; }
+.dsec-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .dsec-two { grid-template-columns: minmax(0, 1fr); } }
+.dsec-table .dsec-wrap { display: block; white-space: normal; line-height: 1.4; max-width: 34ch; }
+.dsec-table td:has(.dsec-wrap) { white-space: normal; vertical-align: top; }
+
+/* Legacy tables inside a domain (RFM, Product Performance) pick up the same
+   type scale and rhythm as DataTable without being rewritten row by row. */
+.dashboard-body table.table { width: 100%; border-collapse: collapse; font-size: .74rem; font-variant-numeric: tabular-nums; }
+.dashboard-body table.table th { font-size: .66rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+.dashboard-body table.table tbody tr:hover td { background: var(--bg-elevated, #f7f8fc); }
+.dsec-panel .dsec-head + .dsec-table-wrap { margin-top: 10px; }
+.dsec-level { display: inline-flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 650; color: var(--text-muted); }

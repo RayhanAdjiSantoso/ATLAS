@@ -11,7 +11,7 @@ function truncateLabel(name, max = 18) {
 // Pareto chart: bars = per-product revenue (left axis), line = cumulative
 // contribution % (right axis), dashed reference at 80% — same layout as the
 // notebook's plot_pareto_kontribusi() (matplotlib twin-axis bar + line).
-export default function ParetoChart({ data = [], title = 'Pareto Chart — Top 10 Kontribusi Penjualan Produk' }) {
+export default function ParetoChart({ data = [], title = 'Pareto Chart — Top 10 Kontribusi Penjualan Produk', flat = false }) {
   const [hovered, setHovered] = useState(null);
 
   const width = 900;
@@ -76,8 +76,8 @@ export default function ParetoChart({ data = [], title = 'Pareto Chart — Top 1
   }
 
   return (
-    <div className="card" style={{ padding: '1.25rem', position: 'relative' }}>
-      <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--text)' }}>{title}</h3>
+    <div className={flat ? 'dsec-chart' : 'card'} style={{ padding: '1.25rem', position: 'relative' }}>
+      {!flat && <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--text)' }}>{title}</h3>}
       <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
         <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#C44E52', marginRight: '4px', borderRadius: '2px' }} />Penjualan Produk (IDR)</span>
         <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#4C72B0', marginRight: '4px', borderRadius: '50%' }} />Persentase Kumulatif</span>

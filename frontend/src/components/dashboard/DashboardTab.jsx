@@ -2,6 +2,10 @@ import { useState, Children, Fragment } from 'react';
 import { Download, Building2, Inbox, RotateCcw } from 'lucide-react';
 import KpiCard from './KpiCard.jsx';
 import { InfoTip } from './figures.jsx';
+import {
+  CardGrid, ComparePair, DataTable, Figure, GrowthPill, InsightCard, Panel,
+  PeriodBanner, SectionWarn, ShareBar, TotalLine, fmtIdr, fmtIdrShort, fmtNum,
+} from './sectionKit.jsx';
 import LineChart from './LineChart.jsx';
 import DonutChart from './DonutChart.jsx';
 import FunnelChart from './FunnelChart.jsx';
@@ -12,7 +16,7 @@ import RootCauseTree from './RootCauseTree.jsx';
 import GrainWarning from './GrainWarning.jsx';
 import { formatPercent } from '../../utils/format.js';
 
-function HorizontalBarChart({ data = [], nameKey = 'name', valueKey = 'value', title = 'Top 10' }) {
+function HorizontalBarChart({ data = [], nameKey = 'name', valueKey = 'value', title = 'Top 10', flat = false }) {
   const maxVal = Math.max(...data.map(d => Number(d[valueKey] || 0)), 1);
   const formatValue = (val) => (
     title.includes('Rupiah') || title.includes('Sales') || title.includes('Penjualan') || valueKey === 'sales'
@@ -20,8 +24,8 @@ function HorizontalBarChart({ data = [], nameKey = 'name', valueKey = 'value', t
       : new Intl.NumberFormat('id-ID').format(val)
   );
   return (
-    <div className="card" style={{ padding: '1.25rem' }}>
-      <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem', color: 'var(--text)' }}>{title}</h3>
+    <div className={flat ? 'dsec-chart' : 'card'} style={flat ? undefined : { padding: '1.25rem' }}>
+      {!flat && <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem', color: 'var(--text)' }}>{title}</h3>}
       {data.length === 0 && (
         <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '1.5rem 0' }}>
           Belum ada data untuk ditampilkan
@@ -63,7 +67,7 @@ function HorizontalBarChart({ data = [], nameKey = 'name', valueKey = 'value', t
   );
 }
 
-function IndonesiaMapChart({ data = [] }) {
+function IndonesiaMapChart({ data = [], flat = false }) {
   const regions = [
     {
       name: 'Sumatera',
@@ -116,8 +120,8 @@ function IndonesiaMapChart({ data = [] }) {
   };
 
   return (
-    <div className="card" style={{ padding: '1.25rem', position: 'relative' }}>
-      <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem', color: 'var(--text)' }}>Geographic Sales Map (Sebaran Penjualan Pulau)</h3>
+    <div className={flat ? 'dsec-chart' : 'card'} style={flat ? { position: 'relative' } : { padding: '1.25rem', position: 'relative' }}>
+      {!flat && <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem', color: 'var(--text)' }}>Geographic Sales Map (Sebaran Penjualan Pulau)</h3>}
       <div style={{ position: 'relative', width: '100%', height: '260px', background: 'var(--bg-elevated)', borderRadius: '8px', padding: '1rem', overflow: 'hidden' }}>
 
         <svg viewBox="0 0 500 200" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style={{ filter: 'drop-shadow(0px 4px 10px rgba(15, 23, 42, 0.12))' }}>
@@ -587,6 +591,17 @@ function GrowthHeadlineCard({ headline, hasCompare }) {
 }
 
 // TAB 2: BUSINESS GROWTH
+// Source notes for the three headline figures, worded like the KPI strip's:
+// which file, which sheet, which column.
+const GROWTH_NOTES = {
+  gmv: 'Sumber: file Performance Overview Shopee (shop-stats), sheet "Pesanan Dibayar", kolom "Total Penjualan (IDR)" per hari, dijumlah untuk periode terpilih.\nSama dengan "Penjualan" di Seller Centre > Performa Toko.',
+  transactions: 'Sumber: shop-stats, sheet "Pesanan Dibayar", kolom "Total Pesanan" per hari.\nSama dengan "Pesanan" di Performa Toko.',
+  aov: 'GMV ÷ Transaksi untuk periode terpilih.\nSama dengan "Penjualan per Pesanan" di Performa Toko. Beda basis hitung dari "ATV" di Basket Analysis (rata-rata total pembayaran per pesanan Selesai dari file Order), jadi keduanya tidak bisa dibandingkan 1:1.',
+  trend: 'Sumber: shop-stats, baris harian sheet "Pesanan Dibayar". Titik hijau = hari tertinggi, merah = terendah, lingkaran kuning = hari di bawah rata-rata periode ini.',
+  calendar: 'Intensitas GMV harian dari shop-stats sheet "Pesanan Dibayar". Kotak yang lebih gelap berarti penjualan lebih besar.',
+  bestWorst: 'Hari tertinggi dan terendah untuk tiap metrik, dihitung dari baris harian yang sama dengan grafik di atas.',
+};
+
 function renderBusinessGrowth(data, { startDate, endDate } = {}) {
     const { trends = [], summary = null, compareRange = null, compareTrends = null } = data || {};
     const gmvExtremes = computeMetricExtremes(trends, 'gmv');
@@ -599,187 +614,95 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
     const txPoorDates = computePoorPerformingDates(trends, 'transactions');
     const aovPoorDates = computePoorPerformingDates(trends, 'aov');
 
-    // Comparison period gets its own best/worst (same shared function, its
-    // own data) so its chart isn't just a flat unannotated line -- but no
-    // "poor day" tier here, to keep the reference period visually secondary
-    // to the period actually being analyzed. computeMetricExtremes() already
-    // no-ops safely on a short/empty array, so no extra guard needed here.
+    // The comparison period gets its own best/worst from the same shared
+    // function, but no "poor day" tier — the reference period stays visually
+    // secondary to the one being analysed.
     const cmpTrends = compareTrends || [];
     const cmpGmvExtremes = computeMetricExtremes(cmpTrends, 'gmv');
     const cmpTxExtremes = computeMetricExtremes(cmpTrends, 'transactions');
     const cmpAovExtremes = computeMetricExtremes(cmpTrends, 'aov');
 
-    const formatNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0);
-    const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val || 0);
-
     const headline = buildGrowthHeadline(summary);
+    const mainLabel = `${formatDateLabel(startDate)} – ${formatDateLabel(endDate)}`;
+    const cmpLabel = compareRange ? `${formatDateLabel(compareRange.startDate)} – ${formatDateLabel(compareRange.endDate)}` : null;
+    const prevSub = (metric, format) => (compareRange && summary?.[metric]?.previousValue != null
+      ? `Periode pembanding: ${format(summary[metric].previousValue)}`
+      : null);
+
+    const bestWorst = (rows) => (
+      <CardGrid min={170}>
+        <BestWorstDayCard label="GMV" trends={rows} metric="gmv" formatValue={fmtIdr} />
+        <BestWorstDayCard label="Transaksi" trends={rows} metric="transactions" formatValue={fmtNum} />
+        <BestWorstDayCard label="AOV" trends={rows} metric="aov" formatValue={fmtIdr} />
+      </CardGrid>
+    );
 
     return (
       <div className="channel-growth" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-        {/* 1. Insight -- the direct answer to "how is the business doing" */}
+        <PeriodBanner
+          kicker="Periode data · harian"
+          title={mainLabel}
+          note={`Angka dihitung dari baris harian file Performance Overview Shopee, tahap Pesanan Dibayar.${cmpLabel ? ` Pembanding: ${cmpLabel}.` : ' Aktifkan "Bandingkan periode" untuk melihat perubahannya.'}`}
+        />
+
         <GrowthHeadlineCard headline={headline} hasCompare={!!compareRange} />
 
-        {/* 2. Overall performance + comparison vs previous period -- laid
-            out as shared grid rows (main | compare), same two-column
-            pattern every other tab already uses for compare mode, instead
-            of stacking the comparison period's cards underneath. */}
-        {compareRange ? (
-          <div>
-            <div className="channel-comparison-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
-              <PeriodHeader title="Periode Utama" range={`${formatDateLabel(startDate)} - ${formatDateLabel(endDate)}`} />
-              <PeriodHeader title="Periode Pembanding" range={`${formatDateLabel(compareRange.startDate)} - ${formatDateLabel(compareRange.endDate)}`} />
-
-              <KpiCard title="GMV (Penjualan)" value={summary?.gmv?.value} type="currency" growth={summary?.gmv?.growth ?? null} />
-              <KpiCard title="GMV (Penjualan)" value={summary?.gmv?.previousValue} type="currency" />
-
-              <KpiCard title="Transaksi" value={summary?.transactions?.value} type="number" growth={summary?.transactions?.growth ?? null} />
-              <KpiCard title="Transaksi" value={summary?.transactions?.previousValue} type="number" />
-
-              <KpiCard
-                title="AOV (Average Order Value)"
-                value={summary?.aov?.value}
-                type="currency"
-                growth={summary?.aov?.growth ?? null}
-                note="AOV = GMV bersih ÷ jumlah transaksi bersih, basis harian tahap Pesanan Dibayar. Beda basis perhitungan dari 'ATV' di tab Basket Analysis (rata-rata total_payment per pesanan berstatus Selesai) -- kedua angka ini tidak dapat dibandingkan 1:1."
-              />
-              <KpiCard title="AOV (Average Order Value)" value={summary?.aov?.previousValue} type="currency" />
-            </div>
-          </div>
-        ) : (
-          <div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-              <strong style={{ color: 'var(--text)' }}>Periode Utama:</strong> {formatDateLabel(startDate)} - {formatDateLabel(endDate)}
-            </div>
-            <div className="channel-growth-metrics">
-              <KpiCard title="GMV (Penjualan)" value={summary?.gmv?.value} type="currency" />
-              <KpiCard title="Transaksi" value={summary?.transactions?.value} type="number" />
-              <KpiCard
-                title="AOV (Average Order Value)"
-                value={summary?.aov?.value}
-                type="currency"
-                note="AOV = GMV bersih ÷ jumlah transaksi bersih, basis harian tahap Pesanan Dibayar. Beda basis perhitungan dari 'ATV' di tab Basket Analysis (rata-rata total_payment per pesanan berstatus Selesai) -- kedua angka ini tidak dapat dibandingkan 1:1."
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 3. Trend -- same main | compare pairing as the cards above. */}
-        <div>
-          <BestWorstLegend showPoor />
-          {compareRange ? (
-            <div className="channel-comparison-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem', marginTop: '0.75rem' }}>
-              <LineChart fluid data={trends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={gmvExtremes.bestDates} worstDates={gmvExtremes.worstDates} poorDates={gmvPoorDates} />
-              <LineChart data={cmpTrends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={cmpGmvExtremes.bestDates} worstDates={cmpGmvExtremes.worstDates} />
-
-              <LineChart data={trends} metric="transactions" title="Tren Transaksi" bestDates={txExtremes.bestDates} worstDates={txExtremes.worstDates} poorDates={txPoorDates} />
-              <LineChart data={cmpTrends} metric="transactions" title="Tren Transaksi" bestDates={cmpTxExtremes.bestDates} worstDates={cmpTxExtremes.worstDates} />
-
-              <LineChart
-                data={trends}
-                metric="aov"
-                title="Tren AOV (Average Order Value)"
-                bestDates={aovExtremes.bestDates}
-                worstDates={aovExtremes.worstDates}
-                poorDates={aovPoorDates}
-                note="AOV = GMV bersih ÷ jumlah transaksi bersih, basis harian tahap Pesanan Dibayar. Beda basis perhitungan dari 'ATV' di tab Basket Analysis (rata-rata total_payment per pesanan berstatus Selesai) -- kedua angka ini tidak dapat dibandingkan 1:1."
-              />
-              <LineChart data={cmpTrends} metric="aov" title="Tren AOV (Average Order Value)" bestDates={cmpAovExtremes.bestDates} worstDates={cmpAovExtremes.worstDates} />
-            </div>
-          ) : (
-            <div className="channel-growth-charts">
-              <LineChart fluid data={trends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={gmvExtremes.bestDates} worstDates={gmvExtremes.worstDates} poorDates={gmvPoorDates} />
-              <LineChart data={trends} metric="transactions" title="Tren Transaksi" bestDates={txExtremes.bestDates} worstDates={txExtremes.worstDates} poorDates={txPoorDates} />
-              <LineChart
-                data={trends}
-                metric="aov"
-                title="Tren AOV (Average Order Value)"
-                bestDates={aovExtremes.bestDates}
-                worstDates={aovExtremes.worstDates}
-                poorDates={aovPoorDates}
-                note="AOV = GMV bersih ÷ jumlah transaksi bersih, basis harian tahap Pesanan Dibayar. Beda basis perhitungan dari 'ATV' di tab Basket Analysis (rata-rata total_payment per pesanan berstatus Selesai) -- kedua angka ini tidak dapat dibandingkan 1:1."
-              />
-            </div>
-          )}
-        </div>
-
-        {/* 4. Best/Worst performance -- same computeMetricExtremes() used by
-            the colored dots above (via BestWorstDayCard, which calls it
-            internally). Same card also appears on Executive Snapshot; both
-            read off this one shared function so the dates/values can never
-            diverge. Paired main | compare like the sections above. */}
-        {compareRange ? (
-          <div className="channel-comparison-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
-            <div className="card" style={{ padding: '1.25rem' }}>
-              <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Hari Performa Terbaik &amp; Terburuk</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem' }}>
-                <BestWorstDayCard label="GMV" trends={trends} metric="gmv" formatValue={formatCurrency} />
-                <BestWorstDayCard label="Transaksi" trends={trends} metric="transactions" formatValue={formatNumber} />
-                <BestWorstDayCard label="AOV" trends={trends} metric="aov" formatValue={formatCurrency} />
-              </div>
-            </div>
-            <div className="card" style={{ padding: '1.25rem' }}>
-              <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Hari Performa Terbaik &amp; Terburuk</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem' }}>
-                <BestWorstDayCard label="GMV" trends={cmpTrends} metric="gmv" formatValue={formatCurrency} />
-                <BestWorstDayCard label="Transaksi" trends={cmpTrends} metric="transactions" formatValue={formatNumber} />
-                <BestWorstDayCard label="AOV" trends={cmpTrends} metric="aov" formatValue={formatCurrency} />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="card" style={{ padding: '1.25rem' }}>
-            <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Hari Performa Terbaik &amp; Terburuk</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem' }}>
-              <BestWorstDayCard label="GMV" trends={trends} metric="gmv" formatValue={formatCurrency} />
-              <BestWorstDayCard label="Transaksi" trends={trends} metric="transactions" formatValue={formatNumber} />
-              <BestWorstDayCard label="AOV" trends={trends} metric="aov" formatValue={formatCurrency} />
-            </div>
-          </div>
-        )}
-
-        {/* 5. Detailed daily pattern -- paired main | compare heatmap. The
-            compare-period calendar doesn't get rangeStart/rangeEnd since its
-            own compareRange dates already bound exactly what getGrowthMetrics()
-            fetched for it (no extra out-of-range calendar padding to mark). */}
-        {compareRange ? (
-          <div className="channel-comparison-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
-            <CalendarHeatmap
-              data={trends}
-              title="Kalender Intensitas Penjualan (GMV)"
-              bestDates={gmvExtremes.bestDates}
-              worstDates={gmvExtremes.worstDates}
-              poorDates={gmvPoorDates}
-              rangeStart={startDate}
-              rangeEnd={endDate}
-            />
-            <CalendarHeatmap
-              data={cmpTrends}
-              title="Kalender Intensitas Penjualan (GMV)"
-              bestDates={cmpGmvExtremes.bestDates}
-              worstDates={cmpGmvExtremes.worstDates}
-              rangeStart={compareRange.startDate}
-              rangeEnd={compareRange.endDate}
-            />
-          </div>
-        ) : (
-          <CalendarHeatmap
-            data={trends}
-            title="Kalender Intensitas Penjualan (GMV)"
-            bestDates={gmvExtremes.bestDates}
-            worstDates={gmvExtremes.worstDates}
-            poorDates={gmvPoorDates}
-            rangeStart={startDate}
-            rangeEnd={endDate}
+        <CardGrid min={230}>
+          <KpiCard
+            title="GMV (Penjualan)" value={summary?.gmv?.value} type="currency"
+            growth={summary?.gmv?.growth ?? null} growthLabel="vs pembanding"
+            sub={prevSub('gmv', fmtIdr)} note={GROWTH_NOTES.gmv}
           />
-        )}
+          <KpiCard
+            title="Transaksi" value={summary?.transactions?.value} type="number"
+            growth={summary?.transactions?.growth ?? null} growthLabel="vs pembanding"
+            sub={prevSub('transactions', fmtNum)} note={GROWTH_NOTES.transactions}
+          />
+          <KpiCard
+            title="AOV (Average Order Value)" value={summary?.aov?.value} type="currency"
+            growth={summary?.aov?.growth ?? null} growthLabel="vs pembanding"
+            sub={prevSub('aov', fmtIdr)} note={GROWTH_NOTES.aov}
+          />
+        </CardGrid>
+
+        <Panel title="Tren Harian" note={GROWTH_NOTES.trend} bodyClass="dsec-stack">
+          <BestWorstLegend showPoor />
+          <ComparePair mainLabel={`Periode utama · ${mainLabel}`} compareLabel={`Pembanding · ${cmpLabel}`}>
+            <div className="dsec-stack">
+              <LineChart fluid flat data={trends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={gmvExtremes.bestDates} worstDates={gmvExtremes.worstDates} poorDates={gmvPoorDates} />
+              <LineChart fluid flat data={trends} metric="transactions" title="Tren Transaksi" bestDates={txExtremes.bestDates} worstDates={txExtremes.worstDates} poorDates={txPoorDates} />
+              <LineChart fluid flat data={trends} metric="aov" title="Tren AOV" bestDates={aovExtremes.bestDates} worstDates={aovExtremes.worstDates} poorDates={aovPoorDates} note={GROWTH_NOTES.aov} />
+            </div>
+            {compareRange ? (
+              <div className="dsec-stack">
+                <LineChart fluid flat data={cmpTrends} metric="gmv" title="Tren GMV (Penjualan)" bestDates={cmpGmvExtremes.bestDates} worstDates={cmpGmvExtremes.worstDates} />
+                <LineChart fluid flat data={cmpTrends} metric="transactions" title="Tren Transaksi" bestDates={cmpTxExtremes.bestDates} worstDates={cmpTxExtremes.worstDates} />
+                <LineChart fluid flat data={cmpTrends} metric="aov" title="Tren AOV" bestDates={cmpAovExtremes.bestDates} worstDates={cmpAovExtremes.worstDates} />
+              </div>
+            ) : null}
+          </ComparePair>
+        </Panel>
+
+        <Panel title="Hari Performa Terbaik & Terburuk" note={GROWTH_NOTES.bestWorst}>
+          <ComparePair mainLabel={`Periode utama · ${mainLabel}`} compareLabel={`Pembanding · ${cmpLabel}`}>
+            {bestWorst(trends)}
+            {compareRange ? bestWorst(cmpTrends) : null}
+          </ComparePair>
+        </Panel>
+
+        <Panel title="Kalender Intensitas Penjualan (GMV)" note={GROWTH_NOTES.calendar}>
+          <ComparePair mainLabel={`Periode utama · ${mainLabel}`} compareLabel={`Pembanding · ${cmpLabel}`}>
+            <CalendarHeatmap flat data={trends} bestDates={gmvExtremes.bestDates} worstDates={gmvExtremes.worstDates} poorDates={gmvPoorDates} rangeStart={startDate} rangeEnd={endDate} />
+            {compareRange ? (
+              <CalendarHeatmap flat data={cmpTrends} bestDates={cmpGmvExtremes.bestDates} worstDates={cmpGmvExtremes.worstDates} rangeStart={compareRange.startDate} rangeEnd={compareRange.endDate} />
+            ) : null}
+          </ComparePair>
+        </Panel>
 
       </div>
     );
 }
-
-const formatTrafficNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0);
-const formatIdrFull = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(val) || 0);
 
 const SHOP_STATS_SRC = 'file Performance Overview Shopee (shop-stats) bulan ini, yang di-upload di Pengaturan Brand';
 
@@ -793,7 +716,7 @@ const CHANNEL_COLORS = {
   ads: '#0d9488',
 };
 
-const TRAFFIC_NOTES = {
+const TF_NOTES = {
   impressions: `Sumber: ${SHOP_STATS_SRC}, bagian "Iklan Shopee", kolom "Ads Impression", dijumlah untuk semua jenis iklan.\nImpression bisa dijumlah, jadi grafik kecil di bawahnya memecahnya per hari.`,
   visitors: `Sumber: ${SHOP_STATS_SRC}, sheet "Pesanan Dibayar", baris total bulan, kolom "Total Pengunjung".\nIni pengunjung UNIK selama 1 bulan: orang yang datang berkali-kali dihitung sekali. Karena itu angka ini tidak bisa dipecah per hari, dan tidak sama dengan jumlah pengunjung harian.`,
   clicks: `Sumber: ${SHOP_STATS_SRC}, sheet "Pesanan Dibayar", baris total bulan, kolom "Produk Diklik".\nSama dengan "Produk Diklik" di Performa Toko, dan sama dengan jumlah klik keempat channel di kartu Traffic per Channel.`,
@@ -805,84 +728,36 @@ const TRAFFIC_NOTES = {
   funnel: 'Sumber: file Product Performance Shopee bulanan (parentskudetail). Tiap tahap = jumlah angka unik per produk: Pengunjung Produk (Kunjungan) → Pengunjung yang Menambahkan ke Keranjang → Pembeli (Pesanan Dibuat) → Pembeli (Pesanan Siap Dikirim).\nShopee tidak menyediakan angka unik tingkat toko untuk tahap-tahap ini, jadi pengunjung yang melihat 2 produk terhitung 2 kali. Karena itu Kunjungan Produk tidak sama dengan Product Visitor di atas.',
 };
 
-// Growth badge in the same tone rules as the KPI cards.
-function GrowthPill({ value }) {
-  if (value == null) return null;
-  const up = value >= 0;
-  return (
-    <span className={`tf-growth ${up ? 'is-up' : 'is-down'}`}>
-      {up ? '▲' : '▼'} {formatPercent(Math.abs(value), 1)}
-    </span>
-  );
-}
-
-// One whole bar of parts that sum to 100%, the parts listed underneath with
-// their value, share and change vs the comparison month.
-function ShareBar({ items, format }) {
-  return (
-    <>
-      <div className="tf-bar">
-        {items.map((it) => (
-          <div
-            key={it.key}
-            style={{ width: `${it.pct || 0}%`, background: CHANNEL_COLORS[it.key] }}
-            title={`${it.label}: ${formatPercent(it.pct || 0, 1)}`}
-          />
-        ))}
-      </div>
-      <div className="tf-parts">
-        {items.map((it) => (
-          <div className="tf-part" key={it.key}>
-            <div className="tf-part-name">
-              <i style={{ background: CHANNEL_COLORS[it.key] }} />
-              {it.label}
-            </div>
-            <div className="tf-part-val">{it.value == null ? <span className="con-null">&mdash;</span> : format(it.value)}</div>
-            <div className="tf-part-meta">
-              <span>{it.pct == null ? '—' : formatPercent(it.pct, 1)}</span>
-              <GrowthPill value={it.growth} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
 // Laid out like Shopee's "Sumber Kunjungan" block: the store breakdown that
 // adds up to Total Penjualan, and Iklan Shopee beside it on its own.
 function SalesContributionCard({ data }) {
   if (!data) return null;
   const ads = data.ads || {};
   return (
-    <div className="card tf-sales">
-      <div className="tf-sales-store">
-        <div className="tf-head">
+    <div className="card dsec-sales">
+      <div className="dsec-sales-store">
+        <div className="dsec-head">
           <h3>Rincian Kontribusi Penjualan Toko</h3>
-          <InfoTip text={TRAFFIC_NOTES.sales} />
+          <InfoTip text={TF_NOTES.sales} />
         </div>
-        <div className="tf-total">
-          <span>Total Penjualan (100%)</span>
-          <strong>{formatIdrFull(data.total)}</strong>
-          <GrowthPill value={data.growth} />
-        </div>
-        <ShareBar items={data.store} format={formatIdrFull} />
+        <TotalLine label="Total Penjualan (100%)" value={data.total} format={fmtIdr} growth={data.growth} />
+        <ShareBar items={data.store.map((c) => ({ ...c, color: CHANNEL_COLORS[c.key] }))} format={fmtIdr} columns={4} />
       </div>
-      <div className="tf-sales-ads">
-        <div className="tf-head">
+      <div className="dsec-sales-ads">
+        <div className="dsec-head">
           <h3>Kontribusi Penjualan Iklan</h3>
-          <InfoTip text={TRAFFIC_NOTES.ads} />
+          <InfoTip text={TF_NOTES.ads} />
         </div>
-        <div className="tf-ads-label"><i style={{ background: CHANNEL_COLORS.ads }} />Iklan Shopee</div>
-        <strong className="tf-ads-val">{ads.value == null ? <span className="con-null">&mdash;</span> : formatIdrFull(ads.value)}</strong>
-        <div className="tf-ads-pct">
+        <div className="dsec-ads-label"><i style={{ background: CHANNEL_COLORS.ads }} />Iklan Shopee</div>
+        <strong className="dsec-ads-val"><Figure value={ads.value} format={fmtIdr} /></strong>
+        <div className="dsec-ads-pct">
           {ads.pct == null ? '—' : `${formatPercent(ads.pct, 1)} dari Total Penjualan`}
           <GrowthPill value={ads.growth} />
         </div>
-        <div className="tf-ring" style={{ '--p': ads.pct || 0, '--c': CHANNEL_COLORS.ads }} aria-hidden />
-        <dl className="tf-ads-kv">
-          <div><dt>Biaya iklan</dt><dd>{ads.spend == null ? '—' : formatIdrFull(ads.spend)}</dd></div>
-          <div><dt>ROAS</dt><dd>{ads.roas == null ? '—' : new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(ads.roas)}</dd></div>
+        <div className="dsec-ring" style={{ '--p': ads.pct || 0, '--c': CHANNEL_COLORS.ads }} aria-hidden />
+        <dl className="dsec-ads-kv">
+          <div><dt>Biaya iklan</dt><dd><Figure value={ads.spend} format={fmtIdr} /></dd></div>
+          <div><dt>ROAS</dt><dd><Figure value={ads.roas} format={(v) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(v)} /></dd></div>
         </dl>
       </div>
     </div>
@@ -892,51 +767,32 @@ function SalesContributionCard({ data }) {
 function TrafficByChannelCard({ data }) {
   if (!data) return null;
   return (
-    <div className="card tf-traffic">
-      <div className="tf-head">
-        <h3>Traffic per Channel (Produk Diklik)</h3>
-        <InfoTip text={TRAFFIC_NOTES.traffic} />
-      </div>
-      <div className="tf-total">
-        <span>Total klik produk</span>
-        <strong>{formatTrafficNumber(data.total)}</strong>
-        <GrowthPill value={data.growth} />
-      </div>
-      <ShareBar items={data.channels} format={formatTrafficNumber} />
-    </div>
+    <Panel title="Traffic per Channel (Produk Diklik)" note={TF_NOTES.traffic} className="dsec-traffic">
+      <TotalLine label="Total klik produk" value={data.total} growth={data.growth} />
+      <ShareBar items={data.channels.map((c) => ({ ...c, color: CHANNEL_COLORS[c.key] }))} columns={2} />
+    </Panel>
   );
 }
 
 function AdsBreakdownTable({ rows = [] }) {
-  if (!rows.length) return null;
   const nf = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
+  const cell = (v, f = fmtNum) => (v == null ? '—' : f(v));
   return (
-    <div className="card">
-      <div className="tf-head">
-        <h3>Rincian Iklan Shopee per Jenis Iklan</h3>
-        <InfoTip text={TRAFFIC_NOTES.adsTable} />
-      </div>
-      <div className="tf-table-wrap">
-        <table className="tf-table">
-          <thead>
-            <tr><th>Jenis iklan</th><th>Penjualan</th><th>Porsi</th><th>Ads Impression</th><th>Pesanan</th><th>Biaya iklan</th><th>ROAS</th></tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.name}>
-                <td>{r.name}</td>
-                <td>{r.sales == null ? '—' : formatIdrFull(r.sales)}</td>
-                <td>{r.pct == null ? '—' : formatPercent(r.pct, 1)}</td>
-                <td>{r.impressions == null ? '—' : formatTrafficNumber(r.impressions)}</td>
-                <td>{r.orders == null ? '—' : nf.format(r.orders)}</td>
-                <td>{r.spend == null ? '—' : formatIdrFull(r.spend)}</td>
-                <td>{r.roas == null ? '—' : nf.format(r.roas)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <Panel title="Rincian Iklan Shopee per Jenis Iklan" note={TF_NOTES.adsTable}>
+      <DataTable
+        rows={rows}
+        empty="Belum ada data Iklan Shopee untuk bulan ini."
+        columns={[
+          { key: 'name', label: 'Jenis iklan', align: 'left' },
+          { key: 'sales', label: 'Penjualan', align: 'right', render: (r) => cell(r.sales, fmtIdr) },
+          { key: 'pct', label: 'Porsi', align: 'right', render: (r) => (r.pct == null ? '—' : formatPercent(r.pct, 1)) },
+          { key: 'impressions', label: 'Ads Impression', align: 'right', render: (r) => cell(r.impressions) },
+          { key: 'orders', label: 'Pesanan', align: 'right', render: (r) => cell(r.orders, (v) => nf.format(v)) },
+          { key: 'spend', label: 'Biaya iklan', align: 'right', render: (r) => cell(r.spend, fmtIdr) },
+          { key: 'roas', label: 'ROAS', align: 'right', render: (r) => cell(r.roas, (v) => nf.format(v)) },
+        ]}
+      />
+    </Panel>
   );
 }
 
@@ -974,22 +830,6 @@ function FunnelRateCard({ funnelRates = {} }) {
   );
 }
 
-// Growth driver / bottleneck insight card -- same colored-callout visual
-// language as Business Growth's headline card.
-function InsightCard({ tone, label, detail }) {
-  const toneColor = tone === 'up' ? 'var(--success)' : tone === 'down' ? 'var(--danger)' : 'var(--text-muted)';
-  const toneBg = tone === 'up' ? 'var(--success-bg)' : tone === 'down' ? 'var(--danger-bg)' : 'var(--bg-elevated)';
-  return (
-    <div className="con-insight" style={{ background: toneBg }}>
-      <span className="con-insight-dot" style={{ background: toneColor }} aria-hidden />
-      <div>
-        <div className="con-insight-label" style={{ color: toneColor }}>{label}</div>
-        <div className="con-insight-detail">{detail}</div>
-      </div>
-    </div>
-  );
-}
-
 const TRAFFIC_SOURCE_GROUPS = [
   ['productPage', 'Halaman Produk'],
   ['live', 'Live Penjual'],
@@ -1015,26 +855,16 @@ function renderTrafficFunnel(data) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-        <div className="tf-period">
-          <div>
-            <span className="tf-period-kicker">Periode data · per bulan</span>
-            <strong>{period.label || '—'}</strong>
-            {period.isPartialMonth && period.coveredEnd && (
-              <em>Data baru sampai {formatDateLabel(period.coveredEnd)} (bulan berjalan)</em>
-            )}
-          </div>
-          <p>
-            Traffic &amp; Funnel selalu dihitung untuk 1 bulan kalender penuh, mengikuti angka bulanan di Shopee Performa Toko.
-            {period.adjusted && ' Rentang tanggal yang dipilih disesuaikan ke bulan dari tanggal akhirnya.'}
-            {comparePeriod && ` Pembanding: ${comparePeriod.period?.label}.`}
-          </p>
-        </div>
+        <PeriodBanner
+          kicker="Periode data · per bulan"
+          title={period.label || '—'}
+          warn={period.isPartialMonth && period.coveredEnd ? `Data baru sampai ${formatDateLabel(period.coveredEnd)} (bulan berjalan)` : null}
+          note={`Traffic & Funnel selalu dihitung untuk 1 bulan kalender penuh, mengikuti angka bulanan di Shopee Performa Toko.${period.adjusted ? ' Rentang tanggal yang dipilih disesuaikan ke bulan dari tanggal akhirnya.' : ''}${comparePeriod ? ` Pembanding: ${comparePeriod.period?.label}.` : ''}`}
+        />
 
-        {unavailable && (
-          <div className="tf-warn">{unavailable}</div>
-        )}
+        <SectionWarn>{unavailable}</SectionWarn>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))', gap: '1rem' }}>
+        <CardGrid min={190}>
           <KpiCard
             title="Impression (Iklan)"
             value={kpis.impressions?.value}
@@ -1043,7 +873,7 @@ function renderTrafficFunnel(data) {
             growthLabel={vsLabel}
             sparkline={dailyImpressions.length > 1 ? dailyImpressions : null}
             sub={dailyImpressions.length > 1 ? 'Tren harian 1 bulan' : null}
-            note={TRAFFIC_NOTES.impressions}
+            note={TF_NOTES.impressions}
           />
           <KpiCard
             title="Product Visitor (unik)"
@@ -1053,7 +883,7 @@ function renderTrafficFunnel(data) {
             growthLabel={vsLabel}
             sub="Total pengunjung unik per bulan, tidak bisa dipecah per hari"
             absentReason={unavailable}
-            note={TRAFFIC_NOTES.visitors}
+            note={TF_NOTES.visitors}
           />
           <KpiCard
             title="Produk Diklik"
@@ -1062,7 +892,7 @@ function renderTrafficFunnel(data) {
             growth={kpis.clicks?.growth ?? null}
             growthLabel={vsLabel}
             absentReason={unavailable}
-            note={TRAFFIC_NOTES.clicks}
+            note={TF_NOTES.clicks}
           />
           <KpiCard
             title="Pembeli (unik)"
@@ -1072,23 +902,21 @@ function renderTrafficFunnel(data) {
             growthLabel={vsLabel}
             sub="Pembeli unik per bulan"
             absentReason={unavailable}
-            note={TRAFFIC_NOTES.buyers}
+            note={TF_NOTES.buyers}
           />
-        </div>
+        </CardGrid>
 
         <SalesContributionCard data={salesContribution} />
 
-        <div className="tf-split">
-          <TrafficByChannelCard data={trafficByChannel} />
-          <AdsBreakdownTable rows={adsBreakdown} />
-        </div>
+        <TrafficByChannelCard data={trafficByChannel} />
+        <AdsBreakdownTable rows={adsBreakdown} />
 
         <div>
-          <div className="tf-head" style={{ marginBottom: '.75rem' }}>
+          <div className="dsec-head" style={{ marginBottom: '.75rem' }}>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               Funnel mencakup <strong>seluruh traffic</strong> (organik + iklan) untuk {period.label || 'bulan ini'}. Tahap-tahapnya tidak tersedia per sumber traffic.
             </div>
-            <InfoTip text={TRAFFIC_NOTES.funnel} />
+            <InfoTip text={TF_NOTES.funnel} />
           </div>
           {comparePeriod ? (
             <div className="channel-traffic-pair has-period-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '1rem' }}>
@@ -1119,7 +947,7 @@ function renderTrafficFunnel(data) {
         </div>
 
         <div>
-          <div className="tf-head" style={{ marginBottom: '0.75rem' }}>
+          <div className="dsec-head" style={{ marginBottom: '0.75rem' }}>
             <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text)' }}>Detail Sumber Traffic per Channel ({period.label})</div>
             <InfoTip text={`Sumber: ${SHOP_STATS_SRC}, bagian "Asal Penjualan": kolom "Produk Diklik" per sumber kunjungan di dalam tiap channel, total 1 bulan.`} />
           </div>
@@ -1394,11 +1222,17 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
+        <PeriodBanner
+          kicker="Sumber data · file Order"
+          title={`${formatDateLabel(startDate)} – ${formatDateLabel(endDate)}`}
+          note={`Segmentasi RFM dihitung dari file Order (Pesanan) Shopee: pesanan berstatus Selesai, per pelanggan. Recency dari tanggal pesanan terakhir, Frequency dari jumlah pesanan, Monetary dari total pembayaran.${comparePeriod ? ` Pembanding: ${formatDateLabel(comparePeriod.range.startDate)} – ${formatDateLabel(comparePeriod.range.endDate)}.` : ' Aktifkan "Bandingkan periode" untuk melihat perubahan komposisi segmen.'}`}
+        />
+
         {/* 1. Customer Health -- at-a-glance: total customers, retention (if
             a comparison period is active), and the dynamic segment-change
             headline. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '1rem', alignItems: 'stretch' }}>
-          <KpiCard title="Total Pelanggan (Ter-RFM)" value={totalCustomers} type="number" />
+        <CardGrid min={240}>
+          <KpiCard title="Total Pelanggan (Ter-RFM)" value={totalCustomers} type="number" note="Jumlah pelanggan berbeda dengan pesanan Selesai pada periode ini (file Order). Pelanggan tanpa identitas tidak ikut dihitung." />
           <KpiCard
             title="Pelanggan Kembali"
             value={historicalRetention.currentCount ? historicalRetention.retainedCount : null}
@@ -1430,16 +1264,19 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
           ) : (
             <InsightCard tone="stable" label="Perubahan Komposisi Segmen" detail={'Aktifkan "Bandingkan Periode" pada filter untuk melihat segmen mana yang paling berubah.'} />
           )}
-        </div>
+        </CardGrid>
 
         {/* 2. Segment Distribution + Change + Recommended Action, in one
             table so Data -> Insight -> Action stays visually connected for
             every segment instead of split across separate isolated
             sections. Every possible segment appears even at 0 customers
             (valid data, not hidden) -- see RFM_SEGMENTS. */}
-        <div className="card" style={{ padding: '1.25rem', overflowX: 'auto' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--text)' }}>Segmen Pelanggan &amp; Deskripsi</h3>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+        <Panel
+          title="Segmen Pelanggan & Deskripsi"
+          note="Segmen ditentukan dari skor Recency, Frequency dan Monetary tiap pelanggan (K-Means natural breaks), dihitung dari pesanan Selesai di file Order. Kolom tindakan adalah rekomendasi standar per segmen, bukan hasil hitungan data."
+          bodyClass="dsec-table-wrap"
+        >
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 1rem' }}>
             Persentase dihitung dari {formatNumber(totalCustomers)} pelanggan pada periode ini.
             {comparePeriod && ` Perubahan dibandingkan ${formatNumber(comparePeriod.totalCustomers)} pelanggan pada periode pembanding (${formatDateLabel(comparePeriod.range.startDate)} - ${formatDateLabel(comparePeriod.range.endDate)}).`}
           </p>
@@ -1494,55 +1331,34 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
               })}
             </tbody>
           </table>
-        </div>
+        </Panel>
 
         {/* 3. Matrix Heatmap -- cross-tab relationship between two RFM
             dimensions (e.g. do high-Frequency customers also score high on
             Monetary), a different question from the linear table above, not
             a duplicate of it. One dropdown controls both periods' grids so
             the same dimension pair is always being compared. */}
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-            <h3 style={{ fontSize: '1rem', color: 'var(--text)' }}>Matrix Heatmap ({matrixOption.label})</h3>
-            <select
-              value={rfmMatrixDim}
-              onChange={(e) => setRfmMatrixDim?.(e.target.value)}
-              style={{
-                padding: '0.35rem 0.6rem',
-                fontSize: '0.8rem',
-                borderRadius: 'var(--radius)',
-                border: '1px solid var(--border)',
-                background: 'var(--bg)',
-                color: 'var(--text)',
-                cursor: 'pointer'
-              }}
-            >
-              {RFM_MATRIX_OPTIONS.map(o => (
+        <Panel
+          title={`Matrix Heatmap (${matrixOption.label})`}
+          note="Jumlah pelanggan untuk tiap kombinasi dua skor RFM (1 terendah, 5 tertinggi). Kotak yang lebih gelap berarti lebih banyak pelanggan. Menjawab pertanyaan yang berbeda dari tabel segmen: apakah pelanggan dengan skor tinggi di satu dimensi juga tinggi di dimensi lain."
+          action={(
+            <select value={rfmMatrixDim} onChange={(e) => setRfmMatrixDim?.(e.target.value)}>
+              {RFM_MATRIX_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
-          </div>
-          {comparePeriod ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '0.75rem' }}>
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                  Periode Utama ({formatDateLabel(startDate)} - {formatDateLabel(endDate)})
-                </div>
-                <RfmMatrixGrid matrixOption={matrixOption} matrixMap={mainMatrixLookup.map} maxMatrixVal={mainMatrixLookup.maxVal} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                  Periode Pembanding ({formatDateLabel(comparePeriod.range.startDate)} - {formatDateLabel(comparePeriod.range.endDate)})
-                </div>
-                <RfmMatrixGrid matrixOption={matrixOption} matrixMap={compareMatrixLookup.map} maxMatrixVal={compareMatrixLookup.maxVal} />
-              </div>
-            </div>
-          ) : (
-            <div>
-              <RfmMatrixGrid matrixOption={matrixOption} matrixMap={mainMatrixLookup.map} maxMatrixVal={mainMatrixLookup.maxVal} large />
-            </div>
           )}
-        </div>
+        >
+          <ComparePair
+            mainLabel={`Periode utama · ${formatDateLabel(startDate)} – ${formatDateLabel(endDate)}`}
+            compareLabel={comparePeriod ? `Pembanding · ${formatDateLabel(comparePeriod.range.startDate)} – ${formatDateLabel(comparePeriod.range.endDate)}` : null}
+          >
+            <RfmMatrixGrid matrixOption={matrixOption} matrixMap={mainMatrixLookup.map} maxMatrixVal={mainMatrixLookup.maxVal} large={!comparePeriod} />
+            {comparePeriod ? (
+              <RfmMatrixGrid matrixOption={matrixOption} matrixMap={compareMatrixLookup.map} maxMatrixVal={compareMatrixLookup.maxVal} />
+            ) : null}
+          </ComparePair>
+        </Panel>
 
         {/* 4. Detail / exploration -- R/F/M averages per segment + CSV
             export of user IDs, unchanged functionality, just repositioned
@@ -1583,7 +1399,10 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
             place). Distinct from the cross-period cohort "Customer
             Retention" KPI above -- see its note for the difference. */}
         <div>
-          <h3 style={{ fontSize: '1rem', color: 'var(--text)', marginBottom: '1rem' }}>Repeat Customer Rate &amp; Siklus Pembelian</h3>
+          <div className="dsec-head" style={{ marginBottom: '1rem' }}>
+            <h3>Repeat Customer Rate &amp; Siklus Pembelian</h3>
+            <InfoTip text="Dihitung dari file Order (pesanan Selesai) pada periode ini. Repeat Customer Rate = porsi pelanggan dengan lebih dari satu pesanan di periode yang sama — berbeda dari Retention di atas, yang membandingkan antar periode. Siklus pembelian = jarak hari antara pesanan pertama dan kedua tiap pelanggan." />
+          </div>
           {comparePeriod ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: '1.5rem', rowGap: '0.75rem' }}>
@@ -1653,211 +1472,252 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
   }
 
 // TAB 5: TRANSACTION BEHAVIOR
-function renderTransactionBehavior(data) {
+// Every figure on this tab comes from the Order export, so the notes name
+// the column rather than repeating the file each time.
+const ORDER_SRC = 'Sumber: file Order (Pesanan) Shopee yang di-upload di Pengaturan Brand, pesanan berstatus Selesai yang diselesaikan pada periode ini';
+
+const DISCOUNT_PARTS = [
+  { key: 'sellerDiscount', label: 'Diskon dari Penjual', color: '#1e3eb8' },
+  { key: 'shopeeDiscount', label: 'Diskon dari Shopee', color: '#00a3c2' },
+  { key: 'sellerVoucher', label: 'Voucher Penjual', color: '#0d9488' },
+  { key: 'shopeeVoucher', label: 'Voucher Shopee', color: '#7c3aed' },
+  { key: 'creditCardDiscount', label: 'Diskon Kartu Kredit', color: '#f5a623' },
+  { key: 'bundleDiscountSeller', label: 'Paket Diskon (Penjual)', color: '#5a6a90' },
+  { key: 'bundleDiscountShopee', label: 'Paket Diskon (Shopee)', color: '#b8c5f5' },
+];
+
+const TB_NOTES = {
+  discount: `${ORDER_SRC}. Tiap bagian adalah satu kolom diskon di file Order; totalnya sama dengan "Total Diskon" di ringkasan atas.`,
+  map: `${ORDER_SRC}, kolom alamat pengiriman (provinsi), dikelompokkan per pulau.`,
+  cities: `${ORDER_SRC}, kolom kota pada alamat pengiriman, diurutkan dari penjualan terbesar.`,
+  payment: `${ORDER_SRC}, kolom "Metode Pembayaran", dihitung dari total pembayaran per pesanan.`,
+  shipping: `${ORDER_SRC}, kolom "Opsi Pengiriman", dihitung dari total pembayaran per pesanan.`,
+  duration: `${ORDER_SRC}. Durasi = selisih waktu pesanan dibuat sampai pesanan selesai, dikelompokkan per rentang hari.`,
+  cancellation: 'Sumber: file Order Shopee, pesanan berstatus Batal pada periode ini, kolom "Dibatalkan Oleh" dan "Alasan Pembatalan".',
+};
+
+function renderTransactionBehavior(data, { startDate, endDate, compareStartDate, compareEndDate, compareData = null } = {}) {
     const {
-      cities = [],
-      provinces = [],
-      discounts = {},
-      durations = [],
-      payments = [],
-      shippings = [],
-      cancellations = []
+      cities = [], provinces = [], discounts = {}, durations = [],
+      payments = [], shippings = [], cancellations = [],
     } = data || {};
 
-    const paymentData = payments.map(p => ({ name: p.name, value: p.sales }));
-    const shippingData = shippings.map(s => ({ name: s.name, value: s.sales }));
-    const durationData = durations.map(d => ({ name: d.label, value: d.count }));
-    const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val || 0);
+    const mainLabel = `${formatDateLabel(startDate)} – ${formatDateLabel(endDate)}`;
+    const cmpLabel = compareData ? `${formatDateLabel(compareStartDate)} – ${formatDateLabel(compareEndDate)}` : null;
+    const growth = (cur, prev) => {
+      if (cur == null || prev == null || !Number(prev)) return null;
+      return ((Number(cur) - Number(prev)) / Math.abs(Number(prev))) * 100;
+    };
+
+    const sumDiscounts = (d) => DISCOUNT_PARTS.reduce((sum, p) => sum + (Number(d?.[p.key]) || 0), 0);
+    const discountTotal = sumDiscounts(discounts);
+    const cmpDiscountTotal = compareData ? sumDiscounts(compareData.discounts) : null;
+    const discountItems = DISCOUNT_PARTS
+      .map((p) => {
+        const value = discounts[p.key] == null ? null : Number(discounts[p.key]);
+        return {
+          ...p,
+          value,
+          pct: discountTotal > 0 && value != null ? (value / discountTotal) * 100 : null,
+          growth: compareData ? growth(value, compareData.discounts?.[p.key]) : null,
+        };
+      })
+      .sort((a, b) => (b.value || 0) - (a.value || 0));
+
+    const countCancels = (rows = []) => rows.reduce((sum, c) => sum + (Number(c.count) || 0), 0);
+    const cancelTotal = countCancels(cancellations);
+    const cmpCancelTotal = compareData ? countCancels(compareData.cancellations) : null;
+
+    const donut = (rows, key) => rows.map((r) => ({ name: r.name, value: r[key] }));
+    const pair = (mainNode, compareNode) => (
+      <ComparePair mainLabel={`Periode utama · ${mainLabel}`} compareLabel={`Pembanding · ${cmpLabel}`}>
+        {mainNode}
+        {compareData ? compareNode : null}
+      </ComparePair>
+    );
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-        {/* Discount KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
-          <KpiCard title="Diskon Dari Penjual" value={discounts.sellerDiscount} type="currency" />
-          <KpiCard title="Voucher Ditanggung Shopee" value={discounts.shopeeVoucher} type="currency" />
-          <KpiCard title="Voucher Ditanggung Penjual" value={discounts.sellerVoucher} type="currency" />
-          <KpiCard title="Diskon Dari Shopee" value={discounts.shopeeDiscount} type="currency" />
-          <KpiCard title="Diskon Kartu Kredit" value={discounts.creditCardDiscount} type="currency" />
-          <KpiCard title="Paket Diskon (Diskon dari Shopee)" value={discounts.bundleDiscountShopee} type="currency" />
-          <KpiCard title="Paket Diskon (Diskon dari Penjual)" value={discounts.bundleDiscountSeller} type="currency" />
+        <PeriodBanner
+          kicker="Sumber data · file Order"
+          title={mainLabel}
+          note={`Seluruh angka di tab ini dihitung dari file Order (Pesanan) Shopee, bukan laporan Performa Toko: pesanan berstatus Selesai yang diselesaikan pada periode ini. Karena itu angkanya tidak selalu sama dengan GMV di ringkasan atas.${cmpLabel ? ` Pembanding: ${cmpLabel}.` : ''}`}
+        />
+
+        <Panel title="Diskon & Voucher yang Diberikan" note={TB_NOTES.discount}>
+          <TotalLine
+            label="Total diskon periode ini"
+            value={discountTotal || null}
+            format={fmtIdr}
+            growth={growth(discountTotal, cmpDiscountTotal)}
+            absentReason="Butuh file Order (Pesanan) Shopee untuk periode ini."
+            sub={cmpLabel ? `Pembanding: ${fmtIdr(cmpDiscountTotal)}` : null}
+          />
+          <ShareBar items={discountItems} format={fmtIdr} columns={4} />
+        </Panel>
+
+        <div className="dsec-two">
+          <Panel title="Sebaran Penjualan per Pulau" note={TB_NOTES.map}>
+            {pair(
+              <IndonesiaMapChart flat data={provinces} />,
+              <IndonesiaMapChart flat data={compareData?.provinces || []} />,
+            )}
+          </Panel>
+          <Panel title="Top 10 Kota (Penjualan)" note={TB_NOTES.cities}>
+            <HorizontalBarChart flat data={cities} nameKey="city" valueKey="sales" title="Top 10 Kota (Penjualan)" />
+          </Panel>
         </div>
 
-        {/* Map Chart & Top Cities */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.5rem' }}>
-          <IndonesiaMapChart data={provinces} />
-          <HorizontalBarChart data={cities} nameKey="city" valueKey="sales" title="Top 10 Kota (Penjualan)" />
+        <div className="dsec-two">
+          <Panel title="Metode Pembayaran" note={TB_NOTES.payment}>
+            {pair(
+              <DonutChart data={donut(payments, 'sales')} title="" centerLabel="Total Penjualan" valueFormatter={fmtIdr} centerValueFormatter={fmtIdrShort} />,
+              <DonutChart data={donut(compareData?.payments || [], 'sales')} title="" centerLabel="Total Penjualan" valueFormatter={fmtIdr} centerValueFormatter={fmtIdrShort} />,
+            )}
+          </Panel>
+          <Panel title="Opsi Pengiriman" note={TB_NOTES.shipping}>
+            {pair(
+              <DonutChart data={donut(shippings, 'sales')} title="" centerLabel="Total Penjualan" valueFormatter={fmtIdr} centerValueFormatter={fmtIdrShort} />,
+              <DonutChart data={donut(compareData?.shippings || [], 'sales')} title="" centerLabel="Total Penjualan" valueFormatter={fmtIdr} centerValueFormatter={fmtIdrShort} />,
+            )}
+          </Panel>
         </div>
 
-        {/* Payments, Shippings & Durations */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.5rem' }}>
-          <div className="card" style={{ padding: '1.25rem' }}>
-            <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem', color: 'var(--text)' }}>Metode Pembayaran (Sales Share)</h3>
-            <DonutChart data={paymentData} title="" centerLabel="Total Penjualan" valueFormatter={formatCurrency} />
-          </div>
-          <div className="card" style={{ padding: '1.25rem' }}>
-            <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem', color: 'var(--text)' }}>Opsi Pengiriman (Sales Share)</h3>
-            <DonutChart data={shippingData} title="" centerLabel="Total Penjualan" valueFormatter={formatCurrency} />
-          </div>
-        </div>
+        <Panel title="Durasi Penyelesaian Pesanan" note={TB_NOTES.duration}>
+          {pair(
+            <HorizontalBarChart flat data={durations.map((d) => ({ name: d.label, value: d.count }))} nameKey="name" valueKey="value" title="Distribusi Durasi" />,
+            <HorizontalBarChart flat data={(compareData?.durations || []).map((d) => ({ name: d.label, value: d.count }))} nameKey="name" valueKey="value" title="Distribusi Durasi" />,
+          )}
+        </Panel>
 
-        {/* Duration distribution */}
-        <div>
-          <HorizontalBarChart data={durationData} nameKey="name" valueKey="value" title="Distribusi Durasi Penyelesaian Pesanan (Jumlah Order)" />
-        </div>
-
-        {/* Cancellation Reason Table */}
-        <div className="card" style={{ padding: '1.25rem', overflowX: 'auto' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Analisis Pembatalan (Dibatalkan Oleh x Alasan)</h3>
-          <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '0.5rem' }}>Dibatalkan Oleh</th>
-                <th style={{ padding: '0.5rem' }}>Alasan Pembatalan</th>
-                <th style={{ padding: '0.5rem', textAlign: 'right' }}>Jumlah Pesanan</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cancellations.length === 0 ? (
-                <tr>
-                  <td colSpan="3" style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>Tidak ada data pembatalan pada periode ini.</td>
-                </tr>
-              ) : (
-                cancellations.map((c, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--border)', color: 'var(--text)' }}>
-                    <td style={{ padding: '0.5rem', fontWeight: '600' }}>{c.cancelledBy}</td>
-                    <td style={{ padding: '0.5rem' }}>{c.reason}</td>
-                    <td style={{ padding: '0.5rem', textAlign: 'right' }}>{new Intl.NumberFormat('id-ID').format(c.count)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Panel title="Analisis Pembatalan" note={TB_NOTES.cancellation}>
+          <TotalLine
+            label="Total pesanan dibatalkan"
+            value={cancelTotal || null}
+            growth={growth(cancelTotal, cmpCancelTotal)}
+            invert
+            absentReason="Tidak ada pembatalan pada periode ini."
+            sub={cmpLabel ? `Pembanding: ${fmtNum(cmpCancelTotal)} pesanan` : null}
+          />
+          <DataTable
+            rows={cancellations}
+            empty="Tidak ada data pembatalan pada periode ini."
+            columns={[
+              { key: 'cancelledBy', label: 'Dibatalkan oleh', align: 'left' },
+              { key: 'reason', label: 'Alasan pembatalan', align: 'left' },
+              { key: 'count', label: 'Jumlah pesanan', align: 'right', render: (r) => fmtNum(r.count) },
+              {
+                key: 'share',
+                label: 'Porsi',
+                align: 'right',
+                render: (r) => (cancelTotal > 0 ? formatPercent((Number(r.count) / cancelTotal) * 100, 1) : '—'),
+              },
+            ]}
+          />
+        </Panel>
 
       </div>
     );
 }
 
-// Ranked table: Peringkat / Nama Produk / Jumlah Pelanggan
-function RankedCustomerCountTable({ title, rows = [] }) {
-  return (
-    <div className="card" style={{ padding: '1.25rem', overflowX: 'auto' }}>
-      <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>{title}</h3>
-      <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
-            <th style={{ padding: '0.5rem', width: '70px' }}>Peringkat</th>
-            <th style={{ padding: '0.5rem' }}>Nama Produk</th>
-            <th style={{ padding: '0.5rem', textAlign: 'right' }}>Jumlah Pelanggan</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={3} style={{ padding: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                Belum ada data
-              </td>
-            </tr>
-          ) : rows.map((r, idx) => (
-            <tr key={idx} style={{ borderBottom: '1px solid var(--border)', color: 'var(--text)' }}>
-              <td style={{ padding: '0.5rem', fontWeight: '600' }}>{idx + 1}</td>
-              <td style={{ padding: '0.5rem' }} title={r.productName}>{r.productName}</td>
-              <td style={{ padding: '0.5rem', textAlign: 'right' }}>{new Intl.NumberFormat('id-ID').format(r.customerCount)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+const BA_NOTES = {
+  stats: 'Sumber: file Order (Pesanan) Shopee, pesanan berstatus Selesai pada periode ini. "Unit" dihitung dari kolom Jumlah pada tiap baris produk di pesanan.',
+  atv: 'ATV = rata-rata total pembayaran per pesanan berstatus Selesai (file Order).\nBeda basis hitung dari "AOV" di Business Growth/ringkasan atas (GMV ÷ transaksi, dari laporan Performa Toko harian), jadi keduanya tidak bisa dibandingkan 1:1.',
+  sizes: 'Pesanan dikelompokkan berdasarkan jumlah unit di dalamnya. Rerata ATV = rata-rata total pembayaran pesanan di kelompok itu.',
+  pairs: 'Pasangan produk yang paling sering dibeli dalam satu pesanan (file Order).\nSupport = porsi pesanan yang memuat kedua produk. Confidence (A→B) = dari pesanan yang memuat A, berapa porsi yang juga memuat B. Lift > 1 berarti keduanya lebih sering dibeli bersama daripada kebetulan.',
+  first: 'Produk pada pesanan Selesai pertama tiap pelanggan, diurutkan dari jumlah pelanggan terbanyak.',
+  second: 'Produk pada pesanan Selesai kedua tiap pelanggan — apa yang dibeli setelah pembelian pertama.',
+};
 
-// TAB 6: BASKET ANALYSIS
-function renderBasketAnalysis(data) {
+function renderBasketAnalysis(data, { startDate, endDate, compareStartDate, compareEndDate, compareData = null } = {}) {
     const {
       stats = {}, sizes = [], pairs = [], topFirstProducts = [], topSecondProducts = [], productTransitions = [],
     } = data || {};
 
-    const formatCurrency = (val) => {
-      return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+    const ranked = (rows = []) => rows.map((r, i) => ({ ...r, rank: i + 1 }));
+    const cmpStats = compareData?.stats || {};
+    const cmpLabel = compareData ? `${formatDateLabel(compareStartDate)} – ${formatDateLabel(compareEndDate)}` : null;
+    const delta = (key) => {
+      const cur = Number(stats[key]);
+      const prev = Number(cmpStats[key]);
+      if (!compareData || !Number.isFinite(cur) || !Number.isFinite(prev) || prev === 0) return null;
+      return ((cur - prev) / Math.abs(prev)) * 100;
     };
+    const prevSub = (key, format) => (compareData && cmpStats[key] != null ? `Pembanding: ${format(cmpStats[key])}` : null);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-        {/* Stats cards -- "Total Pelanggan Unik" sudah ada di tab Executive
-            Snapshot (query & filter identik: status 'Selesai', COUNT DISTINCT
-            customer_id), jadi tidak dihitung ulang & ditampilkan di sini. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '1rem' }}>
-          <KpiCard title="Total Transaksi (Pesanan)" value={stats.totalTransactions} type="number" />
-          <KpiCard title="Total Produk Terjual (Unit)" value={stats.totalItems} type="number" />
-          <KpiCard title="Rerata Unit / Transaksi" value={stats.avgItemsPerTransaction} type="number" />
-          <KpiCard
-            title="ATV (Rata-rata Keranjang)"
-            value={stats.atv}
-            type="currency"
-            note="ATV = rata-rata total_payment per pesanan berstatus 'Selesai'. Beda basis perhitungan dari 'AOV' di tab Business Growth/Executive Snapshot (GMV bersih ÷ jumlah transaksi bersih, basis harian tahap Pesanan Dibayar) -- kedua angka ini tidak dapat dibandingkan 1:1."
+        <PeriodBanner
+          kicker="Sumber data · file Order"
+          title={`${formatDateLabel(startDate)} – ${formatDateLabel(endDate)}`}
+          note={`Isi keranjang hanya bisa dibaca dari file Order (Pesanan) Shopee: pesanan berstatus Selesai pada periode ini, beserta baris produk di dalamnya. Laporan Performa Toko tidak memuat rincian ini.${cmpLabel ? ` Pembanding: ${cmpLabel}.` : ''}`}
+        />
+
+        <CardGrid min={200}>
+          <KpiCard title="Total Transaksi (Pesanan)" value={stats.totalTransactions} type="number" note={BA_NOTES.stats} growth={delta('totalTransactions')} growthLabel="vs pembanding" sub={prevSub('totalTransactions', fmtNum)} />
+          <KpiCard title="Total Produk Terjual (Unit)" value={stats.totalItems} type="number" note={BA_NOTES.stats} growth={delta('totalItems')} growthLabel="vs pembanding" sub={prevSub('totalItems', fmtNum)} />
+          <KpiCard title="Rerata Unit / Transaksi" value={stats.avgItemsPerTransaction} type="number" note="Total unit ÷ total pesanan Selesai pada periode ini." growth={delta('avgItemsPerTransaction')} growthLabel="vs pembanding" sub={prevSub('avgItemsPerTransaction', (v) => Number(v).toLocaleString('id-ID', { maximumFractionDigits: 2 }))} />
+          <KpiCard title="ATV (Rata-rata Keranjang)" value={stats.atv} type="currency" note={BA_NOTES.atv} growth={delta('atv')} growthLabel="vs pembanding" sub={prevSub('atv', fmtIdr)} />
+        </CardGrid>
+
+        <Panel title="Ukuran Keranjang (Basket Size)" note={BA_NOTES.sizes}>
+          <DataTable
+            rows={sizes}
+            empty="Belum ada pesanan Selesai pada periode ini."
+            columns={[
+              { key: 'segment', label: 'Ukuran basket', align: 'left' },
+              { key: 'orders', label: 'Jumlah pesanan', align: 'right', render: (r) => fmtNum(r.orders) },
+              { key: 'avgTransactionValue', label: 'Rerata ATV', align: 'right', render: (r) => fmtIdr(r.avgTransactionValue) },
+              { key: 'totalRevenue', label: 'Total penjualan', align: 'right', render: (r) => fmtIdr(r.totalRevenue) },
+            ]}
           />
-        </div>
+        </Panel>
 
-        {/* Basket Size distribution table */}
-        <div className="card" style={{ padding: '1.25rem', overflowX: 'auto' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Analisis Ukuran Keranjang (Basket Size)</h3>
-          <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '0.5rem' }}>Ukuran Basket</th>
-                <th style={{ padding: '0.5rem', textAlign: 'right' }}>Jumlah Pesanan</th>
-                <th style={{ padding: '0.5rem', textAlign: 'right' }}>Rerata ATV (IDR)</th>
-                <th style={{ padding: '0.5rem', textAlign: 'right' }}>Total Penjualan</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sizes.map((s, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border)', color: 'var(--text)' }}>
-                  <td style={{ padding: '0.5rem', fontWeight: '600' }}>{s.segment}</td>
-                  <td style={{ padding: '0.5rem', textAlign: 'right' }}>{new Intl.NumberFormat('id-ID').format(s.orders)}</td>
-                  <td style={{ padding: '0.5rem', textAlign: 'right' }}>{formatCurrency(s.avgTransactionValue)}</td>
-                  <td style={{ padding: '0.5rem', textAlign: 'right' }}>{formatCurrency(s.totalRevenue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Panel title="Frequently Bought Together (Top 10 Pasangan Produk)" note={BA_NOTES.pairs}>
+          <DataTable
+            rows={pairs.slice(0, 10)}
+            empty="Belum ada pesanan dengan lebih dari satu produk pada periode ini."
+            columns={[
+              { key: 'productA', label: 'Produk A', align: 'left', render: (r) => <span className="dsec-wrap" title={r.productA}>{r.productA}</span> },
+              { key: 'productB', label: 'Produk B', align: 'left', render: (r) => <span className="dsec-wrap" title={r.productB}>{r.productB}</span> },
+              { key: 'togetherCount', label: 'Transaksi', align: 'right', render: (r) => fmtNum(r.togetherCount) },
+              { key: 'support', label: 'Support', align: 'right', render: (r) => formatPercent(r.support * 100, 2) },
+              { key: 'confidenceAToB', label: 'Conf (A→B)', align: 'right', render: (r) => formatPercent(r.confidenceAToB * 100) },
+              {
+                key: 'lift',
+                label: 'Lift',
+                align: 'right',
+                render: (r) => <b style={{ color: r.lift > 1 ? 'var(--success)' : 'var(--danger)' }}>{r.lift.toFixed(2)}</b>,
+              },
+            ]}
+          />
+        </Panel>
 
-        {/* Product Association rules table — full width so long product names have room to wrap instead of truncating */}
-        <div className="card" style={{ padding: '1.25rem', overflowX: 'auto' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Frequently Bought Together (Top 10 Pasangan Produk)</h3>
-          <table className="table" style={{ width: '100%', minWidth: '720px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '0.5rem', width: '27%' }}>Produk A</th>
-                <th style={{ padding: '0.5rem', width: '27%' }}>Produk B</th>
-                <th style={{ padding: '0.5rem', width: '11.5%', textAlign: 'right' }}>Transaksi</th>
-                <th style={{ padding: '0.5rem', width: '11.5%', textAlign: 'right' }}>Support</th>
-                <th style={{ padding: '0.5rem', width: '11.5%', textAlign: 'right' }}>Conf (A→B)</th>
-                <th style={{ padding: '0.5rem', width: '11.5%', textAlign: 'right' }}>Lift</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pairs.slice(0, 10).map((p, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border)', color: 'var(--text)' }}>
-                  <td style={{ padding: '0.5rem', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.35' }} title={p.productA}>{p.productA}</td>
-                  <td style={{ padding: '0.5rem', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.35' }} title={p.productB}>{p.productB}</td>
-                  <td style={{ padding: '0.5rem', textAlign: 'right', verticalAlign: 'top' }}>{p.togetherCount}</td>
-                  <td style={{ padding: '0.5rem', textAlign: 'right', verticalAlign: 'top' }}>{formatPercent(p.support * 100, 2)}</td>
-                  <td style={{ padding: '0.5rem', textAlign: 'right', verticalAlign: 'top' }}>{formatPercent(p.confidenceAToB * 100)}</td>
-                  <td style={{ padding: '0.5rem', textAlign: 'right', verticalAlign: 'top', fontWeight: '700', color: p.lift > 1 ? 'var(--success)' : 'var(--danger)' }}>{p.lift.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* First & Second Purchase Product */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.5rem' }}>
-          <RankedCustomerCountTable title="Top 10 Produk Pembelian Pertama" rows={topFirstProducts} />
-          <RankedCustomerCountTable title="Top 10 Produk Pembelian Kedua (Repeat Purchase)" rows={topSecondProducts} />
+        <div className="dsec-two">
+          <Panel title="Top 10 Produk Pembelian Pertama" note={BA_NOTES.first}>
+            <DataTable
+              rows={ranked(topFirstProducts)}
+              empty="Belum ada pembelian pertama pada periode ini."
+              columns={[
+                { key: 'rank', label: '#', align: 'left', render: (r) => r.rank },
+                { key: 'productName', label: 'Produk', align: 'left', render: (r) => <span className="dsec-wrap" title={r.productName}>{r.productName}</span> },
+                { key: 'customerCount', label: 'Pelanggan', align: 'right', render: (r) => fmtNum(r.customerCount) },
+              ]}
+            />
+          </Panel>
+          <Panel title="Top 10 Produk Pembelian Kedua" note={BA_NOTES.second}>
+            <DataTable
+              rows={ranked(topSecondProducts)}
+              empty="Belum ada pembelian kedua pada periode ini."
+              columns={[
+                { key: 'rank', label: '#', align: 'left', render: (r) => r.rank },
+                { key: 'productName', label: 'Produk', align: 'left', render: (r) => <span className="dsec-wrap" title={r.productName}>{r.productName}</span> },
+                { key: 'customerCount', label: 'Pelanggan', align: 'right', render: (r) => fmtNum(r.customerCount) },
+              ]}
+            />
+          </Panel>
         </div>
 
         <ProductTransitionTable data={productTransitions} />
@@ -1878,8 +1738,7 @@ const formatProductCurrency = (val) => new Intl.NumberFormat('id-ID', { style: '
 // full product list can be long.
 function ContributionTable({ rows = [], levelNoun }) {
   return (
-    <div className="card" style={{ padding: '1.25rem' }}>
-      <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>Kontribusi Setiap {levelNoun} terhadap Revenue</h3>
+    <Panel title={`Kontribusi Setiap ${levelNoun} terhadap Revenue`} note={PP_NOTES.contribution}>
       <div style={{ maxHeight: '420px', overflow: 'auto' }}>
         <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
           <thead>
@@ -1906,7 +1765,7 @@ function ContributionTable({ rows = [], levelNoun }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -1915,10 +1774,10 @@ function ContributionTable({ rows = [], levelNoun }) {
 // the two stages that answer "which products are driving growth" and "which
 // are losing ground", ranked by revenue so the ones that matter most to the
 // business surface first.
-function ProductTrendTable({ title, rows = [], accentColor, emptyMessage }) {
+function ProductTrendTable({ title, rows = [], accentColor, emptyMessage, flat = false }) {
   return (
-    <div className="card" style={{ padding: '1.25rem', overflowX: 'auto' }}>
-      <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>{title}</h3>
+    <div className={flat ? 'dsec-table-wrap' : 'card'} style={flat ? undefined : { padding: '1.25rem', overflowX: 'auto' }}>
+      {!flat && <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text)' }}>{title}</h3>}
       <table className="table" style={{ width: '100%', minWidth: '520px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead>
           <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
@@ -1984,80 +1843,101 @@ function renderRootCause(data, { startDate, endDate, compareStartDate, compareEn
 }
 
 // TAB 7: PRODUCT PERFORMANCE
-function renderProductPerformance(data, { productPerformanceLevel = 'category', setProductPerformanceLevel } = {}) {
+const PP_NOTES = {
+  source: 'Sumber: file Product Performance Shopee bulanan (parentskudetail) yang di-upload di Pengaturan Brand. Laporan ini hanya tersedia per bulan, jadi rentang tanggal yang bukan 1 bulan penuh tetap memakai angka bulan yang dilaluinya.',
+  quantity: 'Kolom "Produk (Pesanan Siap Dikirim)" per produk pada laporan bulanan, diurutkan dari jumlah unit terbanyak.',
+  revenue: 'Kolom "Penjualan (Pesanan Siap Dikirim) (IDR)" per produk pada laporan bulanan, diurutkan dari penjualan terbesar.',
+  pareto: 'Kontribusi penjualan 10 produk teratas terhadap total penjualan, dengan garis kumulatif. Dipakai untuk melihat seberapa terpusat penjualan pada sedikit produk (prinsip 80/20).',
+  contribution: 'Porsi tiap produk terhadap total penjualan periode ini, tanpa dibatasi 10 besar.',
+  growth: 'Produk yang kontribusi penjualannya naik paling besar dibanding periode pembanding.',
+  declining: 'Produk yang kontribusi penjualannya turun paling besar dibanding periode pembanding.',
+};
+
+function renderProductPerformance(data, { productPerformanceLevel = 'category', setProductPerformanceLevel, startDate, endDate, compareStartDate, compareEndDate, compareData = null } = {}) {
     const {
       topByQuantity = [], topByRevenue = [], pareto = { total: 0, items: [] },
       contributions = [], growthDrivers = [], declining = [], grainWarning = null,
     } = data || {};
 
     const levelNoun = productPerformanceLevel === 'variant' ? 'Variasi Produk' : 'Produk';
+    const mainLabel = `${formatDateLabel(startDate)} – ${formatDateLabel(endDate)}`;
+    const cmpLabel = compareData ? `${formatDateLabel(compareStartDate)} – ${formatDateLabel(compareEndDate)}` : null;
+    const pair = (mainNode, compareNode) => (
+      <ComparePair mainLabel={`Periode utama · ${mainLabel}`} compareLabel={`Pembanding · ${cmpLabel}`}>
+        {mainNode}
+        {compareData ? compareNode : null}
+      </ComparePair>
+    );
+    // Side by side only when there is room: with a comparison period the
+    // panel already splits in two, so the pair stacks instead of squeezing
+    // four bar charts across the width.
+    const topTen = (rows) => (
+      <div className={compareData ? 'dsec-stack' : 'dsec-two'}>
+        <div>
+          <div className="dsec-chart-title">Jumlah terjual (unit)</div>
+          <HorizontalBarChart flat data={rows.topByQuantity || []} nameKey="label" valueKey="quantity" title="Jumlah Terjual" />
+        </div>
+        <div>
+          <div className="dsec-chart-title">Penjualan (revenue)</div>
+          <HorizontalBarChart flat data={rows.topByRevenue || []} nameKey="label" valueKey="revenue" title="Penjualan" />
+        </div>
+      </div>
+    );
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-        {/* Global level dropdown -- drives every visualization on this tab */}
-        <div className="card" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'help' }} title="Seluruh angka pada tab ini bersumber dari laporan produk bulanan (monthly report), sama seperti file Product Performance dari Shopee.">
-            ⓘ Angka bersumber dari laporan produk <strong>bulanan</strong> (cocok dengan file Product Performance Shopee).
-          </div>
-          <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600' }}>Tingkat Analisis Produk</label>
-          <select
-            value={productPerformanceLevel}
-            onChange={(e) => setProductPerformanceLevel?.(e.target.value)}
-            style={{
-              padding: '0.45rem 0.75rem',
-              fontSize: '0.85rem',
-              borderRadius: 'var(--radius)',
-              border: '1px solid var(--border)',
-              background: 'var(--bg)',
-              color: 'var(--text)',
-              cursor: 'pointer'
-            }}
-          >
-            {PRODUCT_LEVEL_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
+        <PeriodBanner
+          kicker="Sumber data · laporan produk bulanan"
+          title={`${formatDateLabel(startDate)} – ${formatDateLabel(endDate)}`}
+          note={`Seluruh angka di tab ini berasal dari laporan produk bulanan Shopee (file Product Performance), bukan dari data harian. Tingkat analisis bisa diganti antara Kategori Produk dan Variasi Produk lewat pilihan di kanan atas.${cmpLabel ? ` Pembanding: ${cmpLabel}.` : ''}`}
+        />
 
         <GrainWarning warning={grainWarning} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '1.5rem' }}>
-          <HorizontalBarChart
-            data={topByQuantity}
-            nameKey="label"
-            valueKey="quantity"
-            title={`Top 10 ${levelNoun} — Jumlah Terjual`}
-          />
-          <HorizontalBarChart
-            data={topByRevenue}
-            nameKey="label"
-            valueKey="revenue"
-            title={`Top 10 ${levelNoun} — Penjualan (Revenue)`}
-          />
-        </div>
+        <Panel
+          title={`Top 10 ${levelNoun}`}
+          note={`${PP_NOTES.quantity}\n\n${PP_NOTES.revenue}`}
+          action={(
+            <label className="dsec-level">
+              Tingkat analisis
+              <select value={productPerformanceLevel} onChange={(e) => setProductPerformanceLevel?.(e.target.value)}>
+                {PRODUCT_LEVEL_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+        >
+          {pair(topTen({ topByQuantity, topByRevenue }), topTen(compareData || {}))}
+        </Panel>
 
-        <ParetoChart
-          data={pareto.items}
-          title={`Pareto Chart — Top 10 Kontribusi Penjualan ${levelNoun} terhadap Total Penjualan`}
-        />
+        <Panel title={`Konsentrasi Penjualan — Pareto ${levelNoun}`} note={PP_NOTES.pareto}>
+          {pair(
+            <ParetoChart flat data={pareto.items} title="" />,
+            <ParetoChart flat data={compareData?.pareto?.items || []} title="" />,
+          )}
+        </Panel>
 
         <ContributionTable rows={contributions} levelNoun={levelNoun} />
 
-        {/* Growth driver vs declining-contribution products */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '1.5rem' }}>
-          <ProductTrendTable
-            title={`Growth Driver — ${levelNoun} Pendorong Pertumbuhan`}
-            rows={growthDrivers}
-            accentColor="var(--success)"
-            emptyMessage="Tidak ada produk dengan tren pertumbuhan signifikan pada periode ini."
-          />
-          <ProductTrendTable
-            title={`Penurunan Kontribusi — ${levelNoun} yang Melemah`}
-            rows={declining}
-            accentColor="var(--danger)"
-            emptyMessage="Tidak ada produk dengan tren penurunan signifikan pada periode ini."
-          />
+        <div className="dsec-stack">
+          <Panel title={`Growth Driver — ${levelNoun} Pendorong Pertumbuhan`} note={PP_NOTES.growth}>
+            <ProductTrendTable
+              flat
+              rows={growthDrivers}
+              accentColor="var(--success)"
+              emptyMessage="Tidak ada produk dengan tren pertumbuhan signifikan pada periode ini."
+            />
+          </Panel>
+          <Panel title={`Penurunan Kontribusi — ${levelNoun} yang Melemah`} note={PP_NOTES.declining}>
+            <ProductTrendTable
+              flat
+              rows={declining}
+              accentColor="var(--danger)"
+              emptyMessage="Tidak ada produk dengan tren penurunan signifikan pada periode ini."
+            />
+          </Panel>
         </div>
 
       </div>
@@ -2082,7 +1962,11 @@ const TAB_RENDERERS = {
 
 // Tabs that render their own period comparison internally (per-node delta)
 // instead of the generic main | compare split render below.
-const SELF_COMPARE_TABS = new Set(['Root Cause Analysis']);
+// Domains that draw their own comparison (deltas beside each figure, paired
+// panels where a second visual actually helps) instead of the generic
+// side-by-side duplicate of the whole tab. Traffic & Funnel set the pattern;
+// the rest followed so every tab compares the same way.
+const SELF_COMPARE_TABS = new Set(['Root Cause Analysis', 'Transaction Behavior', 'Basket Analysis', 'Product Performance']);
 
 // Loading shows the shape of what is coming rather than the word "Memuat".
 // The console keeps the rail, the strip and every summary on screen while

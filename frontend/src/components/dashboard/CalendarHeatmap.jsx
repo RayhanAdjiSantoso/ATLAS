@@ -22,7 +22,7 @@ const EMPTY_SET = new Set();
 // DashboardTab.jsx and LineChart.jsx.
 const POOR_PERFORMING_COLOR = '#eab308';
 
-export default function CalendarHeatmap({ data = [], title = 'Sales Calendar — Total Penjualan (IDR) Harian', bestDates = EMPTY_SET, worstDates = EMPTY_SET, poorDates = EMPTY_SET, rangeStart = null, rangeEnd = null }) {
+export default function CalendarHeatmap({ data = [], title = 'Sales Calendar — Total Penjualan (IDR) Harian', bestDates = EMPTY_SET, worstDates = EMPTY_SET, poorDates = EMPTY_SET, rangeStart = null, rangeEnd = null, flat = false }) {
   const [hoveredDay, setHoveredDay] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -166,15 +166,15 @@ export default function CalendarHeatmap({ data = [], title = 'Sales Calendar —
 
   if (data.length === 0) {
     return (
-      <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-muted)' }}>
+      <div className={flat ? 'dsec-chart-empty' : 'card'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-muted)' }}>
         Belum ada data transaksi untuk Kalender Penjualan
       </div>
     );
   }
 
   return (
-    <div className="card heatmap-container" style={{ padding: '1.25rem' }}>
-      <h3 style={{ fontSize: '1rem', marginBottom: '1.5rem', color: 'var(--text)' }}>{title}</h3>
+    <div className={flat ? 'heatmap-container dsec-chart' : 'card heatmap-container'} style={flat ? undefined : { padding: '1.25rem' }}>
+      {!flat && <h3 style={{ fontSize: '1rem', marginBottom: '1.5rem', color: 'var(--text)' }}>{title}</h3>}
 
       {/* Single month panel with Previous/Next navigation across the analysis period */}
       {activePanel && (
