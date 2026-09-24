@@ -4,6 +4,7 @@ import { PieChartCanvas } from '../../components/PieChartCanvas';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { computeDelta, deltaClassForSentiment, formatDeltaID } from '../../lib/delta';
 import { buildSpecialMoment, DEFAULT_PAYDAY, type MomentKind, type MomentOccurrence } from '../../lib/metaSpecialMoment';
+import { metaRevenueTotal } from '../../lib/metaFunnel';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 
@@ -123,30 +124,40 @@ export function MetaSpecialMomentSection({
   const paydayStart = Math.min(28, Math.max(1, Number(startDay) || DEFAULT_PAYDAY.startDay));
   const paydayLength = Math.min(31, Math.max(1, Number(lengthDays) || DEFAULT_PAYDAY.lengthDays));
 
-  const { hasDayBreakdown, kinds } = useMemo(() => {
+  const { hasDayBreakdown, kinds, hasRevenueCol } = useMemo(() => {
     const payday = { startDay: paydayStart, lengthDays: paydayLength };
-    const sum = (list: MomentOccurrence[], pick: (o: MomentOccurrence) => number | null) => {
+    // Does the file carry a revenue column at all? Asked once, of the whole
+    // upload — otherwise a moment with no purchases looks exactly like a file
+    // that cannot report revenue, and a zero gets drawn as "no data".
+    const revenueCol = rows.length ? metaRevenueTotal(rows) !== null : false;
+    const sum = (list: MomentOccurrence[], pick: (o: MomentOccurrence) => number | null, present: boolean) => {
       const usable = list.map(pick).filter((v): v is number => v !== null);
-      return usable.length ? usable.reduce((a, b) => a + b, 0) : null;
+      if (usable.length) return usable.reduce((a, b) => a + b, 0);
+      return present ? 0 : null;
     };
     const build = (key: MomentKind, label: string, word: string) => {
       const result = buildSpecialMoment(rows, dayCol, key, payday);
       // An occurrence belongs to the period whose date range contains its start.
       const perPeriod: PeriodTotals[] = periods.map((p) => {
         const occ = result.occurrences.filter((o) => o.start >= p.start && o.start <= p.end);
-        return { label: p.label, revenue: sum(occ, (o) => o.revenue), spending: sum(occ, (o) => o.spending), occurrences: occ };
+        return {
+          label: p.label,
+          revenue: sum(occ, (o) => o.revenue, revenueCol),
+          spending: sum(occ, (o) => o.spending, true),
+          occurrences: occ,
+        };
       });
       return { result, kind: { key, label, word, periods: perPeriod, occurrences: result.occurrences } as KindTotals };
     };
     const twin = build('double-date', 'Twin Date', 'twin date');
     const pay = build('payday', 'Payday', 'payday');
-    return { hasDayBreakdown: twin.result.hasDayBreakdown, kinds: [twin.kind, pay.kind] };
+    return { hasDayBreakdown: twin.result.hasDayBreakdown, kinds: [twin.kind, pay.kind], hasRevenueCol: revenueCol };
   }, [rows, dayCol, paydayStart, paydayLength, periods]);
 
   // A Meta export carries revenue only for a Sales/Conversion objective; an
   // Awareness or Traffic report has no such column at all, so the pies are
   // dropped rather than drawn empty and the reason is said once.
-  const hasRevenue = kinds.some((k) => k.periods.some((p) => p.revenue !== null));
+  const hasRevenue = hasRevenueCol;
 
   const blocked = !rows.length ? (
     <div className="empty-note">Belum ada data untuk bagian ini.</div>
@@ -195,8 +206,9 @@ export function MetaSpecialMomentSection({
                 </div>
               ) : (
                 <div className="empty-note" style={{ margin: 0 }}>
-                  Pie revenue belum bisa digambar: file ini tidak memuat kolom revenue (mis. &quot;Purchases conversion value&quot;). Kolom itu hanya ada pada export Meta
-                  untuk objective Sales/Conversion, bukan Awareness atau Traffic.
+                  Pie revenue belum bisa digambar: file yang diunggah tidak memuat kolom <strong>Purchases conversion value</strong>. Tambahkan kolom itu saat export
+                  di Meta Ads Reporting (Metrics → Performance → Purchases conversion value). Pilihan <em>Objective</em> pada form di atas hanya menentukan metrik
+                  headline laporan; kolomnya tetap harus ada di file.
                 </div>
               )}
               <div className="sm-scorecards sm-scorecards-side">
