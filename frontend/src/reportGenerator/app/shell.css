@@ -997,6 +997,11 @@
   .sm-split{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(250px,.9fr);gap:1.5rem;align-items:start}
   .sm-split .sm-pies{margin-bottom:0}
   .sm-scorecards-side{grid-template-columns:minmax(0,1fr);align-content:start}
+  /* One pie left: it takes the room the missing one would have had rather
+     than sitting in a half-empty row, and centres in it. */
+  .sm-pies-one{grid-template-columns:minmax(0,1fr)}
+  .sm-pies-one .pie-canvas-wrap{display:flex;justify-content:center}
+  .sm-pies-one .chart-foot{text-align:center}
   @media(max-width:900px){.sm-split{grid-template-columns:minmax(0,1fr)}}
   .sm-card-figure{font-size:1.25rem;font-weight:800;letter-spacing:-.02em;color:var(--text);font-variant-numeric:tabular-nums lining-nums}
   .sm-card-change{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem;margin-top:.4rem;font-size:.7rem;color:var(--muted)}
