@@ -25,17 +25,22 @@ import { useAutoSave } from '../reports/useAutoSave';
 import { mapTiktokRows } from '../reports/rowMapping';
 import { getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage, formatSavedAt } from '../reports/savedPeriodLabels';
-import { SavedPeriodPicker } from '../reports/SavedPeriodPicker';
+import { PeriodSourcePicker, type LibraryMonth } from '../reports/PeriodSourcePicker';
+import api from '../../../api/client.js';
+import type { LibraryFile } from '../reports/LibraryFileSlot';
 import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SaveReportPayload, SavedPeriod } from '../reports/types';
 import { buildTiktokReport, type TiktokReport } from './tiktokReport';
 
 type FileKey = 'tiktok-old' | 'tiktok-cur';
 
+// Library channels that count as "this month has TikTok data".
+const TIKTOK_PERIOD_CHANNELS = ['tiktok'] as const;
+
 interface FileState {
   rows: SheetRow[];
   fileName: string;
-  // Absent when the slot's rows came from stored data (SavedPeriodPicker)
+  // Absent when the slot's rows came from stored data (PeriodSourcePicker)
   // rather than a fresh upload — there's no File to re-archive then, and
   // raw_uploads isn't used for reconstruction anyway.
   file?: File;
@@ -76,6 +81,10 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   // straight from a previously saved report_run instead of re-uploading.
   const [oldSource, setOldSource] = useState<SlotSource>('saved');
   const [curSource, setCurSource] = useState<SlotSource>('saved');
+  // Two stored sources now: a month from the brand library, and a period from
+  // a report already generated.
+  const [oldPickedMonth, setOldPickedMonth] = useState<LibraryMonth | null>(null);
+  const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
   const [oldPicked, setOldPicked] = useState<SavedPeriod | null>(null);
   const [curPicked, setCurPicked] = useState<SavedPeriod | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
@@ -110,14 +119,60 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   function handlePickPeriod(period: SavedPeriod) {
     const targetRole = pickerRole;
     if (!targetRole) return;
+    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
     (targetRole === 'old' ? setOldPicked : setCurPicked)(period);
     (targetRole === 'old' ? setOldSource : setCurSource)('saved');
     applySavedPeriod(targetRole, period);
   }
 
+  // A month straight from Pengaturan Brand — usable before any report has
+  // ever been generated for it, which the archive by definition cannot offer.
+  async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
+    if (!clientId) return;
+    const key: FileKey = targetRole === 'old' ? 'tiktok-old' : 'tiktok-cur';
+    setApplyingRole(targetRole);
+    setFileErrors((prev) => ({ ...prev, [key]: null }));
+    try {
+      const { data } = await api.get(`/brands/${clientId}/library`);
+      const list = (data.files as LibraryFile[]).filter((f) => f.platform === 'tiktok' && f.channel === 'tiktok' && f.period_month?.slice(0, 7) === month.month);
+      if (!list.length) throw new Error('Bulan ini tidak punya file campaign TikTok di Pengaturan Brand.');
+      const buffers = await Promise.all(
+        list.map(async (f) => {
+          const res = await api.get(`/brands/${clientId}/library/${f.id}/download`, { responseType: 'arraybuffer' });
+          return res.data as ArrayBuffer;
+        }),
+      );
+      const rows = (await Promise.all(buffers.map((b) => parseTiktokXLSX(b)))).flat();
+      if (!rows.length) throw new Error('File bulan ini kosong atau formatnya tidak dikenali.');
+      setFiles((prev) => ({ ...prev, [key]: { rows, fileName: list.map((f) => f.original_filename).join(' · ') } }));
+      (targetRole === 'old' ? periodOld : periodCur).autoFill(month.label);
+      if (month.start && month.end) {
+        (targetRole === 'old' ? setPeriodOldRange : setPeriodCurRange)({ start: month.start.slice(0, 10), end: month.end.slice(0, 10) });
+        (targetRole === 'old' ? setPeriodOldDays : setPeriodCurDays)(daysBetweenInclusive(fromISODate(month.start.slice(0, 10))!, fromISODate(month.end.slice(0, 10))!));
+      }
+      setReport(null);
+      onInvalidate();
+    } catch (err) {
+      setFileErrors((prev) => ({ ...prev, [key]: 'Gagal memuat periode dari perpustakaan: ' + (err as Error).message }));
+      (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    } finally {
+      setApplyingRole(null);
+    }
+  }
+
+  function handlePickMonth(month: LibraryMonth) {
+    const targetRole = pickerRole;
+    if (!targetRole) return;
+    (targetRole === 'old' ? setOldPicked : setCurPicked)(null);
+    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(month);
+    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    applyLibraryMonth(targetRole, month);
+  }
+
   function clearPickedPeriod(role: PeriodRole) {
     const key: FileKey = role === 'old' ? 'tiktok-old' : 'tiktok-cur';
     (role === 'old' ? setOldPicked : setCurPicked)(null);
+    (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
     setFiles((prev) => ({ ...prev, [key]: null }));
     setReport(null);
     onInvalidate();
@@ -283,11 +338,23 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
           <div className="source-label" style={{ color: 'var(--tiktok)' }}>
             Pilih Periode
           </div>
-          <span className="sec-badge">isi file campaign sekaligus dari laporan tersimpan</span>
+          <span className="sec-badge">Perpustakaan Brand &amp; Arsip Laporan</span>
         </div>
         <div className="dz-grid-4">
           {(['old', 'cur'] as const).map((role) => {
-            const picked = role === 'old' ? oldPicked : curPicked;
+            const pickedRun = role === 'old' ? oldPicked : curPicked;
+            const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
+            const picked = pickedMonth
+              ? { title: pickedMonth.label, sourceComparison: '', savedAt: '', summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
+              : pickedRun
+                ? {
+                    title: pickedRun.label || 'Tanpa label',
+                    sourceComparison: pickedRun.sourceComparison,
+                    savedAt: formatSavedAt(pickedRun.savedAt),
+                    summary: formatChannelCoverage(pickedRun.channels),
+                    metaLine: 'Arsip Laporan',
+                  }
+                : null;
             const source = role === 'old' ? oldSource : curSource;
             return (
               <div key={role}>
@@ -309,15 +376,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
                   (applyingRole === role ? (
                     <div className="empty-note">Menerapkan periode…</div>
                   ) : (
-                    <SavedSlotCard
-                      picked={
-                        picked && {
-                          title: picked.label || 'Tanpa label',
-                          sourceComparison: picked.sourceComparison,
-                          savedAt: formatSavedAt(picked.savedAt),
-                          summary: formatChannelCoverage(picked.channels),
-                        }
-                      }
+                    <SavedSlotCard picked={picked}
                       onOpen={() => setPickerRole(role)}
                       onClear={() => clearPickedPeriod(role)}
                     />
@@ -329,7 +388,21 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
       </div>
 
       {pickerRole && clientId && (
-        <SavedPeriodPicker clientId={clientId} platform="tiktok" variant="period" onClose={() => setPickerRole(null)} onPick={handlePickPeriod} />
+        <PeriodSourcePicker
+          clientId={clientId}
+          platform="tiktok"
+          periodChannels={TIKTOK_PERIOD_CHANNELS}
+          sideLabel={pickerRole === 'old' ? 'Periode Lalu' : 'Periode Ini'}
+          selectedMonth={(pickerRole === 'old' ? oldPickedMonth : curPickedMonth)?.month ?? null}
+          selectedRun={
+            (pickerRole === 'old' ? oldPicked : curPicked)
+              ? { runId: (pickerRole === 'old' ? oldPicked : curPicked)!.runId, role: (pickerRole === 'old' ? oldPicked : curPicked)!.role }
+              : null
+          }
+          onClose={() => setPickerRole(null)}
+          onPickLibrary={handlePickMonth}
+          onPickArchive={handlePickPeriod}
+        />
       )}
 
       <div className="source-block">

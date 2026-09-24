@@ -4,7 +4,7 @@ import '../features/reports/librarySource.css';
 
 // Small toggle shown above an upload slot: keep uploading a fresh file, or
 // reuse a period this client already uploaded before (picked via
-// SavedPeriodPicker). Default stays 'upload' everywhere, so a tab that
+// PeriodSourcePicker). Default stays 'upload' everywhere, so a tab that
 // never touches the "saved" side behaves exactly as before.
 export type SlotSource = 'upload' | 'saved';
 

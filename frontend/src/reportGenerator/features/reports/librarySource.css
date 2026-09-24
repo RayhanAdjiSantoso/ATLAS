@@ -173,3 +173,50 @@
   .mil-ui .saved-src-card.is-filled { flex-wrap: wrap; }
   .mil-ui .saved-src-card.is-filled .saved-src-actions { width: 100%; justify-content: flex-end; }
 }
+
+/* ── Ambil data tersimpan: two sources, one dialog ─────────────────────────
+   Stored data comes from two different places and they answer different
+   questions, so the dialog names both rather than merging them into one
+   undifferentiated list: the brand's monthly uploads, and the periods of
+   reports already generated. */
+.mil-ui .src-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; padding: .85rem 1.2rem 0; }
+.mil-ui .src-tab {
+  display: flex; align-items: center; gap: .6rem; padding: .7rem .85rem; text-align: left;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 12px; background: var(--surface, #fff);
+  font: inherit; cursor: pointer; transition: border-color .15s, background .15s, color .15s;
+}
+.mil-ui .src-tab:hover { border-color: var(--acc-300); color: var(--text); }
+.mil-ui .src-tab.is-active { border-color: var(--acc); color: var(--acc); background: var(--acc-100); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 10%, transparent); }
+.mil-ui .src-tab:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mil-ui .src-tab-text { display: grid; gap: .1rem; min-width: 0; flex: 1; }
+.mil-ui .src-tab-text strong { font-size: .82rem; font-weight: 750; letter-spacing: -.012em; color: inherit; }
+.mil-ui .src-tab-text small { font-size: .69rem; line-height: 1.35; color: var(--muted); }
+.mil-ui .src-tab-count {
+  flex-shrink: 0; min-width: 24px; padding: .12rem .4rem; border-radius: 99px; background: var(--s2);
+  color: var(--muted); font-size: .68rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums lining-nums;
+}
+.mil-ui .src-tab.is-active .src-tab-count { background: var(--acc); color: #fff; }
+
+/* One saved report = one block, its two sides side by side, so it is clear
+   which comparison a period came from before it is reused. */
+.mil-ui .src-run { padding: .9rem 0 .2rem; }
+.mil-ui .src-run + .src-run { border-top: 1px solid var(--border); }
+.mil-ui .src-run-head { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; flex-wrap: wrap; margin-bottom: .55rem; }
+.mil-ui .src-run-head h3 { margin: 0; font-size: .78rem; font-weight: 800; letter-spacing: -.01em; color: var(--text); }
+.mil-ui .src-run-head span { font-size: .68rem; color: var(--muted); }
+.mil-ui .src-run-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: .55rem; }
+.mil-ui .src-side {
+  display: grid; gap: .22rem; padding: .7rem .8rem; text-align: left;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface, #fff);
+  font: inherit; cursor: pointer; transition: border-color .15s, background .15s, transform .15s;
+}
+.mil-ui .src-side:hover { border-color: var(--acc); background: var(--acc-100); transform: translateY(-1px); }
+.mil-ui .src-side:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mil-ui .src-side.is-selected { border-color: var(--acc); background: var(--acc-100); }
+.mil-ui .src-side-top { display: flex; align-items: center; justify-content: space-between; gap: .4rem; }
+.mil-ui .src-side-role { padding: .1rem .45rem; border-radius: 99px; font-size: .6rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.mil-ui .src-side-role.role-old { background: var(--s2); color: var(--muted); }
+.mil-ui .src-side-role.role-cur { background: var(--acc-100); color: var(--acc); }
+.mil-ui .src-side strong { font-size: .86rem; font-weight: 750; letter-spacing: -.012em; color: var(--text); overflow-wrap: anywhere; }
+.mil-ui .src-side-coverage { font-size: .68rem; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 560px) { .mil-ui .src-tabs { grid-template-columns: minmax(0, 1fr); } }

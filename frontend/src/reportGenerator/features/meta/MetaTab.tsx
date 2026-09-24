@@ -37,10 +37,11 @@ import { BRAND_AUDIENCE_METRICS, BRAND_CREATIVE_METRICS, SALES_AUDIENCE_METRICS,
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
-import { LibraryPeriodPicker, type LibraryMonth } from '../reports/LibraryPeriodPicker';
+import { PeriodSourcePicker, type LibraryMonth } from '../reports/PeriodSourcePicker';
+import { getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
-import type { PeriodRole, RawFileEntry, SaveReportPayload } from '../reports/types';
+import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
 import { buildMetaReport, isBoostRow, type MetaReport } from './metaReport';
 
 // Meta's export uses either a "Month" breakdown or a "Day" breakdown column
@@ -183,6 +184,11 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const [curSource, setCurSource] = useState<SlotSource>('upload');
   const [oldPickedMonth, setOldPickedMonth] = useState<LibraryMonth | null>(null);
   const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
+  // The other stored source: a period of a report already generated. Its rows
+  // come back from the archive exactly as they were parsed, so a slot can be
+  // filled without the original file.
+  const [oldPickedRun, setOldPickedRun] = useState<SavedPeriod | null>(null);
+  const [curPickedRun, setCurPickedRun] = useState<SavedPeriod | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
 
@@ -228,13 +234,48 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   function handlePickMonth(month: LibraryMonth) {
     const targetRole = pickerRole;
     if (!targetRole) return;
+    (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
     (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(month);
     (targetRole === 'old' ? setOldSource : setCurSource)('saved');
     applyLibraryMonth(targetRole, month);
   }
 
+  // Boost and Non-Boost were stored as two channels of one Meta file; putting
+  // them back together restores exactly what that report read.
+  async function applyArchivePeriod(targetRole: PeriodRole, period: SavedPeriod) {
+    setApplyingRole(targetRole);
+    setUploadError(null);
+    try {
+      const detail = await getSavedPeriod(period.runId, period.role);
+      const metaRowsSaved = [...(detail.channels.boost ?? []), ...(detail.channels.nonboost ?? [])];
+      const cpasRowsSaved = detail.channels.cpas_overall ?? [];
+      if (!metaRowsSaved.length && !cpasRowsSaved.length) throw new Error('Periode ini tidak menyimpan baris data apa pun.');
+      const name = `Arsip · ${period.label || period.sourceComparison}`;
+      setMetaSides((prev) => ({ ...prev, [targetRole]: metaRowsSaved.length ? { rows: metaRowsSaved, fileName: name } : null }));
+      setCpasSides((prev) => ({ ...prev, [targetRole]: cpasRowsSaved.length ? { rows: cpasRowsSaved, fileName: name } : null }));
+      setReport(null);
+      onInvalidate();
+    } catch (err) {
+      setUploadError('Gagal memuat periode dari arsip laporan: ' + (err as Error).message);
+      (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
+      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+    } finally {
+      setApplyingRole(null);
+    }
+  }
+
+  function handlePickArchive(period: SavedPeriod) {
+    const targetRole = pickerRole;
+    if (!targetRole) return;
+    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(period);
+    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    applyArchivePeriod(targetRole, period);
+  }
+
   function clearPickedPeriod(role: PeriodRole) {
     (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    (role === 'old' ? setOldPickedRun : setCurPickedRun)(null);
     (role === 'old' ? setOldSource : setCurSource)('upload');
     setMetaSides((prev) => ({ ...prev, [role]: null }));
     setCpasSides((prev) => ({ ...prev, [role]: null }));
@@ -473,14 +514,25 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       <div className="source-block">
         <div className="source-header">
           <div className="source-label">Pilih Periode</div>
-          <span className="sec-badge">isi Meta Ads &amp; CPAS sekaligus dari Pengaturan Brand</span>
+          <span className="sec-badge">Perpustakaan Brand &amp; Arsip Laporan</span>
         </div>
         <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Bisa memilih bulan mana pun yang sudah diunggah di Pengaturan Brand — satu bulan per slot Periode Lalu/Periode Ini.
+          Dua sumber tersedia: <strong>Perpustakaan Brand</strong> (file bulanan dari Pengaturan Brand, bisa dipakai walau belum pernah di-Generate) dan{' '}
+          <strong>Arsip Laporan</strong> (periode dari laporan yang sudah tersimpan — dipakai ulang tanpa unggah file).
         </div>
         <div className="dz-grid-4">
           {(['old', 'cur'] as const).map((role) => {
-            const picked = role === 'old' ? oldPickedMonth : curPickedMonth;
+            const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
+            const pickedRun = role === 'old' ? oldPickedRun : curPickedRun;
+            const picked = pickedMonth
+              ? { title: pickedMonth.label, summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
+              : pickedRun
+                ? {
+                    title: pickedRun.label || pickedRun.sourceComparison,
+                    summary: formatChannelCoverage(pickedRun.channels),
+                    metaLine: `Arsip Laporan · ${pickedRun.sourceComparison}`,
+                  }
+                : null;
             const source = role === 'old' ? oldSource : curSource;
             return (
               <div key={role}>
@@ -497,15 +549,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     <div className="empty-note">Menerapkan periode…</div>
                   ) : (
                     <SavedSlotCard
-                      picked={
-                        picked && {
-                          title: picked.label,
-                          sourceComparison: '',
-                          savedAt: '',
-                          summary: formatChannelCoverage(picked.channels),
-                          metaLine: '',
-                        }
-                      }
+                      picked={picked && { title: picked.title, sourceComparison: '', savedAt: '', summary: picked.summary, metaLine: picked.metaLine }}
                       onOpen={() => setPickerRole(role)}
                       onClear={() => clearPickedPeriod(role)}
                     />
@@ -517,7 +561,21 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       </div>
 
       {pickerRole && clientId && (
-        <LibraryPeriodPicker clientId={clientId} platform="meta" periodChannels={META_PERIOD_CHANNELS} onClose={() => setPickerRole(null)} onPick={handlePickMonth} />
+        <PeriodSourcePicker
+          clientId={clientId}
+          platform="meta"
+          periodChannels={META_PERIOD_CHANNELS}
+          sideLabel={pickerRole === 'old' ? 'Periode Lalu' : 'Periode Ini'}
+          selectedMonth={(pickerRole === 'old' ? oldPickedMonth : curPickedMonth)?.month ?? null}
+          selectedRun={
+            (pickerRole === 'old' ? oldPickedRun : curPickedRun)
+              ? { runId: (pickerRole === 'old' ? oldPickedRun : curPickedRun)!.runId, role: (pickerRole === 'old' ? oldPickedRun : curPickedRun)!.role }
+              : null
+          }
+          onClose={() => setPickerRole(null)}
+          onPickLibrary={handlePickMonth}
+          onPickArchive={handlePickArchive}
+        />
       )}
 
       <div className="source-block">

@@ -29,12 +29,12 @@ import { useAutoSave } from '../reports/useAutoSave';
 import { getProductMaster, getSavedPeriod, getSavedPeriods, saveProductMasterEntry } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { mapShopeeRows, type ShopeeCategorization } from '../reports/rowMapping';
-import { LibraryPeriodPicker, type LibraryMonth } from '../reports/LibraryPeriodPicker';
+import { PeriodSourcePicker, type LibraryMonth } from '../reports/PeriodSourcePicker';
 import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
 import { DEFAULT_PARETO_RANGE, type ParetoRangeSelection, type PerfMetricVars, type ProductPerfMonth } from '../../lib/shopeeProductAnalysis';
-import type { PeriodRole, RawFileEntry, SaveReportPayload } from '../reports/types';
+import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
 import { ShopeeReportSections } from './ShopeeReportSections';
 import { buildShopeeDeepDiveReport, type ShopeeDeepDiveReport } from './shopeeDeepDiveReport';
 import { buildShopeeFunnelReport, type ShopeeFunnelReport } from './shopeeFunnelReport';
@@ -241,7 +241,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
   // "Pilih Periode" — per period side, sourced straight from the brand
   // library (any month with files there, generated before or not — see
-  // LibraryPeriodPicker), not from report_runs. One pick fills every
+  // PeriodSourcePicker), not from report_runs. One pick fills every
   // channel that has a file for that month (Iklan Produk/Produk Otomatis/
   // Toko/Keyword/Live/Overview/Product Performance); the user can still
   // drop a fresh file on any individual channel slot below to override just
@@ -252,6 +252,10 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const [oldSource, setOldSource] = useState<SlotSource>('saved');
   const [curSource, setCurSource] = useState<SlotSource>('saved');
   const [oldPickedMonth, setOldPickedMonth] = useState<LibraryMonth | null>(null);
+  // The second stored source: a period of a report already generated. Its
+  // rows return from the archive exactly as that report read them.
+  const [oldPickedRun, setOldPickedRun] = useState<SavedPeriod | null>(null);
+  const [curPickedRun, setCurPickedRun] = useState<SavedPeriod | null>(null);
   const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
@@ -356,13 +360,76 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   function handlePickMonth(month: LibraryMonth) {
     const targetRole = pickerRole;
     if (!targetRole) return;
+    (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
     (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(month);
     (targetRole === 'old' ? setOldSource : setCurSource)('saved');
     applyLibraryMonth(targetRole, month);
   }
 
+  // The archive stores each ads channel separately, so a saved period drops
+  // straight back into the same slots an upload would have filled. Total Omzet
+  // Toko rides along in that report's config — the one figure no file carries.
+  async function applyArchivePeriod(targetRole: PeriodRole, period: SavedPeriod) {
+    setApplyingRole(targetRole);
+    setUploadError(null);
+    try {
+      const detail = await getSavedPeriod(period.runId, period.role);
+      const name = `Arsip · ${period.label || period.sourceComparison}`;
+      const slotOf: Record<string, AdsFileKey> = {
+        produk: `produk-${targetRole}` as AdsFileKey,
+        toko: `toko-${targetRole}` as AdsFileKey,
+        toko_keyword: `toko-keyword-${targetRole}` as AdsFileKey,
+        live: `live-${targetRole}` as AdsFileKey,
+      };
+      const adsUpdates: Partial<Record<AdsFileKey, AdsFileState | null>> = {
+        [`produk-otomatis-${targetRole}` as AdsFileKey]: null, // already merged into produk at save time
+      };
+      let filled = 0;
+      for (const [channel, key] of Object.entries(slotOf)) {
+        const rows = detail.channels[channel] ?? [];
+        adsUpdates[key] = rows.length ? { rows, fileName: name } : null;
+        if (rows.length) filled += 1;
+      }
+      if (!filled && !detail.overview.length) throw new Error('Periode ini tidak menyimpan baris data apa pun.');
+      setAdsFiles((prev) => ({ ...prev, ...adsUpdates }));
+      setOverviewFiles((prev) => ({
+        ...prev,
+        [`overview-${targetRole}`]: detail.overview.length ? { rows: detail.overview, fileName: name, period: detail.period.label ?? '' } : null,
+      }));
+
+      (targetRole === 'old' ? periodOld : periodCur).autoFill(detail.period.label);
+      if (detail.period.start && detail.period.end) {
+        (targetRole === 'old' ? setPeriodOldRange : setPeriodCurRange)({ start: detail.period.start, end: detail.period.end });
+        (targetRole === 'old' ? setPeriodOldDays : setPeriodCurDays)(daysBetweenInclusive(fromISODate(detail.period.start)!, fromISODate(detail.period.end)!));
+      }
+      const config = (detail.reportConfig ?? {}) as { omzetOld?: number; omzetCur?: number };
+      (targetRole === 'old' ? onOmzetOldChange : onOmzetCurChange)((period.role === 'old' ? config.omzetOld : config.omzetCur) ?? null);
+
+      setReport(null);
+      setDeepDive(null);
+      setFunnelReport(null);
+      onInvalidate();
+    } catch (err) {
+      setUploadError('Gagal memuat periode dari arsip laporan: ' + (err as Error).message);
+      (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
+      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+    } finally {
+      setApplyingRole(null);
+    }
+  }
+
+  function handlePickArchive(period: SavedPeriod) {
+    const targetRole = pickerRole;
+    if (!targetRole) return;
+    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(period);
+    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    applyArchivePeriod(targetRole, period);
+  }
+
   function clearPickedPeriod(role: PeriodRole) {
     (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    (role === 'old' ? setOldPickedRun : setCurPickedRun)(null);
     setAdsFiles((prev) => ({ ...prev, [`produk-${role}`]: null, [`produk-otomatis-${role}`]: null, [`toko-${role}`]: null, [`toko-keyword-${role}`]: null, [`live-${role}`]: null }));
     setOverviewFiles((prev) => ({ ...prev, [`overview-${role}`]: null }));
     setProductPerfFiles((prev) => ({ ...prev, [role]: null }));
@@ -840,11 +907,23 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           <span className="sec-badge">isi Iklan Produk/Toko/Keyword/Live/Overview/Product Performance sekaligus dari Pengaturan Brand</span>
         </div>
         <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Bisa memilih bulan mana pun yang sudah diunggah di Pengaturan Brand, walau belum pernah di-Generate. Total Omzet Toko hanya ikut terisi kalau bulan itu sudah pernah di-Generate sebelumnya — kalau belum, isi manual di bawah.
+          Dua sumber tersedia: <strong>Perpustakaan Brand</strong> (file bulanan dari Pengaturan Brand, bisa dipakai walau belum pernah di-Generate) dan{' '}
+          <strong>Arsip Laporan</strong> (periode dari laporan yang sudah tersimpan — dipakai ulang tanpa unggah file). Total Omzet Toko ikut terisi hanya jika bulan itu
+          pernah di-Generate; kalau belum, isi manual di bawah.
         </div>
         <div className="dz-grid-4">
           {(['old', 'cur'] as const).map((role) => {
-            const picked = role === 'old' ? oldPickedMonth : curPickedMonth;
+            const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
+            const pickedRun = role === 'old' ? oldPickedRun : curPickedRun;
+            const picked = pickedMonth
+              ? { title: pickedMonth.label, summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
+              : pickedRun
+                ? {
+                    title: pickedRun.label || pickedRun.sourceComparison,
+                    summary: formatChannelCoverage(pickedRun.channels),
+                    metaLine: `Arsip Laporan · ${pickedRun.sourceComparison}`,
+                  }
+                : null;
             const source = role === 'old' ? oldSource : curSource;
             return (
               <div key={role}>
@@ -867,15 +946,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
                     <div className="empty-note">Menerapkan periode…</div>
                   ) : (
                     <SavedSlotCard
-                      picked={
-                        picked && {
-                          title: picked.label,
-                          sourceComparison: '',
-                          savedAt: '',
-                          summary: formatChannelCoverage(picked.channels),
-                          metaLine: '',
-                        }
-                      }
+                      picked={picked && { title: picked.title, sourceComparison: '', savedAt: '', summary: picked.summary, metaLine: picked.metaLine }}
                       onOpen={() => setPickerRole(role)}
                       onClear={() => clearPickedPeriod(role)}
                     />
@@ -887,11 +958,16 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       </div>
 
       {pickerRole && clientId && (
-        <LibraryPeriodPicker
+        <PeriodSourcePicker
           clientId={clientId} platform="shopee" periodChannels={SHOPEE_PERIOD_CHANNELS}
           sideLabel={pickerRole === 'old' ? 'Periode Lalu' : 'Periode Ini'}
           selectedMonth={(pickerRole === 'old' ? oldPickedMonth : curPickedMonth)?.month ?? null}
-          onClose={() => setPickerRole(null)} onPick={handlePickMonth}
+          selectedRun={
+            (pickerRole === 'old' ? oldPickedRun : curPickedRun)
+              ? { runId: (pickerRole === 'old' ? oldPickedRun : curPickedRun)!.runId, role: (pickerRole === 'old' ? oldPickedRun : curPickedRun)!.role }
+              : null
+          }
+          onClose={() => setPickerRole(null)} onPickLibrary={handlePickMonth} onPickArchive={handlePickArchive}
         />
       )}
 
