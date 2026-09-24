@@ -116,7 +116,8 @@ export interface MetaReport {
   // Consideration; the two selling channels decompose GMV.
   boostFunnel?: MetaFunnel;
   nonBoostFunnel?: MetaFunnel;
-  // Current-period rows per channel. Creative Analysis breaks these down by
+  // Current-period rows per channel. Each section's Creative Performance
+  // block breaks these down by
   // Ad, and it has to be the reported period alone — the combined row set
   // spans both periods and would silently average two months together.
   curRows?: { boost: SheetRow[]; nonBoost: SheetRow[]; cpas: SheetRow[] };

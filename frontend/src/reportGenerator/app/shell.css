@@ -658,7 +658,7 @@
      columns keep a common right edge, which is what lets the eye scan a
      straight line down the numbers regardless of depth. */
   .symptom-tree-head{
-    display:grid;grid-template-columns:minmax(0,1fr) var(--st-val-w) var(--st-pill-w);
+    display:grid;grid-template-columns:minmax(7.5rem,1fr) minmax(0,var(--st-val-w)) minmax(0,var(--st-pill-w));
     align-items:end;gap:.7rem;
     font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
     padding:0 .6rem .45rem;margin-bottom:.35rem;border-bottom:1px solid var(--border);
@@ -682,7 +682,10 @@
   }
   .st-node{
     position:relative;display:grid;
-    grid-template-columns:minmax(0,1fr) var(--st-val-w) var(--st-pill-w);
+    /* The label keeps a floor and the numeric columns give way instead: at the
+       deepest indents a fixed numeric width left the label a single character
+       wide, which is how "Impressions" ended up printed one letter per line. */
+    grid-template-columns:minmax(7.5rem,1fr) minmax(0,var(--st-val-w)) minmax(0,var(--st-pill-w));
     align-items:center;gap:.7rem;
     min-height:var(--st-node-h);padding:.35rem .6rem;margin:.18rem 0;border-radius:9px;
     background:transparent;border:1px solid transparent;
@@ -697,12 +700,15 @@
     background:var(--shopee-100);border-color:var(--shopee-300);
     box-shadow:0 0 0 3px rgba(238,77,45,.06);
   }
-  .st-label{min-width:0;font-size:.8rem;font-weight:600;color:var(--text);letter-spacing:-.01em;overflow-wrap:anywhere}
+  .st-label{min-width:0;font-size:.8rem;font-weight:600;color:var(--text);letter-spacing:-.01em;overflow-wrap:break-word;word-break:normal;hyphens:auto}
   .st-node.st-root .st-label{font-weight:800;font-size:.86rem}
   /* One consistent numeric column so the eye can scan straight down. */
   .st-vals{
-    display:flex;align-items:center;justify-content:flex-end;gap:.3rem;min-width:0;
-    font-size:.68rem;color:var(--muted);font-weight:600;
+    /* Wraps rather than overflows: at the deepest indents the pair of figures
+       is wider than its column, and an unwrapped line printed straight over
+       the node's label. */
+    display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.15rem .3rem;min-width:0;
+    font-size:.68rem;color:var(--muted);font-weight:600;line-height:1.35;
     font-variant-numeric:tabular-nums lining-nums;
   }
   /* The period being read is the one that carries the weight; the old value

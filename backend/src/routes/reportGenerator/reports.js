@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import pool from '../../config/db.js';
-import { buildBulkInsert } from '../../utils/sqlHelpers.js';
+import { buildBulkInsert, buildBulkInserts } from '../../utils/sqlHelpers.js';
 
 // Ported from the standalone report generator (src/routes/reports.ts).
 // Logic is unchanged from the original — see git history of the standalone
@@ -240,8 +240,9 @@ reportsRouter.post('/', upload.array('files'), async (req, res) => {
 
     if (payload.platform === 'shopee') {
       await client.query('DELETE FROM ads_reports.shopee_ad_rows WHERE report_run_id = $1', [runId]);
-      const insert = buildBulkInsert('ads_reports.shopee_ad_rows', SHOPEE_COLUMNS, (payload.rows.shopee ?? []).map((r) => shopeeRowValues(runId, r)));
-      if (insert) await client.query(insert.text, insert.values);
+      for (const insert of buildBulkInserts('ads_reports.shopee_ad_rows', SHOPEE_COLUMNS, (payload.rows.shopee ?? []).map((r) => shopeeRowValues(runId, r)))) {
+        await client.query(insert.text, insert.values);
+      }
 
       // Product Overview daily rows — brand-scoped, upserted by date (not
       // deleted-then-reinserted like the run-scoped tables above), so the
@@ -259,12 +260,14 @@ reportsRouter.post('/', upload.array('files'), async (req, res) => {
       }
     } else if (payload.platform === 'meta') {
       await client.query('DELETE FROM ads_reports.meta_ad_rows WHERE report_run_id = $1', [runId]);
-      const insert = buildBulkInsert('ads_reports.meta_ad_rows', META_COLUMNS, (payload.rows.meta ?? []).map((r) => metaRowValues(runId, r)));
-      if (insert) await client.query(insert.text, insert.values);
+      for (const insert of buildBulkInserts('ads_reports.meta_ad_rows', META_COLUMNS, (payload.rows.meta ?? []).map((r) => metaRowValues(runId, r)))) {
+        await client.query(insert.text, insert.values);
+      }
     } else if (payload.platform === 'tiktok') {
       await client.query('DELETE FROM ads_reports.tiktok_ad_rows WHERE report_run_id = $1', [runId]);
-      const insert = buildBulkInsert('ads_reports.tiktok_ad_rows', TIKTOK_COLUMNS, (payload.rows.tiktok ?? []).map((r) => tiktokRowValues(runId, r)));
-      if (insert) await client.query(insert.text, insert.values);
+      for (const insert of buildBulkInserts('ads_reports.tiktok_ad_rows', TIKTOK_COLUMNS, (payload.rows.tiktok ?? []).map((r) => tiktokRowValues(runId, r)))) {
+        await client.query(insert.text, insert.values);
+      }
     }
 
     // Deleting these cascades (ON DELETE CASCADE) into any public.uploads

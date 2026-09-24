@@ -67,7 +67,10 @@ function Delta({ cur, prev }: { cur: number | null; prev: number | null }) {
   return <DeltaPill cls={deltaClassForSentiment(deltaNum, 'higher-better')}>{formatDeltaID(deltaNum, deltaStr)}</DeltaPill>;
 }
 
-export function MetaSpecialMomentSection({ rows, dayCol }: { rows: SheetRow[]; dayCol: string | null }) {
+// `heading` names the ad source the rows came from: the same two sections now
+// appear once under CPAS and once under Non-Boost Post, and a reader landing
+// on either must be able to tell which numbers they are looking at.
+export function MetaSpecialMomentSection({ rows, dayCol, heading }: { rows: SheetRow[]; dayCol: string | null; heading: string }) {
   const [kind, setKind] = useState<MomentKind>('double-date');
   const [startDay, setStartDay] = useState(String(DEFAULT_PAYDAY.startDay));
   const [lengthDays, setLengthDays] = useState(String(DEFAULT_PAYDAY.lengthDays));
@@ -103,7 +106,9 @@ export function MetaSpecialMomentSection({ rows, dayCol }: { rows: SheetRow[]; d
     </div>
   );
 
-  const blocked = !result.hasDayBreakdown ? (
+  const blocked = !rows.length ? (
+    <div className="empty-note">Belum ada data untuk bagian ini.</div>
+  ) : !result.hasDayBreakdown ? (
     <div className="empty-note">
       Special Moment butuh breakdown <strong>Day</strong>. File yang diunggah dipecah per bulan, jadi tanggal seperti 9/9 tidak bisa dipisahkan. Export ulang dari Meta
       Ads Reporting dengan breakdown Day untuk mengisi bagian ini.
@@ -118,7 +123,7 @@ export function MetaSpecialMomentSection({ rows, dayCol }: { rows: SheetRow[]; d
     <>
       <div className="sec-block">
         <div className="sec-heading">
-          Kontribusi Special Moment
+          {heading} · Kontribusi
           <span className="sec-badge">{kindWord} · perbandingan antar kemunculan</span>
           <SectionDownloadButton />
         </div>
@@ -135,7 +140,7 @@ export function MetaSpecialMomentSection({ rows, dayCol }: { rows: SheetRow[]; d
 
       <div className="sec-block">
         <div className="sec-heading">
-          Perbandingan Special Moment
+          {heading} · Perbandingan
           <span className="sec-badge">{kindWord} · vs kemunculan sebelumnya</span>
           <SectionDownloadButton />
         </div>
