@@ -59,12 +59,15 @@ export function PieChartCanvas({ labels, values }: PieChartCanvasProps) {
           const align = side >= 0 ? 'left' : 'right';
           ctx.textAlign = align;
           ctx.textBaseline = 'middle';
+          // Never let a label run past the canvas: outside it is simply
+          // clipped, which is how "Ags 2026" ended up reading "gs 2026".
+          const room = Math.max(24, side >= 0 ? chart.width - lx - 4 : lx - 4);
           ctx.font = '700 11.5px Inter, sans-serif';
           ctx.fillStyle = '#0f1a3a';
-          ctx.fillText(String(data.labels?.[i] ?? ''), lx, p3y - 7);
+          ctx.fillText(String(data.labels?.[i] ?? ''), lx, p3y - 7, room);
           ctx.font = '600 10.5px Inter, sans-serif';
           ctx.fillStyle = '#6b7a9e';
-          ctx.fillText(pct.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%', lx, p3y + 7);
+          ctx.fillText(pct.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%', lx, p3y + 7, room);
         });
         ctx.restore();
       },
@@ -78,7 +81,7 @@ export function PieChartCanvas({ labels, values }: PieChartCanvasProps) {
       },
       options: {
         responsive: false,
-        layout: { padding: { top: 46, bottom: 46, left: 80, right: 80 } },
+        layout: { padding: { top: 46, bottom: 46, left: 92, right: 92 } },
         plugins: { legend: { display: false }, tooltip: { enabled: false } },
         animation: { duration: 500 },
       },

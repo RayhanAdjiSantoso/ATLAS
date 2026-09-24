@@ -141,6 +141,17 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   }, [metaRows]);
   const cpasAllRows = useMemo(() => (cpasRows ? stripCampaignSubtotals(cpasRows) : []), [cpasRows]);
   const cpasDayCol = useMemo(() => (cpasAllRows.length ? findCol(cpasAllRows, ['day']) : null), [cpasAllRows]);
+
+  // Special Moment compares the two periods, so it needs each side's own date
+  // range: the Meta sides use the ranges shown in the date pickers, the CPAS
+  // sides their file's own first/last day.
+  const cpasRanges = useMemo(() => {
+    if (!cpasDayCol) return { old: null, cur: null };
+    return {
+      old: cpasSides.old ? metaDayRange(cpasSides.old.rows, cpasDayCol) : null,
+      cur: cpasSides.cur ? metaDayRange(cpasSides.cur.rows, cpasDayCol) : null,
+    };
+  }, [cpasSides, cpasDayCol]);
   const [oldRange, setOldRange] = useState<{ start: Date; end: Date } | null>(null);
   const [curRange, setCurRange] = useState<{ start: Date; end: Date } | null>(null);
   const oldDayBounds = useMemo(() => (dayCol && metaSides.old ? metaDayRange(metaSides.old.rows, dayCol) : null), [dayCol, metaSides.old]);
@@ -727,7 +738,15 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     const cpasAd = cur?.cpas.length ? findAdCol(cur.cpas) : null;
                     return (
                       <>
-                        <MetaSpecialMomentSection rows={cpasAllRows} dayCol={cpasDayCol} heading="CPAS Shopee · Special Moment" />
+                        <MetaSpecialMomentSection
+                          rows={cpasAllRows}
+                          dayCol={cpasDayCol}
+                          heading="CPAS Shopee · Special Moment"
+                          periods={[
+                            cpasRanges.old ? { label: cpas.p1, ...cpasRanges.old } : null,
+                            cpasRanges.cur ? { label: cpas.p2, ...cpasRanges.cur } : null,
+                          ].filter(Boolean) as { label: string; start: Date; end: Date }[]}
+                        />
                         {cpas.overall && (
                           <OverviewDetailedCard
                             heading="CPAS Shopee"
@@ -804,7 +823,15 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     const nbAd = cur?.nonBoost.length ? findAdCol(cur.nonBoost) : null;
                     return (
                       <>
-                        <MetaSpecialMomentSection rows={nonBoostAllRows} dayCol={dayCol} heading="Non-Boost Post · Special Moment" />
+                        <MetaSpecialMomentSection
+                          rows={nonBoostAllRows}
+                          dayCol={dayCol}
+                          heading="Non-Boost Post · Special Moment"
+                          periods={[
+                            oldRange ? { label: report.p1, ...oldRange } : null,
+                            curRange ? { label: report.p2, ...curRange } : null,
+                          ].filter(Boolean) as { label: string; start: Date; end: Date }[]}
+                        />
                         {report.nonBoost && (
                           <OverviewDetailedCard
                             heading={report.nonBoostSegments ? 'Non-Boost Post · Blended' : 'Non-Boost Post'}

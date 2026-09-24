@@ -658,7 +658,7 @@
      columns keep a common right edge, which is what lets the eye scan a
      straight line down the numbers regardless of depth. */
   .symptom-tree-head{
-    display:grid;grid-template-columns:minmax(7.5rem,1fr) minmax(0,var(--st-val-w)) minmax(0,var(--st-pill-w));
+    display:grid;grid-template-columns:minmax(min(7.5rem,100%),1fr) minmax(0,var(--st-val-w)) minmax(0,var(--st-pill-w));
     align-items:end;gap:.7rem;
     font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
     padding:0 .6rem .45rem;margin-bottom:.35rem;border-bottom:1px solid var(--border);
@@ -685,7 +685,7 @@
     /* The label keeps a floor and the numeric columns give way instead: at the
        deepest indents a fixed numeric width left the label a single character
        wide, which is how "Impressions" ended up printed one letter per line. */
-    grid-template-columns:minmax(7.5rem,1fr) minmax(0,var(--st-val-w)) minmax(0,var(--st-pill-w));
+    grid-template-columns:minmax(min(7.5rem,100%),1fr) minmax(0,var(--st-val-w)) minmax(0,var(--st-pill-w));
     align-items:center;gap:.7rem;
     min-height:var(--st-node-h);padding:.35rem .6rem;margin:.18rem 0;border-radius:9px;
     background:transparent;border:1px solid transparent;
@@ -716,6 +716,19 @@
   .st-cur{color:var(--text);font-weight:750}
   .st-arrow{color:var(--muted2)}
   .st-node .delta-pill{width:100%;min-width:0;justify-content:center;padding:.18rem .4rem;font-size:.72rem}
+  /* Below this the node cannot hold label + figures + pill side by side, so
+     the figures drop to their own line under the label. Keyed to the tree's
+     own container, not the viewport: this tree lives in a narrow aside beside
+     a table, so a wide window says nothing about the room it actually has. */
+  .sympt-panel{container-type:inline-size;container-name:symptree}
+  @container symptree (max-width:430px){
+    .symptom-tree{--st-indent:13px}
+    .symptom-tree-head{grid-template-columns:minmax(0,1fr) var(--st-pill-w)}
+    .symptom-tree-head .st-vals{display:none}
+    .st-children{margin-left:10px}
+    .st-node{grid-template-columns:minmax(0,1fr) var(--st-pill-w);row-gap:.15rem}
+    .st-vals{grid-column:1 / -1;order:3;justify-content:flex-start}
+  }
   @media(max-width:560px){
     .symptom-tree{--st-indent:13px}
     .symptom-tree-head{grid-template-columns:minmax(0,1fr) var(--st-pill-w)}
@@ -908,7 +921,12 @@
      drew a tall empty card. The two columns are brought closer by shortening
      the table instead (see .fg-table below). */
   .sec-split{
-    display:grid;grid-template-columns:minmax(0,630px) minmax(0,1fr);
+    display:grid;
+    /* The tree needs a floor. With the table column fixed at its 630px cap the
+       aside was handed whatever was left — 200px on a 1200px window — and the
+       tree's labels collapsed to one character per line. The table gives way
+       first; below the stacking breakpoint they sit one above the other. */
+    grid-template-columns:minmax(0,630px) minmax(330px,1fr);
     gap:1.5rem;align-items:start;
   }
   .sec-split-padded{padding:1.1rem 1.4rem 1.2rem}
@@ -929,6 +947,7 @@
   .fa-values-table tr.fa-rule td{border-bottom:2px solid var(--text)}
   .fa-values-table tbody tr:last-child td{border-bottom:none}
   @media(max-width:1180px){.sec-split{grid-template-columns:minmax(0,1fr);gap:1.1rem}}
+  @media(max-width:1180px){.sympt-panel{container-type:normal}}
   /* The tree, as a companion panel rather than a second competing card. */
   .sympt-panel{
     min-width:0;background:var(--s2);border:1px solid var(--border);
@@ -946,8 +965,9 @@
      responsive. Plain tokens/hex only: this all renders inside .sec-block. ── */
   .chartbox{position:relative;width:100%;min-width:0}
   /* ── Special Moment (Meta) ─────────────────────────────────────────────
-     Two contribution pies over one occurrence, then every occurrence as a
-     score card measured against the one before it. */
+     One section, two readings: a revenue-share pie per kind (double date,
+     payday) over the whole period, then a spending score card per kind
+     measured against that kind's previous occurrence. */
   .sm-pies{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-bottom:1.7rem}
   .sm-pie h4, .sm-subhead{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.6rem}
   .sm-scorecards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.9rem}
@@ -967,6 +987,21 @@
   .sm-card-title{display:flex;align-items:center;gap:.45rem}
   .sm-latest{padding:.08rem .38rem;border-radius:99px;background:var(--acc-100);color:var(--acc);font-size:.56rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
   .sm-nodelta{color:var(--muted2);font-size:.66rem;font-style:italic}
+  /* The share the pie is about, said in words directly under it — a reader
+     should not have to estimate a slice to get the number. */
+  .sm-share{display:flex;align-items:baseline;justify-content:center;gap:.4rem;margin-top:.7rem}
+  .sm-share b{font-size:1.35rem;font-weight:800;letter-spacing:-.02em;color:var(--text);font-variant-numeric:tabular-nums lining-nums}
+  .sm-share span{font-size:.7rem;color:var(--muted)}
+  /* Pies on the left, the same two figures as cards on the right: the pie
+     answers "how did it split", the card answers "by how much". */
+  .sm-split{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(250px,.9fr);gap:1.5rem;align-items:start}
+  .sm-split .sm-pies{margin-bottom:0}
+  .sm-scorecards-side{grid-template-columns:minmax(0,1fr);align-content:start}
+  @media(max-width:900px){.sm-split{grid-template-columns:minmax(0,1fr)}}
+  .sm-card-figure{font-size:1.25rem;font-weight:800;letter-spacing:-.02em;color:var(--text);font-variant-numeric:tabular-nums lining-nums}
+  .sm-card-change{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem;margin-top:.4rem;font-size:.7rem;color:var(--muted)}
+  .sm-card-total{margin-top:.6rem;padding-top:.5rem;border-top:1px dashed var(--border);font-size:.68rem;color:var(--muted)}
+  .sm-card-total b{color:var(--text);font-variant-numeric:tabular-nums lining-nums}
   .chartbox canvas{display:block;width:100%!important;height:100%!important}
   /* Controls sit above the chart as one row of quiet pill groups — they are
      chart settings, not a third level of navigation, so they read one size
