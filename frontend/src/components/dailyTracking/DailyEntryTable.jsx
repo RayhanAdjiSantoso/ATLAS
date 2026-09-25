@@ -34,7 +34,7 @@ function parseSignedThousandsInput(str) {
 // One row per day of the selected month, every cell inline-editable — the
 // point is fast bulk daily entry, closer to the reference spreadsheet than
 // MonthlyMetricsForm's one-row-at-a-time edit mode.
-export default function DailyEntryTable({ kind, channelKey, days, data, onCellChange, saveStatus }) {
+export default function DailyEntryTable({ kind, channelKey, days, data, onCellChange, saveStatus, readOnly = false }) {
   const showNotes = kind === 'sales' && NOTES_SALES_CHANNEL_KEYS.includes(channelKey);
   const rowStatus = (date) => saveStatus?.[`${kind}:${channelKey}:${date}`];
 
@@ -69,21 +69,21 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                 {kind === 'sales' ? (
                   <>
                     <td>
-                      <input
+                      <input readOnly={readOnly}
                         type="text" inputMode="numeric"
                         value={formatSignedThousands(row.revenue)}
                         onChange={(e) => onCellChange(date, 'revenue', parseSignedThousandsInput(e.target.value))}
                       />
                     </td>
                     <td>
-                      <input
+                      <input readOnly={readOnly}
                         type="number" inputMode="numeric"
                         value={row.transaksi ?? ''}
                         onChange={(e) => onCellChange(date, 'transaksi', e.target.value)}
                       />
                     </td>
                     <td>
-                      <input
+                      <input readOnly={readOnly}
                         type="number" inputMode="numeric"
                         value={row.qtySold ?? ''}
                         onChange={(e) => onCellChange(date, 'qtySold', e.target.value)}
@@ -91,7 +91,7 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                     </td>
                     {showNotes && (
                       <td>
-                        <input
+                        <input readOnly={readOnly}
                           type="text" maxLength={500} className="dt-notes-input"
                           placeholder="mis. RETUR"
                           value={row.notes ?? ''}
@@ -102,7 +102,7 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                   </>
                 ) : (
                   <td className="dt-table-spend-cell">
-                    <input
+                    <input readOnly={readOnly}
                       type="text" inputMode="numeric"
                       value={formatThousands(row.amount)}
                       onChange={(e) => onCellChange(date, 'amount', parseThousandsInput(e.target.value))}

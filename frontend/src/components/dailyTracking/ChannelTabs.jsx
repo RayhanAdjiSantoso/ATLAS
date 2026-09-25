@@ -21,9 +21,11 @@ export default function ChannelTabs({ channels, activeKey, onSelect, onAddChanne
           {c.label}
         </button>
       ))}
-      <button type="button" className="dt-tab dt-tab-add" onClick={onAddChannel}>
-        <Plus size={14} /> Tambah Channel Baru
-      </button>
+      {onAddChannel && (
+        <button type="button" className="dt-tab dt-tab-add" onClick={onAddChannel}>
+          <Plus size={14} /> Tambah Channel Baru
+        </button>
+      )}
     </div>
   );
 }

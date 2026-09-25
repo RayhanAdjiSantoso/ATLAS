@@ -23,7 +23,11 @@ function currentMonth() {
 }
 
 export default function DailyTrackingPage() {
-  const { allowedBrandId, isAdmin } = useAuth();
+  const { allowedBrandId, isAdmin, isClient, isViewOnly } = useAuth();
+  // A client fills in its own revenue; ad spend, import and month deletion
+  // stay with the team. Any other view-only account only reads.
+  const canEditSales = isClient || !isViewOnly;
+  const canEditSpend = !isClient && !isViewOnly;
   const locked = !!allowedBrandId;
 
   // Expand/collapse per section; remembered for the browser tab.
@@ -148,7 +152,7 @@ export default function DailyTrackingPage() {
 
       {loadError && <div className="alert alert-error">{loadError}</div>}
 
-      <div className="dt-toolbar">
+      {canEditSpend && <div className="dt-toolbar">
         <ImportFileButton
           brandId={brandId}
           onImported={() => { loadChannels(); loadEntries(); }}
@@ -159,7 +163,7 @@ export default function DailyTrackingPage() {
           month={month}
           onDeleted={loadEntries}
         />
-      </div>
+      </div>}
 
       {activeTab === 'sales' ? (
         <div role="tabpanel" id="dt-panel-sales" aria-labelledby="dt-tab-sales" className="dt-panel">
@@ -179,13 +183,14 @@ export default function DailyTrackingPage() {
                 channels={channels.sales}
                 activeKey={activeSalesTab}
                 onSelect={setActiveSalesTab}
-                onAddChannel={() => setModalKind('sales')}
+                onAddChannel={canEditSales ? () => setModalKind('sales') : undefined}
               />
               <DailyEntryTable
                 kind="sales" channelKey={activeSalesTab} days={grid.days}
                 data={grid.sales[activeSalesTab]}
                 onCellChange={(date, field, value) => onCellChange('sales', activeSalesTab, date, field, value)}
                 saveStatus={saveStatus}
+                readOnly={!canEditSales}
               />
             </div>}
           </section>
@@ -202,20 +207,21 @@ export default function DailyTrackingPage() {
                 title="Spending Data" bodyId="dt-body-spending"
                 open={isOpen('spending')} onToggle={() => toggleSection('spending')}
               />
-              {isAdmin && isOpen('spending') && <MetaSyncButton brandId={brandId} onSynced={loadEntries} />}
+              {isAdmin && canEditSpend && isOpen('spending') && <MetaSyncButton brandId={brandId} onSynced={loadEntries} />}
             </div>
             {isOpen('spending') && <div id="dt-body-spending">
               <ChannelTabs
                 channels={channels.spend}
                 activeKey={activeSpendTab}
                 onSelect={setActiveSpendTab}
-                onAddChannel={() => setModalKind('spend')}
+                onAddChannel={canEditSpend ? () => setModalKind('spend') : undefined}
               />
               <DailyEntryTable
                 kind="spend" channelKey={activeSpendTab} days={grid.days}
                 data={grid.spend[activeSpendTab]}
                 onCellChange={(date, field, value) => onCellChange('spend', activeSpendTab, date, field, value)}
                 saveStatus={saveStatus}
+                readOnly={!canEditSpend}
               />
             </div>}
           </section>
