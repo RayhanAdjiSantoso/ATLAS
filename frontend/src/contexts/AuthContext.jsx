@@ -35,11 +35,6 @@ export function AuthProvider({ children }) {
     return res.data;
   };
 
-  const register = async (email, password, fullName) => {
-    await api.post('/auth/register', { email, password, fullName });
-    return login(email, password);
-  };
-
   const logout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
     localStorage.removeItem('atlas_token');
@@ -52,7 +47,6 @@ export function AuthProvider({ children }) {
       user,
       loading,
       login,
-      register,
       logout,
       isAdmin: user?.role === 'admin',
       isViewOnly: !!user?.isViewOnly,

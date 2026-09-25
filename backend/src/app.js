@@ -15,6 +15,7 @@ import dailyTrackingRoutes from './routes/dailyTrackingRoutes.js';
 import metaAdsInsightsRoutes from './routes/metaAdsInsightsRoutes.js';
 import metaAdsInsightsIngestRoutes from './routes/metaAdsInsightsIngestRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
+import { securityHeaders } from './middlewares/security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,6 +24,9 @@ const app = express();
 // Express 5 defaults to the 'simple' query parser, which doesn't understand
 // bracket-array syntax (brand[]=a&brand[]=b) used by our multi-select filters.
 app.set('query parser', 'extended');
+// Do not advertise the framework to anyone probing the server.
+app.disable('x-powered-by');
+app.use(securityHeaders);
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 // Before the global parser on purpose: it needs a bigger body limit (see the router).

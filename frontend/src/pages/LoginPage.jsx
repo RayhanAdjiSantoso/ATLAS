@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import AuthExperience from '../components/auth/AuthExperience.jsx';
@@ -73,7 +72,7 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <p className="auth-switch">Belum punya akun? <Link to="/register">Daftar sekarang</Link></p>
+      <p className="auth-switch">Akun dibuat oleh tim MIL Digital. Hubungi admin untuk mendapatkan akses.</p>
     </AuthExperience>
   );
 }

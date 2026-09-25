@@ -9,23 +9,6 @@ function validate(req) {
   }
 }
 
-export const register = asyncHandler(async (req, res) => {
-  validate(req);
-  const { email, password, fullName, role } = req.body;
-
-  // Only allow admin role if request comes from existing admin (future) — default user
-  const assignedRole = req.user?.role === 'admin' && role === 'admin' ? 'admin' : 'user';
-
-  const user = await authService.registerUser({
-    email,
-    password,
-    fullName,
-    role: assignedRole,
-  });
-
-  res.status(201).json({ message: 'Registrasi berhasil', user });
-});
-
 export const login = asyncHandler(async (req, res) => {
   validate(req);
   const result = await authService.loginUser(req.body);

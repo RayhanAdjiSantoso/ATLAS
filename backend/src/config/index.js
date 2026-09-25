@@ -4,6 +4,9 @@ dotenv.config();
 
 export const config = {
   port: Number(process.env.PORT) || 5001,
+  // The fallback only exists for local development. A production deployment
+  // without its own secret would sign tokens anyone could forge, so it refuses
+  // to start instead (see the check below).
   jwtSecret: process.env.JWT_SECRET || 'dev-secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
@@ -22,3 +25,7 @@ export const config = {
     ingestApiKey: process.env.DAILY_TRACKING_INGEST_API_KEY,
   },
 };
+
+if (process.env.VERCEL_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET wajib diisi di environment production.');
+}
