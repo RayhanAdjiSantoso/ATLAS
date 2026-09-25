@@ -35,6 +35,15 @@ export function AuthProvider({ children }) {
     return res.data;
   };
 
+  // Re-read the account after something about it changed on the server (a
+  // replaced temporary password, a permission edit) so the menu follows.
+  const refresh = async () => {
+    const res = await api.get('/auth/me');
+    localStorage.setItem('atlas_user', JSON.stringify(res.data.user));
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
   const logout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
     localStorage.removeItem('atlas_token');
@@ -48,9 +57,19 @@ export function AuthProvider({ children }) {
       loading,
       login,
       logout,
-      isAdmin: user?.role === 'admin',
+      refresh,
+      // Superadmin is an admin with more rights, never fewer, so every
+      // existing "admin" check keeps working for it.
+      isAdmin: user?.role === 'admin' || user?.role === 'superadmin',
+      isSuperAdmin: user?.role === 'superadmin',
+      isClient: user?.role === 'client',
       isViewOnly: !!user?.isViewOnly,
       allowedBrandId: user?.allowedBrandId ?? null,
+      mustChangePassword: !!user?.mustChangePassword,
+      // What Pengaturan Akses lets this role open. An account loaded from an
+      // older session without the list falls back to "everything the server
+      // allows" — the server still checks every request.
+      can: (module) => user?.role === 'superadmin' || !user?.modules || user.modules.includes(module),
     }}>
       {children}
     </AuthContext.Provider>

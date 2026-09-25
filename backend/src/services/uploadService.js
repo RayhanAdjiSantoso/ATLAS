@@ -1,3 +1,4 @@
+import { isAdminRole } from './access/permissions.js';
 import pool from '../config/db.js';
 
 const UPLOAD_LIST_QUERY = `
@@ -36,7 +37,7 @@ export async function listUploads({ userId, role, allowedBrandId, filters = {} }
   const params = [];
   let idx = 1;
 
-  if (role !== 'admin') {
+  if (!isAdminRole(role)) {
     conditions.push(`u.user_id = $${idx++}`);
     params.push(userId);
   }
@@ -56,7 +57,7 @@ export async function listUploads({ userId, role, allowedBrandId, filters = {} }
     params.push(filters.fileType);
   }
 
-  if (filters.userId?.length > 0 && role === 'admin') {
+  if (filters.userId?.length > 0 && isAdminRole(role)) {
     conditions.push(`u.user_id = ANY($${idx++})`);
     params.push(filters.userId.map(Number));
   }

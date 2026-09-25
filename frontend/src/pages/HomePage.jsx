@@ -165,11 +165,13 @@ function ModuleRow({ item }) {
 }
 
 export default function HomePage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, can } = useAuth();
   // Admin-only modules are hidden rather than shown-and-blocked: a link that
   // bounces you to the dashboard is worse than no link. ProtectedRoute is
   // still the thing that actually enforces this.
-  const modules = MODULES.filter((m) => !m.adminOnly || isAdmin);
+  // Same rule as the sidebar: a card shows only if this role may open it.
+  const PERMISSION_OF = { dashboard: 'dashboard', 'report-generator': 'report_generator', 'meta-automation': 'meta_automation', 'internal-dashboard': 'internal_dashboard', history: 'history' };
+  const modules = MODULES.filter((m) => !PERMISSION_OF[m.key] || can(PERMISSION_OF[m.key]));
   const firstName = (user?.full_name || user?.fullName || '').trim().split(' ')[0];
 
   return (

@@ -1,6 +1,7 @@
 import { validationResult } from 'express-validator';
 import { AppError, asyncHandler } from '../utils/errors.js';
 import * as authService from '../services/authService.js';
+import { forgetAccount } from '../middlewares/auth.js';
 
 function validate(req) {
   const errors = validationResult(req);
@@ -30,5 +31,13 @@ export const me = asyncHandler(async (req, res) => {
     role: user.role,
     allowedBrandId: user.allowedBrandId,
     isViewOnly: user.isViewOnly,
+    mustChangePassword: user.mustChangePassword,
+    modules: user.modules,
   } });
+});
+
+export const changePassword = asyncHandler(async (req, res) => {
+  await authService.changePassword(req.user.userId, req.body?.currentPassword, req.body?.newPassword);
+  forgetAccount(req.user.userId);
+  res.json({ message: 'Password berhasil diganti' });
 });

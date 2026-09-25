@@ -13,5 +13,6 @@ const router = Router();
 router.post('/login', loginRateLimit, loginValidation, authController.login);
 router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.me);
+router.post('/change-password', authenticate, loginRateLimit, authController.changePassword);
 
 export default router;

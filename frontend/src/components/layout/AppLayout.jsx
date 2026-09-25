@@ -1,20 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  History,
-  Home,
-  LogOut,
-  Megaphone,
-  FileBarChart,
-  Building2,
-  SlidersHorizontal,
-  CalendarCheck,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Menu,
-  Radar,
-} from 'lucide-react';
+import { LayoutDashboard, History, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, CalendarCheck, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import api from '../../api/client.js';
 import atlasIcon from '../../assets/atlas-icon.png';
@@ -25,22 +11,26 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 // tooltips can never drift apart.
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
-  { to: '/dashboard', label: 'Dashboard Business Overview', Icon: LayoutDashboard, group: 'Workspace' },
+  { to: '/dashboard', label: 'Dashboard Business Overview', Icon: LayoutDashboard, group: 'Workspace', module: 'dashboard' },
   // No adminOnly: both internal staff and client accounts fill this in
   // themselves, unlike everywhere else a view-only account can only read.
-  { to: '/daily-tracking', label: 'Daily Tracking', Icon: CalendarCheck, group: 'Workspace' },
+  { to: '/daily-tracking', label: 'Daily Tracking', Icon: CalendarCheck, group: 'Workspace', module: 'daily_tracking' },
   // Sits directly under the dashboard it feeds: this is where the data those
   // charts read comes in, and it used to be that page's first tab.
-  { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal, group: 'Workspace' },
-  { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace' },
-  { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, adminOnly: true, group: 'Operasional' },
-  { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, adminOnly: true, group: 'Operasional' },
-  { to: '/pusat-kendali', label: 'Pusat Kendali', Icon: Radar, adminOnly: true, group: 'Operasional' },
-  { to: '/history', label: 'History Upload', Icon: History, group: 'Operasional' },
+  { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal, group: 'Workspace', module: 'brand_settings' },
+  { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace', module: 'report_generator' },
+  { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, group: 'Operasional', module: 'meta_automation' },
+  { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, group: 'Operasional', module: 'internal_dashboard' },
+  { to: '/pusat-kendali', label: 'Pusat Kendali', Icon: Radar, group: 'Operasional', module: 'control_center' },
+  { to: '/history', label: 'History Upload', Icon: History, group: 'Operasional', module: 'history' },
+  // Account and permission management — superadmin and admin only.
+  { to: '/pengaturan-akses', label: 'Pengaturan Akses', Icon: ShieldCheck, group: 'Operasional', adminOnly: true },
 ];
 
+const ROLE_BADGE = { superadmin: 'Superadmin', admin: 'Admin', user: 'User', client: 'Client' };
+
 export default function AppLayout() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, can } = useAuth();
   const navigate = useNavigate();
 
   // Remembered per browser: whoever collapses the sidebar means it, and having
@@ -71,10 +61,11 @@ export default function AppLayout() {
   const [attention, setAttention] = useState(null);
   const lastSummaryAt = useRef(0);
   useEffect(() => {
-    if (!isAdmin || Date.now() - lastSummaryAt.current < 60_000) return;
+    if (!can('control_center') || Date.now() - lastSummaryAt.current < 60_000) return;
     lastSummaryAt.current = Date.now();
     api.get('/control-center/summary').then(({ data }) => setAttention(data)).catch(() => {});
-  }, [isAdmin, location.pathname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, user?.modules, location.pathname]);
   const badgeCount = (attention?.overdueTasks ?? 0) + (attention?.dataAttention ?? 0);
   const badgeTitle = attention
     ? `${attention.overdueTasks} to do tertunda · ${attention.dataAttention} brand perlu tindakan data`
@@ -106,7 +97,7 @@ export default function AppLayout() {
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileOpen]);
 
-  const links = NAV.filter((n) => !n.adminOnly || isAdmin);
+  const links = NAV.filter((n) => (!n.adminOnly || isAdmin) && (!n.module || can(n.module)));
   const groups = ['Workspace', 'Operasional']
     .map((label) => ({ label, links: links.filter((link) => link.group === label) }))
     .filter((group) => group.links.length > 0);
@@ -191,7 +182,7 @@ export default function AppLayout() {
             <span className="sidebar-user-copy">
               <strong>{displayName}</strong>
               <span className="sidebar-label">
-                {user?.email} · {isAdmin ? 'Admin' : 'User'}
+                {user?.email} · {ROLE_BADGE[user?.role] ?? 'User'}
               </span>
             </span>
           </div>

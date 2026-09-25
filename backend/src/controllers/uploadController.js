@@ -1,3 +1,4 @@
+import { isAdminRole } from '../services/access/permissions.js';
 import { v4 as uuidv4 } from 'uuid';
 import { validationResult } from 'express-validator';
 import { AppError, asyncHandler } from '../utils/errors.js';
@@ -92,7 +93,7 @@ export const getUpload = asyncHandler(async (req, res) => {
   const upload = await uploadService.getUploadById(req.params.uploadId);
   if (!upload) throw new AppError('Upload tidak ditemukan', 404);
 
-  if (req.user.role !== 'admin' && upload.user_id !== req.user.userId) {
+  if (!isAdminRole(req.user.role) && upload.user_id !== req.user.userId) {
     throw new AppError('Akses ditolak', 403);
   }
   if (req.user.allowedBrandId && upload.brand_id !== req.user.allowedBrandId) {
@@ -107,7 +108,7 @@ export const getUpload = asyncHandler(async (req, res) => {
 // format -- .xlsx or .xls -- it was submitted in; multer's fileFilter only
 // ever accepts those two).
 export const downloadUpload = asyncHandler(async (req, res) => {
-  if (req.user.role !== 'admin') {
+  if (!isAdminRole(req.user.role)) {
     throw new AppError('Akses ditolak', 403);
   }
 
@@ -138,7 +139,7 @@ export const deleteUpload = asyncHandler(async (req, res) => {
   const upload = await uploadService.getUploadById(req.params.uploadId);
   if (!upload) throw new AppError('Upload tidak ditemukan', 404);
 
-  if (req.user.role !== 'admin' && upload.user_id !== req.user.userId) {
+  if (!isAdminRole(req.user.role) && upload.user_id !== req.user.userId) {
     throw new AppError('Akses ditolak', 403);
   }
   if (req.user.allowedBrandId && upload.brand_id !== req.user.allowedBrandId) {
@@ -152,7 +153,7 @@ export const deleteUpload = asyncHandler(async (req, res) => {
 
 export const getFilterOptions = asyncHandler(async (req, res) => {
   const brands = await uploadService.listBrandsForFilter(req.user.allowedBrandId);
-  const users = req.user.role === 'admin'
+  const users = isAdminRole(req.user.role)
     ? await uploadService.listUsersForFilter()
     : [];
 

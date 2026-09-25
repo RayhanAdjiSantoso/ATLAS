@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, requireModule } from '../middlewares/auth.js';
 import * as ctrl from '../controllers/internalDashboardController.js';
 import {
   brandQueryValidation,
@@ -28,7 +28,7 @@ import {
 // public.brands (extended by migrations 008/009), no parallel client model.
 const router = Router();
 
-router.use(authenticate, authorize('admin'));
+router.use(authenticate, requireModule('internal_dashboard'));
 
 router.get('/clients', ctrl.listClients);
 

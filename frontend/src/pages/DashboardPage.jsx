@@ -599,6 +599,7 @@ export default function DashboardPage() {
   // View first, domain second. The top bar holds Executive Snapshot and the
   // three channels; only a channel has domains beneath it. The session key is
   // unchanged, so a session that remembered 'shopee' still opens on Shopee.
+  const { can } = useAuth();
   const [viewId, setViewId] = useSessionState('dashboard:channel', 'snapshot');
   const [activeKey, setActiveKey] = useSessionState('dashboard:section', 'Business Growth');
   const [productLevel, setProductLevel] = useSessionState('dashboard:product-level', 'category');
@@ -772,7 +773,9 @@ export default function DashboardPage() {
                   answers to the brand. That is why they live on this view
                   instead of repeating above every channel. */}
               <ExecutiveSummary filters={filters} />
-              <MinutesOverview filters={filters} />
+              {/* Meeting notes are internal and live under Pengaturan Brand;
+                  a role without that module (a client) does not see them. */}
+              {can('brand_settings') && <MinutesOverview filters={filters} />}
             </>
           ) : (
             <>

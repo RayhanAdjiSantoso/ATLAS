@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, requireModule } from '../middlewares/auth.js';
 import { requireBrandAccess } from '../middlewares/brandAccess.js';
 import * as ctrl from '../controllers/metaAdsInsightsController.js';
 import {
@@ -11,7 +11,7 @@ import {
 // (see metaAutomationRoutes.js).
 const router = Router();
 
-router.use(authenticate, authorize('admin'));
+router.use(authenticate, requireModule('meta_automation'));
 
 router.get('/overview', requireBrandAccess((req) => req.query.brandId), brandQueryValidation, ctrl.getOverview);
 router.get('/accounts', requireBrandAccess((req) => req.query.brandId), brandQueryValidation, ctrl.listAccounts);

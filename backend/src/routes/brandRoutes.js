@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middlewares/auth.js';
+import { authenticate, requireModule } from '../middlewares/auth.js';
 import { uploadDataFile } from '../middlewares/upload.js';
 import { requireBrandAccess, blockWriteIfViewOnly } from '../middlewares/brandAccess.js';
 import * as brandController from '../controllers/brandController.js';
@@ -7,7 +7,8 @@ import * as brandLibraryController from '../controllers/brandLibraryController.j
 
 const router = Router();
 
-router.use(authenticate, blockWriteIfViewOnly);
+// The brand list and library feed several pages, not only Pengaturan Brand.
+router.use(authenticate, requireModule('brand_settings', 'report_generator', 'daily_tracking'), blockWriteIfViewOnly);
 // Every route below except GET/POST '/' has :brandId — routes without it
 // pass straight through (see requireBrandAccess).
 router.use(requireBrandAccess((req) => req.params.brandId));

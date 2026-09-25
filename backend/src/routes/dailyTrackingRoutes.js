@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize, requireModule } from '../middlewares/auth.js';
 import { requireBrandAccess } from '../middlewares/brandAccess.js';
 import { verifyIngestKey } from '../middlewares/dailyTrackingIngestAuth.js';
 import { uploadDataFile } from '../middlewares/upload.js';
@@ -22,40 +22,41 @@ import {
 // route (POST /ingest) is a machine-to-machine call authenticated by a shared
 // secret instead of a user JWT.
 const router = Router();
+const dailyTracking = requireModule('daily_tracking');
 
 router.get(
   '/channels',
-  authenticate, requireBrandAccess((req) => req.query.brandId),
+  authenticate, dailyTracking, requireBrandAccess((req) => req.query.brandId),
   channelsQueryValidation, ctrl.listChannels,
 );
 router.post(
   '/channels',
-  authenticate, requireBrandAccess((req) => req.body.brandId),
+  authenticate, dailyTracking, requireBrandAccess((req) => req.body.brandId),
   addChannelBodyValidation, ctrl.addChannel,
 );
 router.get(
   '/entries',
-  authenticate, requireBrandAccess((req) => req.query.brandId),
+  authenticate, dailyTracking, requireBrandAccess((req) => req.query.brandId),
   entriesQueryValidation, ctrl.listEntries,
 );
 router.put(
   '/entries',
-  authenticate, requireBrandAccess((req) => req.body.brandId),
+  authenticate, dailyTracking, requireBrandAccess((req) => req.body.brandId),
   upsertEntriesBodyValidation, ctrl.upsertEntries,
 );
 router.delete(
   '/entries',
-  authenticate, requireBrandAccess((req) => req.query.brandId),
+  authenticate, dailyTracking, requireBrandAccess((req) => req.query.brandId),
   entriesQueryValidation, ctrl.deleteMonthEntries,
 );
 router.post(
   '/import',
-  authenticate, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),
+  authenticate, dailyTracking, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),
   importFileBodyValidation, ctrl.importFile,
 );
 router.post(
   '/meta-sync',
-  authenticate, authorize('admin'),
+  authenticate, dailyTracking, authorize('admin'),
   metaSyncBodyValidation, ctrl.runMetaSync,
 );
 router.post(

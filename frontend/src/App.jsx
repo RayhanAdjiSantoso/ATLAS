@@ -11,6 +11,8 @@ import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
 import BrandSettingsPage from './pages/BrandSettingsPage.jsx';
 import ControlCenterPage from './pages/ControlCenterPage.jsx';
+import AccessSettingsPage from './pages/AccessSettingsPage.jsx';
+import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
 
 export default function App() {
   return (
@@ -20,32 +22,45 @@ export default function App() {
       </Route>
 
       <Route element={<ProtectedRoute />}>
+        {/* Outside the layout: a temporary password is replaced before the
+            rest of ATLAS opens (ProtectedRoute redirects here). */}
+        <Route path="/ganti-password" element={<ChangePasswordPage />} />
+
+        {/* One layout for every page, so the sidebar is not rebuilt on each
+            navigation. Inside it, each page opens only for roles Pengaturan
+            Akses allows to use it; the matching API refuses them either way. */}
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          {/* No role restriction — internal staff AND client accounts fill
-              this in themselves, so it can't sit behind the admin-only block
-              below like meta-automation/internal-dashboard do. */}
-          <Route path="/daily-tracking" element={<DailyTrackingPage />} />
-          {/* Ingest, moved off Business Overview's tab strip. Any logged-in
-              user may load their brand's data, same as before — it was an
-              unrestricted tab, so restricting it here would take away access
-              people already had. */}
-          <Route path="/pengaturan-brand" element={<BrandSettingsPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          {/* No role restriction — any logged-in user, unlike meta-automation below.
-              The report type is a URL param so each one is linkable and the
-              back button works; the page component stays mounted across those
-              param changes, so an upload in progress survives switching. */}
-          <Route path="/report-generator" element={<Navigate to="/report-generator/meta" replace />} />
-          <Route path="/report-generator/:platform" element={<ReportGeneratorPage />} />
-        </Route>
-
-        <Route element={<ProtectedRoute roles={['admin']} />}>
-          <Route element={<AppLayout />}>
+          <Route element={<ProtectedRoute module="dashboard" />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute module="daily_tracking" />}>
+            <Route path="/daily-tracking" element={<DailyTrackingPage />} />
+          </Route>
+          <Route element={<ProtectedRoute module="brand_settings" />}>
+            <Route path="/pengaturan-brand" element={<BrandSettingsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute module="history" />}>
+            <Route path="/history" element={<HistoryPage />} />
+          </Route>
+          <Route element={<ProtectedRoute module="report_generator" />}>
+            {/* The report type is a URL param so each one is linkable and the
+                back button works; the page stays mounted across param changes,
+                so an upload in progress survives switching. */}
+            <Route path="/report-generator" element={<Navigate to="/report-generator/meta" replace />} />
+            <Route path="/report-generator/:platform" element={<ReportGeneratorPage />} />
+          </Route>
+          <Route element={<ProtectedRoute module="meta_automation" />}>
             <Route path="/meta-automation" element={<MetaAutomationPage />} />
+          </Route>
+          <Route element={<ProtectedRoute module="internal_dashboard" />}>
             <Route path="/internal-dashboard" element={<InternalDashboardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute module="control_center" />}>
             <Route path="/pusat-kendali" element={<ControlCenterPage />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={['admin']} />}>
+            <Route path="/pengaturan-akses" element={<AccessSettingsPage />} />
           </Route>
         </Route>
       </Route>

@@ -14,6 +14,7 @@ import controlCenterRoutes from './routes/controlCenterRoutes.js';
 import dailyTrackingRoutes from './routes/dailyTrackingRoutes.js';
 import metaAdsInsightsRoutes from './routes/metaAdsInsightsRoutes.js';
 import metaAdsInsightsIngestRoutes from './routes/metaAdsInsightsIngestRoutes.js';
+import accessRoutes from './routes/accessRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 import { securityHeaders } from './middlewares/security.js';
 
@@ -39,6 +40,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/access', accessRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/brands', brandRoutes);

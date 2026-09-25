@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, requireModule } from '../middlewares/auth.js';
 import * as metaAutomationController from '../controllers/metaAutomationController.js';
 
 const router = Router();
 
-router.use(authenticate, authorize('admin'));
+router.use(authenticate, requireModule('meta_automation'));
 
 router.get('/accounts', metaAutomationController.getAccounts);
 router.get('/log', metaAutomationController.getLog);

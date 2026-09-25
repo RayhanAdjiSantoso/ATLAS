@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { authenticate } from '../middlewares/auth.js';
+import { authenticate, requireModule } from '../middlewares/auth.js';
 import { requireBrandAccess } from '../middlewares/brandAccess.js';
 import * as dashboardController from '../controllers/dashboardController.js';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, requireModule('dashboard'));
 
 const brandScoped = requireBrandAccess((req) => req.query.brandId);
 
