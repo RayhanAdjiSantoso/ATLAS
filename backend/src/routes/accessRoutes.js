@@ -9,7 +9,12 @@ import { createAccount, listAccounts, listAudit, recordPermissionChange, resetPa
 // is decided in services/access/accounts.js, and only a superadmin may change
 // what a role is allowed to open.
 const router = Router();
-router.use(authenticate, authorize('admin'));
+router.use(authenticate, authorize('admin'), (req, res, next) => {
+  // A view-only admin (e.g. an audit reviewer) sees every page but not the
+  // account list — staff emails and roles are not part of what they review.
+  if (req.user.isViewOnly) return next(new AppError('Akses ditolak', 403));
+  next();
+});
 
 router.get('/meta', asyncHandler(async (req, res) => {
   const { rows: brands } = await pool.query('SELECT brand_id, brand_name FROM brands ORDER BY lower(brand_name)');

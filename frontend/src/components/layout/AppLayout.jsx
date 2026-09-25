@@ -30,7 +30,7 @@ const NAV = [
 const ROLE_BADGE = { superadmin: 'Superadmin', admin: 'Admin', user: 'User', client: 'Client' };
 
 export default function AppLayout() {
-  const { user, logout, isAdmin, can } = useAuth();
+  const { user, logout, isAdmin, isViewOnly, can } = useAuth();
   const navigate = useNavigate();
 
   // Remembered per browser: whoever collapses the sidebar means it, and having
@@ -97,7 +97,7 @@ export default function AppLayout() {
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileOpen]);
 
-  const links = NAV.filter((n) => (!n.adminOnly || isAdmin) && (!n.module || can(n.module)));
+  const links = NAV.filter((n) => (!n.adminOnly || (isAdmin && !isViewOnly)) && (!n.module || can(n.module)));
   const groups = ['Workspace', 'Operasional']
     .map((label) => ({ label, links: links.filter((link) => link.group === label) }))
     .filter((group) => group.links.length > 0);

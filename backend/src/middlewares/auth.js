@@ -32,6 +32,16 @@ export function forgetAccount(userId) {
 // Routes an account that still has to replace its temporary password may use.
 const PASSWORD_CHANGE_PATHS = ['/api/auth/me', '/api/auth/change-password', '/api/auth/logout'];
 
+// View-only holds across all of ATLAS, not only the routers that remember to
+// check it. Two exceptions: changing one's own password, and a client
+// entering its own brand's daily sales in Daily Tracking (brand-locked by that
+// router). A view-only account of any other role changes nothing at all.
+const isWrite = (method) => !['GET', 'HEAD', 'OPTIONS'].includes(method);
+function viewOnlyMayWrite(account, path) {
+  if (PASSWORD_CHANGE_PATHS.includes(path)) return true;
+  return account.role === 'client' && path.startsWith('/api/daily-tracking');
+}
+
 export async function authenticate(req, res, next) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
@@ -58,8 +68,12 @@ export async function authenticate(req, res, next) {
       isViewOnly: account.is_view_only,
       mustChangePassword: account.must_change_password,
     };
-    if (account.must_change_password && !PASSWORD_CHANGE_PATHS.includes(req.originalUrl.split('?')[0])) {
+    const path = req.originalUrl.split('?')[0];
+    if (account.must_change_password && !PASSWORD_CHANGE_PATHS.includes(path)) {
       return next(new AppError('Ganti password sementara Anda terlebih dahulu.', 403));
+    }
+    if (account.is_view_only && isWrite(req.method) && !viewOnlyMayWrite(account, path)) {
+      return next(new AppError('Akun ini hanya dapat melihat data', 403));
     }
     next();
   } catch (err) {

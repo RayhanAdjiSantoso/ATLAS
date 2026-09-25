@@ -23,7 +23,10 @@ export function ProtectedRoute({ roles, module }) {
     return <Navigate to="/ganti-password" replace />;
   }
 
-  const roleOk = !roles || roles.includes(user.role) || (roles.includes('admin') && user.role === 'superadmin');
+  // Admin-only pages manage the system; a view-only admin may look everywhere
+  // else but not there.
+  const roleOk = !roles || ((roles.includes(user.role) || (roles.includes('admin') && user.role === 'superadmin'))
+    && !(roles.includes('admin') && user.isViewOnly));
   if (!roleOk || (module && !can(module))) {
     return <Navigate to={can('dashboard') ? '/dashboard' : '/'} replace />;
   }
