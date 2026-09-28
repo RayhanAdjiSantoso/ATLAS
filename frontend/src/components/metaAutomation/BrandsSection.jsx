@@ -5,6 +5,16 @@ import BrandCombo from './BrandCombo.jsx';
 
 const EMPTY_FORM = { id: '', client: '', type: 'MAIN', token: '', boostMatch: '' };
 
+const isAutoReady = (b) => !!b.atlasBrandId && (b.type === 'CPAS' || !!b.boostMatch);
+const needsSetup = (b) => !b.hasToken || !isAutoReady(b);
+
+// Brand yang belum siap (token kosong atau Daily Tracking otomatis belum
+// aktif) naik ke atas supaya langsung terlihat; sisanya urut nama brand.
+const sortBrands = (list) => [...list].sort((a, b) =>
+  (needsSetup(b) - needsSetup(a))
+  || (a.client || '').localeCompare(b.client || '', 'id', { sensitivity: 'base' })
+  || a.id.localeCompare(b.id));
+
 // Alur 1 — Tambah Brand ke Database: cuma kredensial ad account, TIDAK
 // ADA pengaturan notifikasi di sini sama sekali. Itu ada di SubscriptionsSection.
 //
@@ -155,7 +165,6 @@ export default function BrandsSection() {
                 <th>Brand</th>
                 <th>ID Ad Account</th>
                 <th>Tipe</th>
-                <th>Sumber</th>
                 <th>Token</th>
                 <th>Daily Tracking Otomatis</th>
                 <th>Langganan</th>
@@ -163,19 +172,14 @@ export default function BrandsSection() {
               </tr>
             </thead>
             <tbody>
-              {brands.map((b) => {
+              {sortBrands(brands).map((b) => {
                 const subCount = subscriptions.filter((s) => s.brandId === b.id).length;
-                const autoReady = !!b.atlasBrandId && (b.type === 'CPAS' || !!b.boostMatch);
+                const autoReady = isAutoReady(b);
                 return (
                   <tr key={b.id}>
                     <td>{b.client}</td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{b.id}</td>
                     <td>{b.type}</td>
-                    <td>
-                      <span className={`badge ${b.source === 'dynamic' ? 'badge-info' : 'badge-warning'}`}>
-                        {b.source === 'dynamic' ? 'Dinamis' : 'Hardcoded'}
-                      </span>
-                    </td>
                     <td><span className={`badge ${b.hasToken ? 'badge-success' : 'badge-danger'}`}>{b.hasToken ? 'Ada' : 'Kosong'}</span></td>
                     <td>
                       <span

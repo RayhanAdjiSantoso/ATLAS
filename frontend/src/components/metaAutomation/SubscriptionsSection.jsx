@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pencil, Trash2, Plus, X, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../../api/client.js';
 import BrandCombo from './BrandCombo.jsx';
+import BrandTypeFilter from './BrandTypeFilter.jsx';
 
 // Katalog field yang bisa dipantau -- BUKAN daftar metrik tetap lagi.
 // User bebas menyusun kombinasi field + arah + threshold sendiri lewat
@@ -220,7 +221,7 @@ export default function SubscriptionsSection() {
   const [error, setError] = useState('');
 
   const [filterEmail, setFilterEmail] = useState('');
-  const [filterBrandId, setFilterBrandId] = useState('');
+  const [filterBrand, setFilterBrand] = useState({ brand: '', type: '' });
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -351,9 +352,16 @@ export default function SubscriptionsSection() {
     }
   };
 
+  // Tanpa tipe = semua ad account milik brand tersebut.
+  const filterBrandIds = filterBrand.brand
+    ? new Set(brands
+      .filter((b) => b.client === filterBrand.brand && (!filterBrand.type || (b.type || 'MAIN') === filterBrand.type))
+      .map((b) => b.id))
+    : null;
+
   const filtered = subscriptions.filter((s) => {
     if (filterEmail && !s.email.toLowerCase().includes(filterEmail.toLowerCase())) return false;
-    if (filterBrandId && s.brandId !== filterBrandId) return false;
+    if (filterBrandIds && !filterBrandIds.has(s.brandId)) return false;
     return true;
   });
 
@@ -373,10 +381,7 @@ export default function SubscriptionsSection() {
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label>Saring Brand</label>
-          <select value={filterBrandId} onChange={(e) => setFilterBrandId(e.target.value)} style={{ width: '100%' }}>
-            <option value="">Semua brand</option>
-            {brands.map((b) => <option key={b.id} value={b.id}>{b.client} ({b.type})</option>)}
-          </select>
+          <BrandTypeFilter brands={brands} value={filterBrand} onChange={setFilterBrand} />
         </div>
       </div>
 
