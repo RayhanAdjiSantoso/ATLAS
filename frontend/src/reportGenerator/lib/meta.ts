@@ -1056,6 +1056,38 @@ export function splitMonths(
   };
 }
 
+// A Day-breakdown export (no Month column) split the same way: each row goes
+// to its calendar month, and the first and last months are compared. The
+// month labels are the actual covered range ("2026-07-01 - 2026-07-31"), so
+// parseMetaMonthValue reads them exactly as a Month-breakdown export's.
+export function splitDayRowsByMonth(
+  rows: SheetRow[],
+  dayCol: string,
+): { old: SheetRow[]; cur: SheetRow[]; months: unknown[] } {
+  const buckets = new Map<string, { rows: SheetRow[]; min: Date; max: Date }>();
+  for (const r of rows) {
+    const d = parseMetaDayValue(r[dayCol]);
+    if (!d) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const b = buckets.get(key);
+    if (!b) buckets.set(key, { rows: [r], min: d, max: d });
+    else {
+      b.rows.push(r);
+      if (d < b.min) b.min = d;
+      if (d > b.max) b.max = d;
+    }
+  }
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const keys = [...buckets.keys()].sort();
+  const first = buckets.get(keys[0]);
+  const last = buckets.get(keys[keys.length - 1]);
+  return {
+    old: first?.rows ?? [],
+    cur: last?.rows ?? [],
+    months: keys.map((k) => { const b = buckets.get(k)!; return `${iso(b.min)} - ${iso(b.max)}`; }),
+  };
+}
+
 export function groupByCamp(rows: SheetRow[], campCol: string | null, keywords: string[]): Record<string, SheetRow[]> {
   const groups: Record<string, SheetRow[]> = {};
   keywords.forEach((k) => (groups[k] = []));

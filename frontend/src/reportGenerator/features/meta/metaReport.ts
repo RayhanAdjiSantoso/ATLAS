@@ -21,6 +21,7 @@ import {
   parseMetaMonthValue,
   reachIsApproximated,
   splitByDayRange,
+  splitDayRowsByMonth,
   splitMonths,
   stripCampaignSubtotals,
   type CprRow,
@@ -469,15 +470,21 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
 
   if (cpasRows && cpasRows.length) {
     const cMonthCol = findCol(cpasRows, ['month']);
+    const cDayCol = cMonthCol ? null : findCol(cpasRows, ['day']);
     const cCampCol = findCol(cpasRows, ['campaign']);
     const cAgeCol = findCol(cpasRows, ['age']);
     const cGenderCol = findCol(cpasRows, ['gender']);
-    const cDimCols = [cMonthCol, cCampCol, cAgeCol, cGenderCol].filter((c): c is string => Boolean(c));
+    const cDimCols = [cMonthCol, cDayCol, cCampCol, cAgeCol, cGenderCol].filter((c): c is string => Boolean(c));
     // Same pivot-subtotal drop as the Boost/Non-Boost path above — without
     // it the "Overall" tab double-counts every absolute metric (the NV/RM
     // tabs happen to escape it only because groupByCamp's "NV"/"RM" regex
     // never matches a subtotal's "All" campaign name).
-    const { old: cOld, cur: cCur, months: cMonths } = splitMonths(stripCampaignSubtotals(cpasRows), cMonthCol);
+    // CPAS exports come with either a Month or a Day breakdown; both compare
+    // the first and last calendar month in the file(s).
+    const cpasLeaves = stripCampaignSubtotals(cpasRows);
+    const { old: cOld, cur: cCur, months: cMonths } = cDayCol
+      ? splitDayRowsByMonth(cpasLeaves, cDayCol)
+      : splitMonths(cpasLeaves, cMonthCol);
     // CPAS has its own comparison periods — the two calendar months its file
     // spans — not the main-account file's p1/p2 (which may be a custom
     // Day-breakdown sub-range). Fall back to the main periods only if the
