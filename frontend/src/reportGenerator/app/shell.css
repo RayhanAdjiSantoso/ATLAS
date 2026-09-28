@@ -968,6 +968,18 @@
      One section, two readings: a revenue-share pie per kind (double date,
      payday) over the whole period, then a spending score card per kind
      measured against that kind's previous occurrence. */
+  .bd-pies{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,max(380px,calc(50% - .6rem))),1fr));gap:1.1rem}
+  .bd-pie canvas{max-width:100%;height:auto}
+  .bd-pie{display:flex;flex-direction:column;gap:.6rem;margin:0;padding:1rem 1.05rem 1.1rem;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+  .bd-pie figcaption h4{margin:0 0 .25rem;font-size:.82rem;font-weight:800;color:var(--text)}
+  .bd-pie figcaption p{margin:0;color:var(--muted);font-size:.7rem;line-height:1.45}
+  .bd-pie .pie-canvas-wrap{display:flex;justify-content:center;align-self:stretch;width:100%;max-width:100%;overflow:hidden}
+  .bd-pie-legend{display:grid;gap:.3rem;margin:0;padding:.55rem 0 0;border-top:1px dashed var(--border);list-style:none}
+  .bd-pie-legend li{display:grid;grid-template-columns:.6rem minmax(0,1fr) auto 3.4rem;align-items:center;gap:.5rem;font-size:.74rem}
+  .bd-dot{width:.6rem;height:.6rem;border-radius:3px}
+  .bd-label{overflow:hidden;color:var(--text);text-overflow:ellipsis;white-space:nowrap;text-transform:capitalize}
+  .bd-pie-legend b{font-weight:780;font-variant-numeric:tabular-nums lining-nums}
+  .bd-pct{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums lining-nums}
   .sm-pies{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-bottom:1.7rem}
   .sm-pie h4, .sm-subhead{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.6rem}
   .sm-scorecards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.9rem}

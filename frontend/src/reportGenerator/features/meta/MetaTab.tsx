@@ -847,7 +847,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             dimCol={cpas.genderDemo.dimCol}
                             kind="sales"
                             metrics={SALES_AUDIENCE_METRICS}
-                            prefer="pie"
+                            prefer="pies"
                           />
                         )}
                         {cpasAd && cur ? (
