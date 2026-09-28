@@ -97,9 +97,16 @@ export function MetaBreakdownSection<M>({
     [rows, dimCol, kind],
   );
   const [pick, setPick] = useState('0');
+  // Highest/lowest ordering for the bars. Age keeps its natural order — its
+  // groups are a scale (18–24 → 65+), and sorting would scramble it.
+  const [order, setOrder] = useState<'default' | 'desc' | 'asc'>('default');
+  const sortable = !dimCol.toLowerCase().includes('age');
   const metric = metrics[Number(pick)] ?? metrics[0];
-  const values = slices.map((s) => (s.metrics[metric.key] ?? null) as number | null);
-  const usable = slices.filter((_, i) => values[i] !== null);
+  const valueOf = (s: AudienceSlice<M>) => (s.metrics[metric.key] ?? null) as number | null;
+  const usableRaw = slices.filter((s) => valueOf(s) !== null);
+  const usable = sortable && order !== 'default'
+    ? [...usableRaw].sort((a, b) => (order === 'desc' ? (valueOf(b) as number) - (valueOf(a) as number) : (valueOf(a) as number) - (valueOf(b) as number)))
+    : usableRaw;
   const asPie = prefer === 'pie' && metric.additive;
   const fmt = (v: number) => fmtPivotVal(v, metric.fmt);
   const group = heading.toLowerCase().includes('gender') ? 'gender' : heading.toLowerCase().includes('age') ? 'kelompok umur' : 'kelompok';
@@ -141,6 +148,19 @@ export function MetaBreakdownSection<M>({
           onChange={setPick}
           accent="var(--acc)"
         />
+        {sortable && !(prefer === 'pie' && metric.additive) && (
+          <SegmentedToggle
+            label="Urutan"
+            options={[
+              { value: 'default', label: 'Bawaan' },
+              { value: 'desc', label: 'Tertinggi' },
+              { value: 'asc', label: 'Terendah' },
+            ]}
+            value={order}
+            onChange={(v) => setOrder(v as 'default' | 'desc' | 'asc')}
+            accent="var(--acc)"
+          />
+        )}
       </div>
 
       <div style={{ padding: '1.1rem 1.4rem 1.4rem' }}>

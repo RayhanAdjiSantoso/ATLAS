@@ -187,7 +187,9 @@ export interface MetaBrandMetrics {
 export function metaBrandMetrics(rows: SheetRow[]): MetaBrandMetrics {
   const impressions = total(rows, ['impressions']);
   const spend = total(rows, ['amount spent', 'spend']);
-  const interactions = total(rows, ['post engagement', 'post interactions', 'engagement'], ['rate']);
+  // MIL's own Boost template names the column plain "Interaction"; the
+  // rate and cost variants are kept out by the exclusions.
+  const interactions = total(rows, ['post engagement', 'post interactions', 'engagement', 'interaction'], ['rate']);
   const profileVisits = total(rows, ['profile visits', 'profile visit'], ['rate']);
   const follows = total(rows, ['follows', 'new followers', 'page likes'], ['rate']);
 
