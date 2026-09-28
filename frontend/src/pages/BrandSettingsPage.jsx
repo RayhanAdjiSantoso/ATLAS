@@ -21,6 +21,25 @@ import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
 import '../components/dashboard/console.css';
 
+// The file is behind login, so a plain <a href> (which carries no token)
+// gets the 401 JSON back and saves it as "download.json". Fetch it with the
+// token and hand the browser the bytes under the original file name.
+async function downloadLibraryFile(file) {
+  try {
+    const { data } = await api.get(`/brands/${file.brand_id}/library/${file.id}/download`, { responseType: 'blob' });
+    const url = URL.createObjectURL(data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.original_filename || `file-${file.id}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch {
+    window.alert('File gagal diunduh. Coba lagi, atau muat ulang halaman.');
+  }
+}
+
 // Pengaturan Brand — the one place a brand is described and its source files
 // live. Every other module (Report Generator, Dashboard, Meta Automation)
 // reads what is uploaded here instead of asking for its own upload.
@@ -911,7 +930,7 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                         </button>
                       )}
                       <button type="button" onClick={() => onPick(dataset, month, file)}><Upload size={14} /> Ganti</button>
-                      <a href={`/api/brands/${file.brand_id}/library/${file.id}/download`} download><Download size={14} /> Unduh</a>
+                      <button type="button" onClick={() => downloadLibraryFile(file)}><Download size={14} /> Unduh</button>
                       <button type="button" className="is-danger" onClick={() => onDelete(file)}><Trash2 size={14} /> Hapus</button>
                     </span>
                   </div>
