@@ -287,7 +287,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const curSpansMultipleDays = daysBetweenInclusive(dayRanges.cur.start, dayRanges.cur.end) > 1;
     if (oldSpansMultipleDays || curSpansMultipleDays) {
       reachWarning =
-        'Reach, Frequency, dan Cost per Reach tidak ditampilkan (—): file ini memakai breakdown Day, hasil tidak valid saat dijumlahkan, hasil penjumlahannya dapat jauh lebih tinggi dari hasil sebenarnya di Ads Manager. Ganti ke breakdown Month untuk rentang tanggal yang sama, dengan format export "Formatted data table (.xlsx)".';
+        'Reach, Frequency, dan Cost per Reach ditampilkan sebagai (—): file breakdown Day mencatat reach per hari, dan orang yang sama bisa terhitung berkali-kali bila dijumlahkan, jadi angkanya tidak bisa dipakai. Metrik lain dan Special Moment tetap akurat. Lihat Reach periode penuh langsung di Ads Manager bila dibutuhkan.';
     }
   } else {
     const { old, cur, months } = splitMonths(metaRows, mMonthCol);
@@ -493,7 +493,9 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const cCurPeriod = parseMetaMonthValue(cMonths[cMonths.length - 1]);
     const cP1 = cOldPeriod.label || p1;
     const cP2 = cCurPeriod.label || p2;
-    const cAllCols = cpasHeaders.filter((h) => isNumericCol(h, cpasRows) && !cDimCols.includes(h));
+    // A Day-breakdown CPAS file sums reach per day — same over-count as the
+    // main file's, so Reach/Frequency/Cost per Reach are not offered either.
+    const cAllCols = cpasHeaders.filter((h) => isNumericCol(h, cpasRows) && !cDimCols.includes(h) && !(cDayCol && isReachDependentCol(h)));
     const defCpasOverall = matchDef(DEFS.cpasOverall, cAllCols);
     const defCpasDemo = matchDef(DEFS.cpasDemo, cAllCols);
     const defCpasNV = matchDef(DEFS.cpasNV, cAllCols);

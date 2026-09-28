@@ -801,8 +801,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           dayCol={cpasDayCol}
                           heading="CPAS Shopee · Special Moment"
                           periods={[
-                            cpasRanges.old ? { label: cpas.p1, ...cpasRanges.old } : null,
-                            cpasRanges.cur ? { label: cpas.p2, ...cpasRanges.cur } : null,
+                            // metaDayRange gives {min, max}; a period is {start, end}.
+                            cpasRanges.old ? { label: cpas.p1, start: cpasRanges.old.min, end: cpasRanges.old.max } : null,
+                            cpasRanges.cur ? { label: cpas.p2, start: cpasRanges.cur.min, end: cpasRanges.cur.max } : null,
                           ].filter(Boolean) as { label: string; start: Date; end: Date }[]}
                         />
                         {cpas.overall && (
