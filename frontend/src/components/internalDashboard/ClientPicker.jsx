@@ -1,7 +1,7 @@
 import useSessionState from '../../hooks/useSessionState.js';
 import { useMemo, useState } from 'react';
 
-// Searchable + status-filterable client list for the Input Data picker.
+// Searchable + status-filterable client list (Benchmarking / Client Detail).
 // "freeze" is bucketed with "off" (and so is any null/other status); only
 // an explicit 'active' counts as active.
 const STATUS_FILTERS = [

@@ -60,5 +60,12 @@ export const S4 = {
   growthHeatmapCap: 0.25,
 };
 
+export const SYNC = {
+  // S8: a channel-sales total within this fraction of revenue counts as
+  // reconciled. (Daily Tracking rolls both up from the same rows, so a gap
+  // means a negative channel month or a channel skipped by the roll-up.)
+  channelVsRevenueTolerance: 0.005,
+};
+
 // Maps the API `category` param to the stored kategori_besar value.
 export const CATEGORY_MAP = { retail: 'Retail', b2b_service: 'B2B/Service', fnb: 'F&B' };

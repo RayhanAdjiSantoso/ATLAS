@@ -23,107 +23,213 @@ export async function listClients(db = pool) {
   return rows;
 }
 
-// ---------------------------------------------------------------------
-// brand_sheet_sources (migration 022) — which brands have a live Google
-// Sheets feed the Input Data tab can offer a "Sync dari Sheets" button for.
-// ---------------------------------------------------------------------
-export async function listActiveSheetSources(db = pool) {
-  const { rows } = await db.query(`
-    SELECT s.brand_id, b.brand_name, s.spreadsheet_title, s.is_verified, s.last_synced_at
-    FROM brand_sheet_sources s
-    JOIN brands b ON b.brand_id = s.brand_id
-    WHERE s.is_active
-    ORDER BY b.brand_name
-  `);
-  return rows;
+// Every fact row the brand has for the given periods, across the four fact
+// tables, with its provenance — what the sync compares against before it
+// writes (overwritten manual values are logged; stale synced rows removed).
+export async function brandFactSnapshot(brandId, periods, db = pool) {
+  const dates = periods.map((p) => `${p}-01`);
+  // Sequential on purpose: `db` is usually one checked-out transaction
+  // client, which cannot run queries concurrently.
+  const q = (sql) => db.query(sql, [brandId, dates]).then((r) => r.rows);
+  const cmm = await q(`SELECT client_monthly_metric_id AS id, to_char(period,'YYYY-MM') AS period, revenue, transaksi, qty_sold,
+              is_partial_month, partial_month_reason, source::text AS source
+       FROM client_monthly_metrics WHERE brand_id = $1 AND period = ANY($2::date[])`);
+  const ccs = await q(`SELECT client_channel_sales_id AS id, to_char(period,'YYYY-MM') AS period, channel::text AS channel, sales,
+              source::text AS source
+       FROM client_channel_sales_monthly WHERE brand_id = $1 AND period = ANY($2::date[])`);
+  const ccso = await q(`SELECT client_channel_sales_other_id AS id, to_char(period,'YYYY-MM') AS period, channel_label, sales_amount AS sales,
+              source::text AS source
+       FROM client_channel_sales_other WHERE brand_id = $1 AND period = ANY($2::date[])`);
+  const cps = await q(`SELECT client_platform_spend_id AS id, to_char(period,'YYYY-MM') AS period, platform::text AS platform,
+              ${CPS_COLS.join(', ')}, is_partial_month, partial_month_reason, source::text AS source
+       FROM client_platform_spend_monthly WHERE brand_id = $1 AND period = ANY($2::date[])`);
+  return { cmm, ccs, ccso, cps };
 }
 
-export async function touchSheetSourceSync(brandId, error, db = pool) {
-  await db.query(
-    `UPDATE brand_sheet_sources SET last_synced_at = now(), last_sync_error = $2 WHERE brand_id = $1`,
-    [brandId, error ?? null]
-  );
-}
-
-// ---------------------------------------------------------------------
-// §2.3 client_monthly_metrics
-// ---------------------------------------------------------------------
-const CMM_SELECT = `
-  SELECT client_monthly_metric_id AS id, brand_id,
-         to_char(period, 'YYYY-MM') AS period,
-         revenue, transaksi, qty_sold, target_sales, is_partial_month,
-         created_by, created_at, updated_at
-  FROM client_monthly_metrics
-`;
-
-export async function listMonthlyMetrics(brandId, db = pool) {
-  const { rows } = await db.query(`${CMM_SELECT} WHERE brand_id = $1 ORDER BY period DESC`, [brandId]);
-  return rows;
-}
-
-export async function upsertMonthlyMetric(v, db = pool) {
+// Months in which any fact row of the brand came from one of `sources` —
+// lets a source revisit a month it wrote before but no longer has data for.
+export async function factPeriodsBySource(brandId, sources, db = pool) {
   const { rows } = await db.query(
-    `INSERT INTO client_monthly_metrics
-       (brand_id, period, revenue, transaksi, qty_sold, target_sales, is_partial_month, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (brand_id, period) DO UPDATE SET
-       revenue          = EXCLUDED.revenue,
-       transaksi        = EXCLUDED.transaksi,
-       qty_sold         = EXCLUDED.qty_sold,
-       target_sales     = EXCLUDED.target_sales,
-       is_partial_month = EXCLUDED.is_partial_month
-     RETURNING client_monthly_metric_id AS id, (xmax::text = '0') AS was_insert`,
-    [v.brandId, v.period, v.revenue, v.transaksi, v.qtySold, v.targetSales, v.isPartialMonth ?? false, v.userId],
+    `SELECT DISTINCT to_char(period, 'YYYY-MM') AS period FROM (
+       SELECT period, source FROM client_monthly_metrics WHERE brand_id = $1
+       UNION ALL SELECT period, source FROM client_channel_sales_monthly WHERE brand_id = $1
+       UNION ALL SELECT period, source FROM client_channel_sales_other WHERE brand_id = $1
+       UNION ALL SELECT period, source FROM client_platform_spend_monthly WHERE brand_id = $1
+     ) f WHERE source::text = ANY($2::text[]) ORDER BY 1`,
+    [brandId, sources],
   );
-  return rows[0];
+  return rows.map((r) => r.period);
 }
 
-export async function deleteMonthlyMetric(id, db = pool) {
-  const { rows } = await db.query(
-    `DELETE FROM client_monthly_metrics WHERE client_monthly_metric_id = $1
-     RETURNING client_monthly_metric_id AS id, brand_id, to_char(period,'YYYY-MM') AS period`,
-    [id],
+const FACT_TABLE_PK = {
+  client_monthly_metrics: 'client_monthly_metric_id',
+  client_channel_sales_monthly: 'client_channel_sales_id',
+  client_channel_sales_other: 'client_channel_sales_other_id',
+  client_platform_spend_monthly: 'client_platform_spend_id',
+};
+
+// Deletes rows an automatic source wrote earlier. The source filter is part
+// of the statement and 'manual_form' is refused outright, so a manual row
+// can never be removed through this path.
+export async function deleteSyncedFactRows(table, ids, sources, db = pool) {
+  const pk = FACT_TABLE_PK[table];
+  if (!pk) throw new Error(`deleteSyncedFactRows: tabel tidak dikenal ${table}`);
+  const allowed = (sources || []).filter((s) => s !== 'manual_form');
+  if (!ids.length || !allowed.length) return 0;
+  const { rowCount } = await db.query(
+    `DELETE FROM ${table} WHERE ${pk} = ANY($1::int[]) AND source::text = ANY($2::text[])`,
+    [ids, allowed],
   );
-  return rows[0] ?? null;
+  return rowCount;
 }
 
 // ---------------------------------------------------------------------
-// §2.4 client_channel_sales_monthly
+// ATLAS Daily Tracking (migration 024) — monthly roll-up inputs.
+// Per brand x month x channel: sums plus the counts needed to tell
+// "nothing entered" (no rows / all NULL) from a real 0, and whether every
+// day that sold something also reported qty / transactions.
 // ---------------------------------------------------------------------
-const CCS_SELECT = `
-  SELECT client_channel_sales_id AS id, brand_id,
-         to_char(period, 'YYYY-MM') AS period,
-         channel::text AS channel, sales,
-         created_by, created_at, updated_at
-  FROM client_channel_sales_monthly
-`;
-
-export async function listChannelSales(brandId, db = pool) {
+export async function dailySalesMonthly(brandId, db = pool) {
   const { rows } = await db.query(
-    `${CCS_SELECT} WHERE brand_id = $1 ORDER BY period DESC, channel`,
+    `SELECT to_char(date_trunc('month', entry_date), 'YYYY-MM') AS period, channel_key,
+            SUM(revenue) AS revenue, count(revenue)::int AS n_revenue,
+            SUM(qty_sold) AS qty, count(qty_sold)::int AS n_qty,
+            SUM(transaksi) AS trx, count(transaksi)::int AS n_trx,
+            count(*) FILTER (WHERE revenue IS NOT NULL AND revenue <> 0 AND qty_sold IS NULL)::int AS sold_without_qty,
+            count(*) FILTER (WHERE revenue IS NOT NULL AND revenue <> 0 AND transaksi IS NULL)::int AS sold_without_trx,
+            count(DISTINCT entry_date)::int AS days
+     FROM daily_channel_sales WHERE brand_id = $1
+     GROUP BY 1, 2 ORDER BY 1, 2`,
     [brandId],
   );
   return rows;
 }
 
-export async function upsertChannelSale(v, db = pool) {
+export async function dailySpendMonthly(brandId, db = pool) {
   const { rows } = await db.query(
-    `INSERT INTO client_channel_sales_monthly (brand_id, period, channel, sales, created_by)
-     VALUES ($1, $2, $3::sales_channel, $4, $5)
-     ON CONFLICT (brand_id, period, channel) DO UPDATE SET sales = EXCLUDED.sales
-     RETURNING client_channel_sales_id AS id, (xmax::text = '0') AS was_insert`,
-    [v.brandId, v.period, v.channel, v.sales, v.userId],
+    `SELECT to_char(date_trunc('month', entry_date), 'YYYY-MM') AS period, channel_key,
+            SUM(amount_spent) AS amount, count(amount_spent)::int AS n_amount,
+            count(*) FILTER (WHERE source = 'meta_api')::int AS n_meta_api
+     FROM daily_channel_spend WHERE brand_id = $1
+     GROUP BY 1, 2 ORDER BY 1, 2`,
+    [brandId],
+  );
+  return rows;
+}
+
+// Meta Ads insights (Pengaturan Brand > Meta Ads Auto Fetch, migration 025)
+// summed per month x account x campaign — campaign name is kept so the
+// service can split MAIN accounts into Boost / Non-boost by keyword. Only
+// summable columns: reach/frequency are NOT additive across days or
+// age/gender rows, so they are not rolled up at all.
+export async function metaInsightsMonthly(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT to_char(date_trunc('month', entry_date), 'YYYY-MM') AS period, account_type, ad_account_id, campaign_name,
+            SUM(amount_spent) AS spend, SUM(impressions) AS impressions, SUM(link_clicks) AS link_clicks,
+            SUM(purchases) AS purchase, SUM(purchase_value) AS purchase_value,
+            SUM((metrics->>'profile_visits')::numeric) AS ig_profile_visit,
+            SUM((metrics->>'content_views')::numeric) AS view_content,
+            SUM((metrics->>'adds_to_cart')::numeric) AS atc,
+            SUM((metrics->>'landing_page_views')::numeric) AS lpv
+     FROM meta_ads_insights_daily WHERE brand_id = $1
+     GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`,
+    [brandId],
+  );
+  return rows;
+}
+
+export async function listBrandAdAccounts(brandId, db = pool) {
+  const { rows } = await db.query(
+    'SELECT ad_account_id, account_type, boost_keyword FROM brand_ad_accounts WHERE brand_id = $1',
+    [brandId],
+  );
+  return rows;
+}
+
+export async function dailyTrackingChannelLabels(brandId, db = pool) {
+  const { rows } = await db.query(
+    'SELECT kind, channel_key, label FROM daily_tracking_channels WHERE brand_id = $1',
+    [brandId],
+  );
+  return rows;
+}
+
+// Brands with any Daily Tracking data, and when it last changed — for the
+// "sync all" list and S8's "changed since last sync" check.
+export async function dailyTrackingBrands(db = pool) {
+  const { rows } = await db.query(`
+    SELECT b.brand_id, b.brand_name, b.status::text AS status,
+           GREATEST(s.last_change, p.last_change, m.last_change) AS last_change,
+           GREATEST(s.last_date, p.last_date)::text AS last_entry_date
+    FROM brands b
+    LEFT JOIN (SELECT brand_id, max(updated_at) last_change, max(entry_date) last_date FROM daily_channel_sales GROUP BY brand_id) s ON s.brand_id = b.brand_id
+    LEFT JOIN (SELECT brand_id, max(updated_at) last_change, max(entry_date) last_date FROM daily_channel_spend GROUP BY brand_id) p ON p.brand_id = b.brand_id
+    LEFT JOIN (SELECT brand_id, max(fetched_at) last_change, max(entry_date) last_date FROM meta_ads_insights_daily GROUP BY brand_id) m ON m.brand_id = b.brand_id
+    WHERE s.brand_id IS NOT NULL OR p.brand_id IS NOT NULL OR m.brand_id IS NOT NULL
+    ORDER BY b.brand_name
+  `);
+  return rows;
+}
+
+// ---------------------------------------------------------------------
+// §2.3 client_monthly_metrics
+// ---------------------------------------------------------------------
+
+// `v.source` defaults to the manual form. `v.keepTargetSales` (sync path)
+// leaves an existing target_sales alone — the sheet carries no target, and
+// a hand-entered target must not be wiped by a sync.
+export async function upsertMonthlyMetric(v, db = pool) {
+  const isPartial = v.isPartialMonth ?? false;
+  const reason = isPartial ? (v.partialMonthReason ?? 'manual') : null;
+  const { rows } = await db.query(
+    `INSERT INTO client_monthly_metrics
+       (brand_id, period, revenue, transaksi, qty_sold, target_sales, is_partial_month, partial_month_reason,
+        created_by, source, source_ref)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::ingestion_source, $11)
+     ON CONFLICT (brand_id, period) DO UPDATE SET
+       revenue              = EXCLUDED.revenue,
+       transaksi            = EXCLUDED.transaksi,
+       qty_sold             = EXCLUDED.qty_sold,
+       target_sales         = CASE WHEN $12::boolean THEN client_monthly_metrics.target_sales ELSE EXCLUDED.target_sales END,
+       is_partial_month     = EXCLUDED.is_partial_month,
+       partial_month_reason = EXCLUDED.partial_month_reason,
+       source               = EXCLUDED.source,
+       source_ref           = EXCLUDED.source_ref
+     RETURNING client_monthly_metric_id AS id, (xmax::text = '0') AS was_insert`,
+    [v.brandId, v.period, v.revenue, v.transaksi, v.qtySold, v.targetSales, isPartial, reason, v.userId,
+      v.source ?? 'manual_form', v.sourceRef ?? null, v.keepTargetSales ?? false],
   );
   return rows[0];
 }
 
-export async function deleteChannelSale(id, db = pool) {
+// ---------------------------------------------------------------------
+// §2.4 client_channel_sales_monthly
+// ---------------------------------------------------------------------
+
+export async function upsertChannelSale(v, db = pool) {
   const { rows } = await db.query(
-    `DELETE FROM client_channel_sales_monthly WHERE client_channel_sales_id = $1
-     RETURNING client_channel_sales_id AS id, brand_id, to_char(period,'YYYY-MM') AS period, channel::text AS channel`,
-    [id],
+    `INSERT INTO client_channel_sales_monthly (brand_id, period, channel, sales, created_by, source, source_ref)
+     VALUES ($1, $2, $3::sales_channel, $4, $5, $6::ingestion_source, $7)
+     ON CONFLICT (brand_id, period, channel) DO UPDATE SET
+       sales = EXCLUDED.sales, source = EXCLUDED.source, source_ref = EXCLUDED.source_ref
+     RETURNING client_channel_sales_id AS id, (xmax::text = '0') AS was_insert`,
+    [v.brandId, v.period, v.channel, v.sales, v.userId, v.source ?? 'manual_form', v.sourceRef ?? null],
   );
-  return rows[0] ?? null;
+  return rows[0];
+}
+
+// Free-text channels (migration 010) — e.g. "chat", or a sheet column the
+// parser did not recognise, kept under its original label.
+export async function upsertChannelSaleOther(v, db = pool) {
+  const { rows } = await db.query(
+    `INSERT INTO client_channel_sales_other (brand_id, period, channel_label, sales_amount, created_by, source, source_ref)
+     VALUES ($1, $2, $3, $4, $5, $6::ingestion_source, $7)
+     ON CONFLICT (brand_id, period, channel_label) DO UPDATE SET
+       sales_amount = EXCLUDED.sales_amount, source = EXCLUDED.source, source_ref = EXCLUDED.source_ref
+     RETURNING client_channel_sales_other_id AS id, (xmax::text = '0') AS was_insert`,
+    [v.brandId, v.period, v.channelLabel, v.sales, v.userId, v.source ?? 'manual_form', v.sourceRef ?? null],
+  );
+  return rows[0];
 }
 
 // ---------------------------------------------------------------------
@@ -135,146 +241,69 @@ const CPS_COLS = [
   'cpm', 'cpc', 'ctr', 'cost_per_vc', 'cost_per_atc', 'cost_per_purchase', 'roas',
 ];
 
-const CPS_SELECT = `
-  SELECT client_platform_spend_id AS id, brand_id,
-         to_char(period, 'YYYY-MM') AS period,
-         platform::text AS platform,
-         ${CPS_COLS.join(', ')},
-         created_by, created_at, updated_at
-  FROM client_platform_spend_monthly
-`;
-
-export async function listPlatformSpend(brandId, db = pool) {
-  const { rows } = await db.query(
-    `${CPS_SELECT} WHERE brand_id = $1 ORDER BY period DESC, platform`,
-    [brandId],
-  );
-  return rows;
-}
-
 export async function upsertPlatformSpend(v, db = pool) {
   // v.metrics is an object keyed by the CPS_COLS names (missing/blank => null).
-  const values = [v.brandId, v.period, v.platform, v.userId, ...CPS_COLS.map((c) => v.metrics[c] ?? null)];
+  // v.isPartialMonth undefined (manual form — it has no partial toggle) keeps
+  // the row's existing flag; the sync always passes an explicit value.
+  const n = CPS_COLS.length;
+  const values = [
+    v.brandId, v.period, v.platform, v.userId, ...CPS_COLS.map((c) => v.metrics[c] ?? null),
+    v.source ?? 'manual_form', v.sourceRef ?? null,
+    v.isPartialMonth ?? null, v.isPartialMonth ? (v.partialMonthReason ?? 'manual') : null,
+  ];
   const colPlaceholders = CPS_COLS.map((_, i) => `$${5 + i}`);
+  const [pSource, pRef, pPartial, pReason] = [5 + n, 6 + n, 7 + n, 8 + n];
   const updateSet = CPS_COLS.map((c) => `${c} = EXCLUDED.${c}`).join(',\n       ');
   const { rows } = await db.query(
     `INSERT INTO client_platform_spend_monthly
-       (brand_id, period, platform, created_by, ${CPS_COLS.join(', ')})
-     VALUES ($1, $2, $3::ad_platform, $4, ${colPlaceholders.join(', ')})
+       (brand_id, period, platform, created_by, ${CPS_COLS.join(', ')},
+        source, source_ref, is_partial_month, partial_month_reason)
+     VALUES ($1, $2, $3::ad_platform, $4, ${colPlaceholders.join(', ')},
+        $${pSource}::ingestion_source, $${pRef}, COALESCE($${pPartial}::boolean, false), $${pReason})
      ON CONFLICT (brand_id, period, platform) DO UPDATE SET
-       ${updateSet}
+       ${updateSet},
+       source = EXCLUDED.source,
+       source_ref = EXCLUDED.source_ref,
+       is_partial_month = COALESCE($${pPartial}::boolean, client_platform_spend_monthly.is_partial_month),
+       partial_month_reason = CASE WHEN $${pPartial}::boolean IS NULL
+                                   THEN client_platform_spend_monthly.partial_month_reason
+                                   ELSE EXCLUDED.partial_month_reason END
      RETURNING client_platform_spend_id AS id, (xmax::text = '0') AS was_insert`,
     values,
   );
   return rows[0];
 }
 
-export async function deletePlatformSpend(id, db = pool) {
-  const { rows } = await db.query(
-    `DELETE FROM client_platform_spend_monthly WHERE client_platform_spend_id = $1
-     RETURNING client_platform_spend_id AS id, brand_id, to_char(period,'YYYY-MM') AS period, platform::text AS platform`,
-    [id],
-  );
-  return rows[0] ?? null;
-}
-
-// ---------------------------------------------------------------------
-// §2.2 client_sales_channels — per-brand, per-channel used/not-used.
-// One row per (brand, channel); the manual form always writes source='manual'.
-// ---------------------------------------------------------------------
-export async function listSalesChannels(brandId, db = pool) {
-  const { rows } = await db.query(
-    `SELECT client_sales_channel_id AS id, brand_id, channel::text AS channel,
-            is_used, source, note, created_at, updated_at
-     FROM client_sales_channels WHERE brand_id = $1 ORDER BY channel`,
-    [brandId],
-  );
-  return rows;
-}
-
-export async function upsertSalesChannel(v, db = pool) {
-  const { rows } = await db.query(
-    `INSERT INTO client_sales_channels (brand_id, channel, is_used, source, note, created_by)
-     VALUES ($1, $2::sales_channel, $3, 'manual', $4, $5)
-     ON CONFLICT (brand_id, channel) DO UPDATE SET
-       is_used = EXCLUDED.is_used, source = 'manual', note = EXCLUDED.note
-     RETURNING client_sales_channel_id AS id, (xmax::text = '0') AS was_insert`,
-    [v.brandId, v.channel, v.isUsed, v.note ?? null, v.userId],
-  );
-  return rows[0];
-}
-
-// ---------------------------------------------------------------------
-// brand_ad_accounts — Meta ad-account list per client (1 : many).
-// Partial unique index ux_brand_ad_accounts_primary => at most one primary
-// per brand; the service clears the old primary before setting a new one.
-// ---------------------------------------------------------------------
-export async function listAdAccounts(brandId, db = pool) {
-  const { rows } = await db.query(
-    `SELECT brand_ad_account_id AS id, brand_id, ad_account_id, account_name, is_primary, created_at
-     FROM brand_ad_accounts WHERE brand_id = $1
-     ORDER BY is_primary DESC, ad_account_id`,
-    [brandId],
-  );
-  return rows;
-}
-
-export async function clearPrimaryAdAccount(brandId, exceptId, db = pool) {
-  await db.query(
-    `UPDATE brand_ad_accounts SET is_primary = false
-     WHERE brand_id = $1 AND is_primary = true AND ($2::int IS NULL OR brand_ad_account_id <> $2)`,
-    [brandId, exceptId ?? null],
-  );
-}
-
-export async function insertAdAccount(v, db = pool) {
-  const { rows } = await db.query(
-    `INSERT INTO brand_ad_accounts (brand_id, ad_account_id, account_name, is_primary)
-     VALUES ($1, $2, $3, $4)
-     RETURNING brand_ad_account_id AS id, brand_id, ad_account_id, account_name, is_primary`,
-    [v.brandId, v.adAccountId, v.accountName ?? null, v.isPrimary ?? false],
-  );
-  return rows[0];
-}
-
-export async function updateAdAccount(v, db = pool) {
-  const { rows } = await db.query(
-    `UPDATE brand_ad_accounts
-     SET ad_account_id = $2, account_name = $3, is_primary = $4
-     WHERE brand_ad_account_id = $1
-     RETURNING brand_ad_account_id AS id, brand_id, ad_account_id, account_name, is_primary`,
-    [v.id, v.adAccountId, v.accountName ?? null, v.isPrimary ?? false],
-  );
-  return rows[0] ?? null;
-}
-
-export async function getAdAccount(id, db = pool) {
-  const { rows } = await db.query(
-    'SELECT brand_ad_account_id AS id, brand_id, ad_account_id, account_name, is_primary FROM brand_ad_accounts WHERE brand_ad_account_id = $1',
-    [id],
-  );
-  return rows[0] ?? null;
-}
-
-export async function deleteAdAccount(id, db = pool) {
-  const { rows } = await db.query(
-    `DELETE FROM brand_ad_accounts WHERE brand_ad_account_id = $1
-     RETURNING brand_ad_account_id AS id, brand_id, ad_account_id`,
-    [id],
-  );
-  return rows[0] ?? null;
-}
-
 // ---------------------------------------------------------------------
 // §2.7 data_ingestion_log
 // ---------------------------------------------------------------------
+// Run-level fields (runId … details) are set by the Sheets sync; the manual
+// forms leave them NULL.
 export async function logIngestion(v, db = pool) {
   await db.query(
     `INSERT INTO data_ingestion_log
-       (brand_id, target_table, period, source, method, row_count, status, note, pic, performed_by)
-     VALUES ($1, $2, $3, $4::ingestion_source, $5, $6, $7::ingestion_status, $8, $9, $10)`,
-    [v.brandId, v.targetTable, v.period ?? null, v.source ?? 'manual_form', v.method, v.rowCount, v.status, v.note ?? null, v.pic ?? null, v.userId ?? null],
+       (brand_id, target_table, period, source, method, row_count, status, note, pic, performed_by,
+        run_id, started_at, finished_at, rows_read, rows_written, rows_skipped, warning_count, details)
+     VALUES ($1, $2, $3, $4::ingestion_source, $5, $6, $7::ingestion_status, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17, $18)`,
+    [v.brandId, v.targetTable, v.period ?? null, v.source ?? 'manual_form', v.method, v.rowCount, v.status, v.note ?? null, v.pic ?? null, v.userId ?? null,
+      v.runId ?? null, v.startedAt ?? null, v.finishedAt ?? null, v.rowsRead ?? null, v.rowsWritten ?? null,
+      v.rowsSkipped ?? null, v.warningCount ?? null, v.details ? JSON.stringify(v.details) : null],
   );
+}
+
+// Latest run summary row per brand for one run target ('daily_tracking_sync_run'
+// or 'sheet_sync_run') — S8 reads its status, warnings and reconciliation.
+// Dry runs are rolled back, so they never appear here.
+export async function latestSyncRuns(runTarget = 'daily_tracking_sync_run', db = pool) {
+  const { rows } = await db.query(`
+    SELECT DISTINCT ON (brand_id) brand_id, status::text AS status, run_id, started_at, finished_at,
+           rows_written, rows_skipped, warning_count, details
+    FROM data_ingestion_log
+    WHERE target_table = $1
+    ORDER BY brand_id, created_at DESC
+  `, [runTarget]);
+  return rows;
 }
 
 export async function listIngestionLog({ brandId, target, limit = 50 }, db = pool) {
@@ -288,7 +317,8 @@ export async function listIngestionLog({ brandId, target, limit = 50 }, db = poo
             d.target_table, to_char(d.period, 'YYYY-MM') AS period,
             d.source::text AS source, d.method, d.row_count,
             d.status::text AS status, d.note, d.pic,
-            d.performed_by, u.full_name AS performed_by_name, d.created_at
+            d.performed_by, u.full_name AS performed_by_name, d.created_at,
+            d.run_id, d.rows_written, d.rows_skipped, d.warning_count
      FROM data_ingestion_log d
      LEFT JOIN brands b ON b.brand_id = d.brand_id
      LEFT JOIN users u ON u.user_id = d.performed_by
@@ -418,7 +448,7 @@ export async function dataQualitySnapshot(period, db = pool) {
     `SELECT b.brand_id, b.brand_name, b.status::text AS status,
             bwc.kategori_besar, b.bm_id, b.join_date::text AS join_date,
             (cmm.brand_id IS NOT NULL)                       AS has_monthly_metrics,
-            cmm.revenue,
+            cmm.revenue, cmm.is_partial_month, cmm.partial_month_reason, cmm.source::text AS revenue_source,
             COALESCE(ccs.total, 0) + COALESCE(cco.total, 0)  AS channel_sales_total,
             (ccs.brand_id IS NOT NULL OR cco.brand_id IS NOT NULL) AS has_channel_sales,
             COALESCE(cps.spend, 0)                           AS platform_spend_total,
@@ -439,9 +469,12 @@ export async function dataQualitySnapshot(period, db = pool) {
   return rows;
 }
 
-export async function allClientSalesChannels(db = pool) {
+// Which canonical channels each brand has ever recorded sales on (S8
+// matrix). Derived from the data, since channel usage is no longer typed in.
+export async function brandChannelUsage(db = pool) {
   const { rows } = await db.query(
-    'SELECT brand_id, channel::text AS channel, is_used, source FROM client_sales_channels',
+    `SELECT brand_id, channel::text AS channel, to_char(max(period), 'YYYY-MM') AS last_period
+     FROM client_channel_sales_monthly GROUP BY brand_id, channel`,
   );
   return rows;
 }

@@ -9,6 +9,7 @@ import {
   META_SYNC_CHANNEL_KEYS, slugifyChannelLabel,
 } from '../config/dailyTrackingChannels.js';
 import { parseDailyTrackingFile } from './dailyTrackingImportParser.js';
+import { refreshInternalDashboard } from './internalDashboardSync/dailyTrackingSync.js';
 
 async function assertBrand(brandId) {
   const brand = await brandService.getBrandById(brandId);
@@ -135,7 +136,7 @@ export async function deleteMonthEntries({ brandId, month, userId }) {
   const startDate = days[0];
   const endDate = days[days.length - 1];
 
-  return inTransaction(async (db) => {
+  const result = await inTransaction(async (db) => {
     const salesDeleted = await repo.deleteSalesForMonth(brandId, startDate, endDate, db);
     const spendDeleted = await repo.deleteSpendForMonth(brandId, startDate, endDate, db);
 
@@ -154,6 +155,9 @@ export async function deleteMonthEntries({ brandId, month, userId }) {
     }
     return { month, deleted: { sales: salesDeleted, spend: spendDeleted } };
   });
+  // Keep the Internal Dashboard's monthly tables in step with this write.
+  await refreshInternalDashboard(brandId);
+  return result;
 }
 
 // ---------------------------------------------------------------------
@@ -175,7 +179,7 @@ export async function upsertEntries({ brandId, entryDate, sales, spend, userId }
   if (!Array.isArray(spend) || !spend.length) spend = [];
   if (!sales.length && !spend.length) throw new AppError('Tidak ada data untuk disimpan', 400);
 
-  return inTransaction(async (db) => {
+  const result = await inTransaction(async (db) => {
     let salesCount = 0;
     let spendCount = 0;
 
@@ -210,6 +214,9 @@ export async function upsertEntries({ brandId, entryDate, sales, spend, userId }
 
     return { saved: { sales: salesCount, spend: spendCount } };
   });
+  // Keep the Internal Dashboard's monthly tables in step with this write.
+  await refreshInternalDashboard(brandId);
+  return result;
 }
 
 // ---------------------------------------------------------------------
@@ -219,7 +226,7 @@ export async function upsertEntries({ brandId, entryDate, sales, spend, userId }
 // reported as skipped, never overwritten.
 // ---------------------------------------------------------------------
 async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
-  return inTransaction(async (db) => {
+  const result = await inTransaction(async (db) => {
     const applied = [];
     const skipped = [];
     for (const e of entries) {
@@ -240,6 +247,9 @@ async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
     }, db);
     return { applied, skipped };
   });
+  // Keep the Internal Dashboard's monthly tables in step with this write.
+  await refreshInternalDashboard(brandId);
+  return result;
 }
 
 // Manual "Sync Meta Sekarang" — reuses an existing Apps Script dry-run
@@ -340,7 +350,7 @@ export async function importFromFile({ brandId, buffer, filename, userId }) {
   await assertBrand(brandId);
   const parsed = parseDailyTrackingFile(buffer, filename);
 
-  return inTransaction(async (db) => {
+  const result = await inTransaction(async (db) => {
     for (const c of parsed.recognizedSales) {
       if (!c.isCustom) continue;
       await repo.upsertCustomChannelIfMissing({ brandId, kind: 'sales', channelKey: c.key, label: c.label, userId }, db);
@@ -391,6 +401,9 @@ export async function importFromFile({ brandId, buffer, filename, userId }) {
       monthsAffected,
     };
   });
+  // Keep the Internal Dashboard's monthly tables in step with this write.
+  await refreshInternalDashboard(brandId);
+  return result;
 }
 
 // Scheduled 1am WIB ingest — called by apps-script/DailyTrackingBoostPost.gs's
