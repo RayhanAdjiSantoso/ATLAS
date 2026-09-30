@@ -17,6 +17,9 @@ import api from '../../../api/client.js';
 // rejects with a generic "Request failed with status code 409" unless we
 // unwrap it ourselves, so every call below goes through this on error.
 function unwrap(err: unknown): never {
+  if ((err as { response?: { status?: number } })?.response?.status === 413) {
+    throw new Error('ukuran data laporan melebihi batas server. Coba pisahkan periode atau hubungi developer.');
+  }
   const data = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
   throw new Error(data?.error || data?.message || (err instanceof Error ? err.message : 'Request failed'));
 }
@@ -44,9 +47,20 @@ export async function createClient(name: string): Promise<Client> {
   }
 }
 
+// A Meta report's rows serialize to 6–11 MB, over the 4.5 MB request limit
+// of the hosting platform, so the JSON goes out gzipped (~20x smaller). A
+// browser without CompressionStream falls back to the plain field.
+async function gzipJson(value: unknown): Promise<Blob | null> {
+  if (typeof CompressionStream === 'undefined') return null;
+  const stream = new Blob([JSON.stringify(value)], { type: 'application/json' }).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Response(stream).blob();
+}
+
 export async function saveReport(payload: SaveReportPayload, files: RawFileEntry[]): Promise<{ id: number }> {
   const form = new FormData();
-  form.append('payload', JSON.stringify(payload));
+  const gz = await gzipJson(payload);
+  if (gz) form.append('payloadGz', new Blob([gz], { type: 'application/gzip' }), 'payload.json.gz');
+  else form.append('payload', JSON.stringify(payload));
   form.append('fileMeta', JSON.stringify(files.map((f) => ({ channel: f.channel, periodRole: f.periodRole, originalFilename: f.file.name }))));
   files.forEach((f) => form.append('files', f.file, f.file.name));
   try {

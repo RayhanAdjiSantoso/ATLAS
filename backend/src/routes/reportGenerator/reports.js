@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import zlib from 'zlib';
 import pool from '../../config/db.js';
 import { buildBulkInsert, buildBulkInserts } from '../../utils/sqlHelpers.js';
 
@@ -180,10 +181,21 @@ function isValidPayload(body) {
   return true;
 }
 
-reportsRouter.post('/', upload.array('files'), async (req, res) => {
+// A Meta report's rows run 6–11 MB as JSON, over the 4.5 MB request body
+// Vercel accepts, so the browser sends them gzipped (`payloadGz`, ~20x
+// smaller). The plain `payload` field stays accepted for older clients.
+// Decompression is capped so a small upload cannot expand without bound.
+const MAX_PAYLOAD_BYTES = 80 * 1024 * 1024;
+function readPayload(req) {
+  const gz = req.files?.payloadGz?.[0];
+  const text = gz ? zlib.gunzipSync(gz.buffer, { maxOutputLength: MAX_PAYLOAD_BYTES }).toString('utf8') : (req.body.payload ?? '');
+  return JSON.parse(text);
+}
+
+reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', maxCount: 1 }]), async (req, res) => {
   let payload;
   try {
-    payload = JSON.parse(req.body.payload ?? '');
+    payload = readPayload(req);
   } catch {
     res.status(400).json({ error: 'Invalid or missing "payload" field (must be JSON).' });
     return;
@@ -206,7 +218,7 @@ reportsRouter.post('/', upload.array('files'), async (req, res) => {
       return;
     }
   }
-  const files = req.files ?? [];
+  const files = req.files?.files ?? [];
 
   const client = await pool.connect();
   try {
