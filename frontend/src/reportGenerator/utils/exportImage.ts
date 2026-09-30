@@ -76,6 +76,8 @@ export async function exportElementToPDF(rootEl: HTMLElement | null, filename: s
     const gap = 14;
     let cursorY = margin;
 
+    // Allow the export scale and responsive charts to settle before capture.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     for (const block of blocks) {
       const canvas = await html2canvas(block, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
       const imgH = canvas.height * (usableW / canvas.width);

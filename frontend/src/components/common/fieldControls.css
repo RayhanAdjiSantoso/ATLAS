@@ -29,7 +29,7 @@
   --text: #0f1a3a; --text-muted: #5a6a90; --acc: #1e3eb8; --acc-300: #b8c5f5; --primary-light: #eef1fc; --rule: #e7ebf5;
   position: fixed; z-index: 1000;
   display: flex; flex-direction: column;
-  max-width: min(440px, calc(100vw - 16px)); max-height: min(380px, calc(100dvh - 16px));
+  max-width: min(440px, calc(var(--atlas-vw, 100vw) - 16px)); max-height: min(380px, calc(var(--atlas-dvh, 100dvh) - 16px));
   overflow: hidden;
   color: var(--text);
   border: 1px solid rgba(197, 208, 235, .95); border-radius: 14px;
@@ -61,7 +61,7 @@
 /* Single-date popover: DateRangePicker's shell at one month's width. */
 .date-single-popover { width: auto; }
 .date-single-popover .date-range-presets { flex: 0 0 150px; }
-.date-single-popover .date-range-calendars { width: min(318px, calc(100vw - 32px)); padding: 1rem 1.1rem; }
+.date-single-popover .date-range-calendars { width: min(318px, calc(var(--atlas-vw, 100vw) - 32px)); padding: 1rem 1.1rem; }
 .date-single-preset { display: block; width: 100%; padding: .65rem 1.25rem; color: var(--text-muted); border: 0; background: transparent; font: inherit; font-size: .85rem; text-align: left; cursor: pointer; }
 .date-single-preset:hover { background: var(--primary-light); }
 @media (max-width: 760px) {

@@ -1,3 +1,4 @@
+import { getLayoutRect, getLayoutViewport } from '../../utils/uiScale.js';
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
@@ -81,13 +82,14 @@ export function InfoTip({ text, className = 'con-kpi-note' }) {
   if (!text) return null;
 
   const show = () => {
-    const r = ref.current?.getBoundingClientRect();
+    const r = ref.current ? getLayoutRect(ref.current) : null;
+    const viewport = getLayoutViewport();
     if (!r) return;
-    const vw = window.innerWidth;
+    const vw = viewport.width;
     const left = Math.min(Math.max(r.left + r.width / 2 - TIP_WIDTH / 2, 8), vw - TIP_WIDTH - 8);
     const below = r.bottom + 8;
     // Flip above when the trigger sits in the bottom third of the viewport.
-    const above = r.top > window.innerHeight * 0.66;
+    const above = r.top > viewport.height * 0.66;
     setPos({ left, top: above ? r.top - 8 : below, above });
   };
   const hide = () => setPos(null);

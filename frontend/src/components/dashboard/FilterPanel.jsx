@@ -1,9 +1,9 @@
 import useSessionState from '../../hooks/useSessionState.js';
-import BrandStatusFilter, { matchesBrandStatus } from '../common/BrandStatusFilter.jsx';
 import { useState, useEffect } from 'react';
 import api from '../../api/client.js';
 import DateRangePicker from './DateRangePicker.jsx';
-import SearchableSelect from '../common/SearchableSelect.jsx';
+import DashboardBrandPicker from './DashboardBrandPicker.jsx';
+import SelectMenu from '../common/SelectMenu.jsx';
 
 const COMPARE_TYPES = [
   { value: 'previous_period', label: 'Periode sebelumnya' },
@@ -109,24 +109,19 @@ export default function FilterPanel({ filters, onChange }) {
     onChange({ ...filters, compareStartDate: startDate, compareEndDate: endDate });
   };
 
-  // The console's control bar. Brand, period and comparison are the axes every
-  // number on the page is read against, so they sit in one sticky row rather
-  // than a card that scrolls away — and the comparison controls appear in that
-  // same row instead of opening a second block beneath it.
+  // Brand status lives inside the picker; period controls reflow with the header.
   return (
     <div className="con-controls">
       <div className="con-ctl con-ctl-brand">
         <label htmlFor="brand-select">Brand</label>
-        <SearchableSelect
-          id="brand-select"
-          placeholder="Pilih brand..."
+        <DashboardBrandPicker
+          brands={brands}
           value={filters.brandId}
-          options={brands.filter(b => matchesBrandStatus(b, brandStatus) || String(b.brand_id) === String(filters.brandId)).map((b) => ({ value: b.brand_id, label: b.brand_name }))}
+          status={brandStatus}
+          onStatusChange={setBrandStatus}
           onChange={(val) => handleChange('brandId', val)}
         />
       </div>
-
-      <BrandStatusFilter value={brandStatus} onChange={setBrandStatus} />
 
       <div className="con-ctl con-ctl-period">
         <label>Periode</label>
@@ -154,20 +149,18 @@ export default function FilterPanel({ filters, onChange }) {
 
       {showCompare && (
         <>
-          <div className="con-ctl">
+          <div className="con-ctl con-ctl-basis">
             <label htmlFor="compare-type-select">Basis pembanding</label>
-            <select
+            <SelectMenu
               id="compare-type-select"
+              label="Basis pembanding"
               value={compareType}
-              onChange={(e) => handleCompareTypeChange(e.target.value)}
-            >
-              {COMPARE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+              onChange={handleCompareTypeChange}
+              options={COMPARE_TYPES}
+            />
           </div>
 
-          <div className="con-ctl con-ctl-period">
+          <div className="con-ctl con-ctl-period con-ctl-comparison">
             <label>Periode pembanding</label>
             {compareType === 'custom' ? (
               <DateRangePicker

@@ -1,0 +1,264 @@
+/* Business Overview — soft layout (test). A pale grey floor holding large
+   white surfaces with generous radii; colour is spent on two headline tiles
+   only (ATLAS accent blue and summary violet), everything else stays ink on
+   white so the numbers carry the page. */
+
+.soft-shell {
+  --soft-floor: #eef0f5;
+  --soft-card: #ffffff;
+  --soft-radius: 24px;
+  --soft-shadow: 0 1px 2px rgba(15, 26, 58, .04), 0 14px 34px -22px rgba(15, 26, 58, .28);
+  --soft-ink: #0f1a3a;
+  --soft-muted: #5a6a90;
+  --soft-accent: #1e3eb8;
+  --soft-violet: #7c3aed;
+  width: 100%;
+  max-width: var(--workspace-max, 1840px);
+  margin: 0 auto;
+  padding: clamp(.75rem, 1.6vw, 1.4rem) 0 3rem;
+  background: transparent;
+}
+
+/* ── Frame ─────────────────────────────────────────────────── */
+.soft-frame { display: flex; flex-direction: column; gap: 16px; padding: 18px; border-radius: 32px; background: var(--soft-floor); }
+.soft-card { border-radius: var(--soft-radius); background: var(--soft-card); box-shadow: var(--soft-shadow); }
+
+/* Module identity: a blue/cyan wash that fades into the workspace. */
+.soft-masthead {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  margin: -18px -18px 0;
+  padding: 30px 34px 18px;
+  border-radius: 32px 32px 0 0;
+  background:
+    radial-gradient(ellipse at 16% 0%, rgba(111, 154, 245, .22), transparent 65%),
+    radial-gradient(ellipse at 88% 5%, rgba(66, 190, 219, .17), transparent 62%),
+    linear-gradient(180deg, #edf3ff 0%, var(--soft-floor) 100%);
+}
+.soft-masthead-copy { min-width: 0; }
+.soft-masthead h1 {
+  margin: 0; color: var(--soft-ink); font-size: clamp(1.75rem, 2.65vw, 2.65rem);
+  font-weight: 800; line-height: 1.12; letter-spacing: -.035em; text-wrap: balance;
+}
+.soft-masthead h1::after {
+  content: '';
+  display: block;
+  width: min(100%, 420px);
+  height: 1px;
+  margin-top: 16px;
+  background: linear-gradient(90deg, var(--soft-accent), #abc7e9 56%, transparent);
+}
+.soft-masthead h1 > span { color: var(--soft-accent); }
+.soft-masthead .soft-title-dot { margin-left: 2px; }
+.soft-masthead p { margin: 10px 0 0; max-width: 65ch; color: var(--soft-muted); font-size: .84rem; line-height: 1.5; }
+.soft-masthead-signature {
+  display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 8px;
+  padding-left: 24px; border-left: 1px solid #cdd5e9;
+}
+.soft-masthead-signature img { display: block; width: 108px; height: auto; }
+.soft-masthead-signature > span { color: var(--soft-muted); font-size: .68rem; }
+@media (max-width: 720px) {
+  .soft-masthead { align-items: flex-start; gap: 16px; margin: -10px -10px 0; padding: 22px 18px 8px; border-radius: 22px 22px 0 0; }
+  .soft-masthead p { font-size: .78rem; margin-top: 8px; }
+  .soft-masthead-signature { padding-left: 12px; margin-top: 4px; }
+  .soft-masthead-signature img { width: 68px; }
+  .soft-masthead-signature > span { display: none; }
+}
+@media (max-width: 420px) {
+  .soft-masthead { flex-wrap: wrap; }
+  .soft-masthead-signature { display: none; }
+}
+
+/* Header controls reflow by available space; no fixed single-line rail. */
+.soft-command {
+  display: flex; align-items: flex-start; gap: 12px; padding: 16px;
+  border: 1px solid #dde2ee; border-radius: 18px; background: #fff;
+  box-shadow: 0 2px 5px rgba(15, 26, 58, .03);
+}
+.soft-command .con-controls { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.soft-command .con-ctl { min-width: 0; gap: 6px; }
+.soft-command .con-ctl > label { font-size: .68rem; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--soft-muted); }
+.soft-command .con-ctl-brand { flex: 1 1 170px; max-width: 280px; }
+.soft-command .con-ctl-period { flex: 0 1 auto; }
+.soft-command .con-ctl-basis { flex: 0 1 190px; }
+.soft-command .con-ctl button, .soft-command .con-ctl-static { min-height: 42px; }
+.soft-command .con-ctl-static { display: flex; align-items: center; background: #f4f6fb; font-variant-numeric: tabular-nums; }
+.soft-command .con-switch { min-height: 42px; margin: 0; padding: .6rem .7rem; border-color: transparent; background: #f4f6fb; font-size: .75rem; }
+.soft-command .con-switch.is-on { background: #eef1fc; color: var(--soft-accent); }
+.soft-icon-btn { display: grid; flex: 0 0 auto; place-items: center; width: 36px; height: 36px; padding: 0; margin-top: 22px; border: 1px solid #dde2ee; border-radius: 10px; background: #fff; color: var(--soft-muted); cursor: pointer; }
+.soft-icon-btn:hover { background: #eef1fc; color: var(--soft-accent); }
+
+/* ATLAS accent rail with a white active surface. */
+.soft-tabs { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 6px; border-radius: 18px; background: var(--soft-accent); }
+.soft-tab { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 16px; border: 0; border-radius: 12px; background: transparent; color: #fff; font: inherit; text-align: left; cursor: pointer; transition: background .18s var(--ease); }
+.soft-tab:hover { background: rgba(255,255,255,.1); }
+.soft-tab-pill { position: absolute; inset: 0; z-index: 0; border-radius: 12px; background: #fff; box-shadow: 0 2px 5px rgba(15,26,58,.1); }
+.soft-tab-ico, .soft-tab-text { position: relative; z-index: 1; }
+.soft-tab-ico { display: grid; flex: 0 0 auto; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.12); }
+.soft-tab-text { display: grid; min-width: 0; gap: 3px; }
+.soft-tab-text strong { font-size: .86rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.3; }
+.soft-tab-text small { font-size: .68rem; color: #e1e8ff; line-height: 1.4; }
+.soft-tab.is-on { color: var(--soft-accent); }
+.soft-tab.is-on .soft-tab-ico { background: #eef1fc; color: var(--soft-accent); }
+.soft-tab.is-on .soft-tab-text small { color: var(--soft-muted); }
+.soft-tabs .soft-tab:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+
+/* Domains: secondary tabs with a sliding underline, on the floor. */
+.soft-subtabs { display: flex; flex-wrap: wrap; gap: .2rem 1.4rem; padding: .1rem .5rem 0; border-bottom: 1px solid #dde2ee; }
+.soft-subtab {
+  position: relative; padding: .7rem 0 .8rem; border: 0; background: transparent; color: var(--soft-muted);
+  font: inherit; font-size: .84rem; font-weight: 650; cursor: pointer; transition: color .16s ease;
+}
+.soft-subtab:hover { color: var(--soft-ink); }
+.soft-subtab.is-on { color: var(--soft-ink); font-weight: 800; }
+.soft-subtab-line { position: absolute; right: 0; bottom: -1px; left: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--soft-accent); }
+.soft-tab:focus-visible, .soft-subtab:focus-visible, .soft-icon-btn:focus-visible { outline: 2px solid var(--soft-accent); outline-offset: 2px; }
+
+.soft-head { padding: .5rem .4rem 0; }
+.soft-head h2 { margin: 0; color: var(--soft-ink); font-size: clamp(1.6rem, 2.4vw, 2.2rem); font-weight: 800; letter-spacing: -.035em; line-height: 1.08; }
+.soft-head p { max-width: 70ch; margin: .4rem 0 0; color: var(--soft-muted); font-size: .84rem; line-height: 1.5; }
+
+
+.soft-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.soft-tile {
+  position: relative; display: grid; align-content: start; gap: .7rem; min-width: 0; padding: 1rem 1.15rem;
+  border-radius: 22px; background: var(--soft-card); box-shadow: var(--soft-shadow); overflow: hidden;
+}
+.soft-tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .6rem; }
+.soft-tile-label { display: inline-flex; align-items: center; gap: .3rem; font-size: .82rem; font-weight: 700; }
+.soft-tile-chip { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--soft-accent); color: #fff; }
+/* Full figures, never abbreviated: the size follows the tile's own width so
+   "Rp 1.300.217.980" stays on one line. */
+.soft-tile { container-type: inline-size; }
+.soft-tile-val { font-size: clamp(1.05rem, 10cqi, 1.95rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.1; white-space: nowrap; font-variant-numeric: tabular-nums lining-nums; }
+.soft-tile-gross { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .7rem; min-width: 0; }
+.soft-tile-net { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .6rem; color: var(--soft-muted); font-size: .8rem; line-height: 1.4; font-variant-numeric: tabular-nums lining-nums; }
+.soft-tile-net > span { overflow-wrap: anywhere; }
+.soft-tile-net strong { font-weight: 650; }
+.soft-tile .con-delta, .soft-strip-cell .con-delta { justify-self: start; width: fit-content; flex: 0 0 auto; }
+.soft-tile.is-plain { color: var(--soft-ink); }
+.soft-tile.is-accent, .soft-tile.is-violet { color: #fff; }
+.soft-tile.is-accent { background: var(--soft-accent); }
+.soft-tile.is-violet { background: var(--soft-violet); }
+.soft-tile.is-accent::after, .soft-tile.is-violet::after {
+  content: ''; position: absolute; right: -46px; top: -46px; width: 150px; height: 150px;
+  border-radius: 50%; background: rgba(255, 255, 255, .08); pointer-events: none;
+}
+/* Deltas and info tips on a filled tile: same meaning, legible on colour. */
+.soft-tile.is-accent .con-delta, .soft-tile.is-violet .con-delta { background: rgba(255, 255, 255, .18); color: #fff; }
+.soft-tile.is-accent .con-tip-btn, .soft-tile.is-violet .con-tip-btn,
+.soft-tile.is-accent [class*='tip'] svg, .soft-tile.is-violet [class*='tip'] svg { color: rgba(255, 255, 255, .8); }
+.soft-tile.is-accent .con-absent, .soft-tile.is-violet .con-absent { color: rgba(255, 255, 255, .85); }
+
+.soft-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: .4rem; }
+.soft-strip-cell { display: grid; align-content: start; gap: .35rem; min-width: 0; padding: .7rem .85rem; border-radius: 16px; }
+.soft-strip-cell + .soft-strip-cell { box-shadow: inset 1px 0 #eef0f5; }
+.soft-strip-label { display: inline-flex; align-items: center; gap: .3rem; color: var(--soft-muted); font-size: .72rem; font-weight: 700; }
+.soft-strip-val { color: var(--soft-ink); font-size: 1.08rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums lining-nums; }
+
+/* The analysis itself: the classic panels, re-seated as large soft surfaces. */
+.soft-content { min-width: 0; padding: 0; }
+.soft-content > .con-canvas { gap: 16px; }
+.soft-content .con-focus,
+.soft-content .mom-panel,
+.soft-content > section,
+.soft-content > div > section {
+  border: 0;
+  border-radius: var(--soft-radius);
+  background: var(--soft-card);
+  box-shadow: var(--soft-shadow);
+}
+/* The classic channel panel is open (no card); here it sits in one, so it
+   takes the card's inner padding back. */
+.soft-content .channel-analysis { padding: 1.4rem 1.5rem 1.5rem; }
+.soft-content .channel-analysis > .con-focus-head { padding: 0 0 1.1rem; }
+.soft-content .channel-analysis > .con-focus-head h2 { font-size: clamp(1.3rem, 1.8vw, 1.7rem); }
+@media (max-width: 720px) { .soft-content .channel-analysis { padding: 1rem; } }
+
+.soft-source { display: inline-flex; align-items: center; gap: .4rem; margin: 0; padding: 0 .4rem; color: var(--soft-muted); font-size: .72rem; }
+.soft-source a { color: var(--soft-accent); font-weight: 700; }
+
+/* Figures inside the classic cards: full value on one line, sized to the card. */
+.soft-content .stat-card { container-type: inline-size; }
+.soft-content .stat-card .value { word-break: normal !important; white-space: nowrap; font-size: clamp(1rem, 9cqi, 1.6rem); }
+
+/* Executive Snapshot's panel is open in the classic console; here it is a card. */
+.soft-shell .soft-content .con-focus.xs { padding: 1.4rem 1.5rem 1.5rem; border: 0; border-radius: var(--soft-radius); background: var(--soft-card); box-shadow: var(--soft-shadow); }
+
+/* ── Responsive ────────────────────────────────────────────── */
+
+@media (max-width: 1180px) {
+  .soft-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .soft-strip-cell:nth-child(3n + 1) { box-shadow: none; }
+}
+@media (max-width: 900px) {
+  .soft-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .soft-frame { padding: 10px; border-radius: 22px; gap: 12px; }
+  .soft-command { position: relative; padding: 12px; }
+  .soft-command .con-controls { width: 100%; }
+  .soft-command .con-ctl-brand { padding-right: 46px; }
+  .soft-command .soft-icon-btn { position: absolute; right: 12px; top: 12px; }
+  .soft-command .con-ctl-basis { flex: 1 1 100%; }
+  .soft-command .con-ctl-period > div { width: 100%; }
+  .soft-command .con-ctl-period button { width: 100%; white-space: normal; text-align: left; }
+  .soft-command .con-ctl-static { white-space: normal; }
+  .soft-command .con-ctl-brand, .soft-command .con-ctl-period { flex: 1 1 100%; max-width: none; }
+  .soft-tab { padding: .55rem .6rem; gap: .5rem; }
+  .soft-tab-ico { width: 30px; height: 30px; }
+  .soft-tab-text small { display: none; }
+  .soft-subtabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .soft-subtab { flex: 0 0 auto; }
+  .soft-tiles { grid-template-columns: minmax(0, 1fr); }
+  .soft-tile { min-height: 0; }
+  .soft-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .soft-strip-cell { box-shadow: none !important; }
+}
+@media (prefers-reduced-motion: reduce) { .soft-tab, .soft-subtab { transition: none; } }
+
+/* The page heading above already names the channel, domain and question;
+   the panel's own heading would say it a second time. */
+.soft-content .channel-analysis > .con-focus-head { display: none; }
+.soft-content .xs-head { display: none; }
+.soft-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .6rem 1rem; }
+.soft-head-link { display: inline-flex; align-items: center; gap: .3rem; color: var(--soft-accent); font-size: .78rem; font-weight: 750; text-decoration: none; }
+.soft-head-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Selected Soft Blue palette; the channel rail keeps its blue/white treatment. */
+.soft-shell {
+  --soft-floor: #f3f6fb;
+  --soft-ink: #202e45;
+  --soft-muted: #57677e;
+  --soft-accent: #2856b6;
+  --soft-tint: #eaf1fc;
+  --soft-border: #d9e2ef;
+  --soft-secondary: #f5f8fd;
+}
+.soft-shell {
+  --text: var(--soft-ink);
+  --text-muted: var(--soft-muted);
+  --text-placeholder: var(--soft-muted);
+  --border: var(--soft-border);
+  --rule: var(--soft-border);
+  --primary: var(--soft-accent);
+  --acc: var(--soft-accent);
+  --primary-light: var(--soft-tint);
+  --bg-elevated: var(--soft-secondary);
+  --soft-shadow: 0 2px 3px rgba(25,40,65,.025), 0 12px 26px -20px rgba(25,40,65,.16);
+}
+.soft-shell .soft-masthead h1 > span:not(.soft-title-dot) { color: var(--soft-ink); }
+.soft-shell .soft-masthead-signature { border-color: var(--soft-border); }
+.soft-shell .soft-command { border-color: var(--soft-border); box-shadow: none; }
+.soft-shell .dashboard-brand-trigger { background: var(--soft-tint); color: var(--soft-accent); border-color: var(--soft-border); }
+.soft-shell .dashboard-brand-trigger:hover { border-color: var(--soft-accent); }
+.soft-shell .con-switch.is-on { background: var(--soft-tint); }
+.soft-shell .con-ctl-static { background: var(--soft-secondary); }
+.soft-shell .soft-subtabs { border-color: var(--soft-border); }
+.soft-shell .soft-tile.is-accent { background: var(--soft-tint); color: var(--soft-ink); }
+.soft-shell .soft-tile.is-violet { background: var(--soft-secondary); color: var(--soft-ink); }
+.soft-shell .soft-tile:is(.is-accent, .is-violet)::after { display: none; }
+.soft-shell .soft-tile-chip { background: var(--soft-tint); color: var(--soft-accent); }
+.soft-shell .soft-tile :is(.con-tip-btn, .con-absent, [class*='tip'] svg) { color: var(--soft-muted); }
+.soft-shell .soft-tile .con-delta.is-up { color: var(--good); background: var(--good-100); }
+.soft-shell .soft-tile .con-delta.is-down { color: var(--bad); background: var(--bad-100); }
+.soft-shell .soft-tile .con-delta.is-flat { color: var(--soft-muted); background: #fff; }

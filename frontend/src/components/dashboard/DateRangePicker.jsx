@@ -1,3 +1,4 @@
+import { getLayoutRect, getLayoutViewport } from '../../utils/uiScale.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './dateRangePicker.css';
@@ -171,16 +172,17 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
   useLayoutEffect(() => {
     if (!open) return undefined;
     const place = () => {
-      const anchor = triggerRef.current?.getBoundingClientRect();
+      const anchor = triggerRef.current ? getLayoutRect(triggerRef.current) : null;
+      const viewport = getLayoutViewport();
       const panel = panelRef.current;
       if (!anchor || !panel) return;
       const width = panel.offsetWidth;
       const height = panel.offsetHeight;
-      const left = Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8));
+      const left = Math.max(8, Math.min(anchor.left, viewport.width - width - 8));
       const below = anchor.bottom + 8;
-      const top = below + height <= window.innerHeight - 8
+      const top = below + height <= viewport.height - 8
         ? below
-        : Math.max(8, Math.min(anchor.top - height - 8, window.innerHeight - height - 8));
+        : Math.max(8, Math.min(anchor.top - height - 8, viewport.height - height - 8));
       setPosition({ left, top });
     };
     place();

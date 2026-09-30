@@ -22,6 +22,7 @@ import {
 } from '../components/dashboard/domains.js';
 import { Delta, Figure, InfoTip, Spark } from '../components/dashboard/figures.jsx';
 import ExecutiveSummary from '../components/dashboard/ExecutiveSummary.jsx';
+import SoftShell from '../components/dashboard/SoftShell.jsx';
 import '../components/dashboard/console.css';
 import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
@@ -633,6 +634,100 @@ export default function DashboardPage() {
     if (!isSnapshot && domainKey !== activeKey) setActiveKey(domainKey);
   }, [isSnapshot, domainKey, activeKey, setActiveKey]);
 
+  // Layout under test: "soft" (the new frame) or "classic". Remembered per
+  // browser session so a comparison survives a reload.
+  const [look, setLook] = useSessionState('dashboard:look', 'soft');
+
+  const analysis = (
+    <>
+    {isSnapshot ? (
+      <>
+        {/* Both readings here are brand-level rather than per-channel:
+            the snapshot is the sum of the channels, and a meeting record
+            answers to the brand. That is why they live on this view
+            instead of repeating above every channel. */}
+        <ExecutiveSummary filters={filters} />
+        {/* Meeting notes are internal and live under Pengaturan Brand;
+            a role without that module (a client) does not see them. */}
+        {can('brand_settings') && <MinutesOverview filters={filters} />}
+      </>
+    ) : (
+      <>
+        {channel.ready && look !== 'soft' && <KpiStrip entry={read('Executive Snapshot')} />}
+
+        <section className="con-focus channel-analysis" aria-labelledby="con-focus-title">
+          <div className="con-focus-head">
+            <h2 id="con-focus-title">
+              <span className="con-focus-channel" style={{ '--ch-accent': channel.accent }}>
+                <i aria-hidden="true" />{channel.label}
+              </span>
+              {active.label}
+            </h2>
+            <p className="con-focus-q">{channel.ready ? active.question : channel.hint}</p>
+          </div>
+          {channel.ready ? (
+            // Keyed on the domain so the settle animation replays on every
+            // exchange, and so a domain's local view state never leaks into
+            // the next one.
+            <div className="con-focus-body" key={`${channel.id}:${domainKey}`} data-anim={reduceMotion ? undefined : 'in'}>
+              <DashboardTab
+                activeTab={domainKey}
+                filters={filters}
+                data={activeEntry.data}
+                status={activeEntry.status}
+                error={activeEntry.error}
+                onRetry={() => retry(domainKey)}
+                productPerformanceLevel={productLevel}
+                setProductPerformanceLevel={setProductLevel}
+                onNavigateTab={setActiveKey}
+              />
+            </div>
+          ) : (
+            // An empty state that says what has to happen, not just that
+            // nothing is here. The steps are a real sequence — the file
+            // has to land before the importer can fill the domains.
+            <div className="con-focus-body channel-pending">
+              <div className="channel-pending-main">
+                <span className="channel-pending-ico" style={{ '--ch-accent': channel.accent }} aria-hidden="true">
+                  <Database size={20} />
+                </span>
+                <div>
+                  <strong>{channel.label} belum punya data terimpor</strong>
+                  <p>{channel.note}</p>
+                </div>
+              </div>
+              <ol className="channel-pending-steps">
+                <li>Unggah file {channel.label} pada Pengaturan Brand</li>
+                <li>Importer memindahkannya ke tabel fakta</li>
+                <li>Seluruh domain {channel.label} di atas ikut terisi</li>
+              </ol>
+              <p className="channel-pending-note">
+                Belanja iklan {channel.label} yang sudah diisi di Daily Tracking tetap terbaca pada Executive Snapshot.
+              </p>
+              <Link to="/pengaturan-brand" className="mom-head-link">Buka Pengaturan Brand <ArrowUpRight size={13} /></Link>
+            </div>
+          )}
+        </section>
+      </>
+    )}
+    </>
+  );
+
+  if (look === 'soft') {
+    return (
+      <SoftShell
+        filters={filters} setFilters={setFilters}
+        views={VIEWS} view={view} setViewId={setViewId}
+        channel={channel} channelDomains={channelDomains} domainKey={domainKey} setActiveKey={setActiveKey}
+        question={isSnapshot ? EXECUTIVE_VIEW.question : channel.ready ? active.question : channel.note}
+        kpiEntry={channel?.ready ? read('Executive Snapshot') : null}
+        onClassic={() => setLook('classic')}
+      >
+        {analysis}
+      </SoftShell>
+    );
+  }
+
   return (
     <div className="con dashboard-console">
       <header className="brand-hero dashboard-hero">
@@ -668,7 +763,9 @@ export default function DashboardPage() {
 
         <div className="brand-dock dashboard-dock">
           <div className="dashboard-dock-copy">
-            <span><BarChart3 size={15} /> Ruang lingkup analisis</span>
+            <span><BarChart3 size={15} /> Ruang lingkup analisis
+              <button type="button" className="dashboard-look-btn" onClick={() => setLook('soft')}>Coba tampilan baru</button>
+            </span>
             <small>Brand dan periode berikut menjadi dasar seluruh angka di bawah.</small>
           </div>
           <FilterPanel filters={filters} onChange={setFilters} />
@@ -766,76 +863,7 @@ export default function DashboardPage() {
 
       <div className="con-body dashboard-body">
         <div className="con-canvas">
-          {isSnapshot ? (
-            <>
-              {/* Both readings here are brand-level rather than per-channel:
-                  the snapshot is the sum of the channels, and a meeting record
-                  answers to the brand. That is why they live on this view
-                  instead of repeating above every channel. */}
-              <ExecutiveSummary filters={filters} />
-              {/* Meeting notes are internal and live under Pengaturan Brand;
-                  a role without that module (a client) does not see them. */}
-              {can('brand_settings') && <MinutesOverview filters={filters} />}
-            </>
-          ) : (
-            <>
-              {channel.ready && <KpiStrip entry={read('Executive Snapshot')} />}
-
-              <section className="con-focus channel-analysis" aria-labelledby="con-focus-title">
-                <div className="con-focus-head">
-                  <h2 id="con-focus-title">
-                    <span className="con-focus-channel" style={{ '--ch-accent': channel.accent }}>
-                      <i aria-hidden="true" />{channel.label}
-                    </span>
-                    {active.label}
-                  </h2>
-                  <p className="con-focus-q">{channel.ready ? active.question : channel.hint}</p>
-                </div>
-                {channel.ready ? (
-                  // Keyed on the domain so the settle animation replays on every
-                  // exchange, and so a domain's local view state never leaks into
-                  // the next one.
-                  <div className="con-focus-body" key={`${channel.id}:${domainKey}`} data-anim={reduceMotion ? undefined : 'in'}>
-                    <DashboardTab
-                      activeTab={domainKey}
-                      filters={filters}
-                      data={activeEntry.data}
-                      status={activeEntry.status}
-                      error={activeEntry.error}
-                      onRetry={() => retry(domainKey)}
-                      productPerformanceLevel={productLevel}
-                      setProductPerformanceLevel={setProductLevel}
-                      onNavigateTab={setActiveKey}
-                    />
-                  </div>
-                ) : (
-                  // An empty state that says what has to happen, not just that
-                  // nothing is here. The steps are a real sequence — the file
-                  // has to land before the importer can fill the domains.
-                  <div className="con-focus-body channel-pending">
-                    <div className="channel-pending-main">
-                      <span className="channel-pending-ico" style={{ '--ch-accent': channel.accent }} aria-hidden="true">
-                        <Database size={20} />
-                      </span>
-                      <div>
-                        <strong>{channel.label} belum punya data terimpor</strong>
-                        <p>{channel.note}</p>
-                      </div>
-                    </div>
-                    <ol className="channel-pending-steps">
-                      <li>Unggah file {channel.label} pada Pengaturan Brand</li>
-                      <li>Importer memindahkannya ke tabel fakta</li>
-                      <li>Seluruh domain {channel.label} di atas ikut terisi</li>
-                    </ol>
-                    <p className="channel-pending-note">
-                      Belanja iklan {channel.label} yang sudah diisi di Daily Tracking tetap terbaca pada Executive Snapshot.
-                    </p>
-                    <Link to="/pengaturan-brand" className="mom-head-link">Buka Pengaturan Brand <ArrowUpRight size={13} /></Link>
-                  </div>
-                )}
-              </section>
-            </>
-          )}
+          {analysis}
         </div>
       </div>
       </div>

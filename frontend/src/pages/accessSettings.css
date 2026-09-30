@@ -94,7 +94,7 @@
 
 /* Modal */
 .acc-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(15, 23, 42, .45); backdrop-filter: blur(3px); }
-.acc-modal { display: flex; flex-direction: column; width: min(520px, 100%); max-height: calc(100vh - 32px); border-radius: 16px; background: #fff; box-shadow: 0 30px 60px -20px rgba(15, 23, 42, .45); overflow: hidden; }
+.acc-modal { display: flex; flex-direction: column; width: min(520px, 100%); max-height: calc(var(--atlas-vh, 100vh) - 32px); border-radius: 16px; background: #fff; box-shadow: 0 30px 60px -20px rgba(15, 23, 42, .45); overflow: hidden; }
 .acc-modal.is-wide { width: min(720px, 100%); }
 .acc-modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid #e3e8f2; }
 .acc-modal-head h2 { flex: 1; margin: 0; font-size: 1rem; font-weight: 750; color: #0f1a3a; letter-spacing: -.01em; }

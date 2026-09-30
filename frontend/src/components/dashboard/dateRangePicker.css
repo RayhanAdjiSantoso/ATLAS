@@ -12,8 +12,8 @@
   position: fixed;
   z-index: 1000;
   display: flex;
-  width: min(780px, calc(100vw - 16px));
-  max-height: calc(100dvh - 16px);
+  width: min(780px, calc(var(--atlas-vw, 100vw) - 16px));
+  max-height: calc(var(--atlas-dvh, 100dvh) - 16px);
   overflow: auto;
   background: var(--bg-card);
   border: 1px solid var(--border);

@@ -1,3 +1,4 @@
+import { getLayoutRect, getLayoutViewport } from '../../utils/uiScale.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getPortalContainer } from '../utils/portalTarget';
@@ -38,20 +39,21 @@ export function MetricPicker({ allCols, activeCols, onChange, labelFn, dense }: 
       setPos(null);
       return;
     }
-    const rect = triggerRef.current.getBoundingClientRect();
+    const rect = getLayoutRect(triggerRef.current);
+    const viewport = getLayoutViewport();
     const margin = 10;
-    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceBelow = viewport.height - rect.bottom - margin;
     const spaceAbove = rect.top - margin;
     const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
     const maxHeight = Math.max(140, Math.min(320, openUp ? spaceAbove : spaceBelow));
     // Estimated width (CSS: min-width 260px, max-width min(360px, 90vw)) — used
     // to keep the dropdown from overflowing the right edge on narrow viewports.
-    const estWidth = Math.min(360, window.innerWidth * 0.9);
+    const estWidth = Math.min(360, viewport.width * 0.9);
     let left = rect.left;
-    if (left + estWidth > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - margin - estWidth);
+    if (left + estWidth > viewport.width - margin) left = Math.max(margin, viewport.width - margin - estWidth);
     setPos({
       top: openUp ? undefined : rect.bottom + 5,
-      bottom: openUp ? window.innerHeight - rect.top + 5 : undefined,
+      bottom: openUp ? viewport.height - rect.top + 5 : undefined,
       left,
       maxHeight,
     });

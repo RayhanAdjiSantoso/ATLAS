@@ -2466,3 +2466,7 @@ html:has(.con-bar) {
 .dashboard-body table.table tbody tr:hover td { background: var(--bg-elevated, #f7f8fc); }
 .dsec-panel .dsec-head + .dsec-table-wrap { margin-top: 10px; }
 .dsec-level { display: inline-flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 650; color: var(--text-muted); }
+
+/* Test toggle into the soft layout (Business Overview). */
+.dashboard-look-btn { margin-left:.6rem; padding:.2rem .6rem; border:1px solid var(--acc-300,#b8c5f5); border-radius:99px; background:#fff; color:var(--acc); font:inherit; font-size:.68rem; font-weight:750; cursor:pointer; }
+.dashboard-look-btn:hover { background:var(--acc-100,#eef1fc); }

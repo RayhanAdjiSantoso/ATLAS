@@ -1,0 +1,29 @@
+/* A shared desktop density, including body portals. Browser zoom remains under
+   user control. Narrow layouts retain their existing readable sizing. */
+:root {
+  --atlas-ui-scale: 1;
+  --atlas-vh: calc(100vh / var(--atlas-ui-scale));
+  --atlas-dvh: calc(100dvh / var(--atlas-ui-scale));
+  --atlas-vw: calc(100vw / var(--atlas-ui-scale));
+}
+@media screen and (min-width: 1024px) {
+  html { --atlas-ui-scale: .8; zoom: var(--atlas-ui-scale); }
+  :root { --workspace-max: calc(1840px / var(--atlas-ui-scale)); }
+}
+
+/* Viewport-height surfaces must still cover the full visible window. */
+body, .layout, .auth-page, .mil-ui { min-height: var(--atlas-vh); }
+.sidebar { height: var(--atlas-dvh); }
+.mil-ui .auth-experience { min-height: var(--atlas-dvh); }
+.mil-ui .auth-frame { min-height: min(780px, calc(var(--atlas-dvh) - clamp(2rem, 5.2vw, 4.5rem))); }
+.mil-ui .site-main { min-height: calc(var(--atlas-vh) - 66px); }
+
+/* Export captures and printed documents use the original layout scale. The
+   existing export lifecycle adds/removes these classes, including on error. */
+html:has(.pdf-export-mode) { --atlas-ui-scale: 1; zoom: 1; }
+@media print {
+  html { --atlas-ui-scale: 1; zoom: 1; }
+}
+@media (max-width: 760px) {
+  .mil-ui .auth-frame { min-height: calc(var(--atlas-dvh) - 2rem); }
+}

@@ -175,12 +175,12 @@ function MultiMetricTable<T extends { metrics: GenericMetricCell[] }>({
         setMaxHeight(undefined);
         return;
       }
-      let h = head.getBoundingClientRect().height;
+      let h = head.offsetHeight;
       // While this table lives in an inactive report tab (display:none) every
       // rect measures 0 — don't cap the scroll area to ~1px and hide it; wait
       // for the ResizeObserver below to fire once the panel becomes visible.
       if (h === 0) return;
-      for (let i = 0; i < VISIBLE_ROWS; i++) h += body.rows[i].getBoundingClientRect().height;
+      for (let i = 0; i < VISIBLE_ROWS; i++) h += body.rows[i].offsetHeight;
       setMaxHeight(Math.ceil(h) + 1);
     }
     measure();

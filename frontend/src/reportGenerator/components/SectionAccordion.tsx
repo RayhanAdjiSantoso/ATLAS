@@ -1,3 +1,4 @@
+import { getUIScale } from '../../utils/uiScale.js';
 import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 // Everything sticky above the report stacks: site header → report-type rail →
@@ -144,9 +145,9 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
       let collapsing = 0;
       if (pending.prev !== -1 && pending.prev < pending.next) {
         const prevBlock = blockOf(pending.prev);
-        if (prevBlock) collapsing = Math.max(0, prevBlock.getBoundingClientRect().height - headHeight(prevBlock));
+        if (prevBlock) collapsing = Math.max(0, prevBlock.getBoundingClientRect().height - headHeight(prevBlock) * getUIScale());
       }
-      const top = el.getBoundingClientRect().top + window.scrollY - collapsing - stickyBottom() - 12;
+      const top = el.getBoundingClientRect().top + window.scrollY - collapsing - stickyBottom() - 12 * getUIScale();
       window.scrollTo({ top: Math.max(0, top), behavior: prefersReduced() ? 'auto' : 'smooth' });
     });
     return () => cancelAnimationFrame(raf);
