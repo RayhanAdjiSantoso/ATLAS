@@ -1096,3 +1096,9 @@
   .sec-split-main .kpi-compact th:not(:first-child), .sec-split-main .fg-table th:not(:first-child){white-space:normal}
   .sec-split-main .kpi-compact th, .sec-split-main .kpi-compact td, .sec-split-main .fg-table th, .sec-split-main .fg-table td{padding-left:.65rem;padding-right:.65rem}
 }
+
+  /* "Disalin: <nama>" after clicking a chart's axis label (Creative Performance). */
+  .chart-copied{position:absolute;left:50%;bottom:6px;z-index:2;max-width:calc(100% - 24px);padding:.35rem .7rem;border-radius:8px;background:#0f1a3a;color:#fff;font-size:.72rem;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0;transform:translate(-50%,4px);transition:opacity .18s ease,transform .18s ease;pointer-events:none}
+  .chart-copied.is-on{opacity:1;transform:translate(-50%,0)}
+  @media(prefers-reduced-motion:reduce){.chart-copied{transition:none}}
+

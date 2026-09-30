@@ -843,10 +843,24 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           />
                         )}
                         {cpas.nv && (
-                          <OverviewDetailedCard heading="CPAS Shopee · NV" badge="New Visitor" overviewRows={cpas.nv.overviewRows} detailedRows={cpas.nv.detailedRows} allCols={cpas.nv.allCols} p1={cpas.p1} p2={cpas.p2} />
+                          <OverviewDetailedCard
+                            heading="CPAS Shopee · NV" badge="New Visitor"
+                            overviewRows={cpas.nv.overviewRows} detailedRows={cpas.nv.detailedRows} allCols={cpas.nv.allCols}
+                            p1={cpas.p1} p2={cpas.p2}
+                            aside={cpas.nvFunnel?.hasData ? (
+                              <SymptomTreePanel tree={cpas.nvFunnel.tree} p1={cpas.p1} p2={cpas.p2} title="Root Cause Analysis · NV" badge={`${cpas.p1} → ${cpas.p2}`} />
+                            ) : undefined}
+                          />
                         )}
                         {cpas.rm && (
-                          <OverviewDetailedCard heading="CPAS Shopee · RM" badge="Re-Marketing" overviewRows={cpas.rm.overviewRows} detailedRows={cpas.rm.detailedRows} allCols={cpas.rm.allCols} p1={cpas.p1} p2={cpas.p2} />
+                          <OverviewDetailedCard
+                            heading="CPAS Shopee · RM" badge="Re-Marketing"
+                            overviewRows={cpas.rm.overviewRows} detailedRows={cpas.rm.detailedRows} allCols={cpas.rm.allCols}
+                            p1={cpas.p1} p2={cpas.p2}
+                            aside={cpas.rmFunnel?.hasData ? (
+                              <SymptomTreePanel tree={cpas.rmFunnel.tree} p1={cpas.p1} p2={cpas.p2} title="Root Cause Analysis · RM" badge={`${cpas.p1} → ${cpas.p2}`} />
+                            ) : undefined}
+                          />
                         )}
                         {cpas.ageDemo && (
                           <MetaBreakdownSection

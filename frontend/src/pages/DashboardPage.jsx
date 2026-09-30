@@ -23,6 +23,7 @@ import {
 import { Delta, Figure, InfoTip, Spark } from '../components/dashboard/figures.jsx';
 import ExecutiveSummary from '../components/dashboard/ExecutiveSummary.jsx';
 import SoftShell from '../components/dashboard/SoftShell.jsx';
+import CrossChannelPanel from '../components/dashboard/CrossChannelPanel.jsx';
 import '../components/dashboard/console.css';
 import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
@@ -647,6 +648,8 @@ export default function DashboardPage() {
             answers to the brand. That is why they live on this view
             instead of repeating above every channel. */}
         <ExecutiveSummary filters={filters} />
+        {/* Cross-channel reading of the month's product performance. */}
+        <CrossChannelPanel filters={filters} />
         {/* Meeting notes are internal and live under Pengaturan Brand;
             a role without that module (a client) does not see them. */}
         {can('brand_settings') && <MinutesOverview filters={filters} />}

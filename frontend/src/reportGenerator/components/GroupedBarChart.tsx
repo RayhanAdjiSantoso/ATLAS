@@ -1,5 +1,6 @@
 import { Chart, type ChartDataset, type TooltipItem } from 'chart.js/auto';
-import { useEffect, useRef } from 'react';
+import { getRelativePosition } from 'chart.js/helpers';
+import { useEffect, useRef, useState } from 'react';
 
 // Grouped vertical bars, one group per product. Canvas rather than SVG for
 // the same reason PieChartCanvas is canvas: these sections are captured by
@@ -29,6 +30,7 @@ export function GroupedBarChart({
   zeroLine = false,
   height = 320,
   ariaLabel,
+  copyLabels = false,
 }: {
   labels: string[];
   series: BarSeries[];
@@ -38,7 +40,12 @@ export function GroupedBarChart({
   zeroLine?: boolean;
   height?: number;
   ariaLabel: string;
+  // Clicking an axis label copies its full, untruncated name — for creative
+  // names that only fit the axis cut short and slanted.
+  copyLabels?: boolean;
 }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const copiedTimer = useRef<number | undefined>(undefined);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
   // Keep the newest formatter without making it a re-render trigger.
@@ -132,15 +139,50 @@ export function GroupedBarChart({
         : [],
     });
 
+    // Label copy is wired on the canvas itself: Chart.js only reports clicks
+    // inside the plot area, and the axis labels sit below it.
+    const chart = chartRef.current;
+    const labelIndexAt = (e: MouseEvent): number | null => {
+      if (!chart) return null;
+      const pos = getRelativePosition(e, chart as never);
+      if (pos.y <= chart.chartArea.bottom) return null;
+      const idx = Math.round(Number(chart.scales.x.getValueForPixel(pos.x)));
+      return idx >= 0 && idx < labels.length ? idx : null;
+    };
+    const onMove = (e: MouseEvent) => { el.style.cursor = labelIndexAt(e) === null ? 'default' : 'copy'; };
+    const onClick = (e: MouseEvent) => {
+      const idx = labelIndexAt(e);
+      if (idx === null) return;
+      const name = labels[idx];
+      navigator.clipboard?.writeText(name).then(() => {
+        setCopied(name);
+        window.clearTimeout(copiedTimer.current);
+        copiedTimer.current = window.setTimeout(() => setCopied(null), 1800);
+      }).catch(() => {});
+    };
+    if (copyLabels) {
+      el.addEventListener('mousemove', onMove);
+      el.addEventListener('click', onClick);
+    }
+
     return () => {
+      el.removeEventListener('mousemove', onMove);
+      el.removeEventListener('click', onClick);
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [labels, series, zeroLine]);
+  }, [labels, series, zeroLine, copyLabels]);
+
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
 
   return (
-    <div className="chartbox" style={{ height }}>
+    <div className="chartbox" style={{ height, position: 'relative' }}>
       <canvas ref={canvasRef} role="img" aria-label={ariaLabel} />
+      {copyLabels && (
+        <span className={`chart-copied${copied ? ' is-on' : ''}`} role="status" aria-live="polite">
+          {copied ? `Disalin: ${copied}` : ''}
+        </span>
+      )}
     </div>
   );
 }

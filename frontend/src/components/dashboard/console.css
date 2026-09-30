@@ -2470,3 +2470,25 @@ html:has(.con-bar) {
 /* Test toggle into the soft layout (Business Overview). */
 .dashboard-look-btn { margin-left:.6rem; padding:.2rem .6rem; border:1px solid var(--acc-300,#b8c5f5); border-radius:99px; background:#fff; color:var(--acc); font:inherit; font-size:.68rem; font-weight:750; cursor:pointer; }
 .dashboard-look-btn:hover { background:var(--acc-100,#eef1fc); }
+
+/* ── Executive Snapshot · Rekomendasi silang Meta × Shopee ─────────────── */
+.xc-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+.xc-head h2 { margin:0; font-size:1.05rem; font-weight:800; letter-spacing:-.02em; color:var(--text); }
+.xc-head p { margin:.25rem 0 0; max-width:62ch; color:var(--text-muted); font-size:.76rem; line-height:1.5; }
+.xc-body { display:grid; gap:1rem; }
+.xc-cols { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.xc-col { min-width:0; padding:1rem 1.05rem; border-radius:12px; background:#f6f8fd; }
+.xc-col h3 { display:flex; align-items:center; gap:.4rem; margin:0 0 .75rem; color:var(--text); font-size:.82rem; font-weight:800; }
+.xc-col h3 svg { flex-shrink:0; color:var(--acc); }
+.xc-list { display:grid; gap:.6rem; margin:0; padding:0; list-style:none; counter-reset:xc; }
+.xc-list li { display:grid; gap:.3rem; padding:.75rem .85rem; border:1px solid var(--border); border-radius:10px; background:#fff; }
+.xc-name { color:var(--text); font-size:.8rem; font-weight:750; line-height:1.35; overflow-wrap:anywhere; }
+.xc-facts { display:flex; flex-wrap:wrap; gap:.3rem .5rem; }
+.xc-facts span { padding:.12rem .45rem; border-radius:6px; background:#eef1f7; color:var(--text-muted); font-size:.68rem; font-weight:600; }
+.xc-facts b { color:var(--text); font-weight:800; font-variant-numeric:tabular-nums lining-nums; }
+.xc-list p { margin:0; color:var(--text-muted); font-size:.72rem; line-height:1.45; }
+.xc-list small { color:var(--text-placeholder,#61708f); font-size:.66rem; overflow-wrap:anywhere; }
+.xc-empty, .xc-note { color:var(--text-muted); font-size:.76rem; line-height:1.5; }
+.xc-note.is-bad { color:var(--danger,#c81e1e); }
+.xc-foot { margin:0; color:var(--text-muted); font-size:.7rem; line-height:1.5; }
+@media (max-width:900px) { .xc-cols { grid-template-columns:minmax(0,1fr); } .xc-head { flex-direction:column; } }

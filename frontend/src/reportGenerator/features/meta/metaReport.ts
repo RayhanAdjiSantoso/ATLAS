@@ -71,6 +71,9 @@ export interface CpasSections {
   // Root cause analysis for this channel — the sales funnel, same shape the
   // Shopee report draws.
   funnel?: MetaFunnel;
+  // The same funnel, read for the New Visitor and Re-Marketing campaigns alone.
+  nvFunnel?: MetaFunnel;
+  rmFunnel?: MetaFunnel;
 }
 
 export interface MetaReport {
@@ -509,6 +512,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       const nvOld = cpasGrpOld['NV'] || [];
       const nvCur = cpasGrpCur['NV'] || [];
       const nvOvRows = buildMetaOverviewRows('ecommerce', nvOld, nvCur, cpasReach);
+      cpas.nvFunnel = buildMetaSalesFunnel(nvOld, nvCur);
       cpas.nv = { overviewRows: nvOvRows, detailedRows: toDisplayRows(buildKPI(nvOld, nvCur, cAllCols)), allCols: cAllCols };
       metaKpis.push(...overviewSummary(nvOvRows, 'CPAS Marketplace · NV'));
       cpasKpis.push(...overviewSummary(nvOvRows, 'NV'));
@@ -518,6 +522,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       const rmOld = cpasGrpOld['RM'] || [];
       const rmCur = cpasGrpCur['RM'] || [];
       const rmOvRows = buildMetaOverviewRows('ecommerce', rmOld, rmCur, cpasReach);
+      cpas.rmFunnel = buildMetaSalesFunnel(rmOld, rmCur);
       cpas.rm = { overviewRows: rmOvRows, detailedRows: toDisplayRows(buildKPI(rmOld, rmCur, cAllCols)), allCols: cAllCols };
       metaKpis.push(...overviewSummary(rmOvRows, 'CPAS Marketplace · RM'));
       cpasKpis.push(...overviewSummary(rmOvRows, 'RM'));

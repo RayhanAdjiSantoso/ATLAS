@@ -196,6 +196,7 @@ export function MetaBreakdownSection<M>({
               formatValue={fmt}
               height={320}
               ariaLabel={`${heading}: ${metric.label} per kelompok`}
+              copyLabels={!dimCol.toLowerCase().includes('age') && !dimCol.toLowerCase().includes('gender')}
             />
             {prefer === 'pie' && (
               <p className="chart-foot">
@@ -204,6 +205,9 @@ export function MetaBreakdownSection<M>({
               </p>
             )}
           </>
+        )}
+        {asPie ? null : !dimCol.toLowerCase().match(/age|gender/) && usable.length > 0 && (
+          <p className="chart-foot">Klik nama di bawah grafik untuk menyalin nama lengkapnya.</p>
         )}
         {missing.length > 0 && (
           <p className="chart-foot">
