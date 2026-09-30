@@ -45,9 +45,14 @@ function getReportBlocks(rootEl: HTMLElement): HTMLElement[] {
   // Shopee report is paged — every page is force-shown during pdf-export-mode).
   // .period-warning (Fase 1) is captured alongside .sec-block so the "periods
   // aren't the same length" warning survives into the export.
-  body
-    .querySelectorAll<HTMLElement>(':scope > .sec-block, :scope > .period-warning, :scope > .report-tab-panel > .sec-block, :scope > .report-tab-panel > .period-warning')
-    .forEach((el) => blocks.push(el));
+  // Every top-level card, wherever the page nests it — directly under the
+  // body, inside a paged .report-tab-panel, or inside a section workspace
+  // (SectionAccordion) wrapper. A .sec-block nested inside another one is part
+  // of that card, not a card of its own.
+  body.querySelectorAll<HTMLElement>('.sec-block, .period-warning').forEach((el) => {
+    if (el.parentElement?.closest('.sec-block')) return;
+    blocks.push(el);
+  });
   return blocks;
 }
 

@@ -1,207 +1,153 @@
-import { getUIScale } from '../../utils/uiScale.js';
-import { Children, Fragment, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
-// Everything sticky above the report stacks: site header → report-type rail →
-// the report's own tab bar. Measure whichever is lowest rather than hardcode a
-// number, so opening a section parks it just under the chrome instead of
-// behind it.
-function stickyBottom(): number {
-  const bottoms = ['.gen-rail', '.report-tabs', '.site-header']
-    .map((sel) => document.querySelector(sel)?.getBoundingClientRect().bottom ?? 0)
-    .filter((n) => n > 0);
-  return bottoms.length ? Math.max(...bottoms) : 0;
-}
+// A report page as a workspace: a sticky navigator of its sections on the
+// left, the chosen section on the right. Replaces a column of folded rows —
+// a dozen tall cards read one at a time, side by side with their index,
+// instead of scrolled past.
+//
+// Each child renders its own `.sec-block` + `.sec-heading`; the navigator
+// reads each section's title and badge from that heading after render, so no
+// section component had to change. Inactive sections stay mounted (hidden),
+// which keeps their state and lets a PDF export show every one of them
+// (.pdf-export-mode unhides the lot and drops the navigator).
+//
+// A child carrying `alwaysOpen` is not a section but context for all of them
+// (e.g. the Non-Boost objective chooser, the cross-channel contribution); it
+// stays visible above whichever section is open.
+//
+// Exported under its old name so every page that used the accordion now
+// gets the workspace unchanged.
 
-const prefersReduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-
-// Collapses a run of report sections into a single-open accordion: clicking a
-// section's heading opens it, closes whichever was open, and scrolls it up to
-// the top of the reading area — a report is a dozen tall cards, and opening
-// the ninth shouldn't leave you looking at the eighth.
-//
-// Each child renders its own `.sec-block` + `.sec-heading`, so rather than
-// re-plumbing every section component this wraps them and animates the block's
-// max-height between "heading only" and its measured content height. The
-// clamp is dropped once the transition finishes: these sections hold live
-// tables whose height changes when you add or remove a metric, and a section
-// frozen at its opening height would clip them. Same reason `overflow` is only
-// hidden while animating — the metric pickers inside open as popups.
-//
-// The heading click is caught on the wrapper, with the buttons inside it
-// (PNG / Excel) excluded so they still work.
-//
-// Keyboard access comes from a real <button> laid over the heading rather than
-// role="button" on the heading itself: the heading already contains the export
-// buttons, and interactive content nested inside a button role is invalid and
-// unreliably exposed. As a sibling overlay the toggle keeps its own accessible
-// name (read off the heading text) while PNG / Excel stay reachable — they
-// just sit a layer above it.
-// Fragments are opened up so a page that groups sections under one condition
-// (`{cond && <>…</>}`) still folds section by section.
 function flatten(children: ReactNode): ReactNode[] {
   return Children.toArray(children).flatMap((child) =>
     isValidElement(child) && child.type === Fragment ? flatten((child as ReactElement<{ children?: ReactNode }>).props.children) : [child],
   );
 }
 
+interface SectionMeta {
+  title: string;
+  badge: string;
+}
+
+const prefersReduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+// "CPAS Shopee · Age Breakdown" → "Age Breakdown": the page tab already says
+// which channel this is; the navigator only needs what tells sections apart.
+function shortTitle(full: string): string {
+  const i = full.indexOf(' · ');
+  return i > 0 ? full.slice(i + 3) : full;
+}
+
+function readMeta(wrap: HTMLElement | null, fallback: string): SectionMeta {
+  const head = wrap?.querySelector<HTMLElement>('.sec-heading');
+  if (!head) return { title: fallback, badge: '' };
+  const title = Array.from(head.childNodes)
+    .filter((n) => !(n instanceof HTMLElement && (n.tagName === 'BUTTON' || n.tagName === 'A' || n.classList.contains('sec-badge'))))
+    .map((n) => n.textContent ?? '')
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const badge = head.querySelector('.sec-badge')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  return { title: title || fallback, badge };
+}
+
 export function SectionAccordion({ children, defaultOpen = 0 }: { children: ReactNode; defaultOpen?: number }) {
   const items = flatten(children).filter(Boolean);
-  // A child may opt out of folding entirely by carrying `alwaysOpen`. Some
-  // sections lose their job the moment they can be collapsed — the
-  // cross-channel contribution read is the only place the channels are
-  // compared, and behind a click it is simply missed. Such a section renders
-  // with no toggle and no height clamp, and never becomes the open index.
   const statics = items.map((child) => isValidElement(child) && (child.props as { alwaysOpen?: boolean }).alwaysOpen === true);
-  const [open, setOpen] = useState(defaultOpen);
+  const sections = items.map((_, i) => i).filter((i) => !statics[i]);
+  const first = sections.includes(defaultOpen) ? defaultOpen : sections[0] ?? 0;
+  const [chosen, setChosen] = useState(first);
+  const active = sections.includes(chosen) ? chosen : first;
+
   const refs = useRef<(HTMLDivElement | null)[]>([]);
-  // Scroll only for a click, never for the initial render.
-  const pendingScroll = useRef<{ next: number; prev: number } | null>(null);
-  const mounted = useRef(false);
+  const deckRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [meta, setMeta] = useState<SectionMeta[]>([]);
 
-  const blockOf = (i: number) => refs.current[i]?.querySelector<HTMLElement>('.sec-block') ?? null;
-  const headOf = (block: HTMLElement) => block.querySelector<HTMLElement>('.sec-heading');
-  const headHeight = (block: HTMLElement) => headOf(block)?.offsetHeight ?? 56;
-
-  // Wire the overlay toggle to its panel: the heading supplies the accessible
-  // name, and the overlay is sized to the heading so it never covers content.
+  // Titles come from the rendered headings; re-read after every render (a
+  // heading can change — the Non-Boost breakdowns name their objective) but
+  // only commit when something actually changed.
   useLayoutEffect(() => {
-    items.forEach((_, i) => {
-      if (statics[i]) return;
-      const wrap = refs.current[i];
-      const block = blockOf(i);
-      if (!wrap || !block) return;
-      if (!block.id) block.id = `sec-acc-panel-${i}`;
-      const toggle = wrap.querySelector<HTMLButtonElement>('.sec-acc-toggle');
-      if (!toggle) return;
-      toggle.setAttribute('aria-controls', block.id);
-      wrap.style.setProperty('--acc-head-h', `${headHeight(block)}px`);
-      // Strip the export-button glyphs out of the name; they are their own
-      // controls and would otherwise read as part of the section title.
-      const head = headOf(block);
-      if (head) {
-        const name = Array.from(head.childNodes)
-          .filter((n) => !(n instanceof HTMLElement && (n.tagName === 'BUTTON' || n.tagName === 'A')))
-          .map((n) => n.textContent ?? '')
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        if (name) toggle.setAttribute('aria-label', name);
-      }
-    });
+    const next = items.map((_, i) => readMeta(refs.current[i], `Bagian ${i + 1}`));
+    if (JSON.stringify(next) !== JSON.stringify(meta)) setMeta(next);
   });
 
-  useLayoutEffect(() => {
-    items.forEach((_, i) => {
-      if (statics[i]) return;
-      const block = blockOf(i);
-      if (!block) return;
-      const isOpen = open === i;
-      const head = headHeight(block);
+  function open(i: number) {
+    setChosen(i);
+    // Bring the workspace back into view when the switch happens far below it.
+    const deck = deckRef.current;
+    if (deck && deck.getBoundingClientRect().top < 0) {
+      deck.scrollIntoView({ behavior: prefersReduced() ? 'auto' : 'smooth', block: 'start' });
+    }
+  }
 
-      // First paint: set the collapsed state outright, no transition.
-      if (!mounted.current) {
-        if (!isOpen) {
-          block.style.maxHeight = `${head}px`;
-          block.style.overflow = 'hidden';
-        }
-        return;
-      }
+  function onKey(e: KeyboardEvent<HTMLButtonElement>, pos: number) {
+    const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+    if (!step && e.key !== 'Home' && e.key !== 'End') return;
+    e.preventDefault();
+    const nextPos = e.key === 'Home' ? 0 : e.key === 'End' ? sections.length - 1 : (pos + step + sections.length) % sections.length;
+    const next = sections[nextPos];
+    open(next);
+    tabRefs.current[next]?.focus();
+  }
 
-      const done = () => {
-        block.style.maxHeight = '';
-        block.style.overflow = '';
-      };
-
-      if (isOpen) {
-        if (!block.style.maxHeight) return; // already open
-        if (prefersReduced()) return done();
-        block.style.overflow = 'hidden';
-        block.style.maxHeight = `${block.scrollHeight}px`;
-        block.addEventListener('transitionend', function end(e) {
-          if (e.propertyName !== 'max-height') return;
-          block.removeEventListener('transitionend', end);
-          done();
-        });
-      } else {
-        if (block.style.maxHeight === `${head}px`) return; // already closed
-        if (prefersReduced()) {
-          block.style.maxHeight = `${head}px`;
-          block.style.overflow = 'hidden';
-          return;
-        }
-        // Pin the current height first so the transition has somewhere to go.
-        block.style.overflow = 'hidden';
-        block.style.maxHeight = `${block.scrollHeight}px`;
-        void block.offsetHeight;
-        block.style.maxHeight = `${head}px`;
-      }
-    });
-    mounted.current = true;
-  }, [open, items.length]);
-
-  useEffect(() => {
-    const pending = pendingScroll.current;
-    pendingScroll.current = null;
-    if (pending === null || pending.next !== open) return;
-    const el = refs.current[pending.next];
-    if (!el) return;
-    const raf = requestAnimationFrame(() => {
-      // A section closing ABOVE this one is still at full height right now and
-      // will collapse over the next 420ms, pulling this section up with it.
-      // Scrolling to the position measured today lands it behind the header,
-      // so subtract the height that is about to disappear.
-      let collapsing = 0;
-      if (pending.prev !== -1 && pending.prev < pending.next) {
-        const prevBlock = blockOf(pending.prev);
-        if (prevBlock) collapsing = Math.max(0, prevBlock.getBoundingClientRect().height - headHeight(prevBlock) * getUIScale());
-      }
-      const top = el.getBoundingClientRect().top + window.scrollY - collapsing - stickyBottom() - 12 * getUIScale();
-      window.scrollTo({ top: Math.max(0, top), behavior: prefersReduced() ? 'auto' : 'smooth' });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [open]);
-
-  const toggle = (i: number) =>
-    setOpen((cur) => {
-      const next = cur === i ? -1 : i;
-      pendingScroll.current = { next, prev: cur };
-      return next;
-    });
+  // One section is not a workspace — render it as it is.
+  if (sections.length <= 1) return <>{items}</>;
 
   return (
-    <div className="sec-accordion">
-      {items.map((child, i) => (
-        <div
-          key={i}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          className={`sec-acc-item${statics[i] ? ' is-static' : open === i ? ' open' : ''}`}
-          onClickCapture={
-            statics[i]
-              ? undefined
-              : (e) => {
-                  const el = e.target as HTMLElement;
-                  // Mouse fallback for any part of the heading the overlay doesn't
-                  // cover. Never the export buttons living in it, and never the
-                  // overlay itself — that has its own handler and would double-fire.
-                  if (!el.closest('.sec-heading') || el.closest('button') || el.closest('a')) return;
-                  e.preventDefault();
-                  toggle(i);
-                }
-          }
-        >
-          {!statics[i] && (
-            <button
-              type="button"
-              className="sec-acc-toggle"
-              aria-expanded={open === i}
-              onClick={() => toggle(i)}
-            />
-          )}
-          {child}
+    <div className="sdeck" ref={deckRef}>
+      <nav className="sdeck-nav" aria-label="Bagian laporan">
+        <span className="sdeck-nav-label" aria-hidden="true">Bagian laporan</span>
+        <div role="tablist" aria-orientation="vertical" className="sdeck-tabs">
+          {sections.map((i, pos) => {
+            const m = meta[i];
+            const on = i === active;
+            return (
+              <button
+                key={i}
+                ref={(el) => {
+                  tabRefs.current[i] = el;
+                }}
+                type="button"
+                role="tab"
+                id={`sdeck-tab-${i}`}
+                aria-selected={on}
+                aria-controls={`sdeck-panel-${i}`}
+                tabIndex={on ? 0 : -1}
+                className={`sdeck-tab${on ? ' is-on' : ''}`}
+                onClick={() => open(i)}
+                onKeyDown={(e) => onKey(e, pos)}
+              >
+                <span className="sdeck-dot" aria-hidden="true" />
+                <span className="sdeck-tab-text">
+                  <strong>{m ? shortTitle(m.title) : `Bagian ${pos + 1}`}</strong>
+                  {m?.badge && <small>{m.badge}</small>}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      ))}
+      </nav>
+
+      <div className="sdeck-body">
+        {items.map((child, i) => (
+          <div
+            key={i}
+            ref={(el) => {
+              refs.current[i] = el;
+            }}
+            id={statics[i] ? undefined : `sdeck-panel-${i}`}
+            role={statics[i] ? undefined : 'tabpanel'}
+            aria-labelledby={statics[i] ? undefined : `sdeck-tab-${i}`}
+            className={`sdeck-item${statics[i] ? ' is-static' : ''}${i === active ? ' is-active' : ''}`}
+            hidden={!statics[i] && i !== active}
+          >
+            {child}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
+
+export { SectionAccordion as SectionDeck };
