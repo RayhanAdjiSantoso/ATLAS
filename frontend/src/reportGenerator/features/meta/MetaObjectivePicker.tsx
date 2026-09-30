@@ -16,6 +16,8 @@ export function MetaObjectivePicker({
   active: MetaObjectiveKey | null;
   source: MetaObjectiveSource | null;
   onPick: (key: MetaObjectiveKey) => void;
+  // Read by SectionAccordion: a chooser, not a section, so it never folds.
+  alwaysOpen?: boolean;
 }) {
   const total = objectives.reduce((a, o) => a + (o.spend ?? 0), 0);
   const many = objectives.length > 1;

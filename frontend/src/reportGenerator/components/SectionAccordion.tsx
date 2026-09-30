@@ -1,5 +1,5 @@
 import { getUIScale } from '../../utils/uiScale.js';
-import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Children, Fragment, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 
 // Everything sticky above the report stacks: site header → report-type rail →
 // the report's own tab bar. Measure whichever is lowest rather than hardcode a
@@ -36,8 +36,16 @@ const prefersReduced = () => window.matchMedia?.('(prefers-reduced-motion: reduc
 // unreliably exposed. As a sibling overlay the toggle keeps its own accessible
 // name (read off the heading text) while PNG / Excel stay reachable — they
 // just sit a layer above it.
+// Fragments are opened up so a page that groups sections under one condition
+// (`{cond && <>…</>}`) still folds section by section.
+function flatten(children: ReactNode): ReactNode[] {
+  return Children.toArray(children).flatMap((child) =>
+    isValidElement(child) && child.type === Fragment ? flatten((child as ReactElement<{ children?: ReactNode }>).props.children) : [child],
+  );
+}
+
 export function SectionAccordion({ children, defaultOpen = 0 }: { children: ReactNode; defaultOpen?: number }) {
-  const items = Children.toArray(children).filter(Boolean);
+  const items = flatten(children).filter(Boolean);
   // A child may opt out of folding entirely by carrying `alwaysOpen`. Some
   // sections lose their job the moment they can be collapsed — the
   // cross-channel contribution read is the only place the channels are

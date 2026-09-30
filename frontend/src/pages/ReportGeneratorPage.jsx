@@ -2,6 +2,7 @@ import ReportGeneratorApp from '../reportGenerator/App';
 import '../reportGenerator/index.css';
 import '../reportGenerator/app/shell.css';
 import '../reportGenerator/app/atlas-fit.css';
+import '../reportGenerator/app/report-skin.css';
 
 // The "Performance Report Generator" (Meta / Shopee / TikTok ads reports),
 // merged in as one page — same pattern as MetaAutomationPage.jsx mounting a

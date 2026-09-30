@@ -4,6 +4,7 @@ import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { ReportPages } from '../../components/ReportPages';
+import { SectionAccordion } from '../../components/SectionAccordion';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -815,7 +816,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     const cur = report.curRows;
                     const cpasAd = cur?.cpas.length ? findAdCol(cur.cpas) : null;
                     return (
-                      <>
+                      <SectionAccordion>
                         <MetaSpecialMomentSection
                           rows={cpasAllRows}
                           dayCol={cpasDayCol}
@@ -903,7 +904,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             </div>
                           </div>
                         )}
-                      </>
+                      </SectionAccordion>
                     );
                   })(),
                 },
@@ -915,7 +916,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     const cur = report.curRows;
                     const nbAd = cur?.nonBoost.length ? findAdCol(cur.nonBoost) : null;
                     return (
-                      <>
+                      <SectionAccordion>
                         <MetaSpecialMomentSection
                           rows={nonBoostAllRows}
                           dayCol={dayCol}
@@ -975,6 +976,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             <>
                               {objectives.length > 0 && (
                                 <MetaObjectivePicker
+                                  alwaysOpen
                                   objectives={objectives}
                                   active={active?.key ?? null}
                                   source={report.nonBoostObjectiveSource ?? null}
@@ -1028,7 +1030,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             </>
                           );
                         })()}
-                      </>
+                      </SectionAccordion>
                     );
                   })(),
                 },
@@ -1040,7 +1042,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     const cur = report.curRows;
                     const boostAd = cur?.boost.length ? findAdCol(cur.boost) : null;
                     return (
-                      <>
+                      <SectionAccordion>
                         {report.boost && (
                           <OverviewDetailedCard
                             heading="Boost Post"
@@ -1098,7 +1100,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             </div>
                           </div>
                         )}
-                      </>
+                      </SectionAccordion>
                     );
                   })(),
                 },

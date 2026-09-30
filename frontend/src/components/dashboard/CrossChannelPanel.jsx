@@ -38,16 +38,24 @@ export default function CrossChannelPanel({ filters }) {
     (async () => {
       try {
         const { data } = await api.get(`/brands/${brandId}/library`);
-        const inMonth = (data.files || []).filter((f) => f.period_month?.slice(0, 7) === month);
-        const pick = (ch) => inMonth.filter((f) => f.channel === ch);
-        const missing = NEEDED.filter((n) => !pick(n.channel).length).map((n) => n.label);
-        if (missing.length) { if (alive) setState({ status: 'missing', missing }); return; }
+        const files = data.files || [];
+        const complete = (mm) => NEEDED.every((n) => files.some((f) => f.channel === n.channel && f.period_month?.slice(0, 7) === mm));
+        // The selected month, or else the latest complete month before it —
+        // said plainly in the header, so the reading is never silently off.
+        const months = [...new Set(files.map((f) => f.period_month?.slice(0, 7)).filter(Boolean))].sort().reverse();
+        const used = complete(month) ? month : months.find((mm) => mm <= month && complete(mm)) ?? months.find(complete) ?? null;
+        if (!used) {
+          const missing = NEEDED.filter((n) => !files.some((f) => f.channel === n.channel && f.period_month?.slice(0, 7) === month)).map((n) => n.label);
+          if (alive) setState({ status: 'missing', missing });
+          return;
+        }
+        const pick = (ch) => files.filter((f) => f.channel === ch && f.period_month?.slice(0, 7) === used);
         const [cpasFiles, adFiles, perfFiles] = await Promise.all(NEEDED.map((n) => Promise.all(pick(n.channel).map((f) => fileAs(brandId, f)))));
         const cpasRows = (await Promise.all(cpasFiles.map(readSpreadsheetFile))).flat();
         const adRows = (await Promise.all(adFiles.map(async (f) => parseShopeeCSV(await f.text()).rows))).flat();
         const perf = parseProductPerfRows((await Promise.all(perfFiles.map(readSpreadsheetFile))).flat());
         const result = buildCrossChannel(cpasRows, buildShopeeProducts(perf, adRows));
-        if (alive) setState({ status: 'ready', result });
+        if (alive) setState({ status: 'ready', result, used });
       } catch (e) {
         // A role without access to Pengaturan Brand's files simply does not
         // get this reading; anything else is a real failure worth saying.
@@ -58,8 +66,10 @@ export default function CrossChannelPanel({ filters }) {
   }, [brandId, month]);
 
   if (state.status === 'hidden' || state.status === 'idle') return null;
-  const [y, m] = month.split('-').map(Number);
-  const monthLabel = `${MONTHS[m - 1]} ${y}`;
+  const label = (mm) => { const [y, m] = mm.split('-').map(Number); return `${MONTHS[m - 1]} ${y}`; };
+  const monthLabel = label(month);
+  const usedLabel = state.used ? label(state.used) : monthLabel;
+  const fallback = state.used && state.used !== month;
   const r = state.result;
 
   return (
@@ -67,7 +77,10 @@ export default function CrossChannelPanel({ filters }) {
       <div className="con-focus-head xc-head">
         <div>
           <h2 id="xc-title">Rekomendasi silang Meta × Shopee</h2>
-          <p>Produk yang kuat di satu channel tapi belum dimaksimalkan di channel lain, {monthLabel}.</p>
+          <p>
+            Produk yang kuat di satu channel tapi belum dimaksimalkan di channel lain, {usedLabel}.
+            {fallback && <> File {monthLabel} belum lengkap, jadi dipakai {usedLabel} — bulan terdekat yang filenya lengkap.</>}
+          </p>
         </div>
         <Link to="/pengaturan-brand" className="mom-head-link">Sumber file <ArrowUpRight size={13} /></Link>
       </div>
