@@ -112,13 +112,13 @@
 .mil-ui.report-generator-app .sdeck-tab-text strong { font-size: .84rem; font-weight: 750; letter-spacing: -.01em; line-height: 1.3; overflow-wrap: anywhere; }
 .mil-ui.report-generator-app .sdeck-tab-text small { color: var(--rs-quiet); font-size: .67rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .mil-ui.report-generator-app .sdeck-tab.is-on {
-  background: linear-gradient(135deg, #1f2c47 0%, #2c4273 100%);
+  background: var(--rs-accent);
   color: #fff;
-  box-shadow: 0 14px 30px -18px rgba(20, 34, 72, .8);
+  box-shadow: 0 14px 30px -18px rgba(40, 86, 182, .8);
   transform: none;
 }
-.mil-ui.report-generator-app .sdeck-tab.is-on .sdeck-dot { background: #8fb0ff; box-shadow: 0 0 0 4px rgba(143, 176, 255, .22); }
-.mil-ui.report-generator-app .sdeck-tab.is-on .sdeck-tab-text small { color: rgba(255, 255, 255, .68); }
+.mil-ui.report-generator-app .sdeck-tab.is-on .sdeck-dot { background: #fff; box-shadow: 0 0 0 4px rgba(255, 255, 255, .22); }
+.mil-ui.report-generator-app .sdeck-tab.is-on .sdeck-tab-text small { color: rgba(255, 255, 255, .8); }
 .mil-ui.report-generator-app .sdeck-body { display: grid; gap: 14px; min-width: 0; }
 .mil-ui.report-generator-app .sdeck-item > .sec-block { margin-bottom: 0; }
 .mil-ui.report-generator-app .sdeck-item.is-active:not(.is-static) { animation: sdeck-in .38s cubic-bezier(.22, 1, .36, 1) both; }
@@ -139,20 +139,20 @@
   .mil-ui.report-generator-app .sdeck-tab:hover { transform: none; }
 }
 
-/* ── Platform rail: the primary switch, in the Business Overview's ink ───── */
+/* ── Platform rail: the primary switch, in the Business Overview's blue ──── */
 .mil-ui.report-generator-app .gen-rail {
   border: 0;
   border-radius: 22px;
-  background: linear-gradient(135deg, #0f1a3a 0%, #1b2c62 100%);
-  box-shadow: 0 20px 44px -28px rgba(15, 26, 58, .8), inset 0 1px rgba(255, 255, 255, .06);
+  background: var(--rs-accent);
+  box-shadow: 0 18px 40px -28px rgba(40, 86, 182, .75);
 }
-.mil-ui.report-generator-app .gen-rail-link { color: rgba(255, 255, 255, .74); }
+.mil-ui.report-generator-app .gen-rail-link { color: rgba(255, 255, 255, .86); }
 .mil-ui.report-generator-app .gen-rail-link:hover:not(.active) { color: #fff; background: rgba(255, 255, 255, .06); }
-.mil-ui.report-generator-app .gen-rail-ico { border: 0; background: rgba(255, 255, 255, .09); color: #fff; }
+.mil-ui.report-generator-app .gen-rail-ico { border: 0; background: rgba(255, 255, 255, .12); color: #fff; }
 .mil-ui.report-generator-app .gen-rail-link:hover:not(.active) .gen-rail-ico { color: #fff; background: rgba(255, 255, 255, .16); }
-.mil-ui.report-generator-app .gen-rail-pill { background: #fff; box-shadow: 0 10px 24px -12px rgba(0, 0, 0, .6); }
-.mil-ui.report-generator-app .gen-rail-link.active { color: var(--rs-ink); }
-.mil-ui.report-generator-app .gen-rail-link.active .gen-rail-ico { background: var(--gr-accent, var(--rs-accent)); color: #fff; box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--gr-accent, var(--rs-accent)) 70%, transparent); }
+.mil-ui.report-generator-app .gen-rail-pill { background: #fff; box-shadow: 0 2px 5px rgba(15, 26, 58, .12); }
+.mil-ui.report-generator-app .gen-rail-link.active { color: var(--rs-accent); }
+.mil-ui.report-generator-app .gen-rail-link.active .gen-rail-ico { background: #eef1fc; color: var(--rs-accent); box-shadow: none; }
 .mil-ui.report-generator-app .gen-rail-badge { border: 0; background: rgba(255, 255, 255, .14); color: #fff; }
 .mil-ui.report-generator-app .gen-rail-link.active .gen-rail-badge { background: var(--rs-accent-soft); color: var(--rs-accent); }
 
@@ -285,13 +285,13 @@
 .mil-ui.report-generator-app .st-label { color: var(--rs-ink); font-size: .8rem; font-weight: 620; }
 .mil-ui.report-generator-app .st-vals { color: var(--rs-quiet); font-size: .68rem; }
 .mil-ui.report-generator-app .st-cur { color: var(--rs-ink); font-weight: 780; }
-/* The root: the number the whole tree explains, set in ink. */
+/* The root: the number the whole tree explains, set in the accent blue. */
 .mil-ui.report-generator-app .st-node.st-root {
   min-height: 52px;
   padding: .7rem .9rem;
   border: 0;
-  background: linear-gradient(135deg, #1f2c47 0%, #2c4273 100%);
-  box-shadow: 0 16px 34px -20px rgba(20, 34, 72, .75);
+  background: var(--rs-accent);
+  box-shadow: 0 16px 34px -20px rgba(40, 86, 182, .75);
 }
 .mil-ui.report-generator-app .st-node.st-root:hover { transform: none; }
 .mil-ui.report-generator-app .st-node.st-root .st-label { color: #fff; font-size: .9rem; font-weight: 800; }
