@@ -38,10 +38,14 @@ export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRow
   // a stable id in that case) is excluded from the extra pool so a default
   // metric can't appear twice.
   const overviewCols = new Set((overviewRows as (KpiRowDisplay & { col?: string })[]).map((r) => r.col).filter((c): c is string => Boolean(c)));
-  const overviewIds = overviewRows.map((r) => (r as KpiRowDisplay & { col?: string }).col ?? r.label);
+  // A computed row is keyed by its label under its own namespace: a file can
+  // carry a raw column with the very same name ("Profile Visit Rate"), and a
+  // shared id would let that raw column's value stand in for the computed one.
+  const idOf = (r: KpiRowDisplay & { col?: string }) => r.col ?? `ov:${r.label}`;
+  const overviewIds = overviewRows.map((r) => idOf(r));
   const extraRows = detailedRows.filter((r) => !overviewCols.has(r.col) && allCols.includes(r.col));
   const rows: KpiRowDisplay[] = [
-    ...overviewRows.map((r) => ({ ...r, id: (r as KpiRowDisplay & { col?: string }).col ?? r.label })),
+    ...overviewRows.map((r) => ({ ...r, id: idOf(r) })),
     ...extraRows.map((r) => ({ ...r, id: r.col })),
   ];
 

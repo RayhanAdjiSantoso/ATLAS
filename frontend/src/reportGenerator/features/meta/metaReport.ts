@@ -1,17 +1,14 @@
 import type { KpiRowDisplay } from '../../components/KpiTable';
+import { buildMetaOverviewRows, type MetaOverviewKind, type MetaOverviewRow } from '../../lib/metaOverview';
 import type { DetailedRow } from '../../components/OverviewDetailedCard';
 import {
   DEFS,
   META_OBJECTIVE_DEFS,
   META_OBJECTIVE_ORDER,
   agg,
-  buildBlendedNonBoostDef,
-  buildCprRow,
   buildKPI,
   buildLabeledAggRow,
-  buildObjectiveOverviewDef,
   displayName,
-  getOverviewDefs,
   groupByCamp,
   isAllValue,
   isNumericCol,
@@ -138,14 +135,17 @@ function toDisplayRows(rows: MetaKpiRow[]): DetailedRow[] {
   return rows.map((r) => ({ col: r.col, label: displayName(r.col), old: r.old, cur: r.val, delta: r.delta, cls: r.cls }));
 }
 
-// Feeds the Summary Overview tab: prefixes each Overview row's label with its
-// section name (e.g. "Boost Post · Amount Spent") the same way the original
-// generate() did inline while building each card.
-function toSummaryRows(rows: (MetaKpiRow | CprRow)[], prefix: string): SummaryKpi[] {
-  return rows.map((r) => {
-    const label = 'col' in r ? displayName(r.col) : r.label;
-    return toSummaryKpi({ ...r, label: `${prefix} · ${label}` });
-  });
+// Default Overview rows (lib/metaOverview) as Summary Overview entries.
+function overviewSummary(rows: MetaOverviewRow[], prefix: string): SummaryKpi[] {
+  return rows.map((r) => toSummaryKpi({ ...r, key: r.label, label: `${prefix} · ${r.label}` }));
+}
+
+// Which default set a Non-Boost objective opens with: selling → E-commerce,
+// anything else (leads, messages, traffic…) → B2B. Without any objective, the
+// Industry pick decides.
+function nonBoostKind(key: MetaObjectiveKey | null, industry: MetaIndustry): MetaOverviewKind {
+  if (key) return key === 'sales' ? 'ecommerce' : 'b2b';
+  return industry === 'b2b' ? 'b2b' : 'ecommerce';
 }
 
 // A campaign name is treated as a "Boost Post" row if it looks like an
@@ -331,7 +331,6 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
   const mNonCur = mCur.filter((r) => !isBoost(r));
   const hasNonBoost = mNonOld.length > 0 || mNonCur.length > 0;
   const hasBoost = mBoostOld.length > 0 || mBoostCur.length > 0;
-  const ovDefs = getOverviewDefs(industry, mAllCols, customResultsCol);
   const mSpentCol = mAllCols.find((c) => c.toLowerCase().includes('amount spent'));
 
   const report: MetaReport = {
@@ -351,14 +350,10 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
   const metaSpend: Record<string, SpendEntry | undefined> = {};
 
   if (hasBoost) {
-    const boostKpiRows = buildKPI(mBoostOld, mBoostCur, ovDefs.boost.cols);
-    const boostOvRows: KpiRowDisplay[] = toDisplayRows(boostKpiRows);
-    const boostCpr = buildCprRow(ovDefs.boost.cprPair, mBoostOld, mBoostCur);
-    if (boostCpr) boostOvRows.push(boostCpr);
+    const boostOvRows = buildMetaOverviewRows('boost', mBoostOld, mBoostCur, !reachWarning);
     report.boost = { overviewRows: boostOvRows, detailedRows: toDisplayRows(buildKPI(mBoostOld, mBoostCur, mAllCols)), allCols: mAllCols };
     report.boostFunnel = buildMetaBrandFunnel(mBoostOld, mBoostCur);
-    metaKpis.push(...toSummaryRows(boostKpiRows, 'Boost Post'));
-    if (boostCpr) metaKpis.push(...toSummaryRows([boostCpr], 'Boost Post'));
+    metaKpis.push(...overviewSummary(boostOvRows, 'Boost Post'));
     if (mSpentCol) metaSpend.boost = { old: agg(mBoostOld, mSpentCol), cur: agg(mBoostCur, mSpentCol) };
   }
 
@@ -394,37 +389,30 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
   if (nbGroups && nbGroups.multi) {
     // Multi-objective: a blended headline + per-objective spend split on top,
     // then one full sub-section per objective.
-    const blendedDef = buildBlendedNonBoostDef(mAllCols);
-    const blendedKpiRows = buildKPI(mNonOld, mNonCur, blendedDef.cols);
-    const blendedOvRows: KpiRowDisplay[] = toDisplayRows(blendedKpiRows);
+    // The blended card opens with the default set of the objective that spent
+    // the most (report.nonBoostObjectives is sorted by spend).
+    const leadKey = report.nonBoostObjectives?.[0]?.key ?? nbGroups.groups[0].key;
+    const blendedOvRows: KpiRowDisplay[] = buildMetaOverviewRows(nonBoostKind(leadKey, industry), mNonOld, mNonCur, !reachWarning);
     // "Amount Spent · Sales / · Leads / …" — the split the user actually asked
     // for, right under the blended total so every figure is labelled.
     const spendSplitRows = nbGroups.groups
       .map((g) => buildLabeledAggRow(`Amount Spent · ${g.label}`, mSpentCol ?? null, g.old, g.cur))
       .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    const spentRowIdx = blendedOvRows.findIndex((r) => (r as KpiRowDisplay & { col?: string }).col === mSpentCol);
+    const spentRowIdx = blendedOvRows.findIndex((r) => r.label === 'Amount Spent');
     if (spentRowIdx >= 0) blendedOvRows.splice(spentRowIdx + 1, 0, ...spendSplitRows);
     else blendedOvRows.unshift(...spendSplitRows);
-    const blendedCpr = buildCprRow(blendedDef.cprPair, mNonOld, mNonCur);
-    if (blendedCpr) blendedOvRows.push(blendedCpr);
     report.nonBoost = { overviewRows: blendedOvRows, detailedRows: toDisplayRows(buildKPI(mNonOld, mNonCur, mAllCols)), allCols: mAllCols };
-    metaKpis.push(...toSummaryRows(blendedKpiRows, 'Non-Boost · Blended'));
-    if (blendedCpr) metaKpis.push(...toSummaryRows([blendedCpr], 'Non-Boost · Blended'));
+    metaKpis.push(...overviewSummary(blendedOvRows as MetaOverviewRow[], 'Non-Boost · Blended'));
     metaKpis.push(...spendSplitRows.map((r) => toSummaryKpi({ ...r, label: `Non-Boost · Blended · ${r.label}` })));
     if (mSpentCol) metaSpend.nonboost = { old: agg(mNonOld, mSpentCol), cur: agg(mNonCur, mSpentCol) };
 
     report.nonBoostSegments = nbGroups.groups.map((g) => {
-      const d = buildObjectiveOverviewDef(g.key, mAllCols, g.label);
-      const segKpiRows = buildKPI(g.old, g.cur, d.cols);
-      // Make the Amount Spent row say which objective it is, and drop the
-      // "(blended)" tag now that Results/Cost per result is scoped to it.
-      const segOvRows: KpiRowDisplay[] = deblend(
-        toDisplayRows(segKpiRows).map((r) => (mSpentCol && (r as DetailedRow).col === mSpentCol ? { ...r, label: `Amount Spent (${g.label})` } : r)),
+      // Each objective opens with its own default set; the Amount Spent row
+      // says which objective it is.
+      const segOvRows = buildMetaOverviewRows(nonBoostKind(g.key, industry), g.old, g.cur, !reachWarning).map((r) =>
+        r.label === 'Amount Spent' ? { ...r, label: `Amount Spent (${g.label})` } : r,
       );
-      const segCpr = buildCprRow(d.cprPair, g.old, g.cur);
-      if (segCpr) segOvRows.push(segCpr);
-      metaKpis.push(...toSummaryRows(segKpiRows, `Non-Boost · ${g.label}`));
-      if (segCpr) metaKpis.push(...toSummaryRows([segCpr], `Non-Boost · ${g.label}`));
+      metaKpis.push(...overviewSummary(segOvRows, `Non-Boost · ${g.label}`));
       return {
         key: g.key,
         label: g.label,
@@ -434,31 +422,19 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       };
     });
   } else if (hasNonBoost) {
-    // Single Non-Boost section. Headline from: the file's sole objective, else
-    // the Objective dropdown, else (legacy) the industry pick.
+    // Single Non-Boost section. Its default set follows the file's sole
+    // objective, else the Objective dropdown, else the Industry pick.
     const soleKey = nbGroups && !nbGroups.multi ? nbGroups.groups[0].key : null;
     const objKey = soleKey ?? objective ?? null;
-    const mainDef = objKey ? buildObjectiveOverviewDef(objKey, mAllCols) : ovDefs.main;
-    if (mainDef && mainDef.cols.length) {
-      const objLabel = objKey ? META_OBJECTIVE_DEFS[objKey].label : null;
-      const mainKpiRows = buildKPI(mNonOld, mNonCur, mainDef.cols);
-      let mainOvRows: KpiRowDisplay[] = toDisplayRows(mainKpiRows).map((r) =>
-        objLabel && mSpentCol && (r as DetailedRow).col === mSpentCol ? { ...r, label: `Amount Spent (${objLabel})` } : r,
-      );
-      let mainDetailedRows = toDisplayRows(buildKPI(mNonOld, mNonCur, mAllCols));
-      // Objective-headlined (not the legacy industry fallback) — same
-      // de-blending as the per-objective segments above.
-      if (objKey) {
-        mainOvRows = deblend(mainOvRows);
-        mainDetailedRows = deblend(mainDetailedRows);
-      }
-      const mainCpr = buildCprRow(mainDef.cprPair, mNonOld, mNonCur);
-      if (mainCpr) mainOvRows.push(mainCpr);
-      report.nonBoost = { overviewRows: mainOvRows, detailedRows: mainDetailedRows, allCols: mAllCols };
-      metaKpis.push(...toSummaryRows(mainKpiRows, 'Non-Boost Post'));
-      if (mainCpr) metaKpis.push(...toSummaryRows([mainCpr], 'Non-Boost Post'));
-      if (mSpentCol) metaSpend.nonboost = { old: agg(mNonOld, mSpentCol), cur: agg(mNonCur, mSpentCol) };
-    }
+    const objLabel = objKey ? META_OBJECTIVE_DEFS[objKey].label : null;
+    const mainOvRows = buildMetaOverviewRows(nonBoostKind(objKey, industry), mNonOld, mNonCur, !reachWarning).map((r) =>
+      objLabel && r.label === 'Amount Spent' ? { ...r, label: `Amount Spent (${objLabel})` } : r,
+    );
+    let mainDetailedRows = toDisplayRows(buildKPI(mNonOld, mNonCur, mAllCols));
+    if (objKey) mainDetailedRows = deblend(mainDetailedRows);
+    report.nonBoost = { overviewRows: mainOvRows, detailedRows: mainDetailedRows, allCols: mAllCols };
+    metaKpis.push(...overviewSummary(mainOvRows, 'Non-Boost Post'));
+    if (mSpentCol) metaSpend.nonboost = { old: agg(mNonOld, mSpentCol), cur: agg(mNonCur, mSpentCol) };
   }
 
   const defDemo = matchDef(DEFS.nonBoostDemo, mAllCols);
@@ -515,11 +491,14 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const cpasKpis: SummaryKpi[] = [];
 
     const cpas: CpasSections = { p1: cP1, p2: cP2 };
+    // CPAS sells on the marketplace: every CPAS card opens with the
+    // E-commerce set. A Day-breakdown file cannot sum reach (Frequency "—").
+    const cpasReach = !cDayCol;
     if (defCpasOverall.length) {
-      const overallKpiRows = buildKPI(cOld, cCur, defCpasOverall);
-      cpas.overall = { overviewRows: toDisplayRows(overallKpiRows), detailedRows: toDisplayRows(buildKPI(cOld, cCur, cAllCols)), allCols: cAllCols };
-      metaKpis.push(...toSummaryRows(overallKpiRows, 'CPAS Marketplace'));
-      cpasKpis.push(...toSummaryRows(overallKpiRows, 'Overall'));
+      const overallOvRows = buildMetaOverviewRows('ecommerce', cOld, cCur, cpasReach);
+      cpas.overall = { overviewRows: overallOvRows, detailedRows: toDisplayRows(buildKPI(cOld, cCur, cAllCols)), allCols: cAllCols };
+      metaKpis.push(...overviewSummary(overallOvRows, 'CPAS Marketplace'));
+      cpasKpis.push(...overviewSummary(overallOvRows, 'Overall'));
       if (cSpentCol) metaSpend.cpasOverall = { old: agg(cOld, cSpentCol), cur: agg(cCur, cSpentCol) };
     }
     cpas.funnel = buildMetaSalesFunnel(cOld, cCur);
@@ -529,19 +508,19 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     if (defCpasNV.length) {
       const nvOld = cpasGrpOld['NV'] || [];
       const nvCur = cpasGrpCur['NV'] || [];
-      const nvKpiRows = buildKPI(nvOld, nvCur, defCpasNV);
-      cpas.nv = { overviewRows: toDisplayRows(nvKpiRows), detailedRows: toDisplayRows(buildKPI(nvOld, nvCur, cAllCols)), allCols: cAllCols };
-      metaKpis.push(...toSummaryRows(nvKpiRows, 'CPAS Marketplace · NV'));
-      cpasKpis.push(...toSummaryRows(nvKpiRows, 'NV'));
+      const nvOvRows = buildMetaOverviewRows('ecommerce', nvOld, nvCur, cpasReach);
+      cpas.nv = { overviewRows: nvOvRows, detailedRows: toDisplayRows(buildKPI(nvOld, nvCur, cAllCols)), allCols: cAllCols };
+      metaKpis.push(...overviewSummary(nvOvRows, 'CPAS Marketplace · NV'));
+      cpasKpis.push(...overviewSummary(nvOvRows, 'NV'));
       if (cSpentCol) metaSpend.cpasNV = { old: agg(nvOld, cSpentCol), cur: agg(nvCur, cSpentCol) };
     }
     if (defCpasRM.length) {
       const rmOld = cpasGrpOld['RM'] || [];
       const rmCur = cpasGrpCur['RM'] || [];
-      const rmKpiRows = buildKPI(rmOld, rmCur, defCpasRM);
-      cpas.rm = { overviewRows: toDisplayRows(rmKpiRows), detailedRows: toDisplayRows(buildKPI(rmOld, rmCur, cAllCols)), allCols: cAllCols };
-      metaKpis.push(...toSummaryRows(rmKpiRows, 'CPAS Marketplace · RM'));
-      cpasKpis.push(...toSummaryRows(rmKpiRows, 'RM'));
+      const rmOvRows = buildMetaOverviewRows('ecommerce', rmOld, rmCur, cpasReach);
+      cpas.rm = { overviewRows: rmOvRows, detailedRows: toDisplayRows(buildKPI(rmOld, rmCur, cAllCols)), allCols: cAllCols };
+      metaKpis.push(...overviewSummary(rmOvRows, 'CPAS Marketplace · RM'));
+      cpasKpis.push(...overviewSummary(rmOvRows, 'RM'));
       if (cSpentCol) metaSpend.cpasRM = { old: agg(rmOld, cSpentCol), cur: agg(rmCur, cSpentCol) };
     }
     // Only expose the CPAS section when at least one sub-section actually

@@ -561,7 +561,7 @@ function sumImpliedFromRatio(rows: SheetRow[], ratioCol: string, countCol: strin
 // below — resolving e.g. "adds to cart" for "Cost per add to cart" itself
 // is meant to read that exact same column (that's the whole mechanism, not
 // a self-match bug).
-function resolveConceptCount(rows: SheetRow[], concept: string, excludeCol?: string): number | null {
+export function resolveConceptCount(rows: SheetRow[], concept: string, excludeCol?: string): number | null {
   const literalCol = findDenomCol(rows, concept, excludeCol);
   if (literalCol) return aggSum(rows, literalCol);
 
