@@ -3,7 +3,7 @@ import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { PIE_COLORS, PieChartCanvas } from '../../components/PieChartCanvas';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
-import { buildBrandAudience, buildSalesAudience, type AudienceMetricDef } from '../../lib/metaAudience';
+import { buildBrandAudience, buildObjectiveAudience, buildSalesAudience, type AudienceMetricDef } from '../../lib/metaAudience';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 import type { AudienceSlice } from '../../lib/metaAudience';
@@ -76,7 +76,7 @@ export function MetaBreakdownSection<M>({
   rows,
   dimCol,
   kind,
-  metrics,
+  metrics: menu,
   prefer,
   emptyMessage,
 }: {
@@ -85,17 +85,27 @@ export function MetaBreakdownSection<M>({
   rows: SheetRow[];
   dimCol: string;
   // Which metric family this channel belongs to — selling channels decompose
-  // the sales funnel, Boost Post decomposes brand actions.
-  kind: 'sales' | 'brand';
+  // the sales funnel, Boost Post decomposes brand actions, and a Non-Boost
+  // objective that is not selling (leads, messages, traffic) its own results.
+  kind: 'sales' | 'brand' | 'objective';
   metrics: readonly AudienceMetricDef<M>[];
   // 'pies' shows every metric as its own pie on one page, no metric toggle.
   prefer: 'bar' | 'pie' | 'pies';
   emptyMessage?: string;
 }) {
   const slices = useMemo(
-    () => (kind === 'brand' ? buildBrandAudience(rows, dimCol) : buildSalesAudience(rows, dimCol)) as unknown as AudienceSlice<M>[],
+    () => (kind === 'brand' ? buildBrandAudience(rows, dimCol) : kind === 'objective' ? buildObjectiveAudience(rows, dimCol) : buildSalesAudience(rows, dimCol)) as unknown as AudienceSlice<M>[],
     [rows, dimCol, kind],
   );
+  // Only metrics this file can compute are offered — a button that always
+  // answers "column missing" is noise. Up to four, in the menu's order; what
+  // was left out is named under the chart instead.
+  const available = useMemo(() => {
+    const ok = menu.filter((m) => slices.some((s) => s.metrics[m.key] !== null && s.metrics[m.key] !== undefined));
+    return (ok.length ? ok : menu).slice(0, 4);
+  }, [menu, slices]);
+  const missing = menu.slice(0, 4).filter((m) => !available.includes(m));
+  const metrics = available;
   const [pick, setPick] = useState('0');
   // Highest/lowest ordering for the bars. Age keeps its natural order — its
   // groups are a scale (18–24 → 65+), and sorting would scramble it.
@@ -126,6 +136,9 @@ export function MetaBreakdownSection<M>({
             <div className="bd-pies">
               {metrics.map((m) => <PieTile key={String(m.key)} metric={m} slices={slices} group={group} />)}
             </div>
+          )}
+          {missing.length > 0 && (
+            <p className="chart-foot">Tidak ditampilkan karena kolomnya tidak ada di file: {missing.map((m) => m.label).join(', ')}.</p>
           )}
         </div>
       </div>
@@ -191,6 +204,11 @@ export function MetaBreakdownSection<M>({
               </p>
             )}
           </>
+        )}
+        {missing.length > 0 && (
+          <p className="chart-foot">
+            Tidak ditampilkan karena kolomnya tidak ada di file: {missing.map((m) => m.label).join(', ')}.
+          </p>
         )}
       </div>
     </div>

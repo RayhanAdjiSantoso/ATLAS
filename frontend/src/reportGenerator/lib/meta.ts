@@ -303,7 +303,33 @@ export function findLeafCampaignCol(rows: SheetRow[]): string | null {
 // means a module that forgets to call it is the only way to reintroduce it.
 export function stripCampaignSubtotals(rows: SheetRow[]): SheetRow[] {
   const leafCol = findLeafCampaignCol(rows);
-  return leafCol ? rows.filter((r) => !isAllValue(r[leafCol])) : rows;
+  const leaves = leafCol ? rows.filter((r) => !isAllValue(r[leafCol])) : rows;
+  return stripNestedSubtotals(leaves);
+}
+
+// The same pivot subtotals one level further down. An export broken out below
+// Campaign — by Ad name, Ad set, Objective… — repeats every row as an "All"
+// subtotal at each of those levels too (a Campaign > Age > Gender > Day > Ad
+// > Objective export carries each figure three times over). Only the literal
+// "All" marks one: a blank there can be a real leaf, so it stays.
+//
+// One kind of "All" row is kept on purpose: a campaign's Age=All/Gender=All
+// rollup, which computeGroupedSum prefers because its Reach is Meta's own
+// exact figure rather than a sum of estimates.
+const NESTED_DIM_COLS = /^(ad name|ad set name|objective|campaign objective|placement|platform)$/i;
+const isLiteralAll = (v: unknown) => String(v ?? '').trim().toLowerCase() === 'all';
+
+function stripNestedSubtotals(rows: SheetRow[]): SheetRow[] {
+  const hs = Object.keys(rows[0] || {});
+  const nested = hs.filter((h) => NESTED_DIM_COLS.test(h.trim()) && rows.some((r) => !isAllValue(r[h])));
+  if (!nested.length) return rows;
+  const ageCol = hs.find((h) => h.trim().toLowerCase() === 'age');
+  const genderCol = hs.find((h) => h.trim().toLowerCase() === 'gender');
+  const hasDemo = Boolean(ageCol || genderCol);
+  return rows.filter((r) => {
+    if (!nested.some((c) => isLiteralAll(r[c]))) return true;
+    return hasDemo && (!ageCol || isAllValue(r[ageCol])) && (!genderCol || isAllValue(r[genderCol]));
+  });
 }
 
 // Splits rows into per-campaign+period groups — one group per campaign,
@@ -1402,6 +1428,125 @@ export function classifyMetaObjective(raw: string): MetaObjectiveKey {
   if (/reach|impression|awareness|\bbrand\b/.test(lc)) return 'awareness';
   if (/engagement|post[_ ]reaction|video[_ ]view|thruplay|messag|conversation|page[_ ]like/.test(lc)) return 'engagement';
   return 'other';
+}
+
+// ── Per-campaign objective ────────────────────────────────────────────────
+//
+// Which objective a campaign runs, from the strongest signal the file has:
+//   1. the "Objective" column — Meta's own setting, so it wins even when the
+//      name says otherwise ("Engagement - Send Message | Custom Conversions
+//      (Occasion)" really runs Leads);
+//   2. the campaign name, read the way MIL names campaigns —
+//      "Audience | Objective - Optimisation | …": each pipe segment is tried
+//      in order, and only its head (the part before " - ") is classified, so
+//      a later word ("Custom Conversions") cannot outvote the objective;
+//   3. the metrics the campaign actually produced — its "Result type", else
+//      which result count it has (purchases, leads, conversations).
+// Subtotal rows ("All") never vote.
+
+export type MetaObjectiveSource = 'column' | 'campaign-name' | 'metrics';
+
+export interface CampaignObjective {
+  key: MetaObjectiveKey;
+  source: MetaObjectiveSource;
+}
+
+export const META_OBJECTIVE_SOURCE_LABEL: Record<MetaObjectiveSource, string> = {
+  column: 'kolom Objective',
+  'campaign-name': 'nama campaign',
+  metrics: 'metrik hasil',
+};
+
+export function classifyCampaignName(name: string): MetaObjectiveKey {
+  const segments = String(name || '').split('|').map((x) => x.trim()).filter(Boolean);
+  for (const seg of segments) {
+    const head = seg.split(/\s+-\s+/)[0];
+    const k = classifyMetaObjective(head);
+    if (k !== 'other') return k;
+  }
+  for (const seg of segments) {
+    const k = classifyMetaObjective(seg);
+    if (k !== 'other') return k;
+  }
+  return 'other';
+}
+
+function classifyResultType(raw: string): MetaObjectiveKey {
+  const lc = raw.toLowerCase();
+  if (/lead/.test(lc)) return 'leads';
+  if (/purchase|checkout|add(s)? to cart|content view|conversion/.test(lc)) return 'sales';
+  if (/messag|conversation/.test(lc)) return 'engagement';
+  if (/profile visit|link click|landing page|outbound/.test(lc)) return 'traffic';
+  if (/thruplay|video|post engagement|reaction|interaction|follow/.test(lc)) return 'engagement';
+  if (/reach|impression|recall/.test(lc)) return 'awareness';
+  if (/install|app/.test(lc)) return 'app';
+  return 'other';
+}
+
+function numOf(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function objectiveFromMetrics(rows: SheetRow[]): MetaObjectiveKey {
+  const hs = Object.keys(rows[0] || {});
+  const typeCol = hs.find((h) => /^result (type|indicator)$/i.test(h.trim()));
+  if (typeCol) {
+    const votes = new Map<MetaObjectiveKey, number>();
+    for (const r of rows) {
+      const v = String(r[typeCol] ?? '').trim();
+      if (!v || isAllValue(v)) continue;
+      const k = classifyResultType(v);
+      if (k !== 'other') votes.set(k, (votes.get(k) ?? 0) + 1);
+    }
+    const top = [...votes].sort((a, b) => b[1] - a[1])[0];
+    if (top) return top[0];
+  }
+  const sumOf = (re: RegExp) => {
+    const col = hs.find((h) => re.test(h) && !/cost|rate|ratio|value|roas|per /i.test(h));
+    return col ? rows.reduce((a, r) => a + numOf(r[col]), 0) : 0;
+  };
+  if (sumOf(/^purchases?\b|purchases with shared/i) > 0) return 'sales';
+  if (sumOf(/^leads?\b|on-facebook leads/i) > 0) return 'leads';
+  if (sumOf(/messaging conversations started/i) > 0) return 'engagement';
+  return 'other';
+}
+
+export function resolveCampaignObjectives(rows: SheetRow[], campCol: string | null): Map<string, CampaignObjective> {
+  const out = new Map<string, CampaignObjective>();
+  if (!campCol || !rows.length) return out;
+  const objCol = detectMetaObjectiveCol(Object.keys(rows[0] || {}));
+  const byCampaign = new Map<string, SheetRow[]>();
+  for (const r of rows) {
+    const name = String(r[campCol] ?? '').trim();
+    if (!name || isAllValue(name)) continue;
+    const list = byCampaign.get(name);
+    if (list) list.push(r);
+    else byCampaign.set(name, [r]);
+  }
+  for (const [name, list] of byCampaign) {
+    if (objCol) {
+      const votes = new Map<MetaObjectiveKey, number>();
+      for (const r of list) {
+        const v = String(r[objCol] ?? '').trim();
+        if (!v || isAllValue(v)) continue;
+        const k = classifyMetaObjective(v);
+        votes.set(k, (votes.get(k) ?? 0) + 1);
+      }
+      const top = [...votes].sort((a, b) => b[1] - a[1])[0];
+      if (top && top[0] !== 'other') {
+        out.set(name, { key: top[0], source: 'column' });
+        continue;
+      }
+    }
+    const byName = classifyCampaignName(name);
+    if (byName !== 'other') {
+      out.set(name, { key: byName, source: 'campaign-name' });
+      continue;
+    }
+    out.set(name, { key: objectiveFromMetrics(list), source: 'metrics' });
+  }
+  return out;
 }
 
 // The objective that spent the most in a set of rows — used to pre-fill the

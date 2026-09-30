@@ -11,11 +11,12 @@ import {
   META_OBJECTIVE_CHOICES,
   splitMonths,
   detectMetaObjectiveCol,
-  dominantMetaObjective,
+  resolveCampaignObjectives,
   metaDayRange,
   stripCampaignSubtotals,
   type MetaIndustry,
   type MetaObjectiveKey,
+  META_OBJECTIVE_SOURCE_LABEL,
 } from '../../lib/meta';
 import { findCol } from '../../lib/columns';
 import { daysBetweenInclusive, formatPeriodLabel } from '../../lib/periodLabel';
@@ -33,7 +34,8 @@ import { AiSummarySection } from '../ai/AiSummarySection';
 import { SymptomTreePanel } from '../shopee/AnalysisSections';
 import { MetaSpecialMomentSection } from './MetaSpecialMomentSection';
 import { MetaBreakdownSection } from './MetaBreakdownSection';
-import { BRAND_AUDIENCE_METRICS, BRAND_CREATIVE_METRICS, SALES_AUDIENCE_METRICS, SALES_CREATIVE_METRICS, findAdCol } from '../../lib/metaAudience';
+import { BRAND_AUDIENCE_METRICS, BRAND_CREATIVE_METRICS, SALES_AUDIENCE_METRICS, SALES_CREATIVE_METRICS, findAdCol, objectiveAudienceMetrics } from '../../lib/metaAudience';
+import { MetaObjectivePicker } from './MetaObjectivePicker';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
@@ -117,6 +119,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // objective; auto-prefilled from the file's "Objective" column when present,
   // still overridable.
   const [industry, setIndustry] = useState<MetaIndustry>(null);
+  // Which Non-Boost objective the Age / Gender / Creative breakdowns show,
+  // when the file runs more than one (null = the highest-spend one).
+  const [nbObjective, setNbObjective] = useState<MetaObjectiveKey | null>(null);
   // Legacy — the "Custom Conversion" column picker is gone; kept so old saved
   // report configs still round-trip.
   const [customResultsCol, setCustomResultsCol] = useState<string | null>(null);
@@ -374,16 +379,28 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // Non-Boost headline.
   const objectiveCol = metaRows ? detectMetaObjectiveCol(metaHeaders) : null;
 
-  // Prefill the Objective dropdown from the file's dominant (highest-spend)
-  // objective, once per file — a manual change afterwards sticks.
+  // Prefill the Objective dropdown with the Non-Boost lane's highest-spend
+  // objective — read per campaign from the Objective column, else the name,
+  // else the metrics — once per file; a manual change afterwards sticks.
+  // Boost rows stay out: the dropdown is about Non-Boost.
   useEffect(() => {
-    if (!metaRows || !objectiveCol) return;
-    const fileKey = objectiveCol + '·' + metaRows.length;
+    if (!metaRows) return;
+    const fileKey = (objectiveCol ?? '') + '·' + metaRows.length;
     if (objectivePrefilledFor.current === fileKey) return;
     objectivePrefilledFor.current = fileKey;
+    const leaves = stripCampaignSubtotals(metaRows);
+    const campCol = findCol(leaves, ['campaign']);
     const spentCol = metaHeaders.find((h) => h.toLowerCase().includes('amount spent')) ?? null;
-    const dom = dominantMetaObjective(metaRows, objectiveCol, spentCol);
-    if (dom && dom !== 'other') setObjective(dom);
+    const isBoost = isBoostRow(campCol);
+    const resolved = resolveCampaignObjectives(leaves.filter((r) => !isBoost(r)), campCol);
+    const spend = new Map<MetaObjectiveKey, number>();
+    for (const r of leaves) {
+      const hit = campCol && !isBoost(r) ? resolved.get(String(r[campCol] ?? '').trim()) : undefined;
+      if (!hit || hit.key === 'other') continue;
+      spend.set(hit.key, (spend.get(hit.key) ?? 0) + (spentCol ? Number(r[spentCol]) || 0 : 1));
+    }
+    const dom = [...spend].sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (dom) setObjective(dom);
   }, [metaRows, objectiveCol, metaHeaders]);
 
   const objectiveOk = Boolean(objectiveCol) || Boolean(objective) || Boolean(industry);
@@ -397,6 +414,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   function generate() {
     if (!metaRows) return;
     const r = buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
+    setNbObjective(null);
     setReport(r);
     setGeneratedAt(formatGeneratedDate());
     onGenerated({ period: { old: r.p1, cur: r.p2 }, kpis: r.summary.kpis, cpasKpis: r.summary.cpasKpis, spend: r.summary.spend });
@@ -413,6 +431,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setIndustry(null);
     setCustomResultsCol(null);
     setObjective(null);
+    setNbObjective(null);
     objectivePrefilledFor.current = '';
     setReport(null);
     setUploadError(null);
@@ -488,8 +507,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               </ul>
               <div className="empty-note" style={{ padding: '.35rem 0 0', fontSize: '.66rem' }}>
                 Kolom <strong>Objective</strong> &amp; <strong>Campaign Name</strong> adalah kolom identitas (bukan metrik angka) — <strong>Objective</strong>{' '}
-                wajib kalau mau breakdown Amount Spent per objective (Sales / Leads / Traffic) di section Non-Boost. Tanpa kolom ini, Non-Boost
-                digabung jadi satu.
+                sangat disarankan: dipakai untuk memecah Non-Boost per objective (Sales / Leads / Engagement / Traffic). Tanpa kolom ini, objective
+                dibaca dari nama campaign (format MIL: <em>NV | Sales - VC | …</em>), lalu dari metrik hasilnya.
               </div>
             </div>
             <div className="howto-col-block">
@@ -595,8 +614,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           {objectiveCol && (
             <InlineNotice tone="info" title={`Kolom "${objectiveCol}" terdeteksi di file`}>
               Lajur <strong>Non-Boost</strong> otomatis dipecah per objective (Sales / Leads / Traffic / dst) — tiap objective punya headline &amp;
-              Cost per X sendiri, plus baris <strong>Blended</strong> + <strong>Amount Spent per objective</strong> di atasnya. Dropdown Objective
-              di bawah cuma prefill dari file (boleh diubah, nggak ngaruh ke hasil split).
+              Cost per X sendiri, plus baris <strong>Blended</strong> + <strong>Amount Spent per objective</strong> di atasnya. Breakdown Age, Gender,
+              dan Creative bisa dipilih per objective dengan metrik yang sesuai. Dropdown Objective di bawah cuma prefill (tidak mengubah hasil split).
             </InlineNotice>
           )}
           <div className="dual-select">
@@ -896,9 +915,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             heading={report.nonBoostSegments ? 'Non-Boost Post · Blended' : 'Non-Boost Post'}
                             badge={
                               report.nonBoostSegments
-                                ? report.nonBoostObjectiveSource === 'column'
-                                  ? 'total + Amount Spent per objective'
-                                  : 'objective dari nama campaign'
+                                ? `objective dari ${META_OBJECTIVE_SOURCE_LABEL[report.nonBoostObjectiveSource ?? 'campaign-name']}`
                                 : 'Meta Ads'
                             }
                             overviewRows={report.nonBoost.overviewRows}
@@ -925,47 +942,77 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             p2={report.p2}
                           />
                         ))}
-                        {report.ageDemo && (
-                          <MetaBreakdownSection
-                            heading="Non-Boost Post · Age Breakdown"
-                            badge={`data ${report.p2}`}
-                            rows={report.ageDemo.rows}
-                            dimCol={report.ageDemo.dimCol}
-                            kind="sales"
-                            metrics={SALES_AUDIENCE_METRICS}
-                            prefer="bar"
-                          />
-                        )}
-                        {report.genderDemo && (
-                          <MetaBreakdownSection
-                            heading="Non-Boost Post · Gender Breakdown"
-                            badge={`data ${report.p2}`}
-                            rows={report.genderDemo.rows}
-                            dimCol={report.genderDemo.dimCol}
-                            kind="sales"
-                            metrics={SALES_AUDIENCE_METRICS}
-                            prefer="pie"
-                          />
-                        )}
-                        {nbAd && cur ? (
-                          <MetaBreakdownSection
-                            heading="Non-Boost Post · Creative Performance"
-                            badge={`per materi iklan · ${report.p2}`}
-                            rows={cur.nonBoost}
-                            dimCol={nbAd}
-                            kind="sales"
-                            metrics={SALES_CREATIVE_METRICS}
-                            prefer="bar"
-                          />
-                        ) : (
-                          <div className="sec-block">
-                            <div className="sec-heading">Non-Boost Post · Creative Performance</div>
-                            <div className="empty-note" style={{ margin: '1.1rem 1.4rem 1.4rem' }}>
-                              Bagian ini membandingkan performa per materi iklan. File yang diunggah dipecah per campaign, bukan per <strong>Ad</strong> — export ulang
-                              dari Meta Ads Reporting dengan breakdown Ad disertakan.
-                            </div>
-                          </div>
-                        )}
+                        {(() => {
+                          // The breakdowns read one objective at a time, with
+                          // that objective's metrics — see MetaObjectivePicker.
+                          const objectives = report.nonBoostObjectives ?? [];
+                          const active = objectives.find((o) => o.key === nbObjective) ?? objectives[0] ?? null;
+                          const objKey: MetaObjectiveKey = active?.key ?? objective ?? 'sales';
+                          const rows = active?.rows ?? cur?.nonBoost ?? [];
+                          const selling = objKey === 'sales';
+                          const kind = selling ? 'sales' : 'objective';
+                          const audience = selling ? SALES_AUDIENCE_METRICS : objectiveAudienceMetrics(objKey);
+                          const creative = selling ? SALES_CREATIVE_METRICS : objectiveAudienceMetrics(objKey);
+                          const label = active?.label ?? '';
+                          const suffix = objectives.length > 1 && label ? ` · ${label}` : '';
+                          const adCol = rows.length ? findAdCol(rows) : nbAd;
+                          return (
+                            <>
+                              {objectives.length > 0 && (
+                                <MetaObjectivePicker
+                                  objectives={objectives}
+                                  active={active?.key ?? null}
+                                  source={report.nonBoostObjectiveSource ?? null}
+                                  onPick={setNbObjective}
+                                />
+                              )}
+                              {report.ageDemo && (
+                                <MetaBreakdownSection
+                                  key={`age-${objKey}`}
+                                  heading={`Non-Boost Post · Age Breakdown${suffix}`}
+                                  badge={`data ${report.p2}`}
+                                  rows={rows}
+                                  dimCol={report.ageDemo.dimCol}
+                                  kind={kind}
+                                  metrics={audience as typeof SALES_AUDIENCE_METRICS}
+                                  prefer="bar"
+                                />
+                              )}
+                              {report.genderDemo && (
+                                <MetaBreakdownSection
+                                  key={`gender-${objKey}`}
+                                  heading={`Non-Boost Post · Gender Breakdown${suffix}`}
+                                  badge={`data ${report.p2}`}
+                                  rows={rows}
+                                  dimCol={report.genderDemo.dimCol}
+                                  kind={kind}
+                                  metrics={audience as typeof SALES_AUDIENCE_METRICS}
+                                  prefer="pie"
+                                />
+                              )}
+                              {adCol && rows.length ? (
+                                <MetaBreakdownSection
+                                  key={`creative-${objKey}`}
+                                  heading={`Non-Boost Post · Creative Performance${suffix}`}
+                                  badge={`per materi iklan · ${report.p2}`}
+                                  rows={rows}
+                                  dimCol={adCol}
+                                  kind={kind}
+                                  metrics={creative as typeof SALES_CREATIVE_METRICS}
+                                  prefer="bar"
+                                />
+                              ) : (
+                                <div className="sec-block">
+                                  <div className="sec-heading">Non-Boost Post · Creative Performance</div>
+                                  <div className="empty-note" style={{ margin: '1.1rem 1.4rem 1.4rem' }}>
+                                    Bagian ini membandingkan performa per materi iklan. File yang diunggah dipecah per campaign, bukan per <strong>Ad</strong> — export ulang
+                                    dari Meta Ads Reporting dengan breakdown Ad disertakan.
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </>
                     );
                   })(),
@@ -982,7 +1029,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                         {report.boost && (
                           <OverviewDetailedCard
                             heading="Boost Post"
-                            badge="Meta Ads"
+                            badge={report.boostObjective ? `objective ${report.boostObjective.label}${report.boostObjective.mixed ? ' (dominan)' : ''} · dari ${META_OBJECTIVE_SOURCE_LABEL[report.boostObjective.source]}` : 'Meta Ads'}
                             overviewRows={report.boost.overviewRows}
                             detailedRows={report.boost.detailedRows}
                             allCols={report.boost.allCols}

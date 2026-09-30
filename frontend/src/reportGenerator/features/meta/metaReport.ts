@@ -10,8 +10,6 @@ import {
   buildKPI,
   buildLabeledAggRow,
   buildObjectiveOverviewDef,
-  classifyMetaObjective,
-  detectMetaObjectiveCol,
   displayName,
   getOverviewDefs,
   groupByCamp,
@@ -28,6 +26,8 @@ import {
   type MetaIndustry,
   type MetaKpiRow,
   type MetaObjectiveKey,
+  resolveCampaignObjectives,
+  type MetaObjectiveSource,
 } from '../../lib/meta';
 import { findCol, matchDef } from '../../lib/columns';
 import { buildMetaBrandFunnel, buildMetaSalesFunnel, type MetaFunnel } from '../../lib/metaFunnel';
@@ -108,7 +108,11 @@ export interface MetaReport {
   nonBoost?: OverviewDetailedData;
   nonBoostSegments?: MetaObjectiveSegment[];
   // How the split was derived — shown in the section note.
-  nonBoostObjectiveSource?: 'column' | 'campaign-name';
+  nonBoostObjectiveSource?: MetaObjectiveSource;
+  // Non-Boost objectives found (highest spend first), with their current rows.
+  nonBoostObjectives?: { key: MetaObjectiveKey; label: string; rows: SheetRow[]; spend: number | null }[];
+  // The objective Boost Post was bought on (highest spend), when recognisable.
+  boostObjective?: { key: MetaObjectiveKey; label: string; source: MetaObjectiveSource; mixed: boolean };
   boostAgeDemo?: DemoData;
   boostGenderDemo?: DemoData;
   ageDemo?: DemoData;
@@ -168,56 +172,37 @@ interface NonBoostGroup {
   cur: SheetRow[];
 }
 
-// Splits the Non-Boost rows by objective. Prefers a "Result type" column; if
-// there isn't one, falls back to keyword-matching the campaign name.
-//   • `multi` true  → render a blended headline + one sub-section per objective
-//   • `multi` false → a single objective was found (via the column); render one
-//                     section headlined by that objective, no industry pick needed
-//   • null          → no objective signal at all; fall back to the industry pick
+// Splits the Non-Boost rows by objective, one objective per campaign — see
+// resolveCampaignObjectives (Objective column → campaign name → metrics).
+//   • `multi` true  → a blended headline + one sub-section per objective
+//   • `multi` false → one objective found; the section is headlined by it
+//   • null          → no signal at all; fall back to the Objective/industry pick
+// `source` is the signal that decided the most spend, for the badge.
 function groupNonBoostByObjective(
   nonOld: SheetRow[],
   nonCur: SheetRow[],
-  headers: string[],
   campCol: string | null,
-): { groups: NonBoostGroup[]; source: 'column' | 'campaign-name'; multi: boolean } | null {
-  const collect = (readKey: (r: SheetRow) => MetaObjectiveKey) => {
-    const map = new Map<MetaObjectiveKey, { old: SheetRow[]; cur: SheetRow[]; raw: Set<string> }>();
-    const push = (rows: SheetRow[], period: 'old' | 'cur', rawOf: (r: SheetRow) => string) => {
-      for (const r of rows) {
-        const key = readKey(r);
-        if (!map.has(key)) map.set(key, { old: [], cur: [], raw: new Set() });
-        const g = map.get(key)!;
-        g[period].push(r);
-        const raw = rawOf(r).trim();
-        if (raw) g.raw.add(raw);
-      }
-    };
-    return { map, push };
+  spentCol: string | null,
+): { groups: NonBoostGroup[]; source: MetaObjectiveSource; multi: boolean } | null {
+  const resolved = resolveCampaignObjectives([...nonOld, ...nonCur], campCol);
+  if (!campCol || !resolved.size) return null;
+  const map = new Map<MetaObjectiveKey, { old: SheetRow[]; cur: SheetRow[] }>();
+  const sourceSpend = new Map<MetaObjectiveSource, number>();
+  const push = (rows: SheetRow[], period: 'old' | 'cur') => {
+    for (const r of rows) {
+      const hit = resolved.get(String(r[campCol] ?? '').trim());
+      const key = hit?.key ?? 'other';
+      if (!map.has(key)) map.set(key, { old: [], cur: [] });
+      map.get(key)![period].push(r);
+      if (hit) sourceSpend.set(hit.source, (sourceSpend.get(hit.source) ?? 0) + (spentCol ? Number(r[spentCol]) || 0 : 1));
+    }
   };
-  const toGroups = (map: Map<MetaObjectiveKey, { old: SheetRow[]; cur: SheetRow[]; raw: Set<string> }>): NonBoostGroup[] =>
-    META_OBJECTIVE_ORDER.filter((k) => map.has(k)).map((k) => {
-      const g = map.get(k)!;
-      const label = k === 'other' && g.raw.size === 1 ? [...g.raw][0] : META_OBJECTIVE_DEFS[k].label;
-      return { key: k, label, old: g.old, cur: g.cur };
-    });
-
-  const objCol = detectMetaObjectiveCol(headers);
-  if (objCol) {
-    const { map, push } = collect((r) => classifyMetaObjective(String(r[objCol] ?? '')));
-    push(nonOld, 'old', (r) => String(r[objCol] ?? ''));
-    push(nonCur, 'cur', (r) => String(r[objCol] ?? ''));
-    if (map.size >= 1) return { groups: toGroups(map), source: 'column', multi: map.size >= 2 };
-  }
-
-  if (campCol) {
-    const { map, push } = collect((r) => classifyMetaObjective(String(r[campCol] ?? '')));
-    push(nonOld, 'old', () => '');
-    push(nonCur, 'cur', () => '');
-    const nonOther = [...map.keys()].filter((k) => k !== 'other');
-    if (nonOther.length >= 2) return { groups: toGroups(map), source: 'campaign-name', multi: true };
-  }
-
-  return null;
+  push(nonOld, 'old');
+  push(nonCur, 'cur');
+  if (!map.size || (map.size === 1 && map.has('other'))) return null;
+  const groups = META_OBJECTIVE_ORDER.filter((k) => map.has(k)).map((k) => ({ key: k, label: META_OBJECTIVE_DEFS[k].label, ...map.get(k)! }));
+  const source = ([...sourceSpend].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'campaign-name') as MetaObjectiveSource;
+  return { groups, source, multi: groups.length >= 2 };
 }
 
 export interface BuildMetaReportInput {
@@ -379,7 +364,32 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
 
   if (hasNonBoost) report.nonBoostFunnel = buildMetaSalesFunnel(mNonOld, mNonCur);
 
-  const nbGroups = hasNonBoost ? groupNonBoostByObjective(mNonOld, mNonCur, metaHeaders, mCampCol) : null;
+  const nbGroups = hasNonBoost ? groupNonBoostByObjective(mNonOld, mNonCur, mCampCol, mSpentCol ?? null) : null;
+  // Every Non-Boost objective with its current-period rows, so the Age /
+  // Gender / Creative breakdowns can be read per objective with that
+  // objective's own metrics (a Leads campaign is judged on leads, not AOV).
+  if (nbGroups) {
+    report.nonBoostObjectives = nbGroups.groups
+      .filter((g) => g.cur.length)
+      .map((g) => ({ key: g.key, label: g.label, rows: g.cur, spend: mSpentCol ? agg(g.cur, mSpentCol) : null }))
+      .sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0));
+    report.nonBoostObjectiveSource = nbGroups.source;
+  }
+  // Boost Post is recognised by its name (a promoted post), not its objective
+  // — but which objective it was bought on is still worth a label.
+  if (hasBoost) {
+    const boostResolved = resolveCampaignObjectives(mBoostCur.length ? mBoostCur : mBoostOld, mCampCol);
+    const spendBy = new Map<MetaObjectiveKey, number>();
+    let src: MetaObjectiveSource | null = null;
+    for (const r of mBoostCur.length ? mBoostCur : mBoostOld) {
+      const hit = mCampCol ? boostResolved.get(String(r[mCampCol] ?? '').trim()) : undefined;
+      if (!hit || hit.key === 'other') continue;
+      spendBy.set(hit.key, (spendBy.get(hit.key) ?? 0) + (mSpentCol ? Number(r[mSpentCol]) || 0 : 1));
+      src ??= hit.source;
+    }
+    const top = [...spendBy].sort((a, b) => b[1] - a[1])[0];
+    if (top && src) report.boostObjective = { key: top[0], label: META_OBJECTIVE_DEFS[top[0]].label, source: src, mixed: spendBy.size > 1 };
+  }
 
   if (nbGroups && nbGroups.multi) {
     // Multi-objective: a blended headline + per-objective spend split on top,
@@ -398,7 +408,6 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const blendedCpr = buildCprRow(blendedDef.cprPair, mNonOld, mNonCur);
     if (blendedCpr) blendedOvRows.push(blendedCpr);
     report.nonBoost = { overviewRows: blendedOvRows, detailedRows: toDisplayRows(buildKPI(mNonOld, mNonCur, mAllCols)), allCols: mAllCols };
-    report.nonBoostObjectiveSource = nbGroups.source;
     metaKpis.push(...toSummaryRows(blendedKpiRows, 'Non-Boost · Blended'));
     if (blendedCpr) metaKpis.push(...toSummaryRows([blendedCpr], 'Non-Boost · Blended'));
     metaKpis.push(...spendSplitRows.map((r) => toSummaryKpi({ ...r, label: `Non-Boost · Blended · ${r.label}` })));

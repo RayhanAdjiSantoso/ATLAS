@@ -1,5 +1,6 @@
 import { isAllValue } from './meta';
-import { metaBrandMetrics, metaSalesMetrics, type MetaBrandMetrics, type MetaSalesMetrics } from './metaFunnel';
+import { metaBrandMetrics, metaObjectiveMetrics, metaSalesMetrics, type MetaBrandMetrics, type MetaObjectiveMetrics, type MetaSalesMetrics } from './metaFunnel';
+import type { MetaObjectiveKey } from './meta';
 import type { PivotFmt } from './shopeeDeepDivePivot';
 import type { SheetRow } from './types';
 
@@ -45,6 +46,10 @@ export function buildSalesAudience(rows: SheetRow[], dimCol: string): AudienceSl
 
 export function buildBrandAudience(rows: SheetRow[], dimCol: string): AudienceSlice<MetaBrandMetrics>[] {
   return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaBrandMetrics(g.rows) }));
+}
+
+export function buildObjectiveAudience(rows: SheetRow[], dimCol: string): AudienceSlice<MetaObjectiveMetrics>[] {
+  return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaObjectiveMetrics(g.rows) }));
 }
 
 // ── Metric menus ─────────────────────────────────────────────────────────
@@ -95,4 +100,46 @@ export function findAdCol(rows: SheetRow[]): string | null {
     headers.find((h) => /^ad$/i.test(h.trim())) ??
     null
   );
+}
+
+// Non-Boost Post read per objective. Sales keeps the sales-funnel menus above;
+// the others are judged on what they were bought for.
+// Listed in order of preference; the section shows the first four the file
+// can actually compute (see MetaBreakdownSection), so a Leads or Engagement
+// export without its own result column still gets the click metrics.
+const LEADS_METRICS: readonly AudienceMetricDef<MetaObjectiveMetrics>[] = [
+  { key: 'leads', label: 'Leads', fmt: 'num', additive: true },
+  { key: 'costPerLead', label: 'Cost per Lead', fmt: 'rp', additive: false },
+  { key: 'leadRate', label: 'Lead Rate', fmt: 'pct', additive: false },
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+  { key: 'linkClicks', label: 'Link Clicks', fmt: 'num', additive: true },
+  { key: 'cpc', label: 'Cost per Click', fmt: 'rp', additive: false },
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+];
+const ENGAGEMENT_METRICS: readonly AudienceMetricDef<MetaObjectiveMetrics>[] = [
+  { key: 'conversations', label: 'Messaging Conversations', fmt: 'num', additive: true },
+  { key: 'costPerConversation', label: 'Cost per Conversation', fmt: 'rp', additive: false },
+  { key: 'interactionRate', label: 'Interaction Rate', fmt: 'pct', additive: false },
+  { key: 'linkClicks', label: 'Link Clicks', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+  { key: 'cpc', label: 'Cost per Click', fmt: 'rp', additive: false },
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+];
+const TRAFFIC_METRICS: readonly AudienceMetricDef<MetaObjectiveMetrics>[] = [
+  { key: 'linkClicks', label: 'Link Clicks', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+  { key: 'cpc', label: 'Cost per Click', fmt: 'rp', additive: false },
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+];
+const REACH_METRICS: readonly AudienceMetricDef<MetaObjectiveMetrics>[] = [
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'cpm', label: 'CPM', fmt: 'rp', additive: false },
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+];
+
+export function objectiveAudienceMetrics(key: MetaObjectiveKey): readonly AudienceMetricDef<MetaObjectiveMetrics>[] {
+  if (key === 'leads') return LEADS_METRICS;
+  if (key === 'engagement') return ENGAGEMENT_METRICS;
+  if (key === 'traffic') return TRAFFIC_METRICS;
+  return REACH_METRICS;
 }

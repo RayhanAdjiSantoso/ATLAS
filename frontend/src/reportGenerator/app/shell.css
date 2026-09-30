@@ -968,6 +968,17 @@
      One section, two readings: a revenue-share pie per kind (double date,
      payday) over the whole period, then a spending score card per kind
      measured against that kind's previous occurrence. */
+  .obj-pick{padding:1.05rem 1.4rem 1.15rem}
+  .obj-pick-head h3{margin:0 0 .3rem;font-size:.92rem;font-weight:800;color:var(--text)}
+  .obj-pick-head p{margin:0;max-width:78ch;color:var(--muted);font-size:.74rem;line-height:1.5}
+  .obj-pick-list{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:.85rem}
+  .obj-chip{display:grid;gap:.1rem;min-width:9.5rem;padding:.55rem .8rem;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);font:inherit;text-align:left;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
+  .obj-chip:hover:not(:disabled){border-color:var(--acc)}
+  .obj-chip:disabled{cursor:default}
+  .obj-chip.is-on{border-color:var(--acc);background:var(--acc-100);box-shadow:0 0 0 3px rgba(30,62,184,.08)}
+  .obj-chip-label{font-size:.8rem;font-weight:800}
+  .obj-chip.is-on .obj-chip-label{color:var(--acc)}
+  .obj-chip-meta{color:var(--muted);font-size:.68rem;font-variant-numeric:tabular-nums lining-nums}
   .bd-pies{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,max(380px,calc(50% - .6rem))),1fr));gap:1.1rem}
   .bd-pie canvas{max-width:100%;height:auto}
   .bd-pie{display:flex;flex-direction:column;gap:.6rem;margin:0;padding:1rem 1.05rem 1.1rem;border:1px solid var(--border);border-radius:14px;background:var(--surface)}

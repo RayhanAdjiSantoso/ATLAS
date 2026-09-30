@@ -210,6 +210,57 @@ export function metaBrandMetrics(rows: SheetRow[]): MetaBrandMetrics {
   };
 }
 
+// ── Non-sales objectives: Leads, Engagement (messages), Traffic ──────────
+// What a Non-Boost campaign that is not selling is judged on. Rates come from
+// each slice's own counts, like the sales set above.
+
+export interface MetaObjectiveMetrics {
+  impressions: number | null;
+  spend: number | null;
+  cpm: number | null;
+  linkClicks: number | null;
+  ctr: number | null;
+  cpc: number | null;
+  leads: number | null;
+  costPerLead: number | null;
+  leadRate: number | null;
+  conversations: number | null;
+  costPerConversation: number | null;
+  conversationRate: number | null;
+  interactions: number | null;
+  interactionRate: number | null;
+  profileVisits: number | null;
+  costPerProfileVisit: number | null;
+}
+
+export function metaObjectiveMetrics(rows: SheetRow[]): MetaObjectiveMetrics {
+  const impressions = total(rows, ['impressions']);
+  const spend = total(rows, ['amount spent', 'spend']);
+  const linkClicks = total(rows, ['link clicks', 'outbound clicks', 'clicks (all)'], ['rate', 'ctr']);
+  const leads = total(rows, ['on-facebook leads', 'leads'], ['rate', 'form']);
+  const conversations = total(rows, ['messaging conversations started', 'conversations started'], ['rate']);
+  const interactions = total(rows, ['post engagement', 'post interactions', 'engagement', 'interaction'], ['rate']);
+  const profileVisits = total(rows, ['profile visits', 'profile visit'], ['rate']);
+  return {
+    impressions,
+    spend,
+    cpm: ratio(spend, impressions, 1000),
+    linkClicks,
+    ctr: rateOr(ratio(linkClicks, impressions), rows, ['ctr'], ['rate (', 'to atc']),
+    cpc: ratio(spend, linkClicks, 1),
+    leads,
+    costPerLead: ratio(spend, leads, 1),
+    leadRate: ratio(leads, linkClicks),
+    conversations,
+    costPerConversation: ratio(spend, conversations, 1),
+    conversationRate: ratio(conversations, linkClicks),
+    interactions,
+    interactionRate: ratio(interactions, impressions),
+    profileVisits,
+    costPerProfileVisit: ratio(spend, profileVisits, 1),
+  };
+}
+
 const BRAND_TREE: readonly TreeDef<MetaBrandMetrics>[] = [
   { key: 'brand', metric: 'brandConsideration', label: 'Brand Consideration', prefix: '', depth: 0, fmt: 'num', sentiment: 'higher-better' },
 
