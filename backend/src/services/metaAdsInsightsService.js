@@ -9,6 +9,7 @@ import { buildInsightsWorkbook } from './metaAdsLibraryExport.js';
 import {
   metricCatalog, sanitizeExtraMetrics, requiredActionTypes, normalizeInsightRow,
 } from '../config/metaAdsMetrics.js';
+import { refreshInternalDashboard } from './internalDashboardSync/dailyTrackingSync.js';
 
 const ACCOUNT_TYPES = ['MAIN', 'CPAS'];
 
@@ -191,6 +192,7 @@ export async function deleteMonth({ brandId, accountType, month }) {
   assertAccountType(accountType);
   const { startDate, endDate } = monthBounds(month);
   const deleted = await repo.deleteMonthRows({ brandId, accountType, startDate, endDate });
+  await refreshInternalDashboard(brandId);
   // The auto-filed copy goes with it, or the library would keep offering a
   // month that no longer exists. A manual file is never removed here.
   const { auto } = await findSlotParts(brandId, accountType, month);
@@ -248,7 +250,7 @@ export async function finishRun({ runId, status, rowCount, note }) {
   const run = await requireOpenRun(runId);
   const { startDate, endDate } = monthBounds(run.month.slice(0, 7));
 
-  return inTransaction(async (db) => {
+  const result = await inTransaction(async (db) => {
     let removedStale = 0;
     // Zero rows on a "success" is treated as "Meta returned nothing", not as
     // proof the month is empty — clearing the existing data on that basis
@@ -266,4 +268,7 @@ export async function finishRun({ runId, status, rowCount, note }) {
     await repo.finishRun({ runId, status, rowCount, note: noteParts.join(' · ') || null }, db);
     return { status, rowCount, removedStale };
   });
+  // The Internal Dashboard's Meta funnel is rolled up from these rows.
+  if (status === 'success') await refreshInternalDashboard(run.brand_id);
+  return result;
 }

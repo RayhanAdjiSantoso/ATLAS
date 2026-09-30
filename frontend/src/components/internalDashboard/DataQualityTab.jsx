@@ -3,6 +3,7 @@ import { Check, X, Minus, Info, AlertTriangle } from 'lucide-react';
 import api from '../../api/client.js';
 import KpiCard from '../dashboard/KpiCard.jsx';
 import { formatPercent } from '../../utils/format.js';
+import { SALES_CHANNELS } from './constants.js';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const money = (v) => (v == null ? '-' : `Rp${new Intl.NumberFormat('id-ID').format(Math.round(v))}`);
@@ -22,7 +23,31 @@ const STATE_BADGE = {
 };
 const SEV_BADGE = { critical: 'badge-danger', warning: 'badge-warning', info: 'badge-info' };
 
-const CHANNELS = ['shopee', 'tiktok_shop', 'website', 'offline'];
+const CHANNELS = SALES_CHANNELS.map((c) => c.value);
+
+// source_status.state -> [badge class, label]. Severity comes from the API.
+const SOURCE_STATE = {
+  ok: ['badge-success', 'OK'],
+  no_daily_tracking: ['badge-warning', 'Belum isi Daily Tracking'],
+  not_synced: ['badge-warning', 'Belum masuk'],
+  sync_failed: ['badge-danger', 'Pembaruan gagal'],
+  needs_sync: ['badge-warning', 'Tertinggal'],
+  not_filled_this_period: ['badge-warning', 'Periode ini kosong'],
+};
+
+function RevenueCell({ c }) {
+  if (c.revenue_state === 'missing') return <Minus size={14} style={{ color: 'var(--text-muted)' }} />;
+  return (
+    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+      {c.revenue_state === 'zero' ? <span className="badge badge-info" style={{ fontSize: '0.6rem' }}>0 eksplisit</span> : <Check size={14} style={{ color: '#059669' }} />}
+      {c.is_partial_month && (
+        <span className="badge badge-warning" style={{ fontSize: '0.6rem' }} title={c.partial_month_reason === 'current_month' ? 'Bulan berjalan' : 'Ditandai manual'}>
+          parsial
+        </span>
+      )}
+    </span>
+  );
+}
 
 // S8 — Data Quality.
 export default function DataQualityTab() {
@@ -40,6 +65,7 @@ export default function DataQualityTab() {
       .catch((err) => setError(err.response?.data?.message || 'Gagal memuat data quality'))
       .finally(() => setLoading(false));
   }, [period]);
+
 
   const cm = data?.completeness_matrix;
   const rows = (cm?.clients || []).filter((c) => !onlyWithData
@@ -99,6 +125,38 @@ export default function DataQualityTab() {
             )}
           </div>
 
+          {/* Status sumber data (ATLAS Daily Tracking) */}
+          {data.source_status && (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '1rem 1.5rem 0', display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <h3 style={{ fontSize: '1rem' }}>Status Sumber Data — client aktif</h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.3rem 0 0' }}>
+                    {Object.entries(data.source_status.summary).map(([k, n]) => `${SOURCE_STATE[k]?.[1] || k}: ${n}`).join(' · ')}.
+                    {' '}Data masuk otomatis dari halaman Daily Tracking (sales & spend) dan Pengaturan Brand (Meta Ads Auto Fetch, Meta Ads Automation).
+                  </p>
+                </div>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ marginTop: '1rem' }}>
+                  <thead><tr><th>Client</th><th>Status sumber</th><th>Tanggal terakhir diisi</th><th>Sync terakhir</th><th>Warning run terakhir</th><th>Keterangan</th></tr></thead>
+                  <tbody>
+                    {data.source_status.clients.map((s) => (
+                      <tr key={s.brand_id}>
+                        <td>{s.brand_name}</td>
+                        <td><span className={`badge ${SOURCE_STATE[s.state]?.[0] || 'badge-info'}`} style={{ fontSize: '0.62rem' }}>{SOURCE_STATE[s.state]?.[1] || s.state}</span></td>
+                        <td style={{ fontSize: '0.78rem' }}>{s.last_entry_date || '—'}</td>
+                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>{fmtDate(s.last_synced_at)}</td>
+                        <td>{s.last_run ? s.last_run.warning_count : '—'}</td>
+                        <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)', maxWidth: 360 }}>{s.error || s.period_warnings.map((w) => w.message).join(' ')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* 1. Matriks Kelengkapan */}
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.5rem 0' }}>
@@ -106,14 +164,14 @@ export default function DataQualityTab() {
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.3rem 0 0' }}>
                 Aktif: {cm.summary.active} · isi metrik {cm.summary.active_with_monthly_metrics} · channel {cm.summary.active_with_channel_sales} ·
                 spend {cm.summary.active_with_platform_spend} · lengkap-3 {cm.summary.active_with_all_three}. {cm.note}
-                {cm.summary.channels_assessed === 0 && ' (client_sales_channels belum diisi — kolom channel semua "—".)'}
+
               </p>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ marginTop: '1rem' }}>
                 <thead>
                   <tr>
-                    <th>Client</th><th>Status</th><th>Kelengkapan</th><th>Metrik</th><th>Channel sales</th><th>Platform spend</th>
+                    <th>Client</th><th>Status</th><th>Kelengkapan</th><th>Revenue</th><th>Channel sales</th><th>Platform spend</th>
                     {CHANNELS.map((ch) => <th key={ch} style={{ fontSize: '0.68rem' }}>{ch}</th>)}
                   </tr>
                 </thead>
@@ -127,7 +185,7 @@ export default function DataQualityTab() {
                           {STATE_BADGE[c.data_state][1]}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'center' }}><TriCell v={c.has_monthly_metrics} /></td>
+                      <td style={{ textAlign: 'center' }}><RevenueCell c={c} /></td>
                       <td style={{ textAlign: 'center' }}><TriCell v={c.has_channel_sales} /></td>
                       <td style={{ textAlign: 'center' }}><TriCell v={c.has_platform_spend} /></td>
                       {CHANNELS.map((ch) => {
@@ -136,7 +194,7 @@ export default function DataQualityTab() {
                       })}
                     </tr>
                   ))}
-                  {rows.length === 0 && <tr><td colSpan={10} className="empty-state">Tidak ada client.</td></tr>}
+                  {rows.length === 0 && <tr><td colSpan={6 + CHANNELS.length} className="empty-state">Tidak ada client.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -232,7 +290,7 @@ export default function DataQualityTab() {
             <h3 style={{ fontSize: '1rem', padding: '1rem 1.5rem 0' }}>5 · Log Ingestion</h3>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ marginTop: '1rem' }}>
-                <thead><tr><th>Waktu</th><th>Client</th><th>Tabel</th><th>Periode</th><th>Aksi</th><th>Baris</th><th>Status</th><th>Oleh</th></tr></thead>
+                <thead><tr><th>Waktu</th><th>Client</th><th>Tabel</th><th>Periode</th><th>Aksi</th><th>Baris</th><th>Warning</th><th>Status</th><th>Oleh</th></tr></thead>
                 <tbody>
                   {data.ingestion_log.map((l) => (
                     <tr key={l.id}>
@@ -242,11 +300,12 @@ export default function DataQualityTab() {
                       <td>{l.period || '-'}</td>
                       <td style={{ fontSize: '0.78rem' }}>{l.method}</td>
                       <td>{l.row_count}</td>
+                      <td>{l.warning_count ?? '—'}</td>
                       <td><span className={`badge ${l.status === 'success' ? 'badge-success' : l.status === 'failed' ? 'badge-danger' : 'badge-warning'}`}>{l.status}</span></td>
                       <td>{l.performed_by_name || '-'}</td>
                     </tr>
                   ))}
-                  {data.ingestion_log.length === 0 && <tr><td colSpan={8} className="empty-state">Belum ada log.</td></tr>}
+                  {data.ingestion_log.length === 0 && <tr><td colSpan={9} className="empty-state">Belum ada log.</td></tr>}
                 </tbody>
               </table>
             </div>

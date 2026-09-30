@@ -1,6 +1,5 @@
 import useSessionState from '../hooks/useSessionState.js';
 import { useState } from 'react';
-import InputDataTab from '../components/internalDashboard/InputDataTab.jsx';
 import ExecutiveOverviewTab from '../components/internalDashboard/ExecutiveOverviewTab.jsx';
 import CategoryComparisonTab from '../components/internalDashboard/CategoryComparisonTab.jsx';
 import IndustryTab from '../components/internalDashboard/IndustryTab.jsx';
@@ -11,8 +10,9 @@ import ClientDetailTab from '../components/internalDashboard/ClientDetailTab.jsx
 import DataQualityTab from '../components/internalDashboard/DataQualityTab.jsx';
 
 // Internal Dashboard MIL Digital — admin-only, all-clients performance.
-// All 8 view sections (S1–S8) + Input Data.
-const TABS = ['Executive Overview', 'Business Checkup', 'Kategori Besar', 'Industry', 'Benchmarking', 'Channel & Platform', 'Client Detail', 'Data Quality', 'Input Data'];
+// All 8 view sections (S1–S8). Read-only: data is entered in Daily
+// Tracking and Pengaturan Brand (Data & File, Meta Ads Automation), never here.
+const TABS = ['Executive Overview', 'Business Checkup', 'Kategori Besar', 'Industry', 'Benchmarking', 'Channel & Platform', 'Client Detail', 'Data Quality'];
 const TAB_COMPONENTS = {
   'Executive Overview': ExecutiveOverviewTab,
   'Business Checkup': BusinessCheckupTab,
@@ -22,18 +22,18 @@ const TAB_COMPONENTS = {
   'Channel & Platform': ChannelPlatformTab,
   'Client Detail': ClientDetailTab,
   'Data Quality': DataQualityTab,
-  'Input Data': InputDataTab,
 };
 
 export default function InternalDashboardPage() {
   const [activeTab, setActiveTab] = useSessionState('internal:section', TABS[0]);
-  const ActiveTabComponent = TAB_COMPONENTS[activeTab];
+  // A tab remembered from before 'Input Data' was removed falls back to the first one.
+  const ActiveTabComponent = TAB_COMPONENTS[activeTab] ?? TAB_COMPONENTS[TABS[0]];
 
   return (
     <div>
       <div className="page-header">
         <h1>Internal Dashboard</h1>
-        <p>Capture performance seluruh client MIL Digital. Input data bulanan manual per sumber.</p>
+        <p>Capture performance seluruh client MIL Digital. Data diambil otomatis dari halaman Daily Tracking dan Pengaturan Brand.</p>
       </div>
 
       <div

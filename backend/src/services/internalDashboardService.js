@@ -1,307 +1,10 @@
-import pool from '../config/db.js';
 import { AppError } from '../utils/errors.js';
-import { S1 as S1_CONFIG, S4 as S4_CONFIG, CATEGORY_MAP } from '../config/internalDashboard.js';
+import { S1 as S1_CONFIG, S4 as S4_CONFIG, SYNC as SYNC_CONFIG, CATEGORY_MAP } from '../config/internalDashboard.js';
 import * as brandService from './brandService.js';
 import * as repo from '../repositories/internalDashboardRepository.js';
-import { syncBrandFromSheets as runSheetSync } from './internalDashboardSheets/syncService.js';
-
-// "YYYY-MM" (from the month picker) -> "YYYY-MM-01" (DATE the tables store).
-const toPeriodDate = (period) => `${period}-01`;
-
-async function assertBrand(brandId) {
-  const brand = await brandService.getBrandById(brandId);
-  if (!brand) throw new AppError('Client tidak ditemukan', 404);
-  return brand;
-}
-
-// Run `work(client)` inside a transaction. `work` does the fact upsert AND
-// the data_ingestion_log insert, so a failed log never leaves an orphan
-// fact row and vice versa.
-async function inTransaction(work) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await work(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-}
 
 export async function listClients() {
   return repo.listClients();
-}
-
-// --- Google Sheets live sync -----------------------------------------
-export async function listSheetSyncSources() {
-  return repo.listActiveSheetSources();
-}
-
-export async function syncBrandFromSheets(brandId, userId) {
-  await assertBrand(brandId);
-  return runSheetSync(brandId, userId);
-}
-
-// --- §2.3 -----------------------------------------------------------
-export async function listMonthlyMetrics(brandId) {
-  await assertBrand(brandId);
-  return repo.listMonthlyMetrics(brandId);
-}
-
-export async function saveMonthlyMetric(input) {
-  await assertBrand(input.brandId);
-  const period = toPeriodDate(input.period);
-
-  return inTransaction(async (db) => {
-    const res = await repo.upsertMonthlyMetric({
-      brandId: input.brandId,
-      period,
-      revenue: input.revenue,
-      transaksi: input.transaksi ?? null,
-      qtySold: input.qtySold ?? null,
-      targetSales: input.targetSales ?? null,
-      isPartialMonth: input.isPartialMonth ?? false,
-      userId: input.userId,
-    }, db);
-
-    await repo.logIngestion({
-      brandId: input.brandId,
-      targetTable: 'client_monthly_metrics',
-      period,
-      method: res.was_insert ? 'form entry' : 'edit',
-      rowCount: 1,
-      status: 'success',
-      pic: input.pic ?? null,
-      userId: input.userId,
-    }, db);
-
-    return { id: res.id, wasInsert: res.was_insert };
-  });
-}
-
-export async function deleteMonthlyMetric(id, userId) {
-  const deleted = await repo.deleteMonthlyMetric(id);
-  if (!deleted) throw new AppError('Data tidak ditemukan', 404);
-  await repo.logIngestion({
-    brandId: deleted.brand_id,
-    targetTable: 'client_monthly_metrics',
-    period: `${deleted.period}-01`,
-    method: 'delete',
-    rowCount: 1,
-    status: 'success',
-    userId,
-  });
-  return deleted;
-}
-
-// --- §2.4 -----------------------------------------------------------
-export async function listChannelSales(brandId) {
-  await assertBrand(brandId);
-  return repo.listChannelSales(brandId);
-}
-
-export async function saveChannelSales(input) {
-  await assertBrand(input.brandId);
-  const period = toPeriodDate(input.period);
-
-  // dedupe channels (last value wins) so a malformed payload can't double-write
-  const byChannel = new Map();
-  for (const c of input.channels) byChannel.set(c.channel, c.sales);
-
-  return inTransaction(async (db) => {
-    let inserted = 0;
-    let updated = 0;
-    for (const [channel, sales] of byChannel) {
-      const res = await repo.upsertChannelSale({
-        brandId: input.brandId, period, channel, sales, userId: input.userId,
-      }, db);
-      if (res.was_insert) inserted += 1; else updated += 1;
-    }
-
-    await repo.logIngestion({
-      brandId: input.brandId,
-      targetTable: 'client_channel_sales_monthly',
-      period,
-      method: inserted && updated ? 'form entry + edit' : updated ? 'edit' : 'form entry',
-      rowCount: byChannel.size,
-      status: 'success',
-      pic: input.pic ?? null,
-      userId: input.userId,
-    }, db);
-
-    return { inserted, updated, channels: byChannel.size };
-  });
-}
-
-export async function deleteChannelSale(id, userId) {
-  const deleted = await repo.deleteChannelSale(id);
-  if (!deleted) throw new AppError('Data tidak ditemukan', 404);
-  await repo.logIngestion({
-    brandId: deleted.brand_id,
-    targetTable: 'client_channel_sales_monthly',
-    period: `${deleted.period}-01`,
-    method: `delete (${deleted.channel})`,
-    rowCount: 1,
-    status: 'success',
-    userId,
-  });
-  return deleted;
-}
-
-// --- §2.5 -----------------------------------------------------------
-export async function listPlatformSpend(brandId) {
-  await assertBrand(brandId);
-  return repo.listPlatformSpend(brandId);
-}
-
-export async function savePlatformSpend(input) {
-  await assertBrand(input.brandId);
-  const period = toPeriodDate(input.period);
-
-  // Only the whitelisted metric columns are forwarded; anything else in the
-  // body is ignored.
-  const metrics = {};
-  for (const col of repo.CPS_COLUMNS) {
-    const raw = input.metrics?.[col];
-    metrics[col] = raw === undefined || raw === null || raw === '' ? null : raw;
-  }
-
-  return inTransaction(async (db) => {
-    const res = await repo.upsertPlatformSpend({
-      brandId: input.brandId, period, platform: input.platform, userId: input.userId, metrics,
-    }, db);
-
-    await repo.logIngestion({
-      brandId: input.brandId,
-      targetTable: 'client_platform_spend_monthly',
-      period,
-      method: `${res.was_insert ? 'form entry' : 'edit'} (${input.platform})`,
-      rowCount: 1,
-      status: 'success',
-      pic: input.pic ?? null,
-      userId: input.userId,
-    }, db);
-
-    return { id: res.id, wasInsert: res.was_insert };
-  });
-}
-
-export async function deletePlatformSpend(id, userId) {
-  const deleted = await repo.deletePlatformSpend(id);
-  if (!deleted) throw new AppError('Data tidak ditemukan', 404);
-  await repo.logIngestion({
-    brandId: deleted.brand_id,
-    targetTable: 'client_platform_spend_monthly',
-    period: `${deleted.period}-01`,
-    method: `delete (${deleted.platform})`,
-    rowCount: 1,
-    status: 'success',
-    userId,
-  });
-  return deleted;
-}
-
-// --- §2.2 client_sales_channels -----------------------------------
-export async function listSalesChannels(brandId) {
-  await assertBrand(brandId);
-  return repo.listSalesChannels(brandId);
-}
-
-export async function saveSalesChannels(input) {
-  await assertBrand(input.brandId);
-  // dedupe (last wins) so a malformed payload can't double-write a channel
-  const byChannel = new Map();
-  for (const c of input.channels) byChannel.set(c.channel, c.isUsed);
-
-  return inTransaction(async (db) => {
-    let inserted = 0;
-    let updated = 0;
-    for (const [channel, isUsed] of byChannel) {
-      const res = await repo.upsertSalesChannel({
-        brandId: input.brandId, channel, isUsed, note: input.note ?? null, userId: input.userId,
-      }, db);
-      if (res.was_insert) inserted += 1; else updated += 1;
-    }
-    await repo.logIngestion({
-      brandId: input.brandId,
-      targetTable: 'client_sales_channels',
-      period: null, // brand-level config, not period-scoped
-      method: `set ${byChannel.size} channel (${inserted} baru, ${updated} edit)`,
-      rowCount: byChannel.size,
-      status: 'success',
-      pic: input.pic ?? null,
-      userId: input.userId,
-    }, db);
-    return { inserted, updated, channels: byChannel.size };
-  });
-}
-
-// --- brand_ad_accounts -------------------------------------------
-export async function listAdAccounts(brandId) {
-  await assertBrand(brandId);
-  return repo.listAdAccounts(brandId);
-}
-
-export async function saveAdAccount(input) {
-  await assertBrand(input.brandId);
-  const adAccountId = input.adAccountId.trim();
-  const accountName = input.accountName?.trim() || null;
-  const isPrimary = input.isPrimary === true;
-
-  return inTransaction(async (db) => {
-    let row;
-    let wasInsert;
-    if (input.id) {
-      const existing = await repo.getAdAccount(input.id);
-      if (!existing || existing.brand_id !== input.brandId) throw new AppError('Ad account tidak ditemukan', 404);
-      if (isPrimary) await repo.clearPrimaryAdAccount(input.brandId, input.id, db);
-      row = await repo.updateAdAccount({ id: input.id, adAccountId, accountName, isPrimary }, db);
-      wasInsert = false;
-    } else {
-      if (isPrimary) await repo.clearPrimaryAdAccount(input.brandId, null, db);
-      row = await repo.insertAdAccount({ brandId: input.brandId, adAccountId, accountName, isPrimary }, db);
-      wasInsert = true;
-    }
-    await repo.logIngestion({
-      brandId: input.brandId,
-      targetTable: 'brand_ad_accounts',
-      period: null,
-      method: `${wasInsert ? 'add' : 'edit'} ${adAccountId}${isPrimary ? ' (primary)' : ''}`,
-      rowCount: 1,
-      status: 'success',
-      pic: input.pic ?? null,
-      userId: input.userId,
-    }, db);
-    return { ...row, wasInsert };
-  }).catch((err) => {
-    // unique (brand_id, ad_account_id)
-    if (err.code === '23505') throw new AppError('Ad account ID itu sudah terdaftar untuk client ini', 409);
-    throw err;
-  });
-}
-
-export async function deleteAdAccount(id, userId) {
-  const deleted = await repo.deleteAdAccount(id);
-  if (!deleted) throw new AppError('Ad account tidak ditemukan', 404);
-  await repo.logIngestion({
-    brandId: deleted.brand_id,
-    targetTable: 'brand_ad_accounts',
-    period: null,
-    method: `delete ${deleted.ad_account_id}`,
-    rowCount: 1,
-    status: 'success',
-    userId,
-  });
-  return deleted;
-}
-
-// --- §2.7 -----------------------------------------------------------
-export async function listIngestionLog(params) {
-  return repo.listIngestionLog(params);
 }
 
 // =====================================================================
@@ -1031,7 +734,8 @@ export async function getIndustries(params) {
 // `platform_attributed_roas`, NOT "ROAS" (that headline term is reserved
 // for the revenue/spend blended figure in S1).
 
-const SALES_CHANNELS = ['shopee', 'tiktok_shop', 'website', 'offline'];
+// Mirrors the sales_channel enum (migrations 009 + 030).
+const SALES_CHANNELS = ['shopee', 'tiktok_shop', 'website', 'offline', 'tokopedia', 'blibli', 'lazada'];
 const AD_PLATFORMS = ['meta_nonboost', 'meta_boost', 'meta_cpas', 'iklanku_shopee', 'gmv_max_tiktok', 'google_ads', 'cpas_tokopedia', 'ttam_tiktok'];
 
 export async function getChannels(params) {
@@ -1213,7 +917,7 @@ export async function getChannels(params) {
     period,
     compare_period: comparePeriod,
     filters: { compare, status, category },
-    note: 'Efisiensi platform dihitung ulang dari kolom raw (spend/impressions/clicks/purchase). "platform_attributed_roas" = purchase_value / spend, bukan ROAS bisnis (revenue/spend ada di Executive Overview). Channel di luar 4 utama (chat/tokopedia/dst.) disimpan sebagai free-text di client_channel_sales_other dan ikut dijumlahkan ke total_channel_sales + tampil di "Sales per Channel" dengan label aslinya. Cakupan = client punya ≥1 bulan data channel/platform tsb dalam 13 bulan terakhir; client_sales_channels (§2.2) belum ada, jadi "tidak dipakai" vs "belum diinput" belum bisa dibedakan.',
+    note: 'Efisiensi platform dihitung ulang dari kolom raw (spend/impressions/clicks/purchase). "platform_attributed_roas" = purchase_value / spend, bukan ROAS bisnis (revenue/spend ada di Executive Overview). Channel di luar enum sales_channel (mis. chat) disimpan sebagai free-text di client_channel_sales_other dan ikut dijumlahkan ke total_channel_sales + tampil di "Sales per Channel" dengan label aslinya. Cakupan = client punya ≥1 bulan data channel/platform tsb dalam 13 bulan terakhir; client_sales_channels (§2.2) belum ada, jadi "tidak dipakai" vs "belum diinput" belum bisa dibedakan.',
     sales_channels,
     channel_trend_keys: channelKeys.map((ch) => (ch.startsWith('other:') ? ch.slice('other:'.length) : ch)),
     total_channel_sales: totalNow || null,
@@ -1434,7 +1138,7 @@ const BENCHMARK_METRICS = [
 // stay null (never coalesced to 0) so funnels render "no data" and
 // adMetrics()'s `> 0` guards behave. (view_content/atc are undefined when
 // the caller's query didn't select them -> also null.)
-function adRowObj(r) {
+export function adRowObj(r) {
   return {
     spend: Number(r.spend || 0), // SUM(amount_spent), never null
     impressions: r.impressions == null ? null : Number(r.impressions),
@@ -1448,7 +1152,7 @@ function adRowObj(r) {
 
 // Per-client ad metrics from raw monthly sums. blended_roas = revenue/spend
 // (S1 definition — NOT S6's platform-attributed purchase_value/spend).
-function adMetrics(rev, ad) {
+export function adMetrics(rev, ad) {
   if (!ad) return null;
   const s = ad.spend;
   return {
@@ -1893,26 +1597,30 @@ export async function getClientRanking(params) {
 // S8 — Data Quality
 // =====================================================================
 
-const SALES_CHANNEL_ALL = ['shopee', 'tiktok_shop', 'website', 'offline'];
+const SALES_CHANNEL_ALL = SALES_CHANNELS;
 // A channel-sales total within this fraction of revenue counts as reconciled.
-const RECON_TOLERANCE = 0.005;
+const RECON_TOLERANCE = SYNC_CONFIG.channelVsRevenueTolerance;
 
 export async function getDataQuality(params) {
   const period = params.period;
 
-  const [snapshot, csc, unmappedAcc, recon, log] = await Promise.all([
+  const [snapshot, channelUsage, unmappedAcc, recon, log, dailyBrands, syncRuns] = await Promise.all([
     repo.dataQualitySnapshot(period),
-    repo.allClientSalesChannels(),
+    repo.brandChannelUsage(),
     repo.metaSpendAdAccountGaps(),
     repo.channelReconciliation(period),
     repo.listIngestionLog({ limit: 40 }),
+    repo.dailyTrackingBrands(),
+    repo.latestSyncRuns('daily_tracking_sync_run'),
   ]);
 
-  // csc lookup: brandId -> { channel -> {is_used, source} }
+  // Channel usage is derived from the data itself (Daily Tracking roll-up):
+  // brandId -> { channel -> last month with sales }. No row = no sales
+  // recorded yet (unknown), never "not used".
   const cscByBrand = new Map();
-  for (const r of csc) {
+  for (const r of channelUsage) {
     if (!cscByBrand.has(r.brand_id)) cscByBrand.set(r.brand_id, new Map());
-    cscByBrand.get(r.brand_id).set(r.channel, { is_used: r.is_used, source: r.source });
+    cscByBrand.get(r.brand_id).set(r.channel, { is_used: true, source: 'daily_tracking', last_period: r.last_period });
   }
 
   // --- 1. Matriks Kelengkapan Data --------------------------------
@@ -1924,7 +1632,7 @@ export async function getDataQuality(params) {
       // carries canonical channels; "other" is separate)
       return {
         channel: ch,
-        is_used: flag ? flag.is_used : null, // true / false / null(=belum dinilai)
+        is_used: flag ? true : null, // true = ada sales kapan pun / null = belum ada data
         source: flag ? flag.source : null,
       };
     });
@@ -1942,6 +1650,11 @@ export async function getDataQuality(params) {
       has_platform_spend: s.has_platform_spend,
       data_state: nFacts === 3 ? 'complete' : nFacts === 0 ? 'empty' : 'partial',
       revenue: s.revenue == null ? null : Number(s.revenue),
+      // missing = no row; zero = a row that really says 0; value = anything else
+      revenue_state: s.revenue == null ? 'missing' : Number(s.revenue) === 0 ? 'zero' : 'value',
+      revenue_source: s.revenue_source ?? null,
+      is_partial_month: Boolean(s.is_partial_month),
+      partial_month_reason: s.is_partial_month ? (s.partial_month_reason ?? 'manual') : null,
       channel_sales_total: Number(s.channel_sales_total),
       platform_spend_total: Number(s.platform_spend_total),
       channels,
@@ -1969,9 +1682,9 @@ export async function getDataQuality(params) {
       empty: active.filter((c) => c.data_state === 'empty').length,
       // headline % — filled fact cells / (active clients * 3)
       completeness_pct: activeCells > 0 ? activeCellsFilled / activeCells : null,
-      channels_assessed: csc.length, // client_sales_channels rows
+      channels_with_sales: channelUsage.length, // brand x channel pairs with any sales
     },
-    note: 'data_state = rollup 3 sel fact-table (complete/partial/empty). completeness_pct = sel terisi / (client aktif * 3). is_used null = channel belum dinilai (belum ada di client_sales_channels), bukan "tidak dipakai".',
+    note: 'data_state = rollup 3 sel fact-table (complete/partial/empty). completeness_pct = sel terisi / (client aktif * 3). channel = ada data sales di Daily Tracking (kapan pun); kosong = belum ada data, bukan "tidak dipakai".',
   };
 
   // --- 2. Ad account belum ter-mapping (2 tier) ------------------
@@ -1982,7 +1695,7 @@ export async function getDataQuality(params) {
   const ad_accounts_unmapped = {
     hard: unmappedAcc.filter((r) => r.hard).map(accRow),
     soft: unmappedAcc.filter((r) => !r.hard).map(accRow),
-    note: 'HARD = punya spend Meta tapi bm_id kosong → spend tidak terikat ke Business Manager mana pun. SOFT = bm_id ada tapi 0 baris brand_ad_accounts → daftar akun iklan belum diisi (semua client sekarang; sheet cuma punya angka "# Ad account", bukan act_ ID). brand_ad_accounts akan diisi dari input manual / CONFIG.ACCOUNTS proyek automation.',
+    note: 'HARD = punya spend Meta tapi bm_id kosong → spend tidak terikat ke Business Manager mana pun. SOFT = bm_id ada tapi belum ada ad account yang terdaftar & tertaut ke brand ini di Pengaturan Brand → Meta Ads Automation.',
   };
 
   // --- 3. Campaign belum terklasifikasi -------------------------
@@ -2024,6 +1737,58 @@ export async function getDataQuality(params) {
     },
   };
 
+  // --- 5. Status sumber data (ATLAS Daily Tracking) per client aktif --
+  // Distinguishes WHY a client's numbers may be missing or behind, so "not
+  // using Daily Tracking yet", "never rolled up", "latest edit not rolled up
+  // (the automatic refresh failed)" and "nothing entered for this month" never collapse
+  // into one red warning. Severity follows the action-list convention:
+  // critical = data is wrong, warning = needs action, info = expected.
+  const dailyByBrand = new Map(dailyBrands.map((b) => [b.brand_id, b]));
+  const runByBrand = new Map(syncRuns.map((r) => [r.brand_id, r]));
+
+  const source_status = active.map((c) => {
+    const daily = dailyByBrand.get(c.brand_id);
+    const run = runByBrand.get(c.brand_id);
+    const hasData = c.has_monthly_metrics || c.has_channel_sales || c.has_platform_spend;
+    let state;
+    let severity;
+    if (!daily) {
+      state = 'no_daily_tracking';
+      severity = 'warning';
+    } else if (!run) {
+      state = 'not_synced'; severity = 'warning';
+    } else if (run.status === 'failed') {
+      state = 'sync_failed'; severity = 'warning';
+    } else if (new Date(daily.last_change) > new Date(run.finished_at)) {
+      state = 'needs_sync'; severity = 'warning';
+    } else if (!hasData) {
+      state = 'not_filled_this_period'; severity = 'warning';
+    } else {
+      state = 'ok'; severity = null;
+    }
+    const periodWarnings = (run?.details?.warnings ?? []).filter((w) => w.period === period && w.severity === 'warning');
+    return {
+      brand_id: c.brand_id,
+      brand_name: c.brand_name,
+      state,
+      severity,
+      last_entry_date: daily?.last_entry_date ?? null,
+      last_change: daily?.last_change ?? null,
+      last_synced_at: run && run.status !== 'failed' ? run.finished_at : null,
+      error: run?.status === 'failed' ? (run.details?.error ?? 'sync gagal') : null,
+      last_run: run ? { status: run.status, finished_at: run.finished_at, warning_count: run.warning_count } : null,
+      period_warnings: periodWarnings,
+    };
+  });
+
+  const SOURCE_STATE_LABEL = {
+    no_daily_tracking: 'belum ada data di halaman Daily Tracking',
+    not_synced: 'data Daily Tracking belum pernah masuk ke dashboard',
+    sync_failed: 'pembaruan otomatis dari Daily Tracking gagal',
+    needs_sync: 'perubahan Daily Tracking terbaru belum masuk ke dashboard',
+    not_filled_this_period: `Daily Tracking belum diisi untuk ${period}`,
+  };
+
   // --- Daftar Tindakan — consolidated, severity-ranked ------------
   // One flat list the team works top-down: critical (spend untracked /
   // reconciliation broken) before warnings (mapping backlog / anomalies).
@@ -2052,6 +1817,35 @@ export async function getDataQuality(params) {
       label: `${a.brand_name}: daftar ad account belum diisi`,
       detail: `BM ID ada tapi belum ada baris brand_ad_accounts (act_ ID). ${rp(a.meta_spend_total)} spend Meta.`,
     })),
+    ...source_status.flatMap((s) => s.period_warnings.map((w) => ({
+      severity: 'warning', type: `daily_tracking_${w.code}`, brand_id: s.brand_id, brand_name: s.brand_name,
+      label: `${s.brand_name}: catatan sync Daily Tracking`,
+      detail: w.message,
+    }))),
+    ...source_status.filter((s) => s.severity).map((s) => ({
+      severity: s.severity, type: `source_${s.state}`, brand_id: s.brand_id, brand_name: s.brand_name,
+      label: `${s.brand_name}: ${SOURCE_STATE_LABEL[s.state]}`,
+      detail: s.error
+        || (s.state === 'no_daily_tracking' ? 'Belum ada data — isi halaman Daily Tracking untuk client ini.' : '')
+        || (s.state === 'needs_sync' ? `Perubahan terakhir ${new Date(s.last_change).toLocaleString('id-ID')} belum masuk — pembaruan otomatis sebelumnya gagal; simpan ulang data di Daily Tracking atau jalankan scripts/syncDailyTracking.js.` : '')
+        || (s.last_entry_date ? `Tanggal terakhir yang diisi: ${s.last_entry_date}.` : ''),
+    })),
+    ...completeness_matrix.clients
+      .filter((c) => c.status === 'active' && c.is_partial_month)
+      .map((c) => ({
+        severity: 'info', type: 'partial_month', brand_id: c.brand_id, brand_name: c.brand_name,
+        label: `${c.brand_name}: ${period} bulan parsial`,
+        detail: c.partial_month_reason === 'current_month'
+          ? 'Bulan berjalan — otomatis dikeluarkan dari Benchmarking sampai bulan selesai.'
+          : 'Ditandai parsial secara manual — dikeluarkan dari Benchmarking.',
+      })),
+    ...completeness_matrix.clients
+      .filter((c) => c.status === 'active' && c.revenue_state === 'zero')
+      .map((c) => ({
+        severity: 'info', type: 'actual_zero', brand_id: c.brand_id, brand_name: c.brand_name,
+        label: `${c.brand_name}: revenue ${period} tercatat 0`,
+        detail: 'Nilai 0 yang eksplisit (bukan data kosong). Pastikan memang tidak ada penjualan.',
+      })),
     ...completeness_matrix.clients
       .filter((c) => c.status === 'active' && c.data_state === 'partial')
       .map((c) => ({
@@ -2071,6 +1865,12 @@ export async function getDataQuality(params) {
     ad_accounts_unmapped,
     campaign_classification,
     reconciliation,
+    source_status: {
+      clients: source_status,
+      summary: Object.fromEntries(
+        Object.entries(source_status.reduce((acc, s) => ({ ...acc, [s.state]: (acc[s.state] || 0) + 1 }), {})),
+      ),
+    },
     action_items,
     ingestion_log: log,
   };

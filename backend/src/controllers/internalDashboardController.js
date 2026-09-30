@@ -1,7 +1,6 @@
 import { validationResult } from 'express-validator';
 import { AppError, asyncHandler } from '../utils/errors.js';
 import * as service from '../services/internalDashboardService.js';
-import { CPS_COLUMNS } from '../repositories/internalDashboardRepository.js';
 
 function validate(req) {
   const errors = validationResult(req);
@@ -10,157 +9,9 @@ function validate(req) {
   }
 }
 
-const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
-
 // GET /api/internal-dashboard/clients
 export const listClients = asyncHandler(async (req, res) => {
   res.json({ clients: await service.listClients() });
-});
-
-// --- Google Sheets live sync -----------------------------------------
-// GET /api/internal-dashboard/sheet-sources
-export const listSheetSyncSources = asyncHandler(async (req, res) => {
-  res.json({ sources: await service.listSheetSyncSources() });
-});
-
-// POST /api/internal-dashboard/sync-from-sheets  { brand_id }
-export const syncFromSheets = asyncHandler(async (req, res) => {
-  validate(req);
-  const result = await service.syncBrandFromSheets(Number(req.body.brand_id), req.user.userId);
-  res.json({ result });
-});
-
-// --- §2.3 client_monthly_metrics -----------------------------------
-export const listMonthlyMetrics = asyncHandler(async (req, res) => {
-  validate(req);
-  const entries = await service.listMonthlyMetrics(Number(req.query.brand_id));
-  res.json({ entries });
-});
-
-export const saveMonthlyMetric = asyncHandler(async (req, res) => {
-  validate(req);
-  const b = req.body;
-  const result = await service.saveMonthlyMetric({
-    brandId: Number(b.brand_id),
-    period: b.period,
-    revenue: num(b.revenue),
-    transaksi: num(b.transaksi),
-    qtySold: num(b.qty_sold),
-    targetSales: num(b.target_sales),
-    isPartialMonth: b.is_partial_month === true || b.is_partial_month === 'true',
-    pic: b.pic?.trim() || null,
-    userId: req.user.userId,
-  });
-  res.status(result.wasInsert ? 201 : 200).json(result);
-});
-
-export const deleteMonthlyMetric = asyncHandler(async (req, res) => {
-  validate(req);
-  await service.deleteMonthlyMetric(Number(req.params.id), req.user.userId);
-  res.json({ message: 'Data bulanan dihapus' });
-});
-
-// --- §2.4 client_channel_sales_monthly ----------------------------
-export const listChannelSales = asyncHandler(async (req, res) => {
-  validate(req);
-  const entries = await service.listChannelSales(Number(req.query.brand_id));
-  res.json({ entries });
-});
-
-export const saveChannelSales = asyncHandler(async (req, res) => {
-  validate(req);
-  const b = req.body;
-  const result = await service.saveChannelSales({
-    brandId: Number(b.brand_id),
-    period: b.period,
-    channels: (b.channels || []).map((c) => ({ channel: c.channel, sales: num(c.sales) })),
-    pic: b.pic?.trim() || null,
-    userId: req.user.userId,
-  });
-  res.json(result);
-});
-
-export const deleteChannelSale = asyncHandler(async (req, res) => {
-  validate(req);
-  await service.deleteChannelSale(Number(req.params.id), req.user.userId);
-  res.json({ message: 'Data channel dihapus' });
-});
-
-// --- §2.5 client_platform_spend_monthly --------------------------
-export const listPlatformSpend = asyncHandler(async (req, res) => {
-  validate(req);
-  const entries = await service.listPlatformSpend(Number(req.query.brand_id));
-  res.json({ entries });
-});
-
-export const savePlatformSpend = asyncHandler(async (req, res) => {
-  validate(req);
-  const b = req.body;
-  const metrics = {};
-  for (const col of CPS_COLUMNS) metrics[col] = num(b[col]);
-  const result = await service.savePlatformSpend({
-    brandId: Number(b.brand_id),
-    period: b.period,
-    platform: b.platform,
-    metrics,
-    pic: b.pic?.trim() || null,
-    userId: req.user.userId,
-  });
-  res.status(result.wasInsert ? 201 : 200).json(result);
-});
-
-export const deletePlatformSpend = asyncHandler(async (req, res) => {
-  validate(req);
-  await service.deletePlatformSpend(Number(req.params.id), req.user.userId);
-  res.json({ message: 'Data platform spend dihapus' });
-});
-
-// --- §2.2 client_sales_channels ---------------------------------
-export const listSalesChannels = asyncHandler(async (req, res) => {
-  validate(req);
-  const entries = await service.listSalesChannels(Number(req.query.brand_id));
-  res.json({ entries });
-});
-
-export const saveSalesChannels = asyncHandler(async (req, res) => {
-  validate(req);
-  const b = req.body;
-  const result = await service.saveSalesChannels({
-    brandId: Number(b.brand_id),
-    channels: (b.channels || []).map((c) => ({ channel: c.channel, isUsed: c.is_used === true || c.is_used === 'true' })),
-    note: b.note?.trim() || null,
-    pic: b.pic?.trim() || null,
-    userId: req.user.userId,
-  });
-  res.json(result);
-});
-
-// --- brand_ad_accounts -----------------------------------------
-export const listAdAccounts = asyncHandler(async (req, res) => {
-  validate(req);
-  const entries = await service.listAdAccounts(Number(req.query.brand_id));
-  res.json({ entries });
-});
-
-export const saveAdAccount = asyncHandler(async (req, res) => {
-  validate(req);
-  const b = req.body;
-  const result = await service.saveAdAccount({
-    id: b.id ? Number(b.id) : null,
-    brandId: Number(b.brand_id),
-    adAccountId: b.ad_account_id,
-    accountName: b.account_name,
-    isPrimary: b.is_primary === true || b.is_primary === 'true',
-    pic: b.pic?.trim() || null,
-    userId: req.user.userId,
-  });
-  res.status(result.wasInsert ? 201 : 200).json(result);
-});
-
-export const deleteAdAccount = asyncHandler(async (req, res) => {
-  validate(req);
-  await service.deleteAdAccount(Number(req.params.id), req.user.userId);
-  res.json({ message: 'Ad account dihapus' });
 });
 
 // --- S1 Executive Overview -------------------------------------
@@ -255,15 +106,4 @@ export const getChannels = asyncHandler(async (req, res) => {
     status: req.query.status,
     category: req.query.category,
   }));
-});
-
-// --- §2.7 data_ingestion_log ------------------------------------
-export const listIngestionLog = asyncHandler(async (req, res) => {
-  validate(req);
-  const log = await service.listIngestionLog({
-    brandId: req.query.brand_id ? Number(req.query.brand_id) : null,
-    target: req.query.target || null,
-    limit: req.query.limit ? Number(req.query.limit) : 50,
-  });
-  res.json({ log });
 });

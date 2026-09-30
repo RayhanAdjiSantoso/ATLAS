@@ -104,6 +104,8 @@ button, input, select {
 }
 .alert-error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: #991b1b; }
 .alert-success { background: var(--success-bg); border: 1px solid var(--success-border); color: #166534; }
+.alert-warning { background: var(--warning-bg); border: 1px solid var(--warning-bg); color: #92400e; }
+.alert-info { background: var(--info-bg); border: 1px solid var(--info-bg); color: #1e40af; }
 
 .badge {
   display: inline-block;

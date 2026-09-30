@@ -2,14 +2,6 @@ import { Router } from 'express';
 import { authenticate, requireModule } from '../middlewares/auth.js';
 import * as ctrl from '../controllers/internalDashboardController.js';
 import {
-  brandQueryValidation,
-  ingestionLogQueryValidation,
-  idParamValidation,
-  monthlyMetricsBodyValidation,
-  channelSalesBodyValidation,
-  platformSpendBodyValidation,
-  salesChannelsBodyValidation,
-  adAccountBodyValidation,
   overviewQueryValidation,
   categoriesQueryValidation,
   industriesQueryValidation,
@@ -19,10 +11,13 @@ import {
   clientDetailValidation,
   clientRankingQueryValidation,
   dataQualityQueryValidation,
-  syncFromSheetsBodyValidation,
 } from '../validators/internalDashboardValidators.js';
 
-// Internal Dashboard — admin-only, all-clients performance capture.
+// Internal Dashboard — all-clients performance capture. READ-ONLY: there is
+// no input endpoint here. The monthly fact tables are rolled up
+// automatically from Daily Tracking + Meta Ads insights
+// (services/internalDashboardSync), and ad accounts are copied from
+// Pengaturan Brand > Meta Ads Automation.
 // New ATLAS page, same "one sub-router mounted in app.js" shape as
 // metaAutomationRoutes / reportGeneratorRoutes. Data is keyed off
 // public.brands (extended by migrations 008/009), no parallel client model.
@@ -31,10 +26,6 @@ const router = Router();
 router.use(authenticate, requireModule('internal_dashboard'));
 
 router.get('/clients', ctrl.listClients);
-
-// Google Sheets live sync
-router.get('/sheet-sources', ctrl.listSheetSyncSources);
-router.post('/sync-from-sheets', syncFromSheetsBodyValidation, ctrl.syncFromSheets);
 
 // S1 — Executive Overview
 router.get('/overview', overviewQueryValidation, ctrl.getOverview);
@@ -53,32 +44,5 @@ router.get('/clients/ranking', clientRankingQueryValidation, ctrl.getClientRanki
 router.get('/clients/:id', clientDetailValidation, ctrl.getClientDetail);
 // S8 — Data Quality
 router.get('/data-quality', dataQualityQueryValidation, ctrl.getDataQuality);
-
-// §2.3 — client_monthly_metrics
-router.get('/monthly-metrics', brandQueryValidation, ctrl.listMonthlyMetrics);
-router.post('/monthly-metrics', monthlyMetricsBodyValidation, ctrl.saveMonthlyMetric);
-router.delete('/monthly-metrics/:id', idParamValidation, ctrl.deleteMonthlyMetric);
-
-// §2.4 — client_channel_sales_monthly
-router.get('/channel-sales', brandQueryValidation, ctrl.listChannelSales);
-router.post('/channel-sales', channelSalesBodyValidation, ctrl.saveChannelSales);
-router.delete('/channel-sales/:id', idParamValidation, ctrl.deleteChannelSale);
-
-// §2.5 — client_platform_spend_monthly
-router.get('/platform-spend', brandQueryValidation, ctrl.listPlatformSpend);
-router.post('/platform-spend', platformSpendBodyValidation, ctrl.savePlatformSpend);
-router.delete('/platform-spend/:id', idParamValidation, ctrl.deletePlatformSpend);
-
-// §2.2 — client_sales_channels (brand-level, not period-scoped)
-router.get('/sales-channels', brandQueryValidation, ctrl.listSalesChannels);
-router.post('/sales-channels', salesChannelsBodyValidation, ctrl.saveSalesChannels);
-
-// brand_ad_accounts (brand-level, 1:many)
-router.get('/ad-accounts', brandQueryValidation, ctrl.listAdAccounts);
-router.post('/ad-accounts', adAccountBodyValidation, ctrl.saveAdAccount);
-router.delete('/ad-accounts/:id', idParamValidation, ctrl.deleteAdAccount);
-
-// §2.7 — data_ingestion_log (read-only feed)
-router.get('/ingestion-log', ingestionLogQueryValidation, ctrl.listIngestionLog);
 
 export default router;

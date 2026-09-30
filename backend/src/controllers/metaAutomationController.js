@@ -1,5 +1,6 @@
 import { asyncHandler } from '../utils/errors.js';
 import * as metaAutomationService from '../services/metaAutomationService.js';
+import { syncMetaAccountsToDashboard } from '../services/internalDashboardSync/metaAccountsMirror.js';
 
 export const getAccounts = asyncHandler(async (req, res) => {
   const accounts = await metaAutomationService.callAppsScript('accounts');
@@ -71,16 +72,19 @@ export const brandList = asyncHandler(async (req, res) => {
 
 export const brandCreate = asyncHandler(async (req, res) => {
   const brand = await metaAutomationService.callAppsScript('brandSave', req.body);
+  await syncMetaAccountsToDashboard();
   res.status(201).json({ brand });
 });
 
 export const brandUpdate = asyncHandler(async (req, res) => {
   const brand = await metaAutomationService.callAppsScript('brandSave', { ...req.body, id: req.params.id });
+  await syncMetaAccountsToDashboard();
   res.json({ brand });
 });
 
 export const brandDelete = asyncHandler(async (req, res) => {
   const result = await metaAutomationService.callAppsScript('brandDelete', { id: req.params.id });
+  await syncMetaAccountsToDashboard();
   res.json(result);
 });
 
