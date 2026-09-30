@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { combineManualPeriods } from '../../lib/manualPeriod';
@@ -431,10 +432,10 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
                 armReportScroll();
               }}
             >
-              ✦ Generate Laporan
+              Generate Laporan
             </button>
             <button className="btn btn-ghost" onClick={reset}>
-              ↺ Reset
+              <RotateCcw size={15} aria-hidden /> Reset
             </button>
           </div>
         </div>
@@ -472,7 +473,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
             <DownloadPdfButton targetId="report-tiktok" filename="Performance Report - TikTok GMV Max.pdf" />
             <button className="btn btn-ghost" onClick={reset}>
-              ↺ Ganti Sumber Data
+              <RotateCcw size={15} aria-hidden /> Ganti Sumber Data
             </button>
           </div>
           <SaveStatus status={autoSave.status} message={autoSave.message} />

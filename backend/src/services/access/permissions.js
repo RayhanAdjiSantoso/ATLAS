@@ -24,7 +24,7 @@ export const ROLE_LABELS = {
 // Module keys are the unit of permission; the frontend maps each to its menu
 // entry and route, the backend to its API routers.
 export const MODULES = [
-  { key: 'dashboard', label: 'Dashboard Business Overview' },
+  { key: 'dashboard', label: 'Business Overview' },
   { key: 'daily_tracking', label: 'Daily Tracking' },
   { key: 'brand_settings', label: 'Pengaturan Brand' },
   { key: 'report_generator', label: 'Report Generator' },

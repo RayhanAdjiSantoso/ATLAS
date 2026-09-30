@@ -239,7 +239,7 @@ export default function BrandsSection() {
           <div className="form-group">
             <label>Nama Brand</label>
             {/* Dibatasi ke daftar brand ATLAS (sama seperti pemilih brand di
-                Dashboard Business Overview / Report Generator) — bukan lagi
+                Business Overview / Report Generator) — bukan lagi
                 bebas ketik, supaya nama di sini selalu bisa ditautkan ke
                 brand_id ATLAS yang benar. */}
             <BrandCombo

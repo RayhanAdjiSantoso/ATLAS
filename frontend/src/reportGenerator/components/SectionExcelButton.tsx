@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Download, Loader2 } from 'lucide-react';
 import { downloadSectionExcel } from '../utils/exportExcel';
 
 // Excel counterpart of SectionDownloadButton, used by the wide metric-column
@@ -23,7 +24,7 @@ export function SectionExcelButton() {
 
   return (
     <button type="button" className="sec-download-btn" title="Download Excel" disabled={busy} onClick={handleClick}>
-      {busy ? '⏳' : '⬇ Excel'}
+      {busy ? <Loader2 size={12} className="rg-spin" aria-hidden /> : <Download size={12} aria-hidden />} Excel
     </button>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Download, Loader2 } from 'lucide-react';
 import { exportElementToPDF } from '../utils/exportImage';
 
 interface DownloadPdfButtonProps {
@@ -24,7 +25,7 @@ export function DownloadPdfButton({ targetId, filename, label }: DownloadPdfButt
 
   return (
     <button className="btn btn-ghost" disabled={busy} onClick={handleClick}>
-      {busy ? '⏳ Menyiapkan PDF…' : label || '⬇ Download PDF'}
+      {busy ? <><Loader2 size={15} className="rg-spin" aria-hidden /> Menyiapkan PDF…</> : <><Download size={15} aria-hidden /> {label || 'Download PDF'}</>}
     </button>
   );
 }

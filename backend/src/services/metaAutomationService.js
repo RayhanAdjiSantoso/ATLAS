@@ -72,7 +72,10 @@ async function callOnce(action, payload, timeoutMs) {
 // surfaces as a readable error instead. Omitted = unbounded (old behavior).
 export async function callAppsScript(action, payload, { deadline } = {}) {
   if (!config.metaAutomation.webAppUrl || !config.metaAutomation.apiKey) {
-    throw new AppError('META_AUTOMATION_WEBAPP_URL / META_AUTOMATION_API_KEY belum dikonfigurasi di server', 500);
+    // The variable names go to the server log for whoever fixes it; the
+    // person on the page gets a sentence they can act on.
+    console.error('Meta automation: META_AUTOMATION_WEBAPP_URL / META_AUTOMATION_API_KEY belum diisi');
+    throw new AppError('Automasi Meta Ads belum tersambung ke Google Apps Script. Minta developer mengisi konfigurasinya di server.', 500);
   }
 
   let lastErr;

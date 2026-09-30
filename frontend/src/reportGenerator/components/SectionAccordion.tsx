@@ -27,13 +27,13 @@ const prefersReduced = () => window.matchMedia?.('(prefers-reduced-motion: reduc
 // hidden while animating — the metric pickers inside open as popups.
 //
 // The heading click is caught on the wrapper, with the buttons inside it
-// (⬇ PNG / ⬇ Excel) excluded so they still work.
+// (PNG / Excel) excluded so they still work.
 //
 // Keyboard access comes from a real <button> laid over the heading rather than
 // role="button" on the heading itself: the heading already contains the export
 // buttons, and interactive content nested inside a button role is invalid and
 // unreliably exposed. As a sibling overlay the toggle keeps its own accessible
-// name (read off the heading text) while ⬇ PNG / ⬇ Excel stay reachable — they
+// name (read off the heading text) while PNG / Excel stay reachable — they
 // just sit a layer above it.
 export function SectionAccordion({ children, defaultOpen = 0 }: { children: ReactNode; defaultOpen?: number }) {
   const items = Children.toArray(children).filter(Boolean);

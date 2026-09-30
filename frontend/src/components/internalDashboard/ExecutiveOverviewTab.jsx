@@ -57,7 +57,8 @@ export default function ExecutiveOverviewTab() {
 
       {data && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(238px, 1fr))', gap: '1rem' }}>
+          {/* Nine KPIs: a 200px floor lays them 5 + 4 at desktop width instead of 4 + 4 + one orphan. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))', gap: '1rem' }}>
             <KpiCard title="Total Portfolio Sales" value={kpi.total_sales.value} type="currency" growth={gpct(kpi.total_sales.delta_pct)}
               note={`${compareLabel}: Rp${money(kpi.total_sales.compare)}`} />
             <KpiCard title="Total Ad Spend" value={kpi.total_spend.value} type="currency" growth={gpct(kpi.total_spend.delta_pct)} invert

@@ -219,7 +219,7 @@ function TasksView({ state, items, busyMinute, onToggle, undo, onUndo, error, on
     <>
       <SectionHead
         title="To do tertunda"
-        description={`Tugas dari Minutes of Meeting yang belum dicentang. Tertunda berarti meeting-nya sudah lebih dari ${overdueDays} hari. Mencentang di sini sama dengan mencentang di Dashboard Business Overview.`}
+        description={`Tugas dari Minutes of Meeting yang belum dicentang. Tertunda berarti meeting-nya sudah lebih dari ${overdueDays} hari. Mencentang di sini sama dengan mencentang di Business Overview.`}
         meta={`${items.length} tugas terbuka`}
       />
       <div className="cc-kpis">

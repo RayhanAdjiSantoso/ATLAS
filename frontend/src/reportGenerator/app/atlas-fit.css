@@ -268,3 +268,8 @@
   .mil-ui .ai-sum-empty { grid-template-columns: 1fr; }
   .mil-ui .ai-sum-empty .ai-sum-cta, .mil-ui .ai-sum-empty .ai-sum-warn { grid-column: 1; }
 }
+
+/* Busy state on export buttons (PNG / Excel / PDF). */
+.mil-ui .rg-spin { animation: rg-spin-k 1s linear infinite; }
+@keyframes rg-spin-k { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mil-ui .rg-spin { animation: none; } }

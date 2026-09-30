@@ -71,7 +71,7 @@ function TotalAmountSpentCard({ platformState }: { platformState: PlatformStateM
 function PlatformCard({ pConf, platformState }: { pConf: (typeof PLATFORM_CONFIG)[number]; platformState: PlatformStateMap }) {
   const st = platformState[pConf.key];
   if (!st || !st.done || !st.data) {
-    const label = st && st.error ? '✕ Gagal — ' + st.error : '⏳ Belum diproses';
+    const label = st && st.error ? 'Gagal — ' + st.error : 'Belum diproses';
     const color = st && st.error ? 'var(--bad)' : 'var(--muted)';
     return (
       <div className="summary-plat-card">
@@ -199,13 +199,14 @@ function SummaryPending({ platformState }: { platformState: PlatformStateMap }) 
               let label: string;
               let cls: string;
               if (st.done) {
-                label = '✓ Selesai';
-                cls = 'delta-good';
+                label = 'Selesai';
+                // Green means movement over time in this system, not "done".
+                cls = '';
               } else if (st.error) {
-                label = '✕ Gagal — ' + st.error;
+                label = 'Gagal — ' + st.error;
                 cls = 'delta-bad';
               } else {
-                label = '⏳ Belum diproses';
+                label = 'Belum diproses';
                 cls = 'delta-neutral';
               }
               return (

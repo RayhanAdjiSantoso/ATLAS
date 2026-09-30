@@ -7,6 +7,8 @@ import type { DeltaClassName, Sentiment, SheetRow } from './types';
 //
 // The rows every Meta Overview card opens with, as MIL's brief lists them:
 //   • Boost Post                    — profile visits, interactions, delivery;
+// Frequency is left out on purpose: the Day-breakdown export Special Moment
+// needs cannot sum reach, so it would read "—" on every card.
 //   • Non-Boost Post & CPAS, E-commerce — the full sales funnel, content view
 //                                     → add to cart → purchase;
 //   • Non-Boost Post, B2B           — leads and delivery.
@@ -93,7 +95,6 @@ interface Spec {
 }
 
 const SPEND: Spec = { label: 'Amount Spent', fmt: 'rp', sentiment: 'neutral', value: (b) => b.spend };
-const FREQUENCY: Spec = { label: 'Frequency', fmt: 'dec', sentiment: 'neutral', value: (b) => b.frequency };
 const IMPRESSIONS: Spec = { label: 'Impressions', fmt: 'num', sentiment: 'higher-better', value: (b) => b.impressions };
 const CPM: Spec = { label: 'Cost per Mille (CPM)', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.impressions, 1000) };
 const LINK_CLICKS: Spec = { label: 'Link Clicks', fmt: 'num', sentiment: 'higher-better', value: (b) => b.linkClicks };
@@ -105,7 +106,6 @@ const BOOST: Spec[] = [
   { label: 'Profile Visits', fmt: 'num', sentiment: 'higher-better', value: (b) => b.profileVisits },
   { label: 'Cost per Profile Visit', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.profileVisits) },
   { label: 'Profile Visit Rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.profileVisits, b.impressions, 100) },
-  FREQUENCY,
   IMPRESSIONS,
   CPM,
   LINK_CLICKS,
@@ -120,7 +120,6 @@ const ECOMMERCE: Spec[] = [
   { label: 'Purchase Value', fmt: 'rp', sentiment: 'higher-better', value: (b) => b.purchaseValue },
   { label: 'ROAS', fmt: 'x', sentiment: 'higher-better', value: (b) => div(b.purchaseValue, b.spend) },
   IMPRESSIONS,
-  FREQUENCY,
   CPM,
   LINK_CLICKS,
   CTR,
@@ -149,8 +148,7 @@ function b2bSpecs(sample: Base[]): Spec[] {
     SPEND,
     { label: useConv ? 'Leads (Messaging Conversations)' : 'Leads', fmt: 'num', sentiment: 'higher-better', value: count },
     { label: useConv ? 'Cost per Lead (per Conversation)' : 'Cost per Lead', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, count(b)) },
-    FREQUENCY,
-    IMPRESSIONS,
+      IMPRESSIONS,
     CPM,
     LINK_CLICKS,
     CTR,

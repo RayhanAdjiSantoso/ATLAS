@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Download, Loader2 } from 'lucide-react';
 import { downloadSectionPNG } from '../utils/exportImage';
 
-// Ported from the original attachSectionDownloadButtons: a small "⬇ PNG"
+// Ported from the original attachSectionDownloadButtons: a small "PNG"
 // button appended to every .sec-heading, downloading just that card as an
 // image. Finds its own .sec-block ancestor via the click event, same as the
 // original's `btn.closest('.sec-block')` — no ref plumbing needed.
@@ -22,7 +23,7 @@ export function SectionDownloadButton() {
 
   return (
     <button type="button" className="sec-download-btn" title="Download PNG" disabled={busy} onClick={handleClick}>
-      {busy ? '⏳' : '⬇ PNG'}
+      {busy ? <Loader2 size={12} className="rg-spin" aria-hidden /> : <Download size={12} aria-hidden />} PNG
     </button>
   );
 }

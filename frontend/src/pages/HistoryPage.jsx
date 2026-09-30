@@ -22,15 +22,23 @@ const STATUS_LABELS = {
   pending: { label: 'Pending', className: 'badge-info' },
 };
 
+const MONTH_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const parts = (d) => { const [y, m, day] = String(d).slice(0, 10).split('-').map(Number); return { y, m, day }; };
+
+// "1–23 Sep 2026", "25 Agu – 3 Sep 2026", "30 Des 2025 – 2 Jan 2026": one
+// line a person reads, instead of two ISO dates that wrap into five.
 function formatPeriod(start, end) {
   if (!start && !end) return '-';
-  if (start && end) return `${start} — ${end}`;
-  return start || end;
+  if (!start || !end) { const a = parts(start || end); return `${a.day} ${MONTH_ID[a.m - 1]} ${a.y}`; }
+  const a = parts(start); const b = parts(end);
+  if (a.y === b.y && a.m === b.m) return a.day === b.day ? `${a.day} ${MONTH_ID[a.m - 1]} ${a.y}` : `${a.day}–${b.day} ${MONTH_ID[b.m - 1]} ${b.y}`;
+  if (a.y === b.y) return `${a.day} ${MONTH_ID[a.m - 1]} – ${b.day} ${MONTH_ID[b.m - 1]} ${b.y}`;
+  return `${a.day} ${MONTH_ID[a.m - 1]} ${a.y} – ${b.day} ${MONTH_ID[b.m - 1]} ${b.y}`;
 }
 
 function formatDate(iso) {
   if (!iso) return '-';
-  return new Date(iso).toLocaleString('id-ID');
+  return new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function HistoryPage() {
@@ -153,7 +161,8 @@ export default function HistoryPage() {
         ) : uploads.length === 0 ? (
           <div className="empty-state">Belum ada riwayat upload.</div>
         ) : (
-          <table>
+          <div className="history-table-wrap">
+          <table className="history-table">
             <thead>
               <tr>
                 <th>Brand</th>
@@ -219,6 +228,7 @@ export default function HistoryPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

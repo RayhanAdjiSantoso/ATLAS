@@ -645,7 +645,7 @@ export default function DashboardPage() {
             transition={{ duration: .4, ease: DASH_EASE }}
           >
             <span className="brand-hero-eye"><Sparkles size={13} /> Business intelligence workspace</span>
-            <h1>Dashboard Business Overview</h1>
+            <h1>Business Overview</h1>
             <p>Executive Snapshot merangkum seluruh channel; tab di sebelahnya membuka pembacaan mendalam per channel — Meta Ads, Shopee, dan TikTok.</p>
             <div className="brand-hero-stats">
               <span><strong>{CHANNELS.length}</strong> channel</span>

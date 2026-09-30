@@ -11,7 +11,7 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 // tooltips can never drift apart.
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
-  { to: '/dashboard', label: 'Dashboard Business Overview', Icon: LayoutDashboard, group: 'Workspace', module: 'dashboard' },
+  { to: '/dashboard', label: 'Business Overview', Icon: LayoutDashboard, group: 'Workspace', module: 'dashboard' },
   // No adminOnly: both internal staff and client accounts fill this in
   // themselves, unlike everywhere else a view-only account can only read.
   { to: '/daily-tracking', label: 'Daily Tracking', Icon: CalendarCheck, group: 'Workspace', module: 'daily_tracking' },

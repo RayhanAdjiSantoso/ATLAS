@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../../../api/client.js';
 import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
@@ -1165,10 +1166,10 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
                 armReportScroll();
               }}
             >
-              ✦ Generate Laporan
+              Generate Laporan
             </button>
             <button className="btn btn-ghost" onClick={reset}>
-              ↺ Reset
+              <RotateCcw size={15} aria-hidden /> Reset
             </button>
           </div>
         </div>
@@ -1219,7 +1220,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
             <DownloadPdfButton targetId="report-shopee" filename="Performance Report - Shopee Ads.pdf" />
             <button className="btn btn-ghost" onClick={reset}>
-              ↺ Ganti Sumber Data
+              <RotateCcw size={15} aria-hidden /> Ganti Sumber Data
             </button>
           </div>
           <SaveStatus status={autoSave.status} message={autoSave.message} />

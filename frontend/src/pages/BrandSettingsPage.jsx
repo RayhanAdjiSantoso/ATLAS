@@ -151,6 +151,10 @@ const VIEWS = [
   { id: 'data', hint: 'Perpustakaan file', label: 'Data & file', Icon: Archive, note: 'Satu perpustakaan sumber untuk semua modul' },
   { id: 'meta-automation', hint: 'Ad account & laporan', label: 'Meta Automation', Icon: Megaphone, note: 'Daftarkan ad account Meta dan penerima laporan otomatisnya' },
 ];
+// The brand list is about every client, not the one picked above — it opens
+// from the brand row as its own view, and the tab rail holds only what
+// belongs to the selected brand.
+const BRAND_VIEWS = VIEWS.filter((v) => v.id !== 'brands');
 
 
 /* ── Month model ────────────────────────────────────────────────────────
@@ -232,7 +236,7 @@ function cellState(merged, month) {
   return 'snapshot';
 }
 
-// Tiga dataset ini dibaca Dashboard Business Overview dari tabel fakta, bukan
+// Tiga dataset ini dibaca Business Overview dari tabel fakta, bukan
 // dari byte filenya. Untuk ketiganya "tersimpan" dan "terbaca" adalah dua hal
 // berbeda, dan perbedaan itu yang dulu disembunyikan status "Lengkap".
 const DASHBOARD_CHANNELS = new Set(['order', 'performance_overview', 'product_performance']);
@@ -558,7 +562,7 @@ function MinuteRow({ minute, open, onToggle, onEdit, onDelete, busy, editing, in
                   );
                 })}
               </div>
-              <p className="mom-detail-foot">{updatedLabel(minute)} · Status tugas dicentang dari Dashboard Business Overview.</p>
+              <p className="mom-detail-foot">{updatedLabel(minute)} · Status tugas dicentang dari Business Overview.</p>
             </div>
           </motion.div>
         )}
@@ -634,7 +638,7 @@ function MinutesView({ brand, minutes, loading, onSave, onDelete, busy, reduced 
     <>
       <SectionHead
         title="Minutes of Meeting"
-        description="Simpan hasil pembahasan dan pembagian tindak lanjut per meeting. Catatan tampil di Dashboard Business Overview sesuai periode tanggal meeting."
+        description="Simpan hasil pembahasan dan pembagian tindak lanjut per meeting. Catatan tampil di Business Overview sesuai periode tanggal meeting."
         meta={`${minutes.length} catatan`}
       />
 
@@ -755,7 +759,7 @@ function MinutesView({ brand, minutes, loading, onSave, onDelete, busy, reduced 
           <div className="mom-empty">
             <UsersRound size={24} />
             <strong>Belum ada catatan meeting</strong>
-            <span>Catatan pertama langsung tersedia di Dashboard Business Overview untuk periode tanggalnya.</span>
+            <span>Catatan pertama langsung tersedia di Business Overview untuk periode tanggalnya.</span>
             <button type="button" className="brand-new" onClick={startNew}><Plus size={14} /> Tulis catatan pertama</button>
           </div>
         )}
@@ -1540,6 +1544,14 @@ export default function BrandSettingsPage() {
             <small>Setiap perubahan terikat pada satu sumber kebenaran.</small>
           </div>
           <BrandPicker brands={brands} brand={brand} sector={profile?.sector} onSelect={setBrand} reduced={reduced} />
+          <div className="brand-dock-actions">
+          <button
+            type="button" className={`brand-new brand-list-toggle${activeView === 'brands' ? ' is-on' : ''}`}
+            aria-pressed={activeView === 'brands'}
+            onClick={() => setActiveView(activeView === 'brands' ? 'context' : 'brands')}
+          >
+            <Layers3 size={15} /> {activeView === 'brands' ? 'Kembali ke brand' : 'Daftar semua brand'}
+          </button>
           {isViewOnly ? null : creating ? (
             <form className="brand-new-form" onSubmit={createBrand}>
               <input
@@ -1554,13 +1566,15 @@ export default function BrandSettingsPage() {
               <Plus size={16} /> Brand baru
             </button>
           )}
+          </div>
         </div>
       </header>
 
+      {activeView !== 'brands' && (
       <LayoutGroup id="brand-workspace-nav">
         <div className="section-nav-shell is-brand">
-        <nav className="brand-view-nav" aria-label="Bagian pengaturan brand" role="tablist">
-          {VIEWS.map(({ id, label, hint, Icon }) => (
+        <nav className="brand-view-nav" aria-label={`Bagian pengaturan ${brand?.brand_name ?? 'brand'}`} role="tablist">
+          {BRAND_VIEWS.map(({ id, label, hint, Icon }) => (
             <button
               key={id} type="button" role="tab" aria-selected={activeView === id}
               className={`brand-view-tab ${activeView === id ? 'is-active' : ''}`}
@@ -1579,9 +1593,10 @@ export default function BrandSettingsPage() {
         </nav>
         </div>
       </LayoutGroup>
+      )}
 
       <div className="brand-view-caption">
-        <span>{view?.note}</span>
+        <span>{activeView === 'brands' ? view?.note : <><strong>{brand?.brand_name ?? 'Brand'}</strong> · {view?.note}</>}</span>
         <span className="brand-caption-rule" />
         {loading
           ? <span className="brand-caption-load"><Loader2 size={13} className="brand-spin" /> Memuat data brand…</span>

@@ -166,6 +166,14 @@
   max-width: var(--workspace-max, 1840px); margin: 0 auto;
   padding-top: clamp(1rem,2.4vw,2.2rem); padding-bottom: 4.5rem;
 }
+/* Same edges as every other page: the shell's main column already carries
+   the gutter, so the page adds none of its own and paints no second floor. */
+.con.brand-settings { padding-left:0; padding-right:0; background:transparent; }
+/* Brand row actions: the all-brands list sits beside "Brand baru", apart from
+   the per-brand tab rail, because it is about every client, not this one. */
+.brand-dock-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+.brand-list-toggle.is-on { color:#fff; border-color:var(--acc); background:var(--acc); }
+.brand-view-caption strong { color:var(--text); font-weight:760; }
 .brand-spin { animation:brand-spin 1s linear infinite; }
 
 /* ── Hero ─────────────────────────────────────────────────────────── */
@@ -265,7 +273,7 @@
 .brand-view-pill { position:absolute; z-index:-1; inset:0; border-radius:13px; background:linear-gradient(135deg,var(--acc) 0%,#2f54d4 100%); box-shadow:0 10px 22px rgba(30,62,184,.3),inset 0 1px rgba(255,255,255,.18); }
 /* Pengaturan Brand: five sections */
 @container (min-width:560px) { .section-nav-shell.is-brand .brand-view-nav { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-@container (min-width:1100px) { .section-nav-shell.is-brand .brand-view-nav { grid-template-columns:repeat(6,minmax(0,1fr)); } }
+@container (min-width:1100px) { .section-nav-shell.is-brand .brand-view-nav { grid-template-columns:repeat(5,minmax(0,1fr)); } }
 /* Business Overview: eight domains */
 @container (min-width:620px) { .section-nav-shell.is-dashboard .brand-view-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 /* Business Overview: Executive Snapshot + three channels. Four tabs split
@@ -2165,8 +2173,9 @@ html:has(.con-bar) {
 .dashboard-channel-nav .brand-view-tab-ico { color:var(--ch-accent, var(--text-muted)); }
 .dashboard-channel-nav .brand-view-tab.is-active .brand-view-tab-ico { color:#fff; }
 .dashboard-channel-nav .brand-view-pill { background:linear-gradient(135deg, var(--ch-accent, var(--acc)) 0%, color-mix(in srgb, var(--ch-accent, var(--acc)) 72%, #ffffff) 100%); box-shadow:0 10px 22px color-mix(in srgb, var(--ch-accent, var(--acc)) 30%, transparent), inset 0 1px rgba(255,255,255,.18); }
-.dashboard-channel-nav .brand-view-tab-copy small { display:flex; align-items:center; gap:.3rem; }
-.dashboard-channel-soon { display:inline-flex; align-items:center; padding:.06rem .34rem; border-radius:99px; background:#fdf3e0; color:#92400e; font-size:.56rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+/* The hint wraps under a narrow tab instead of clipping the status badge. */
+.dashboard-channel-nav .brand-view-tab-copy small { display:flex; flex-wrap:wrap; align-items:center; gap:.2rem .3rem; white-space:normal; overflow:visible; }
+.dashboard-channel-soon { display:inline-flex; flex-shrink:0; white-space:nowrap; align-items:center; padding:.06rem .34rem; border-radius:99px; background:#fdf3e0; color:#92400e; font-size:.56rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
 .brand-view-tab.is-active .dashboard-channel-soon { background:rgba(255,255,255,.22); color:#fff; }
 
 /* The channel a focused domain belongs to, named beside its title: a small

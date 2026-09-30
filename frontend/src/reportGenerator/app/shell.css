@@ -187,39 +187,12 @@
   }
   @media (prefers-reduced-motion: reduce){.home-band-mark{animation:none;opacity:.07}}
   @media(max-width:1019px){.home-band-mark{height:auto;width:120%;left:-22%;animation-name:band-mark-in-sm}}
-  /* Copy on the left, the flow card floating at the right. Behind both: the
-     Mil mark blown up as a watermark and one lit arc across the band. */
+  /* Copy on the left, the flow card at the right, the Mil mark as a
+     watermark behind both. */
   .home-band{display:grid;gap:clamp(1.6rem,3vw,3rem);align-items:center;isolation:isolate}
   @media(min-width:1020px){.home-band{grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr)}}
   .home-band-copy{position:relative;z-index:2;min-width:0}
-  /* The lit arc. Sits above the watermark, below the copy. */
-  .home-streak{
-    position:absolute;left:0;right:0;top:0;height:100%;width:100%;
-    z-index:1;pointer-events:none;overflow:visible;
-  }
-  .home-streak-halo{fill:none;stroke-width:30;opacity:.28}
-  .home-streak-inner{fill:none;stroke-width:8;opacity:.4}
-  .home-streak-core{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.75}
-  /* Badge — the reference's "New · …" pill, in the band's own light-on-blue
-     register. It is a link: the thing it announces is one click away. */
-  .home-badge{
-    position:relative;display:inline-flex;align-items:center;gap:.6rem;
-    padding:.34rem .34rem .34rem .34rem;margin-bottom:1.4rem;
-    border-radius:999px;text-decoration:none;
-    background:var(--surface);box-shadow:0 1px 2px rgba(15,26,58,.05),0 4px 14px rgba(15,26,58,.07),inset 0 0 0 1px var(--border);
-    transition:box-shadow .18s var(--ease-out),transform .18s var(--ease-out);
-  }
-  .home-badge:hover{transform:translateY(-1px);box-shadow:0 2px 4px rgba(15,26,58,.06),0 8px 22px rgba(15,26,58,.1),inset 0 0 0 1px var(--acc-300)}
-  .home-badge:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
-  .home-badge-tag{
-    font-size:.7rem;font-weight:800;letter-spacing:-.005em;
-    color:var(--acc-700);background:var(--acc-100);border-radius:999px;padding:.22rem .6rem;
-  }
-  .home-badge-text{font-size:.82rem;font-weight:650;color:var(--text);letter-spacing:-.01em}
-  .home-badge svg{color:var(--muted2);margin-right:.55rem;flex-shrink:0;transition:transform .2s var(--ease-out)}
-  .home-badge:hover svg{transform:translateX(2px)}
-  /* The floating card: semi-transparent on the band, the three steps in short
-     form. The full wording stays in "Cara kerjanya" below. */
+  /* The flow card: the three-step working rhythm in short form. */
   .home-flowcard{
     position:relative;z-index:2;justify-self:end;width:100%;max-width:340px;
     padding:1.15rem 1.25rem 1.25rem;border-radius:16px;
@@ -251,7 +224,7 @@
   @media(max-width:1019px){.home-flowcard{justify-self:stretch;max-width:none}}
   .home-band-title{
     position:relative;margin:0;
-    font-size:clamp(1.9rem,3.6vw,2.9rem);line-height:1.1;font-weight:800;letter-spacing:-.033em;color:var(--text);
+    font-size:clamp(1.55rem,2.6vw,2.1rem);line-height:1.12;font-weight:800;letter-spacing:-.03em;color:var(--text);
     text-wrap:balance;
   }
   .home-band-lede{
@@ -1074,8 +1047,8 @@
   .sec-acc-item{position:relative}
   /* The keyboard control. A transparent <button> sized to the heading (its
      height is published as --acc-head-h by SectionAccordion) rather than
-     role="button" on the heading itself, which already contains the ⬇ PNG /
-     ⬇ Excel buttons — nesting interactive content inside a button role is
+     role="button" on the heading itself, which already contains the PNG /
+     Excel buttons — nesting interactive content inside a button role is
      invalid and screen readers stop exposing it. As a sibling the toggle owns
      Tab, Enter and Space for free, and the export buttons sit one layer up. */
   .sec-acc-toggle{
