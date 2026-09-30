@@ -1,91 +1,108 @@
 import { Chart, type Plugin } from 'chart.js/auto';
 import { useEffect, useRef } from 'react';
 
-export const PIE_COLORS = ['#1e3eb8', '#00c2e0', '#f5a623', '#2f54d4', '#00e5c8', '#f5a623cc', '#5b7fe8', '#00a0bb', '#ffc55a', '#7c9ff5'];
+// One blue family, deep to pale, then sky — slices read as parts of one whole
+// rather than unrelated categories. No red: on these pages red means "worse".
+export const PIE_COLORS = ['#2856b6', '#5b8def', '#38bdf8', '#9cc7ff', '#1e3eb8', '#7dd3fc', '#c7dcff', '#0ea5e9', '#3b6fd8', '#bfe6fb'];
 
 interface PieChartCanvasProps {
   labels: string[];
   values: number[];
+  // How a value reads (Rp…, 1.234, …). Used by the centre label, the tooltip
+  // and the built-in legend.
+  format?: (v: number) => string;
+  // Centre of the ring: "Total" and the sum, unless the caller says otherwise.
+  centerTitle?: string;
+  centerValue?: string;
+  // The built-in legend (colour bar · name · value · share). Off where the
+  // caller already draws its own legend beside the chart.
+  legend?: boolean;
 }
 
-// Ported 1:1 from the original renderPieChart, including its custom
-// outer-label plugin (leader lines + percentage labels drawn outside the pie).
-export function PieChartCanvas({ labels, values }: PieChartCanvasProps) {
+const INTER = "'Inter', system-ui, sans-serif";
+const defaultFormat = (v: number) => Math.round(v).toLocaleString('id-ID');
+const pct = (v: number, total: number) => (total > 0 ? ((v / total) * 100).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0,0') + '%';
+
+// A ring with the total in its centre; hovering a slice lifts it and puts
+// that slice's name and value in the centre instead. Canvas rather than SVG:
+// report sections are exported through html2canvas, and a canvas comes
+// through as pixels — the centre text is drawn on it for the same reason.
+export function PieChartCanvas({ labels, values, format = defaultFormat, centerTitle = 'Total', centerValue, legend = false }: PieChartCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
+  const fmtRef = useRef(format);
+  fmtRef.current = format;
+  const total = values.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
+    chartRef.current?.destroy();
 
-    const outerLabelPlugin: Plugin<'pie'> = {
-      id: 'outerLabels',
+    const centreText: Plugin<'doughnut'> = {
+      id: 'centreText',
       afterDraw(chart) {
-        const { ctx, data, chartArea } = chart;
-        const { top, bottom, left, right } = chartArea;
-        const cx = (left + right) / 2;
-        const cy = (top + bottom) / 2;
-        const meta = chart.getDatasetMeta(0);
-        const dataset = data.datasets[0].data as number[];
-        const tot = dataset.reduce((a, b) => a + b, 0);
+        const { ctx, chartArea } = chart;
+        const cx = (chartArea.left + chartArea.right) / 2;
+        const cy = (chartArea.top + chartArea.bottom) / 2;
+        const active = chart.getActiveElements()[0];
+        const title = active ? String(chart.data.labels?.[active.index] ?? '') : centerTitle;
+        const raw = active ? Number(chart.data.datasets[0].data[active.index]) : total;
+        const value = active ? fmtRef.current(raw) : centerValue ?? fmtRef.current(total);
+        const inner = (chart.getDatasetMeta(0).data[0] as unknown as { innerRadius?: number } | undefined)?.innerRadius ?? 60;
+        const room = inner * 1.7;
         ctx.save();
-        meta.data.forEach((arc, i) => {
-          const val = dataset[i];
-          const pct = tot > 0 ? (val / tot) * 100 : 0;
-          if (pct < 2) return;
-          const a = arc as unknown as { startAngle: number; endAngle: number; outerRadius: number };
-          const midAngle = (a.startAngle + a.endAngle) / 2;
-          const r = a.outerRadius;
-          const p1r = r + 5;
-          const p2r = r + 20;
-          const p1x = cx + Math.cos(midAngle) * p1r;
-          const p1y = cy + Math.sin(midAngle) * p1r;
-          const p2x = cx + Math.cos(midAngle) * p2r;
-          const p2y = cy + Math.sin(midAngle) * p2r;
-          const side = Math.cos(midAngle) >= 0 ? 1 : -1;
-          const p3x = p2x + side * 12;
-          const p3y = p2y;
-          ctx.beginPath();
-          ctx.moveTo(p1x, p1y);
-          ctx.lineTo(p2x, p2y);
-          ctx.lineTo(p3x, p3y);
-          ctx.strokeStyle = '#9aa5c4';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          const lx = p3x + side * 4;
-          const align = side >= 0 ? 'left' : 'right';
-          ctx.textAlign = align;
-          ctx.textBaseline = 'middle';
-          // Never let a label run past the canvas: outside it is simply
-          // clipped, which is how "Ags 2026" ended up reading "gs 2026".
-          const room = Math.max(24, side >= 0 ? chart.width - lx - 4 : lx - 4);
-          ctx.font = '700 11.5px Inter, sans-serif';
-          ctx.fillStyle = '#0f1a3a';
-          ctx.fillText(String(data.labels?.[i] ?? ''), lx, p3y - 7, room);
-          ctx.font = '600 10.5px Inter, sans-serif';
-          ctx.fillStyle = '#6b7a9e';
-          ctx.fillText(pct.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%', lx, p3y + 7, room);
-        });
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#7a889f';
+        ctx.font = `600 12px ${INTER}`;
+        ctx.fillText(title, cx, cy - 13, room);
+        ctx.fillStyle = '#202e45';
+        ctx.font = `800 ${value.length > 12 ? 15 : 19}px ${INTER}`;
+        ctx.fillText(value, cx, cy + 10, room);
+        if (active) {
+          ctx.fillStyle = '#2856b6';
+          ctx.font = `700 11px ${INTER}`;
+          ctx.fillText(pct(raw, total), cx, cy + 30, room);
+        }
         ctx.restore();
       },
     };
 
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     chartRef.current = new Chart(canvasRef.current, {
-      type: 'pie',
+      type: 'doughnut',
       data: {
         labels,
-        datasets: [{ data: values, backgroundColor: PIE_COLORS.slice(0, labels.length), borderWidth: 2.5, borderColor: '#ffffff', hoverOffset: 5 }],
+        datasets: [{
+          data: values,
+          backgroundColor: PIE_COLORS.slice(0, labels.length).concat(PIE_COLORS).slice(0, labels.length),
+          borderColor: '#ffffff',
+          borderWidth: 3,
+          borderRadius: 4,
+          hoverOffset: 10,
+          spacing: 1,
+        }],
       },
       options: {
         responsive: false,
-        layout: { padding: { top: 46, bottom: 46, left: 92, right: 92 } },
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        animation: { duration: 500 },
+        cutout: '64%',
+        layout: { padding: 14 },
+        animation: reduce ? false : { animateRotate: true, animateScale: false, duration: 850, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#202e45',
+            padding: 10,
+            cornerRadius: 10,
+            titleFont: { family: INTER, size: 12, weight: 700 },
+            bodyFont: { family: INTER, size: 12 },
+            callbacks: {
+              label: (item) => ` ${fmtRef.current(Number(item.parsed))} · ${pct(Number(item.parsed), total)}`,
+            },
+          },
+        },
       },
-      plugins: [outerLabelPlugin],
+      plugins: [centreText],
     });
 
     return () => {
@@ -93,11 +110,25 @@ export function PieChartCanvas({ labels, values }: PieChartCanvasProps) {
       chartRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(labels), JSON.stringify(values)]);
+  }, [JSON.stringify(labels), JSON.stringify(values), centerTitle, centerValue]);
 
   return (
-    <div className="pie-canvas-wrap">
-      <canvas ref={canvasRef} width={340} height={300} />
+    <div className={`donut${legend ? ' has-legend' : ''}`}>
+      <div className="pie-canvas-wrap donut-canvas">
+        <canvas ref={canvasRef} width={260} height={260} />
+      </div>
+      {legend && (
+        <ul className="donut-legend">
+          {labels.map((l, i) => (
+            <li key={`${l}-${i}`}>
+              <span className="donut-bar" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} aria-hidden="true" />
+              <span className="donut-name">{l}</span>
+              <b className="donut-val">{format(values[i] ?? 0)}</b>
+              <span className="donut-share">{pct(values[i] ?? 0, total)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -50,7 +50,7 @@ function PieTile<M>({ metric, slices, group }: { metric: AudienceMetricDef<M>; s
         <div className="empty-note">Kolom dasar {metric.label} tidak ada di file ini.</div>
       ) : (
         <>
-          <PieChartCanvas labels={usable.map((s) => s.label)} values={shares} />
+          <PieChartCanvas labels={usable.map((s) => s.label)} values={shares} format={(v) => fmtPivotVal(v, base ? (base.key === 'gmv' ? 'rp' : 'num') : metric.fmt)} centerTitle={base ? `Total ${base.noun.split(' ')[0]}` : 'Total'} />
           <ul className="bd-pie-legend">
             {usable.map((s, i) => {
               const value = (s.metrics[metric.key] ?? null) as number | null;
@@ -185,7 +185,7 @@ export function MetaBreakdownSection<M>({
           </div>
         ) : asPie ? (
           <>
-            <PieChartCanvas labels={usable.map((s) => s.label)} values={usable.map((s) => (s.metrics[metric.key] ?? 0) as number)} />
+            <PieChartCanvas labels={usable.map((s) => s.label)} values={usable.map((s) => (s.metrics[metric.key] ?? 0) as number)} format={fmt} legend />
             <p className="chart-foot">Porsi {metric.label.toLowerCase()} per {heading.toLowerCase().includes('gender') ? 'gender' : 'kelompok'}.</p>
           </>
         ) : (

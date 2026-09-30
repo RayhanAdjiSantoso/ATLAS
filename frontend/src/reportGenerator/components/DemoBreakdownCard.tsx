@@ -88,7 +88,7 @@ export function DemoBreakdownCard({ heading, badge, rows, dimCol, allCols, defau
       <div style={{ padding: '0 1.4rem 1.4rem' }}>
         {spentColKey && (
           <div className="pie-wrap">
-            <PieChartCanvas labels={pieLabels} values={pieValues} />
+            <PieChartCanvas labels={pieLabels} values={pieValues} format={(v) => 'Rp' + Math.round(v).toLocaleString('id-ID')} centerTitle="Amount spent" />
             <div>
               <div className="pie-caption">Amount Spent per {isAge ? 'Age' : 'Gender'}</div>
               <div className="pie-legend">

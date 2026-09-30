@@ -55,8 +55,10 @@ function KindPie({ kind }: { kind: KindTotals }) {
         <div className="empty-note">Tidak ada {kind.word} di dalam rentang tanggal file ini.</div>
       ) : (
         <>
-          <PieChartCanvas labels={kind.periods.map((p) => p.label)} values={values.map((v) => v || 0)} />
-          <p className="chart-foot">{kind.periods.map((p, i) => `${p.label}: ${rp(values[i])}`).join(' · ')}</p>
+          <PieChartCanvas
+            labels={kind.periods.map((p) => p.label)} values={values.map((v) => v || 0)}
+            format={(v) => rp(v)} centerTitle="Total revenue" legend
+          />
         </>
       )}
     </div>
