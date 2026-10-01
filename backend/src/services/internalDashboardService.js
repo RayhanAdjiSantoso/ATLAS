@@ -815,6 +815,8 @@ export async function getChannels(params) {
     if (!platAgg.has(k)) {
       platAgg.set(k, {
         spend: 0, impressions: 0, link_clicks: 0, purchase: 0, purchase_value: 0, ig_profile_visit: 0,
+        // spend of only the rows that report each denominator (matched ratios)
+        spendImpr: 0, spendClicks: 0, spendPurch: 0, spendPv: 0, spendIgpv: 0, clicksCtr: 0, imprCtr: 0,
         hasImpr: false, hasClicks: false, hasPurch: false, hasPv: false, igpvHas: false, brands: new Set(),
       });
     }
@@ -823,11 +825,13 @@ export async function getChannels(params) {
     // nullable raw: only sum + mark "has" when a real value is present, so a
     // spend-only row (impressions/purchase_value NULL) yields null ratios,
     // not a misleading 0.
-    if (r.impressions != null) { e.impressions += Number(r.impressions); e.hasImpr = true; }
-    if (r.link_clicks != null) { e.link_clicks += Number(r.link_clicks); e.hasClicks = true; }
-    if (r.purchase != null) { e.purchase += Number(r.purchase); e.hasPurch = true; }
-    if (r.purchase_value != null) { e.purchase_value += Number(r.purchase_value); e.hasPv = true; }
-    if (r.ig_profile_visit != null) { e.ig_profile_visit += Number(r.ig_profile_visit); e.igpvHas = true; }
+    const rowSpend = Number(r.amount_spent || 0);
+    if (r.impressions != null) { e.impressions += Number(r.impressions); e.spendImpr += rowSpend; e.hasImpr = true; }
+    if (r.link_clicks != null) { e.link_clicks += Number(r.link_clicks); e.spendClicks += rowSpend; e.hasClicks = true; }
+    if (r.impressions != null && r.link_clicks != null) { e.clicksCtr += Number(r.link_clicks); e.imprCtr += Number(r.impressions); }
+    if (r.purchase != null) { e.purchase += Number(r.purchase); e.spendPurch += rowSpend; e.hasPurch = true; }
+    if (r.purchase_value != null) { e.purchase_value += Number(r.purchase_value); e.spendPv += rowSpend; e.hasPv = true; }
+    if (r.ig_profile_visit != null) { e.ig_profile_visit += Number(r.ig_profile_visit); e.spendIgpv += rowSpend; e.igpvHas = true; }
     e.brands.add(r.brand_id);
   }
   const spendTotalAt = (p) => AD_PLATFORMS.reduce((s, pl) => s + (platAgg.get(`${p}|${pl}`)?.spend || 0), 0);
@@ -851,18 +855,29 @@ export async function getChannels(params) {
       purchases: e.hasPurch ? e.purchase : null,
       purchase_value: e.hasPv ? e.purchase_value : null,
       // purchase_value / spend — NOT "ROAS" (see header note)
-      platform_attributed_roas: e.hasPv ? ratio(e.purchase_value, e.spend) : null,
-      cost_per_purchase: e.hasPurch ? ratio(e.spend, e.purchase) : null,
-      cpm: e.hasImpr && e.impressions > 0 ? (e.spend / e.impressions) * 1000 : null,
-      ctr: e.hasImpr && e.hasClicks ? ratio(e.link_clicks, e.impressions) : null,
-      cpc: e.hasClicks ? ratio(e.spend, e.link_clicks) : null,
+      // each ratio uses only the spend of rows reporting its denominator
+      platform_attributed_roas: e.hasPv ? ratio(e.purchase_value, e.spendPv) : null,
+      cost_per_purchase: e.hasPurch ? ratio(e.spendPurch, e.purchase) : null,
+      cpm: e.hasImpr && e.impressions > 0 ? (e.spendImpr / e.impressions) * 1000 : null,
+      ctr: e.imprCtr > 0 ? e.clicksCtr / e.imprCtr : null,
+      cpc: e.hasClicks ? ratio(e.spendClicks, e.link_clicks) : null,
       // link_clicks is the proxy for IG profile visits (breakdown §4) — flag it
-      cost_per_profile_visit_proxy: e.igpvHas && e.ig_profile_visit > 0 ? e.spend / e.ig_profile_visit : ratio(e.spend, e.link_clicks),
+      cost_per_profile_visit_proxy: e.igpvHas && e.ig_profile_visit > 0 ? e.spendIgpv / e.ig_profile_visit : (e.hasClicks ? ratio(e.spendClicks, e.link_clicks) : null),
       cost_per_profile_visit_is_proxy: !e.igpvHas || e.ig_profile_visit === 0,
       delta_spend_pct: cmp && cmp.spend > 0 ? e.spend / cmp.spend - 1 : null,
       client_count: e.brands.size,
     };
   });
+
+  // Reminder: TikTok ads (GMV Max / TTAM) have spend from Daily Tracking but
+  // no funnel source in ATLAS yet — say so instead of leaving blank columns
+  // unexplained. Data-driven: disappears once any TikTok funnel exists.
+  const TIKTOK_PLATFORMS = ['gmv_max_tiktok', 'ttam_tiktok'];
+  const tiktokSpend = TIKTOK_PLATFORMS.some((pl) => platAgg.get(`${period}|${pl}`)?.spend > 0);
+  const tiktokFunnel = [...platAgg].some(([k, e]) => TIKTOK_PLATFORMS.includes(k.split('|')[1]) && (e.hasImpr || e.hasPurch || e.hasPv));
+  const reminders = tiktokSpend && !tiktokFunnel
+    ? [{ code: 'tiktok_no_funnel', message: 'Data TikTok (GMV Max / TTAM) belum ada di ATLAS: spend tetap masuk dari Daily Tracking, tetapi impression, pesanan, omzet iklan, CPM, dan ROAS iklan TikTok masih kosong.' }]
+    : [];
 
   // Share of ad spend going to Meta (Non-boost + Boost Post + CPAS), of the
   // total across all platforms — the mockup's "Share spend Meta" KPI.
@@ -917,7 +932,7 @@ export async function getChannels(params) {
     period,
     compare_period: comparePeriod,
     filters: { compare, status, category },
-    note: 'Efisiensi platform dihitung ulang dari kolom raw (spend/impressions/clicks/purchase). "platform_attributed_roas" = purchase_value / spend, bukan ROAS bisnis (revenue/spend ada di Executive Overview). Channel di luar enum sales_channel (mis. chat) disimpan sebagai free-text di client_channel_sales_other dan ikut dijumlahkan ke total_channel_sales + tampil di "Sales per Channel" dengan label aslinya. Cakupan = client punya ≥1 bulan data channel/platform tsb dalam 13 bulan terakhir; client_sales_channels (§2.2) belum ada, jadi "tidak dipakai" vs "belum diinput" belum bisa dibedakan.',
+    note: 'Efisiensi platform dihitung ulang dari kolom raw (spend/impressions/clicks/purchase). "platform_attributed_roas" = purchase_value / spend, bukan ROAS bisnis (revenue/spend ada di Executive Overview). Channel di luar enum sales_channel (mis. chat) disimpan sebagai free-text di client_channel_sales_other dan ikut dijumlahkan ke total_channel_sales + tampil di "Sales per Channel" dengan label aslinya. Cakupan = client punya ≥1 bulan data channel/platform tsb dalam 13 bulan terakhir. Funnel: Meta dari Meta Ads Auto Fetch, Shopee Iklanku dari Performance Overview (bulan yang tercakup penuh); setiap rasio hanya memakai spend dari baris yang punya penyebutnya.',
     sales_channels,
     channel_trend_keys: channelKeys.map((ch) => (ch.startsWith('other:') ? ch.slice('other:'.length) : ch)),
     total_channel_sales: totalNow || null,
@@ -925,6 +940,7 @@ export async function getChannels(params) {
     ad_platforms,
     total_platform_spend: spendNow || null,
     meta_spend_share,
+    reminders,
     channel_trend,
     spend_trend,
     client_coverage,
@@ -1139,28 +1155,43 @@ const BENCHMARK_METRICS = [
 // adMetrics()'s `> 0` guards behave. (view_content/atc are undefined when
 // the caller's query didn't select them -> also null.)
 export function adRowObj(r) {
+  const nn = (v) => (v == null ? null : Number(v));
+  // spend_* / *_ctr come from monthlyAdTotalsByBrand; a caller whose query
+  // doesn't select them falls back to the plain totals.
+  const pick = (key, fallback) => (key in r ? nn(r[key]) : fallback);
+  const spend = Number(r.spend || 0); // SUM(amount_spent), never null
+  const impressions = nn(r.impressions);
+  const linkClicks = nn(r.link_clicks);
   return {
-    spend: Number(r.spend || 0), // SUM(amount_spent), never null
-    impressions: r.impressions == null ? null : Number(r.impressions),
-    link_clicks: r.link_clicks == null ? null : Number(r.link_clicks),
-    purchase: r.purchase == null ? null : Number(r.purchase),
-    purchase_value: r.purchase_value == null ? null : Number(r.purchase_value),
-    view_content: r.view_content == null ? null : Number(r.view_content),
-    atc: r.atc == null ? null : Number(r.atc),
+    spend,
+    impressions,
+    link_clicks: linkClicks,
+    purchase: nn(r.purchase),
+    purchase_value: nn(r.purchase_value),
+    view_content: nn(r.view_content),
+    atc: nn(r.atc),
+    spend_impr: pick('spend_impr', spend),
+    spend_clicks: pick('spend_clicks', spend),
+    spend_purch: pick('spend_purch', spend),
+    clicks_ctr: pick('clicks_ctr', linkClicks),
+    impr_ctr: pick('impr_ctr', impressions),
   };
 }
 
 // Per-client ad metrics from raw monthly sums. blended_roas = revenue/spend
 // (S1 definition — NOT S6's platform-attributed purchase_value/spend).
+// Every ratio pairs a denominator with the spend of the SAME platform rows
+// (spend_impr for CPM, …): a platform that reports spend only never inflates
+// another platform's CPM or cost per purchase.
 export function adMetrics(rev, ad) {
   if (!ad) return null;
   const s = ad.spend;
   return {
-    cpm: ad.impressions > 0 ? (s / ad.impressions) * 1000 : null,
-    cpc: ad.link_clicks > 0 ? s / ad.link_clicks : null,
-    ctr: ad.impressions > 0 ? ad.link_clicks / ad.impressions : null,
+    cpm: ad.impressions > 0 && ad.spend_impr != null ? (ad.spend_impr / ad.impressions) * 1000 : null,
+    cpc: ad.link_clicks > 0 && ad.spend_clicks != null ? ad.spend_clicks / ad.link_clicks : null,
+    ctr: ad.impr_ctr > 0 && ad.clicks_ctr != null ? ad.clicks_ctr / ad.impr_ctr : null,
     blended_roas: rev != null && s > 0 ? rev / s : null,
-    cpp: ad.purchase > 0 ? s / ad.purchase : null,
+    cpp: ad.purchase > 0 && ad.spend_purch != null ? ad.spend_purch / ad.purchase : null,
     ad_cost_ratio: rev != null && rev > 0 ? s / rev : null,
   };
 }
@@ -1789,6 +1820,8 @@ export async function getDataQuality(params) {
     not_filled_this_period: `Daily Tracking belum diisi untuk ${period}`,
   };
 
+  const tiktokSpendNoFunnel = await repo.tiktokSpendWithoutFunnel(period);
+
   // --- Daftar Tindakan — consolidated, severity-ranked ------------
   // One flat list the team works top-down: critical (spend untracked /
   // reconciliation broken) before warnings (mapping backlog / anomalies).
@@ -1830,6 +1863,11 @@ export async function getDataQuality(params) {
         || (s.state === 'needs_sync' ? `Perubahan terakhir ${new Date(s.last_change).toLocaleString('id-ID')} belum masuk — pembaruan otomatis sebelumnya gagal; simpan ulang data di Daily Tracking atau jalankan scripts/syncDailyTracking.js.` : '')
         || (s.last_entry_date ? `Tanggal terakhir yang diisi: ${s.last_entry_date}.` : ''),
     })),
+    ...(tiktokSpendNoFunnel ? [{
+      severity: 'info', type: 'tiktok_no_funnel', brand_id: null, brand_name: 'TikTok',
+      label: 'Data TikTok belum ada di ATLAS',
+      detail: 'Spend GMV Max / TTAM masuk dari Daily Tracking, tetapi funnel TikTok (impression, pesanan, omzet iklan) belum tersedia.',
+    }] : []),
     ...completeness_matrix.clients
       .filter((c) => c.status === 'active' && c.is_partial_month)
       .map((c) => ({

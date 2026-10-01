@@ -129,3 +129,47 @@ test('Meta funnel: Daily Tracking vs Meta API spend gap is flagged', () => {
   assert.ok(p.warnings.some((w) => w.code === 'meta_spend_mismatch'));
   assert.equal(month(p, '2026-01').platforms[0].metrics.amount_spent, 100, 'Daily Tracking value kept');
 });
+
+// Shopee Ads rows shaped like repo.shopeeAdsMonthly().
+const shopeeRow = (period, days, v) => ({ period, days, impressions: String(v.impr), purchase: String(v.orders), purchase_value: String(v.sales), spend: String(v.spend) });
+
+test('Shopee funnel: a fully covered month adds impressions / orders / ad sales to Daily Tracking spend', () => {
+  const p = plan({
+    salesRows: [sale('2026-08', 'shopee', 100)],
+    spendRows: [spend('2026-08', 'shopee_iklanku', 1000)],
+    shopeeRows: [shopeeRow('2026-08', 31, { impr: 50000, orders: 20, sales: 9000, spend: 1000 })],
+  });
+  const ik = month(p, '2026-08').platforms.find((x) => x.platform === 'iklanku_shopee').metrics;
+  assert.equal(ik.amount_spent, 1000, 'spend from Daily Tracking');
+  assert.equal(ik.impressions, 50000);
+  assert.equal(ik.purchase, 20);
+  assert.equal(ik.purchase_value, 9000);
+  assert.equal(ik.link_clicks, null, 'clicks are not in the export -> null, not 0');
+});
+
+test('Shopee funnel: partial month or no Daily Tracking spend -> not used, with a note', () => {
+  const partial = plan({
+    salesRows: [sale('2026-09', 'shopee', 100)],
+    spendRows: [spend('2026-09', 'shopee_iklanku', 1000)],
+    shopeeRows: [shopeeRow('2026-09', 23, { impr: 1, orders: 1, sales: 1, spend: 1 })],
+  });
+  assert.equal(month(partial, '2026-09').platforms[0].metrics.impressions, undefined);
+  assert.ok(partial.warnings.some((w) => w.code === 'shopee_funnel_partial'));
+
+  const noSpend = plan({
+    salesRows: [sale('2026-08', 'shopee', 100)],
+    shopeeRows: [shopeeRow('2026-08', 31, { impr: 1, orders: 1, sales: 1, spend: 500 })],
+  });
+  assert.equal(month(noSpend, '2026-08').platforms.length, 0, 'no spend row created from Performance Overview');
+  assert.ok(noSpend.warnings.some((w) => w.code === 'shopee_funnel_without_spend'));
+});
+
+test('Shopee funnel: Daily Tracking vs Performance Overview spend gap is flagged, Daily Tracking kept', () => {
+  const p = plan({
+    salesRows: [sale('2026-08', 'shopee', 100)],
+    spendRows: [spend('2026-08', 'shopee_iklanku', 1000)],
+    shopeeRows: [shopeeRow('2026-08', 31, { impr: 1, orders: 1, sales: 1, spend: 1500 })],
+  });
+  assert.ok(p.warnings.some((w) => w.code === 'shopee_spend_mismatch'));
+  assert.equal(month(p, '2026-08').platforms[0].metrics.amount_spent, 1000);
+});

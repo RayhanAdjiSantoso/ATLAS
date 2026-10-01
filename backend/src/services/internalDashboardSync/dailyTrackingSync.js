@@ -1,4 +1,5 @@
 import { AppError } from '../../utils/errors.js';
+import { monthBounds } from '../../utils/monthPeriod.js';
 import { FIXED_SALES_LABELS, FIXED_SPEND_LABELS } from '../../config/dailyTrackingChannels.js';
 import * as repo from '../../repositories/internalDashboardRepository.js';
 import { applyFactPlan, logFailedRun } from './applyFactPlan.js';
@@ -26,6 +27,14 @@ import { applyFactPlan, logFailedRun } from './applyFactPlan.js';
 //                                           the Apps Script: lower-cased
 //                                           campaign name contains the keyword.
 //                                           CPAS accounts -> meta_cpas.
+//   Shopee Iklanku funnel (impressions,     Performance Overview upload
+//   orders, ad sales)                       (shopee.daily_channel_performance,
+//                                           "Iklan Shopee", stage Pesanan
+//                                           Dibayar) — only for a month the
+//                                           files cover day by day AND that has
+//                                           Shopee Iklanku spend in Daily
+//                                           Tracking. Its own spend column is
+//                                           a cross-check, never stored.
 //
 // Kept current automatically: every Daily Tracking write and every Meta
 // Ads insights fetch calls refreshInternalDashboard() (no sync button).
@@ -117,9 +126,10 @@ function metaFunnelByMonth(metaRows, accounts, warnings) {
  * @param {Array} o.labels       repo.dailyTrackingChannelLabels()
  * @param {string[]} [o.revisitPeriods] months this source wrote before (stale check)
  */
-export function buildDailyTrackingPlan({ salesRows, spendRows, labels, metaRows = [], accounts = [], revisitPeriods = [] }) {
+export function buildDailyTrackingPlan({ salesRows, spendRows, labels, metaRows = [], accounts = [], shopeeRows = [], revisitPeriods = [] }) {
   const warnings = [];
   const metaByMonth = metaFunnelByMonth(metaRows, accounts, warnings);
+  const shopeeByMonth = Object.fromEntries(shopeeRows.map((r) => [r.period, r]));
   const labelOf = (kind, key) => labels.find((l) => l.kind === kind && l.channel_key === key)?.label
     ?? (kind === 'sales' ? FIXED_SALES_LABELS[key] : FIXED_SPEND_LABELS[key]) ?? key;
 
@@ -209,10 +219,32 @@ export function buildDailyTrackingPlan({ salesRows, spendRows, labels, metaRows 
         }
       }
     }
-    const platforms = [...platformTotals].map(([platform, amount]) => {
-      const funnel = meta[platform] ? Object.fromEntries(META_FUNNEL.map((k) => [k, meta[platform][k] ?? null])) : {};
-      return { platform, metrics: { amount_spent: amount, ...funnel } };
-    });
+    // Shopee Iklanku funnel from Performance Overview. A partial month would
+    // pair a few days of impressions with a whole month of spend (wrong CPM /
+    // ROAS), so only fully covered months are used.
+    const funnelOf = {};
+    for (const [platform, m] of Object.entries(meta)) funnelOf[platform] = Object.fromEntries(META_FUNNEL.map((k) => [k, m[k] ?? null]));
+    const sh = shopeeByMonth[period];
+    if (sh) {
+      const covered = sh.days >= monthBounds(period).days;
+      const dtSpend = platformTotals.get('iklanku_shopee');
+      if (!covered) {
+        warnings.push({ code: 'shopee_funnel_partial', severity: 'info', period, message: `Funnel Shopee ${period} tidak dipakai: Performance Overview baru mencakup ${sh.days} hari.` });
+      } else if (dtSpend === undefined) {
+        warnings.push({ code: 'shopee_funnel_without_spend', severity: 'info', period, message: `Funnel Shopee ${period} tidak dipakai: belum ada spend Shopee Iklanku di Daily Tracking.` });
+      } else {
+        funnelOf.iklanku_shopee = {
+          impressions: n(sh.impressions), link_clicks: null, purchase: n(sh.purchase), purchase_value: n(sh.purchase_value),
+          ig_profile_visit: null, view_content: null, atc: null, lpv: null,
+        };
+        const poSpend = n(sh.spend);
+        const diff = dtSpend ? Math.abs(dtSpend - poSpend) / dtSpend : null;
+        if (poSpend !== null && diff !== null && diff > META_SPEND_TOLERANCE) {
+          warnings.push({ code: 'shopee_spend_mismatch', severity: 'warning', period, message: `Spend Shopee Iklanku ${period}: Daily Tracking ${dtSpend} vs Performance Overview ${poSpend} (selisih ${(diff * 100).toFixed(1)}%). Yang disimpan: Daily Tracking.` });
+        }
+      }
+    }
+    const platforms = [...platformTotals].map(([platform, amount]) => ({ platform, metrics: { amount_spent: amount, ...(funnelOf[platform] ?? {}) } }));
 
     if (!metric && platforms.some((p) => p.metrics.amount_spent > 0)) {
       warnings.push({ code: 'spend_without_revenue', severity: 'warning', period, message: `${period}: spend sudah diisi di Daily Tracking tapi sales belum — revenue dibiarkan kosong (bukan 0).` });
@@ -245,18 +277,19 @@ export async function syncBrandFromDailyTracking(brandId, userId, opts = {}) {
   const { dryRun = false, now = Date.now() } = opts;
   let plan;
   try {
-    const [salesRows, spendRows, labels, metaRows, accounts, revisitPeriods] = await Promise.all([
+    const [salesRows, spendRows, labels, metaRows, accounts, shopeeRows, revisitPeriods] = await Promise.all([
       repo.dailySalesMonthly(brandId),
       repo.dailySpendMonthly(brandId),
       repo.dailyTrackingChannelLabels(brandId),
       repo.metaInsightsMonthly(brandId),
       repo.listBrandAdAccounts(brandId),
+      repo.shopeeAdsMonthly(brandId),
       repo.factPeriodsBySource(brandId, [SOURCE]),
     ]);
     if (!salesRows.length && !spendRows.length && !metaRows.length && !revisitPeriods.length) {
       throw new AppError('Brand ini belum punya data di halaman Daily Tracking', 404);
     }
-    plan = buildDailyTrackingPlan({ salesRows, spendRows, labels, metaRows, accounts, revisitPeriods });
+    plan = buildDailyTrackingPlan({ salesRows, spendRows, labels, metaRows, accounts, shopeeRows, revisitPeriods });
   } catch (err) {
     if (!dryRun && err.statusCode !== 404) {
       await logFailedRun({ brandId, userId, source: SOURCE, runTarget: 'daily_tracking_sync_run', method: 'daily tracking sync', error: err.message });

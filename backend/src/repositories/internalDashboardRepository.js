@@ -138,6 +138,33 @@ export async function metaInsightsMonthly(brandId, db = pool) {
   return rows;
 }
 
+// Shopee Ads funnel from the Performance Overview upload (Dashboard / Data &
+// File, migration 028): the "Iklan Shopee" rows of shopee.daily_channel_performance,
+// summed per month. Stage 'Pesanan Dibayar' — the stage the ATLAS Dashboard
+// uses for Iklan Shopee spend and sales — so the two pages agree. The rows are
+// per ad type (GMV Max Auto / ROAS, Product Ads, Lainnya); a 'Semua' total
+// row, if a file ever has one, is excluded so nothing is counted twice.
+//   products_viewed = the file's "Ads Impression"; clicks are NOT in this
+//   export (stored as 0 by the loader) and are not read.
+// `days` lets the caller use only months the files cover completely.
+export async function shopeeAdsMonthly(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT to_char(date_trunc('month', d.report_date), 'YYYY-MM') AS period,
+            count(DISTINCT d.report_date)::int AS days,
+            SUM(d.products_viewed) AS impressions, SUM(d.total_orders) AS purchase,
+            SUM(d.sales_idr) AS purchase_value, SUM(d.ad_spend_idr) AS spend
+     FROM shopee.daily_channel_performance d
+     JOIN shopee.order_pipeline_stages s ON s.stage_id = d.stage_id
+     JOIN shopee.traffic_channels c ON c.channel_id = d.channel_id
+     JOIN shopee.traffic_sub_sources ss ON ss.sub_source_id = d.sub_source_id
+     WHERE d.brand_id = $1 AND c.channel_name = 'Iklan Shopee'
+       AND s.stage_name = 'Pesanan Dibayar' AND ss.sub_source_name <> 'Semua'
+     GROUP BY 1 ORDER BY 1`,
+    [brandId],
+  );
+  return rows;
+}
+
 export async function listBrandAdAccounts(brandId, db = pool) {
   const { rows } = await db.query(
     'SELECT ad_account_id, account_type, boost_keyword FROM brand_ad_accounts WHERE brand_id = $1',
@@ -165,6 +192,8 @@ export async function dailyTrackingBrands(db = pool) {
     LEFT JOIN (SELECT brand_id, max(updated_at) last_change, max(entry_date) last_date FROM daily_channel_sales GROUP BY brand_id) s ON s.brand_id = b.brand_id
     LEFT JOIN (SELECT brand_id, max(updated_at) last_change, max(entry_date) last_date FROM daily_channel_spend GROUP BY brand_id) p ON p.brand_id = b.brand_id
     LEFT JOIN (SELECT brand_id, max(fetched_at) last_change, max(entry_date) last_date FROM meta_ads_insights_daily GROUP BY brand_id) m ON m.brand_id = b.brand_id
+    -- Performance Overview alone does not qualify: its Shopee funnel only
+    -- attaches to Daily Tracking spend.
     WHERE s.brand_id IS NOT NULL OR p.brand_id IS NOT NULL OR m.brand_id IS NOT NULL
     ORDER BY b.brand_name
   `);
@@ -399,6 +428,14 @@ export async function monthlyAdTotalsByBrand(brandIds, startPeriod, endPeriod, d
             SUM(link_clicks) AS link_clicks, SUM(purchase) AS purchase,
             SUM(purchase_value) AS purchase_value,
             SUM(view_content) AS view_content, SUM(atc) AS atc,
+            -- matched numerators: a ratio only uses spend from the platform
+            -- rows that actually report its denominator (a spend-only row
+            -- must not inflate CPM / CPC / cost per purchase)
+            SUM(amount_spent) FILTER (WHERE impressions IS NOT NULL) AS spend_impr,
+            SUM(amount_spent) FILTER (WHERE link_clicks IS NOT NULL) AS spend_clicks,
+            SUM(amount_spent) FILTER (WHERE purchase IS NOT NULL) AS spend_purch,
+            SUM(link_clicks) FILTER (WHERE impressions IS NOT NULL) AS clicks_ctr,
+            SUM(impressions) FILTER (WHERE link_clicks IS NOT NULL) AS impr_ctr,
             bool_or(is_partial_month) AS any_partial_spend
      FROM client_platform_spend_monthly
      WHERE brand_id = ANY($1::int[]) AND period BETWEEN $2::date AND $3::date
@@ -477,6 +514,20 @@ export async function brandChannelUsage(db = pool) {
      FROM client_channel_sales_monthly GROUP BY brand_id, channel`,
   );
   return rows;
+}
+
+// S8 reminder: TikTok platforms carry spend in `period` but no TikTok
+// funnel value exists anywhere yet (there is no TikTok source in ATLAS).
+export async function tiktokSpendWithoutFunnel(period, db = pool) {
+  const { rows } = await db.query(
+    `SELECT EXISTS (SELECT 1 FROM client_platform_spend_monthly
+                     WHERE platform IN ('gmv_max_tiktok', 'ttam_tiktok') AND period = $1::date AND amount_spent > 0)
+        AND NOT EXISTS (SELECT 1 FROM client_platform_spend_monthly
+                         WHERE platform IN ('gmv_max_tiktok', 'ttam_tiktok')
+                           AND (impressions IS NOT NULL OR purchase IS NOT NULL OR purchase_value IS NOT NULL)) AS flag`,
+    [`${period}-01`],
+  );
+  return rows[0].flag;
 }
 
 // Brands with Meta spend but incomplete ad-account mapping. Two tiers:

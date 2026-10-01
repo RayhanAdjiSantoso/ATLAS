@@ -24,3 +24,17 @@ test('missing raw values stay null, never 0', () => {
   assert.equal(m.cpp, null);
   assert.equal(m.blended_roas, null, 'no revenue -> no ROAS');
 });
+
+test('a platform reporting spend only does not inflate CPM / cost per purchase', () => {
+  // Meta: 100 spend, 10 000 impressions, 5 purchases. Google Ads: 900 spend, no funnel.
+  const ad = adRowObj({
+    spend: 1000, impressions: 10000, link_clicks: 50, purchase: 5,
+    spend_impr: 100, spend_clicks: 100, spend_purch: 100, clicks_ctr: 50, impr_ctr: 10000,
+  });
+  const m = adMetrics(5000, ad);
+  assert.equal(m.cpm, 10, 'CPM = 100 / 10 000 x 1000, not 1000 / 10 000 x 1000');
+  assert.equal(m.cpp, 20);
+  assert.equal(m.cpc, 2);
+  assert.equal(m.ctr, 0.005);
+  assert.equal(m.blended_roas, 5, 'business ROAS still uses ALL spend');
+});
