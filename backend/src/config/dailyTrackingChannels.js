@@ -17,10 +17,27 @@ export const FIXED_SPEND_CHANNELS = [
   { key: 'meta_boost_post', label: 'Meta Boost Post' },
   { key: 'meta_nonboost_post', label: 'Meta Non-Boost Post' },
   { key: 'cpas_shopee', label: 'CPAS Shopee' },
+  { key: 'cpas_tokopedia', label: 'CPAS Tokopedia' },
   { key: 'shopee_iklanku', label: 'Shopee Iklanku' },
   { key: 'gmv_max', label: 'GMV Max' },
   { key: 'ttam', label: 'TTAM' },
 ];
+
+// Other names the same fixed channel goes by in client sheets / typed
+// labels. A file column or a "+ Tambah Channel Baru" label whose slug is
+// listed here IS that fixed channel — never a second pill for one metric.
+// (Existing rows under these keys were moved by migration 034.)
+export const CHANNEL_ALIASES = {
+  sales: {},
+  spend: {
+    cpas_tokped: 'cpas_tokopedia',
+    tiktok_gmv: 'gmv_max',
+  },
+};
+
+export function resolveChannelKey(kind, key) {
+  return CHANNEL_ALIASES[kind]?.[key] ?? key;
+}
 
 export const FIXED_SALES_KEYS = new Set(FIXED_SALES_CHANNELS.map((c) => c.key));
 export const FIXED_SPEND_KEYS = new Set(FIXED_SPEND_CHANNELS.map((c) => c.key));

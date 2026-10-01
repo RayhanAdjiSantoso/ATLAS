@@ -157,3 +157,101 @@ export async function logIngestion(v, db = pool) {
     [v.brandId, v.targetTable, v.entryDate ?? null, v.source, v.rowCount, v.status, v.note ?? null, v.pic ?? null, v.performedBy ?? null],
   );
 }
+
+// ---------------------------------------------------------------------
+// Channel management — delete / move a custom channel (pill)
+// ---------------------------------------------------------------------
+
+// Per channel: how many saved rows, plus what a move would lose or refuse
+// (sales -> spend keeps only revenue; spend can't hold a negative amount).
+export async function channelUsage(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT 'sales' AS kind, channel_key, count(*)::int AS rows,
+            count(qty_sold)::int AS with_qty, count(transaksi)::int AS with_trx,
+            count(notes)::int AS with_notes,
+            count(*) FILTER (WHERE revenue < 0)::int AS negative
+     FROM daily_channel_sales WHERE brand_id = $1 GROUP BY channel_key
+     UNION ALL
+     SELECT 'spend', channel_key, count(*)::int, 0, 0, 0, 0
+     FROM daily_channel_spend WHERE brand_id = $1 GROUP BY channel_key`,
+    [brandId],
+  );
+  return rows;
+}
+
+export async function getCustomChannel(brandId, kind, channelKey, db = pool) {
+  const { rows } = await db.query(
+    'SELECT channel_key, label FROM daily_tracking_channels WHERE brand_id = $1 AND kind = $2 AND channel_key = $3',
+    [brandId, kind, channelKey],
+  );
+  return rows[0] ?? null;
+}
+
+export async function deleteChannelEntries(brandId, kind, channelKey, db = pool) {
+  const table = kind === 'sales' ? 'daily_channel_sales' : 'daily_channel_spend';
+  const { rowCount } = await db.query(`DELETE FROM ${table} WHERE brand_id = $1 AND channel_key = $2`, [brandId, channelKey]);
+  return rowCount;
+}
+
+export async function deleteCustomChannel(brandId, kind, channelKey, db = pool) {
+  await db.query(
+    'DELETE FROM daily_tracking_channels WHERE brand_id = $1 AND kind = $2 AND channel_key = $3',
+    [brandId, kind, channelKey],
+  );
+}
+
+// Revenue -> amount_spent (qty / transaksi / notes have no place in spend).
+export async function copySalesToSpend(brandId, channelKey, userId, db = pool) {
+  const { rowCount } = await db.query(
+    `INSERT INTO daily_channel_spend (brand_id, entry_date, channel_key, amount_spent, source, locked_manual, created_by, updated_by)
+     SELECT brand_id, entry_date, channel_key, revenue, 'manual', TRUE, $3, $3
+     FROM daily_channel_sales WHERE brand_id = $1 AND channel_key = $2`,
+    [brandId, channelKey, userId ?? null],
+  );
+  return rowCount;
+}
+
+// amount_spent -> revenue.
+export async function copySpendToSales(brandId, channelKey, userId, db = pool) {
+  const { rowCount } = await db.query(
+    `INSERT INTO daily_channel_sales (brand_id, entry_date, channel_key, revenue, created_by, updated_by)
+     SELECT brand_id, entry_date, channel_key, amount_spent, $3, $3
+     FROM daily_channel_spend WHERE brand_id = $1 AND channel_key = $2`,
+    [brandId, channelKey, userId ?? null],
+  );
+  return rowCount;
+}
+
+export async function setCustomChannelKind(brandId, fromKind, toKind, channelKey, db = pool) {
+  await db.query(
+    'UPDATE daily_tracking_channels SET kind = $4 WHERE brand_id = $1 AND kind = $2 AND channel_key = $3',
+    [brandId, fromKind, channelKey, toKind],
+  );
+}
+
+// ---------------------------------------------------------------------
+// daily_tracking_import_ignored — file columns a user chose not to import
+// ---------------------------------------------------------------------
+export async function listIgnoredColumns(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT kind, column_label, ignored_at FROM daily_tracking_import_ignored WHERE brand_id = $1 ORDER BY column_label`,
+    [brandId],
+  );
+  return rows;
+}
+
+export async function rememberIgnoredColumn(brandId, kind, columnLabel, userId, db = pool) {
+  await db.query(
+    `INSERT INTO daily_tracking_import_ignored (brand_id, kind, column_label, ignored_by)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (brand_id, kind, column_label) DO UPDATE SET ignored_at = now(), ignored_by = EXCLUDED.ignored_by`,
+    [brandId, kind, columnLabel, userId ?? null],
+  );
+}
+
+export async function forgetIgnoredColumn(brandId, kind, columnLabel, db = pool) {
+  await db.query(
+    'DELETE FROM daily_tracking_import_ignored WHERE brand_id = $1 AND kind = $2 AND column_label = $3',
+    [brandId, kind, columnLabel],
+  );
+}

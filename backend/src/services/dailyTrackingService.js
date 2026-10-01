@@ -6,7 +6,8 @@ import { callAppsScript } from './metaAutomationService.js';
 import {
   FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS,
   FIXED_SALES_KEYS, FIXED_SPEND_KEYS,
-  META_SYNC_CHANNEL_KEYS, slugifyChannelLabel,
+  FIXED_SALES_LABELS, FIXED_SPEND_LABELS,
+  META_SYNC_CHANNEL_KEYS, slugifyChannelLabel, resolveChannelKey,
 } from '../config/dailyTrackingChannels.js';
 import { parseDailyTrackingFile } from './dailyTrackingImportParser.js';
 import { refreshInternalDashboard } from './internalDashboardSync/dailyTrackingSync.js';
@@ -39,22 +40,92 @@ const slugify = slugifyChannelLabel;
 // ---------------------------------------------------------------------
 // Channels
 // ---------------------------------------------------------------------
+// Each channel carries how much data it holds (`usage`), so the delete /
+// move confirmations can say exactly what will happen before it does.
 export async function listChannels(brandId) {
   await assertBrand(brandId);
-  const [customSales, customSpend] = await Promise.all([
+  const [customSales, customSpend, usageRows] = await Promise.all([
     repo.listCustomChannels(brandId, 'sales'),
     repo.listCustomChannels(brandId, 'spend'),
+    repo.channelUsage(brandId),
   ]);
+  const usage = (kind, key) => {
+    const u = usageRows.find((r) => r.kind === kind && r.channel_key === key);
+    return u
+      ? { rows: u.rows, withQty: u.with_qty, withTrx: u.with_trx, withNotes: u.with_notes, negative: u.negative }
+      : { rows: 0, withQty: 0, withTrx: 0, withNotes: 0, negative: 0 };
+  };
   return {
     sales: [
-      ...FIXED_SALES_CHANNELS.map((c) => ({ ...c, isCustom: false })),
-      ...customSales.map((c) => ({ key: c.channel_key, label: c.label, isCustom: true })),
+      ...FIXED_SALES_CHANNELS.map((c) => ({ ...c, isCustom: false, usage: usage('sales', c.key) })),
+      ...customSales.map((c) => ({ key: c.channel_key, label: c.label, isCustom: true, usage: usage('sales', c.channel_key) })),
     ],
     spend: [
-      ...FIXED_SPEND_CHANNELS.map((c) => ({ ...c, isCustom: false })),
-      ...customSpend.map((c) => ({ key: c.channel_key, label: c.label, isCustom: true })),
+      ...FIXED_SPEND_CHANNELS.map((c) => ({ ...c, isCustom: false, usage: usage('spend', c.key) })),
+      ...customSpend.map((c) => ({ key: c.channel_key, label: c.label, isCustom: true, usage: usage('spend', c.channel_key) })),
     ],
   };
+}
+
+const KIND_LABEL = { sales: 'Revenue Data', spend: 'Spending Data' };
+
+// Delete a custom channel (pill) and every entry saved under it. Fixed
+// channels are app config and cannot be deleted.
+export async function deleteCustomChannel({ brandId, kind, channelKey, userId }) {
+  await assertBrand(brandId);
+  const channel = await repo.getCustomChannel(brandId, kind, channelKey);
+  if (!channel) throw new AppError('Hanya channel tambahan (bukan channel bawaan) yang bisa dihapus', 400);
+
+  const result = await inTransaction(async (db) => {
+    const deleted = await repo.deleteChannelEntries(brandId, kind, channelKey, db);
+    await repo.deleteCustomChannel(brandId, kind, channelKey, db);
+    await repo.logIngestion({
+      brandId, targetTable: 'daily_tracking_channels', source: 'manual', rowCount: deleted, status: 'success',
+      note: `Hapus channel "${channel.label}" (${KIND_LABEL[kind]}) beserta ${deleted} entri`, performedBy: userId,
+    }, db);
+    return { kind, key: channelKey, label: channel.label, deletedEntries: deleted };
+  });
+  await refreshInternalDashboard(brandId);
+  return result;
+}
+
+// Move a custom channel between Revenue Data and Spending Data, with its
+// entries: revenue <-> amount spent. Revenue -> spend drops qty /
+// transaksi / notes (spend has no such columns) and refuses negative
+// days (a spend amount cannot be negative).
+export async function moveCustomChannel({ brandId, kind, channelKey, userId }) {
+  await assertBrand(brandId);
+  const toKind = kind === 'sales' ? 'spend' : 'sales';
+  const channel = await repo.getCustomChannel(brandId, kind, channelKey);
+  if (!channel) throw new AppError('Hanya channel tambahan (bukan channel bawaan) yang bisa dipindahkan', 400);
+
+  const fixedTarget = (toKind === 'sales' ? FIXED_SALES_KEYS : FIXED_SPEND_KEYS).has(resolveChannelKey(toKind, channelKey));
+  const customTarget = await repo.getCustomChannel(brandId, toKind, channelKey);
+  if (fixedTarget || customTarget) {
+    throw new AppError(`${KIND_LABEL[toKind]} sudah punya channel "${channel.label}" — tidak bisa dipindahkan tanpa menggabungkan data`, 409);
+  }
+  const usage = (await repo.channelUsage(brandId)).find((r) => r.kind === kind && r.channel_key === channelKey);
+  if (kind === 'sales' && usage?.negative) {
+    throw new AppError(`"${channel.label}" punya ${usage.negative} hari dengan nilai negatif — spend tidak boleh negatif, perbaiki dulu`, 422);
+  }
+
+  const result = await inTransaction(async (db) => {
+    const moved = kind === 'sales'
+      ? await repo.copySalesToSpend(brandId, channelKey, userId, db)
+      : await repo.copySpendToSales(brandId, channelKey, userId, db);
+    await repo.deleteChannelEntries(brandId, kind, channelKey, db);
+    await repo.setCustomChannelKind(brandId, kind, toKind, channelKey, db);
+    await repo.logIngestion({
+      brandId, targetTable: 'daily_tracking_channels', source: 'manual', rowCount: moved, status: 'success',
+      note: `Pindah channel "${channel.label}" dari ${KIND_LABEL[kind]} ke ${KIND_LABEL[toKind]} (${moved} entri)`, performedBy: userId,
+    }, db);
+    return {
+      fromKind: kind, toKind, key: channelKey, label: channel.label, movedEntries: moved,
+      droppedFields: kind === 'sales' ? { qty: usage?.with_qty ?? 0, trx: usage?.with_trx ?? 0, notes: usage?.with_notes ?? 0 } : null,
+    };
+  });
+  await refreshInternalDashboard(brandId);
+  return result;
 }
 
 export async function addCustomChannel({ brandId, kind, label, userId }) {
@@ -67,7 +138,11 @@ export async function addCustomChannel({ brandId, kind, label, userId }) {
   if (!channelKey) throw new AppError('Nama channel tidak valid', 400);
 
   const fixedKeys = kind === 'sales' ? FIXED_SALES_KEYS : FIXED_SPEND_KEYS;
-  if (fixedKeys.has(channelKey)) throw new AppError('Channel itu sudah ada', 409);
+  const resolved = resolveChannelKey(kind, channelKey);
+  if (fixedKeys.has(resolved)) {
+    const fixedLabel = (kind === 'sales' ? FIXED_SALES_LABELS : FIXED_SPEND_LABELS)[resolved];
+    throw new AppError(`Channel itu sudah ada sebagai "${fixedLabel}"`, 409);
+  }
 
   try {
     const row = await repo.insertCustomChannel({ brandId, kind, channelKey, label: trimmed, userId });
@@ -346,58 +421,97 @@ export async function runMetaSyncNow({ brandId, trackingConfigId, accountClient,
 // the table would: source='manual', locked_manual=TRUE on every spend cell
 // touched, so a later Meta sync never silently overwrites an imported value.
 // ---------------------------------------------------------------------
-export async function importFromFile({ brandId, buffer, filename, userId }) {
+// Step 1 of an import: read the file, store nothing. Lists every column the
+// parser recognised as a channel (with row count + total) so the user picks
+// what to keep, and flags the ones this brand ignored on an earlier upload.
+export async function previewImport({ brandId, buffer, filename }) {
   await assertBrand(brandId);
   const parsed = parseDailyTrackingFile(buffer, filename);
+  const [ignored, customSales, customSpend] = await Promise.all([
+    repo.listIgnoredColumns(brandId),
+    repo.listCustomChannels(brandId, 'sales'),
+    repo.listCustomChannels(brandId, 'spend'),
+  ]);
+  const ignoredSet = new Set(ignored.map((r) => `${r.kind}|${r.column_label}`));
+  const existingCustom = new Set([...customSales.map((c) => `sales|${c.channel_key}`), ...customSpend.map((c) => `spend|${c.channel_key}`)]);
+
+  const columns = parsed.columns.map((c) => ({
+    ...c,
+    isNew: c.isCustom && !existingCustom.has(`${c.kind}|${c.key}`),
+    previouslyIgnored: c.fileLabels.some((l) => ignoredSet.has(`${c.kind}|${l}`)),
+  }));
+  const months = [...new Set([...parsed.salesRows, ...parsed.spendRows].map((r) => r.entryDate.slice(0, 7)))].sort();
+  return {
+    fileName: filename,
+    dataRowsParsed: parsed.dataRowsParsed,
+    months,
+    columns,
+    previouslyIgnored: columns.filter((c) => c.previouslyIgnored).map((c) => ({ id: c.id, kind: c.kind, label: c.label, fileLabels: c.fileLabels })),
+  };
+}
+
+// Step 2: import only the chosen columns (`selected` = column ids from the
+// preview; omitted = everything, for older callers). Columns left out are
+// remembered as ignored for this brand; a column picked again is forgotten.
+export async function importFromFile({ brandId, buffer, filename, userId, selected }) {
+  await assertBrand(brandId);
+  const parsed = parseDailyTrackingFile(buffer, filename);
+  const chosen = Array.isArray(selected) ? new Set(selected) : new Set(parsed.columns.map((c) => c.id));
+  const salesRows = parsed.salesRows.filter((r) => chosen.has(r.columnId));
+  const spendRows = parsed.spendRows.filter((r) => chosen.has(r.columnId));
+  const keptColumns = parsed.columns.filter((c) => chosen.has(c.id));
+  const skippedColumns = parsed.columns.filter((c) => !chosen.has(c.id));
 
   const result = await inTransaction(async (db) => {
-    for (const c of parsed.recognizedSales) {
-      if (!c.isCustom) continue;
-      await repo.upsertCustomChannelIfMissing({ brandId, kind: 'sales', channelKey: c.key, label: c.label, userId }, db);
+    for (const c of keptColumns) {
+      if (c.isCustom) await repo.upsertCustomChannelIfMissing({ brandId, kind: c.kind, channelKey: c.key, label: c.label, userId }, db);
+      for (const l of c.fileLabels) await repo.forgetIgnoredColumn(brandId, c.kind, l, db);
     }
-    for (const c of parsed.recognizedSpend) {
-      if (!c.isCustom) continue;
-      await repo.upsertCustomChannelIfMissing({ brandId, kind: 'spend', channelKey: c.key, label: c.label, userId }, db);
+    for (const c of skippedColumns) {
+      for (const l of c.fileLabels) await repo.rememberIgnoredColumn(brandId, c.kind, l, userId, db);
     }
 
-    for (const r of parsed.salesRows) {
+    for (const r of salesRows) {
       await repo.upsertSalesEntry({
         brandId, entryDate: r.entryDate, channelKey: r.channelKey,
         revenue: r.revenue, qtySold: r.qtySold, transaksi: r.transaksi, notes: r.notes, userId,
       }, db);
     }
-    for (const r of parsed.spendRows) {
+    for (const r of spendRows) {
       await repo.upsertManualSpendEntry({
         brandId, entryDate: r.entryDate, channelKey: r.channelKey, amountSpent: r.amount, userId,
       }, db);
     }
 
-    const monthsAffected = [...new Set([...parsed.salesRows, ...parsed.spendRows].map((r) => r.entryDate.slice(0, 7)))].sort();
+    const monthsAffected = [...new Set([...salesRows, ...spendRows].map((r) => r.entryDate.slice(0, 7)))].sort();
     for (const month of monthsAffected) {
       const entryDate = `${month}-01`;
-      const salesCount = parsed.salesRows.filter((r) => r.entryDate.startsWith(month)).length;
-      const spendCount = parsed.spendRows.filter((r) => r.entryDate.startsWith(month)).length;
+      const salesCount = salesRows.filter((r) => r.entryDate.startsWith(month)).length;
+      const spendCount = spendRows.filter((r) => r.entryDate.startsWith(month)).length;
+      const note = `Impor file: ${filename}${skippedColumns.length ? ` (diabaikan: ${skippedColumns.map((c) => c.label).join(', ')})` : ''}`;
       if (salesCount) {
         await repo.logIngestion({
           brandId, targetTable: 'daily_channel_sales', entryDate, source: 'manual',
-          rowCount: salesCount, status: 'success', note: `Impor file: ${filename}`, performedBy: userId,
+          rowCount: salesCount, status: 'success', note, performedBy: userId,
         }, db);
       }
       if (spendCount) {
         await repo.logIngestion({
           brandId, targetTable: 'daily_channel_spend', entryDate, source: 'manual',
-          rowCount: spendCount, status: 'success', note: `Impor file: ${filename}`, performedBy: userId,
+          rowCount: spendCount, status: 'success', note, performedBy: userId,
         }, db);
       }
     }
 
+    const pick = (kind) => keptColumns.filter((c) => c.kind === kind).map((c) => ({ key: c.key, label: c.label, isCustom: c.isCustom }));
     return {
       fileName: filename,
       dataRowsParsed: parsed.dataRowsParsed,
-      salesSaved: parsed.salesRows.length,
-      spendSaved: parsed.spendRows.length,
-      recognizedSales: parsed.recognizedSales,
-      recognizedSpend: parsed.recognizedSpend,
+      salesSaved: salesRows.length,
+      spendSaved: spendRows.length,
+      recognizedSales: pick('sales'),
+      recognizedSpend: pick('spend'),
+      ignoredColumns: skippedColumns.map((c) => ({ kind: c.kind, label: c.label })),
       monthsAffected,
     };
   });

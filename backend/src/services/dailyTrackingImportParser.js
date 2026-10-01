@@ -1,7 +1,7 @@
 import { AppError } from '../utils/errors.js';
 import { readWorkbook, readSheetRaw } from './import/parsers.js';
 import {
-  FIXED_SALES_LABELS, FIXED_SPEND_LABELS, slugifyChannelLabel,
+  FIXED_SALES_LABELS, FIXED_SPEND_LABELS, FIXED_SALES_KEYS, FIXED_SPEND_KEYS, slugifyChannelLabel, resolveChannelKey,
 } from '../config/dailyTrackingChannels.js';
 
 // Best-effort importer for whatever shape a client's own Daily Tracking
@@ -71,18 +71,45 @@ const SPEND_SYNONYMS = [
   [/non-?\s*boost|fb\s*ads/i, 'meta_nonboost_post'],
   [/boost\s*post/i, 'meta_boost_post'],
   [/cpas.*shopee/i, 'cpas_shopee'],
+  [/cpas.*(tokopedia|tokped)/i, 'cpas_tokopedia'],
   [/shopee.*(ads|iklanku)|iklan\s*shopee/i, 'shopee_iklanku'],
-  [/gmv\s*max/i, 'gmv_max'],
+  [/gmv\s*max|tiktok\s*gmv/i, 'gmv_max'],
   [/ttam/i, 'ttam'],
 ];
 
-function mapChannel(label, synonyms) {
+function mapChannel(label, synonyms, kind) {
   const cleaned = cleanChannelLabel(label);
   for (const [re, key] of synonyms) {
     if (re.test(cleaned)) return { key, label: cleaned, isCustom: false };
   }
-  const key = slugifyChannelLabel(cleaned);
-  return { key: key || `channel_${Math.random().toString(36).slice(2, 8)}`, label: cleaned, isCustom: true };
+  // A header that slugs to a known alias (e.g. "CPAS Tokped") is the fixed
+  // channel, not a new custom one.
+  const slug = slugifyChannelLabel(cleaned);
+  const resolved = resolveChannelKey(kind, slug);
+  const fixedKeys = kind === 'sales' ? FIXED_SALES_KEYS : FIXED_SPEND_KEYS;
+  if (fixedKeys.has(resolved)) return { key: resolved, label: cleaned, isCustom: false };
+  return { key: slug || `channel_${Math.random().toString(36).slice(2, 8)}`, label: cleaned, isCustom: true };
+}
+
+// One selectable import column: a channel as it will be stored (kind +
+// key), plus the header text(s) it came from in the file — what the user
+// recognises in the "pilih kolom" dialog and what an ignored choice is
+// remembered by.
+function columnEntry(map, kind, mapped, rawLabel) {
+  const id = `${kind}:${mapped.key}`;
+  if (!map.has(id)) {
+    map.set(id, {
+      id, kind, key: mapped.key,
+      label: mapped.isCustom ? mapped.label : (kind === 'sales' ? FIXED_SALES_LABELS : FIXED_SPEND_LABELS)[mapped.key],
+      isCustom: mapped.isCustom,
+      fileLabels: new Set(),
+      rows: 0,
+      total: 0,
+    });
+  }
+  const e = map.get(id);
+  e.fileLabels.add(cleanChannelLabel(rawLabel));
+  return e;
 }
 
 // One header row establishes the column layout for every data row that
@@ -213,7 +240,7 @@ export function parseDailyTrackingFile(buffer, originalFilename = 'file') {
   let headerSeen = false;
   const salesRows = [];
   const spendRows = [];
-  const recognized = { sales: new Map(), spend: new Map() };
+  const columns = new Map();
   let dataRowsParsed = 0;
 
   for (const row of raw) {
@@ -234,17 +261,21 @@ export function parseDailyTrackingFile(buffer, originalFilename = 'file') {
       const notes = ch.notesCol == null ? undefined : (String(row[ch.notesCol] ?? '').trim() || null);
       if (revenue == null && qtySold == null && transaksi == null && !notes) continue;
       anyValue = true;
-      const mapped = mapChannel(ch.rawLabel, REVENUE_SYNONYMS);
-      recognized.sales.set(mapped.key, { label: mapped.isCustom ? mapped.label : FIXED_SALES_LABELS[mapped.key], isCustom: mapped.isCustom });
-      salesRows.push({ entryDate, channelKey: mapped.key, revenue, qtySold, transaksi, notes });
+      const mapped = mapChannel(ch.rawLabel, REVENUE_SYNONYMS, 'sales');
+      const col = columnEntry(columns, 'sales', mapped, ch.rawLabel);
+      col.rows += 1;
+      col.total += revenue ?? 0;
+      salesRows.push({ entryDate, channelKey: mapped.key, revenue, qtySold, transaksi, notes, columnId: col.id });
     }
     for (const ch of currentMap.spendChannels) {
       const amount = parseAmount(row[ch.col]);
       if (amount == null) continue;
       anyValue = true;
-      const mapped = mapChannel(ch.rawLabel, SPEND_SYNONYMS);
-      recognized.spend.set(mapped.key, { label: mapped.isCustom ? mapped.label : FIXED_SPEND_LABELS[mapped.key], isCustom: mapped.isCustom });
-      spendRows.push({ entryDate, channelKey: mapped.key, amount });
+      const mapped = mapChannel(ch.rawLabel, SPEND_SYNONYMS, 'spend');
+      const col = columnEntry(columns, 'spend', mapped, ch.rawLabel);
+      col.rows += 1;
+      col.total += amount;
+      spendRows.push({ entryDate, channelKey: mapped.key, amount, columnId: col.id });
     }
     if (anyValue) dataRowsParsed += 1;
   }
@@ -265,8 +296,7 @@ export function parseDailyTrackingFile(buffer, originalFilename = 'file') {
   return {
     salesRows,
     spendRows,
-    recognizedSales: [...recognized.sales.entries()].map(([key, v]) => ({ key, ...v })),
-    recognizedSpend: [...recognized.spend.entries()].map(([key, v]) => ({ key, ...v })),
+    columns: [...columns.values()].map((c) => ({ ...c, fileLabels: [...c.fileLabels] })),
     dataRowsParsed,
   };
 }

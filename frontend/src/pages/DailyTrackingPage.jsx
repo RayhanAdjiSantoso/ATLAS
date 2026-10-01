@@ -13,6 +13,7 @@ import AddCustomChannelModal from '../components/dailyTracking/AddCustomChannelM
 import MetaSyncButton from '../components/dailyTracking/MetaSyncButton.jsx';
 import ImportFileButton from '../components/dailyTracking/ImportFileButton.jsx';
 import DeleteMonthButton from '../components/dailyTracking/DeleteMonthButton.jsx';
+import ChannelActions from '../components/dailyTracking/ChannelActions.jsx';
 import useAutoSave from '../dailyTracking/lib/useAutoSave.js';
 import { FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS, NOTES_SALES_CHANNEL_KEYS } from '../dailyTracking/lib/constants.js';
 import '../components/dailyTracking/dailyTracking.css';
@@ -118,6 +119,18 @@ export default function DailyTrackingPage() {
     });
   };
 
+  // After a custom pill is deleted or moved: reload channels + this month,
+  // and point the section that lost the pill at its first channel.
+  const handleChannelChanged = ({ kind, toKind, movedKey }) => {
+    if (kind === 'sales') setActiveSalesTab(FIXED_SALES_CHANNELS[0].key);
+    else setActiveSpendTab(FIXED_SPEND_CHANNELS[0].key);
+    if (movedKey && toKind) {
+      if (toKind === 'sales') setActiveSalesTab(movedKey); else setActiveSpendTab(movedKey);
+    }
+    loadChannels();
+    loadEntries();
+  };
+
   const handleAddChannel = async (kind, label) => {
     const res = await api.post('/daily-tracking/channels', { brandId, kind, label });
     setChannels((c) => ({ ...c, [kind]: [...c[kind], res.data.channel] }));
@@ -185,6 +198,13 @@ export default function DailyTrackingPage() {
                 onSelect={setActiveSalesTab}
                 onAddChannel={canEditSales ? () => setModalKind('sales') : undefined}
               />
+              {canEditSpend && (
+                <ChannelActions
+                  brandId={brandId} kind="sales"
+                  channel={channels.sales.find((c) => c.key === activeSalesTab)}
+                  onChanged={handleChannelChanged}
+                />
+              )}
               <DailyEntryTable
                 kind="sales" channelKey={activeSalesTab} days={grid.days}
                 data={grid.sales[activeSalesTab]}
@@ -216,6 +236,13 @@ export default function DailyTrackingPage() {
                 onSelect={setActiveSpendTab}
                 onAddChannel={canEditSpend ? () => setModalKind('spend') : undefined}
               />
+              {canEditSpend && (
+                <ChannelActions
+                  brandId={brandId} kind="spend"
+                  channel={channels.spend.find((c) => c.key === activeSpendTab)}
+                  onChanged={handleChannelChanged}
+                />
+              )}
               <DailyEntryTable
                 kind="spend" channelKey={activeSpendTab} days={grid.days}
                 data={grid.spend[activeSpendTab]}
