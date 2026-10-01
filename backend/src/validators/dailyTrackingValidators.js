@@ -13,6 +13,18 @@ export const addChannelBodyValidation = [
   body('label').isString().trim().notEmpty().withMessage('Nama channel wajib diisi'),
 ];
 
+export const deleteChannelQueryValidation = [
+  query('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+  query('kind').isIn(['sales', 'spend']).withMessage('kind harus sales atau spend'),
+  query('key').isString().trim().notEmpty().withMessage('key channel wajib disertakan'),
+];
+
+export const moveChannelBodyValidation = [
+  body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+  body('kind').isIn(['sales', 'spend']).withMessage('kind harus sales atau spend'),
+  body('key').isString().trim().notEmpty().withMessage('key channel wajib disertakan'),
+];
+
 export const entriesQueryValidation = [
   query('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
   query('month').matches(MONTH_RE).withMessage('month harus format YYYY-MM'),

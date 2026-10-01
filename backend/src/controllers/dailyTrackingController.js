@@ -76,10 +76,57 @@ export const runMetaSync = asyncHandler(async (req, res) => {
 export const importFile = asyncHandler(async (req, res) => {
   validate(req);
   if (!req.file) throw new AppError('File wajib diunggah', 400);
+  // `selected` arrives as a JSON string inside the multipart form.
+  let selected;
+  if (req.body.selected !== undefined) {
+    try {
+      selected = JSON.parse(req.body.selected);
+    } catch {
+      throw new AppError('selected harus JSON array id kolom', 400);
+    }
+    if (!Array.isArray(selected)) throw new AppError('selected harus JSON array id kolom', 400);
+  }
   const result = await service.importFromFile({
     brandId: Number(req.body.brandId),
     buffer: req.file.buffer,
     filename: req.file.originalname,
+    userId: req.user.userId,
+    selected,
+  });
+  res.json(result);
+});
+
+// POST /api/daily-tracking/import/preview  (multipart: brandId, file) — stores nothing
+export const previewImport = asyncHandler(async (req, res) => {
+  validate(req);
+  if (!req.file) throw new AppError('File wajib diunggah', 400);
+  const result = await service.previewImport({
+    brandId: Number(req.body.brandId),
+    buffer: req.file.buffer,
+    filename: req.file.originalname,
+  });
+  res.json(result);
+});
+
+// DELETE /api/daily-tracking/channels?brandId=&kind=&key=
+export const deleteChannel = asyncHandler(async (req, res) => {
+  validate(req);
+  const result = await service.deleteCustomChannel({
+    brandId: Number(req.query.brandId),
+    kind: req.query.kind,
+    channelKey: req.query.key,
+    userId: req.user.userId,
+  });
+  res.json(result);
+});
+
+// POST /api/daily-tracking/channels/move  { brandId, kind, key } — kind = current section
+export const moveChannel = asyncHandler(async (req, res) => {
+  validate(req);
+  const result = await service.moveCustomChannel({
+    brandId: Number(req.body.brandId),
+    kind: req.body.kind,
+    channelKey: req.body.key,
     userId: req.user.userId,
   });
   res.json(result);

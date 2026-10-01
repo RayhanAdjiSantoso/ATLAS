@@ -14,6 +14,7 @@ export const FIXED_SPEND_CHANNELS = [
   { key: 'meta_boost_post', label: 'Meta Boost Post' },
   { key: 'meta_nonboost_post', label: 'Meta Non-Boost Post' },
   { key: 'cpas_shopee', label: 'CPAS Shopee' },
+  { key: 'cpas_tokopedia', label: 'CPAS Tokopedia' },
   { key: 'shopee_iklanku', label: 'Shopee Iklanku' },
   { key: 'gmv_max', label: 'GMV Max' },
   { key: 'ttam', label: 'TTAM' },

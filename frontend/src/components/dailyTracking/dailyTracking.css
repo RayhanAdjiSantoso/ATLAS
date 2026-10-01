@@ -397,6 +397,40 @@
 .dt-btn-danger-outline:hover { background: var(--danger-bg); }
 .dt-modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
 
+/* ── Channel actions (delete / move the active custom pill) ─────── */
+.dt-channel-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem; margin: 0.25rem 0 0.75rem; }
+.dt-channel-actions .dt-import-alert { flex-basis: 100%; }
+
+/* ── Import: choose columns ─────────────────────────────────────── */
+.dt-modal-card.dt-modal-wide { max-width: 640px; max-height: calc(100vh - 2rem); display: flex; flex-direction: column; }
+.dt-import-ignored-note { font-size: 0.85rem; margin: 0 0 0.8rem; }
+.dt-import-columns { overflow-y: auto; display: flex; flex-direction: column; gap: 0.8rem; padding-right: 0.25rem; }
+.dt-import-group { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 0.8rem 0.6rem; margin: 0; }
+.dt-import-group legend { font-size: 0.85rem; font-weight: 700; padding: 0 0.3rem; display: flex; gap: 0.75rem; align-items: center; }
+.dt-import-group-actions { display: inline-flex; gap: 0.5rem; font-weight: 400; }
+.dt-link-btn { background: none; border: 0; padding: 0; color: var(--primary); font-size: 0.78rem; cursor: pointer; }
+.dt-link-btn:hover { text-decoration: underline; }
+.dt-import-column {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.dt-import-group legend + .dt-import-column { border-top: 0; }
+.dt-import-column input { width: auto; margin: 0; }
+.dt-import-column-name { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: baseline; min-width: 0; }
+.dt-import-column-name .badge { font-size: 0.62rem; }
+.dt-import-column-from { font-size: 0.75rem; color: var(--text-muted); }
+.dt-import-column-stat { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+@media (max-width: 560px) {
+  .dt-import-column { grid-template-columns: auto 1fr; }
+  .dt-import-column-stat { grid-column: 2; white-space: normal; }
+}
+
 @media (max-width: 600px) {
   .dt-sticky-head { margin: 0 -1rem; padding-left: 1rem; padding-right: 1rem; }
 }

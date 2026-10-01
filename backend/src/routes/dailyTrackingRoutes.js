@@ -11,6 +11,8 @@ import {
   entriesQueryValidation,
   upsertEntriesBodyValidation,
   importFileBodyValidation,
+  deleteChannelQueryValidation,
+  moveChannelBodyValidation,
   metaSyncBodyValidation,
   ingestBodyValidation,
 } from '../validators/dailyTrackingValidators.js';
@@ -32,7 +34,8 @@ function clientRevenueOnly(req, res, next) {
   if (req.user?.role !== 'client') return next();
   const touchesSpend =
     req.method === 'DELETE'
-    || req.path === '/import'
+    || req.path.startsWith('/import')
+    || req.path === '/channels/move'
     || (req.path === '/channels' && req.body?.kind !== 'sales')
     || (req.path === '/entries' && Array.isArray(req.body?.spend) && req.body.spend.length > 0);
   if (touchesSpend) return next(new AppError('Akun client hanya dapat mengisi data revenue', 403));
@@ -48,6 +51,18 @@ router.post(
   '/channels',
   authenticate, dailyTracking, clientRevenueOnly, requireBrandAccess((req) => req.body.brandId),
   addChannelBodyValidation, ctrl.addChannel,
+);
+// Delete / move a custom channel (pill) — team only: both touch spend data
+// or remove a client's entries (DELETE is blocked for clients above).
+router.delete(
+  '/channels',
+  authenticate, dailyTracking, clientRevenueOnly, requireBrandAccess((req) => req.query.brandId),
+  deleteChannelQueryValidation, ctrl.deleteChannel,
+);
+router.post(
+  '/channels/move',
+  authenticate, dailyTracking, clientRevenueOnly, requireBrandAccess((req) => req.body.brandId),
+  moveChannelBodyValidation, ctrl.moveChannel,
 );
 router.get(
   '/entries',
@@ -65,9 +80,16 @@ router.delete(
   entriesQueryValidation, ctrl.deleteMonthEntries,
 );
 router.post(
+  '/import/preview',
+  authenticate, dailyTracking, clientRevenueOnly, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),
+  importFileBodyValidation, ctrl.previewImport,
+);
+router.post(
   '/import',
   authenticate, dailyTracking, clientRevenueOnly, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),
-  importFileBodyValidation, ctrl.importFile,
+  importFileBodyValidation,
+  deleteChannelQueryValidation,
+  moveChannelBodyValidation, ctrl.importFile,
 );
 router.post(
   '/meta-sync',
