@@ -1,5 +1,6 @@
 import { isAdminRole } from './access/permissions.js';
 import pool from '../config/db.js';
+import { refreshInternalDashboard } from './internalDashboardSync/dailyTrackingSync.js';
 
 const UPLOAD_LIST_QUERY = `
   SELECT
@@ -141,7 +142,7 @@ export async function deleteUpload(uploadId) {
     await client.query('BEGIN');
 
     const existing = await client.query(
-      'SELECT stored_path, source, raw_upload_id FROM uploads WHERE upload_id = $1',
+      'SELECT stored_path, source, raw_upload_id, brand_id, file_type FROM uploads WHERE upload_id = $1',
       [uploadId],
     );
     if (existing.rows.length === 0) {
@@ -169,6 +170,10 @@ export async function deleteUpload(uploadId) {
     }
 
     await client.query('COMMIT');
+    // Performance Overview feeds the Internal Dashboard's Shopee Ads funnel.
+    if (existing.rows[0].file_type === 'performance_overview' && existing.rows[0].brand_id) {
+      await refreshInternalDashboard(existing.rows[0].brand_id);
+    }
     return existing.rows[0];
   } catch (err) {
     await client.query('ROLLBACK');

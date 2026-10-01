@@ -1,4 +1,5 @@
 import pool from '../../config/db.js';
+import { refreshInternalDashboard } from '../internalDashboardSync/dailyTrackingSync.js';
 import { LookupResolver } from './lookupResolver.js';
 import { detectOrderPeriod, loadOrders } from './loaders/orders.js';
 import {
@@ -108,6 +109,8 @@ export async function processUpload({ uploadId, fileType, filepath, brandId, fil
     );
 
     await client.query('COMMIT');
+    // Performance Overview feeds the Internal Dashboard's Shopee Ads funnel.
+    if (fileType === 'performance_overview' && brandId) await refreshInternalDashboard(brandId);
     return { rowsInserted, period, note };
   } catch (err) {
     await client.query('ROLLBACK');

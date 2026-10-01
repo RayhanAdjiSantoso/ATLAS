@@ -54,6 +54,9 @@ export default function ChannelPlatformTab() {
 
       {data && (
         <>
+          {(data.reminders || []).map((r) => (
+            <div key={r.code} className="alert alert-info" style={{ margin: 0, fontSize: '0.85rem' }}>{r.message}</div>
+          ))}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             <KpiCard title="Total Sales per Channel" value={data.total_channel_sales} type="currency"
               note={coveragePct != null ? `${pct(coveragePct)} dari portfolio sales (${money(data.portfolio_sales)})` : null} />
