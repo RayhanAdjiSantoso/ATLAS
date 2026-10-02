@@ -18,9 +18,9 @@ export function buildInsightsWorkbook({ start, end, rows, extraMetrics }) {
 
   const body = rows.map((r) => [
     r.campaign_name, r.age, r.gender, r.entry_date, 'IDR',
-    ...columns.map(({ key }) => {
-      if (key === 'objective') return r.objective ?? '';
-      return num(TYPED_KEYS.has(key) ? r[key] : r.metrics?.[key]);
+    ...columns.map(({ key, unit }) => {
+      const v = TYPED_KEYS.has(key) ? r[key] : r.metrics?.[key];
+      return unit === 'text' ? (v ?? '') : num(v);
     }),
     start, end,
   ]);
