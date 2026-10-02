@@ -43,3 +43,5 @@
 @media (max-width: 860px) {
   .mil-ui .gads-overall-grid, .mil-ui .gads-ranges { grid-template-columns: 1fr; }
 }
+
+.mil-ui .gads-change-text { display: block; min-width: 260px; max-width: 520px; }

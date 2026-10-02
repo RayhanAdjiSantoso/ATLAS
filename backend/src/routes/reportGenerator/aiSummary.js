@@ -10,7 +10,7 @@ import * as library from '../../services/brandLibraryService.js';
 // berlaku sebelum apa pun di sini jalan.
 export const aiSummaryRouter = Router();
 
-const PLATFORMS = ['meta', 'shopee', 'tiktok'];
+const PLATFORMS = ['meta', 'shopee', 'tiktok', 'google'];
 
 function fail(res, status, message) {
   res.status(status).json({ error: message });

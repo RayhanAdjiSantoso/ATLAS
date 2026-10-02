@@ -32,7 +32,37 @@ export interface GadsPeriod {
   adGroups: GadsAdGroup[];
   keywords: GadsKeyword[];
   searchTerms: GadsSearchTerm[];
+  // 'upload' / 'mixed': an uploaded Search terms report in Data & file
+  // replaced the script's numbers for (some of) the period's months.
+  searchTermsSource?: 'atlas' | 'upload' | 'mixed';
   cities: GadsCity[];
+}
+
+// Auction insights shares, 0..1. `text` is set when the export gave words
+// instead of a number ("< 10%").
+export interface GadsShare { value: number | null; text: string | null }
+export interface GadsAuctionRow {
+  domain: string;
+  isYou: boolean;
+  impression_share: GadsShare;
+  overlap_rate: GadsShare;
+  position_above_rate: GadsShare;
+  top_of_page_rate: GadsShare;
+  abs_top_of_page_rate: GadsShare;
+  outranking_share: GadsShare;
+}
+export interface GadsAuctionPeriod { months: string[]; files: string[]; rows: GadsAuctionRow[] }
+
+export interface GadsChange {
+  changed_at: string;
+  user_email: string | null;
+  client_type: string | null;
+  resource_type: string | null;
+  operation: string | null;
+  campaign_name: string | null;
+  ad_group_name: string | null;
+  changes: string | null;
+  source: 'atlas' | 'upload';
 }
 
 export interface GadsReport {
@@ -42,6 +72,8 @@ export interface GadsReport {
   coverage: { customer_id: string; first_date: string; last_date: string; days: number }[];
   old: GadsPeriod;
   cur: GadsPeriod;
+  auctionInsights: { old: GadsAuctionPeriod; cur: GadsAuctionPeriod };
+  changeHistory: { rows: GadsChange[]; uploadedFiles: string[] };
 }
 
 export interface GadsOverview {

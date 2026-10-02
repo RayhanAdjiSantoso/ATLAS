@@ -292,12 +292,15 @@ export async function reportKeywords(brandId, start, end, db = pool) {
   return rows;
 }
 
-export async function reportSearchTerms(brandId, start, end, db = pool) {
+// `months` ('YYYY-MM') narrows the rows to those months — the ones an
+// uploaded Search terms report does not replace.
+export async function reportSearchTerms(brandId, start, end, months = null, db = pool) {
   const { rows } = await db.query(
     `SELECT item AS search_term, match_type, ${SUMS}
      FROM google_ads_daily WHERE ${SCOPE} AND level = 'search_term'
+       AND ($4::text[] IS NULL OR to_char(entry_date, 'YYYY-MM') = ANY($4))
      GROUP BY item, match_type`,
-    [brandId, start, end],
+    [brandId, start, end, months],
   );
   return rows;
 }
@@ -308,6 +311,59 @@ export async function reportCities(brandId, start, end, channelType, db = pool) 
      FROM google_ads_daily WHERE ${SCOPE} AND level = 'city' AND channel_type = $4
      GROUP BY item`,
     [brandId, start, end, channelType],
+  );
+  return rows;
+}
+
+// ---------------------------------------------------------------------
+// google_ads_change_events (036)
+// ---------------------------------------------------------------------
+export async function upsertChangeEvents({ brandId, customerId, runId, rows }, db = pool) {
+  if (!rows.length) return 0;
+  const { rowCount } = await db.query(
+    `INSERT INTO google_ads_change_events
+       (brand_id, customer_id, event_key, changed_at, change_date, user_email, client_type, resource_type,
+        operation, campaign_name, ad_group_name, changes, fetch_run_id)
+     SELECT $1, $2, r.event_key, r.changed_at, r.changed_at::date, r.user_email, r.client_type, r.resource_type,
+            r.operation, r.campaign_name, r.ad_group_name, r.changes, $4
+     FROM jsonb_to_recordset($3::jsonb) AS r(
+       event_key text, changed_at timestamp, user_email text, client_type text, resource_type text,
+       operation text, campaign_name text, ad_group_name text, changes text)
+     ON CONFLICT (customer_id, event_key) DO UPDATE SET
+       brand_id = EXCLUDED.brand_id, changed_at = EXCLUDED.changed_at, change_date = EXCLUDED.change_date,
+       user_email = EXCLUDED.user_email, client_type = EXCLUDED.client_type, resource_type = EXCLUDED.resource_type,
+       operation = EXCLUDED.operation, campaign_name = EXCLUDED.campaign_name, ad_group_name = EXCLUDED.ad_group_name,
+       changes = EXCLUDED.changes, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = now()`,
+    [brandId, customerId, JSON.stringify(rows), runId],
+  );
+  return rowCount;
+}
+
+export async function deleteCustomerChangeEvents(customerId, db = pool) {
+  await db.query('DELETE FROM google_ads_change_events WHERE customer_id = $1', [customerId]);
+}
+
+export async function listChangeEvents(brandId, start, end, db = pool) {
+  const { rows } = await db.query(
+    `SELECT to_char(changed_at, 'YYYY-MM-DD HH24:MI') AS changed_at, user_email, client_type, resource_type,
+            operation, campaign_name, ad_group_name, changes
+     FROM google_ads_change_events
+     WHERE brand_id = $1 AND change_date BETWEEN $2 AND $3
+     ORDER BY changed_at DESC`,
+    [brandId, start, end],
+  );
+  return rows;
+}
+
+// One month of search terms the way the UI's Search terms report lists
+// them: per term × match type × campaign × ad group, days summed.
+export async function searchTermsForFile(brandId, start, end, db = pool) {
+  const { rows } = await db.query(
+    `SELECT item AS search_term, match_type, max(campaign_name) AS campaign_name, max(ad_group_name) AS ad_group_name, ${SUMS}
+     FROM google_ads_daily WHERE ${SCOPE} AND level = 'search_term'
+     GROUP BY item, match_type, customer_id, campaign_id, ad_group_id
+     ORDER BY sum(cost) DESC`,
+    [brandId, start, end],
   );
   return rows;
 }

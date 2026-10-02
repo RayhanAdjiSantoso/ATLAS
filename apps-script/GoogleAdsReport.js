@@ -12,10 +12,17 @@
  *      Pengaturan Brand > Google Ads (Customer ID). Logika "bulan mana
  *      yang kurang" ada di ATLAS (googleAdsService.planJobs), bukan di sini.
  *   2. Untuk tiap job (satu akun x satu bulan) menarik 5 laporan harian:
- *      campaign, ad group, keyword, search term, kota — lalu mengirimnya:
+ *      campaign, ad group, keyword, search term, kota — plus change
+ *      history (hanya 30 hari terakhir; Google tidak menyimpan lebih lama
+ *      untuk script/API) — lalu mengirimnya:
  *        POST /google-ads/ingest/start   -> runId
  *        POST /google-ads/ingest/rows    -> berulang, per 500 baris
+ *        POST /google-ads/ingest/changes -> change history, per 500 baris
  *        POST /google-ads/ingest/finish  -> sukses/gagal
+ *      ATLAS lalu mengisi Pengaturan Brand > Data & file > Google Ads
+ *      (Search terms & Change history) untuk bulan itu.
+ *      Auction insights TIDAK bisa ditarik script (Google membatasinya ke
+ *      developer yang di-allowlist) — unggah manual di Data & file.
  *      Kalau run mati di tengah, data lama bulan itu TIDAK tersentuh.
  *
  * Di akun klien, script hanya memproses akun tempat ia dipasang, walaupun
@@ -141,8 +148,20 @@ function runJob_(job, meta) {
       atlas_('post', '/google-ads/ingest/rows', { runId: runId, rows: rows.slice(i, i + CONFIG.CHUNK_SIZE) });
     }
     sent = rows.length;
-    atlas_('post', '/google-ads/ingest/finish', { runId: runId, status: 'success', rowCount: sent });
-    return job.startDate + '..' + job.endDate + ' ok (' + sent + ' baris)';
+    // Change history is extra context: if Google refuses it, the report
+    // rows above still count and the note says why history is missing.
+    var note = null;
+    var changes = [];
+    try {
+      changes = changeEventRows_(job);
+      for (var j = 0; j < changes.length; j += CONFIG.CHUNK_SIZE) {
+        atlas_('post', '/google-ads/ingest/changes', { runId: runId, rows: changes.slice(j, j + CONFIG.CHUNK_SIZE) });
+      }
+    } catch (ce) {
+      note = 'Change history tidak terambil: ' + String(ce.message || ce).slice(0, 300);
+    }
+    atlas_('post', '/google-ads/ingest/finish', { runId: runId, status: 'success', rowCount: sent, note: note });
+    return job.startDate + '..' + job.endDate + ' ok (' + sent + ' baris, ' + changes.length + ' perubahan)' + (note ? ' — ' + note : '');
   } catch (e) {
     atlas_('post', '/google-ads/ingest/finish', { runId: runId, status: 'failed', rowCount: sent, note: String(e.message || e).slice(0, 480) });
     return job.startDate + '..' + job.endDate + ' GAGAL: ' + e;
@@ -294,6 +313,81 @@ function cityNames_(resourceNames) {
     }
   }
   return out;
+}
+
+// ── Change history ──────────────────────────────────────────────────
+// change_event only answers for the last 30 days and at most 10,000 rows
+// per query, so the job range is clipped to that window; a month that is
+// already older returns nothing here and is filled by a manual upload.
+function changeEventRows_(job) {
+  var tz = AdsApp.currentAccount().getTimeZone();
+  var earliest = Utilities.formatDate(new Date(Date.now() - 29 * 864e5), tz, 'yyyy-MM-dd');
+  var from = job.startDate > earliest ? job.startDate : earliest;
+  if (from > job.endDate) return [];
+  var rows = search_('SELECT change_event.resource_name, change_event.change_date_time, ' +
+    'change_event.change_resource_type, change_event.resource_change_operation, change_event.changed_fields, ' +
+    'change_event.user_email, change_event.client_type, change_event.old_resource, change_event.new_resource, ' +
+    'campaign.name, ad_group.name FROM change_event ' +
+    "WHERE change_event.change_date_time >= '" + from + " 00:00:00' " +
+    "AND change_event.change_date_time <= '" + job.endDate + " 23:59:59' " +
+    'ORDER BY change_event.change_date_time DESC LIMIT 10000');
+  return rows.map(function (row) {
+    var e = row.changeEvent || {};
+    return {
+      key: e.resourceName,
+      changedAt: String(e.changeDateTime || '').replace('T', ' '),
+      userEmail: e.userEmail || '',
+      clientType: e.clientType || '',
+      resourceType: e.changeResourceType || '',
+      operation: e.resourceChangeOperation || '',
+      campaignName: (row.campaign && row.campaign.name) || '',
+      adGroupName: (row.adGroup && row.adGroup.name) || '',
+      changes: describeChange_(e),
+    };
+  });
+}
+
+// "status: PAUSED → ENABLED; cpc bid: 1.2 → 1.5" from the changed field
+// paths and the before/after copies of the resource.
+function describeChange_(e) {
+  var fields = e.changedFields;
+  var paths = typeof fields === 'string' ? fields.split(',') : (fields && fields.paths) || [];
+  var parts = [];
+  paths.slice(0, 8).forEach(function (path) {
+    path = String(path).trim();
+    if (!path) return;
+    var before = valueAt_(e.oldResource, path);
+    var after = valueAt_(e.newResource, path);
+    var label = path.split('.').slice(-2).join(' ').replace(/_/g, ' ');
+    if (before === undefined && after === undefined) parts.push(label);
+    else if (before === undefined) parts.push(label + ': ' + show_(path, after));
+    else parts.push(label + ': ' + show_(path, before) + ' → ' + show_(path, after));
+  });
+  if (paths.length > 8) parts.push('+' + (paths.length - 8) + ' field lain');
+  return parts.join('; ');
+}
+
+// Paths come as snake_case, relative to the resource ("status") or with its
+// name in front ("campaign.status"); the JSON is camelCase and wrapped in the
+// resource's own key ({ campaign: {...} }). Try both.
+function valueAt_(resource, path) {
+  if (!resource) return undefined;
+  var roots = [resource];
+  for (var k in resource) if (resource[k] && typeof resource[k] === 'object') roots.push(resource[k]);
+  var keys = path.split('.').map(function (p) { return p.replace(/_([a-z])/g, function (m, c) { return c.toUpperCase(); }); });
+  for (var r = 0; r < roots.length; r++) {
+    var v = roots[r];
+    for (var i = 0; i < keys.length && v !== undefined && v !== null; i++) v = v[keys[i]];
+    if (v !== undefined) return v;
+  }
+  return undefined;
+}
+
+function show_(path, v) {
+  if (v === null || v === undefined) return '—';
+  if (/micros$/i.test(path) && !isNaN(Number(v))) return String(Number(v) / 1e6);
+  var s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  return s.length > 80 ? s.slice(0, 77) + '…' : s;
 }
 
 // ── ATLAS ───────────────────────────────────────────────────────────

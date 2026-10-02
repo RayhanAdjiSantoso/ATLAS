@@ -22,7 +22,7 @@ interface ReportsTabProps {
   clientId: number | null;
 }
 
-const PLATFORM_LABELS: Record<Platform, string> = { meta: 'Meta Ads', shopee: 'Shopee Ads', tiktok: 'TikTok GMV Max' };
+const PLATFORM_LABELS: Record<Platform, string> = { meta: 'Meta Ads', shopee: 'Shopee Ads', tiktok: 'TikTok GMV Max', google: 'Google Ads' };
 
 // "Riwayat Laporan" — lists saved reports for the selected client (GET
 // /api/reports) and reopens one read-only (GET /api/reports/:id) by feeding
