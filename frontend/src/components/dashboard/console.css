@@ -349,6 +349,9 @@
 .brand-data-guard small b { color:var(--acc); font-weight:780; }
 .brand-data-guard-icon { display:grid!important; place-items:center; width:34px; height:34px; color:var(--acc); border-radius:10px; background:#fff; box-shadow:0 4px 12px rgba(30,62,184,.1); }
 .brand-data-guard-intro { padding-right:1rem; border-right:1px solid var(--border); }
+/* Google Ads › Data & file: the same note card, sitting under the dataset grid. */
+.brand-google-note { margin-top:1rem; border:1px solid var(--rule); border-radius:14px; background:linear-gradient(110deg,rgba(232,240,254,.92),rgba(249,251,255,.86)); }
+.brand-google-note .brand-data-guard-icon { color:#1557b0; }
 
 /* ── Data & file: marketplace rail (liquid glass) ─────────────────── */
 .brand-market-zone { padding:1.15rem 1.5rem 1.5rem; }

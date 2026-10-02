@@ -3,6 +3,10 @@ import pool from '../config/db.js';
 import { AppError } from '../utils/errors.js';
 import * as brandService from './brandService.js';
 import * as repo from '../repositories/googleAdsRepository.js';
+import * as library from './brandLibraryService.js';
+import {
+  parseAuctionInsights, parseSearchTerms, parseChangeHistory, buildSearchTermsWorkbook, buildChangeHistoryWorkbook, AUCTION_METRICS,
+} from './googleAdsFiles.js';
 
 // Google Ads for Pengaturan Brand (which accounts feed a brand) and the
 // Report Generator (the monthly report). The numbers are pushed in from
@@ -122,6 +126,7 @@ export async function removeAccount({ brandId, accountId }) {
   const account = await accountOfBrand(brandId, accountId);
   await inTransaction(async (db) => {
     await repo.deleteCustomerRows(account.customer_id, db);
+    await repo.deleteCustomerChangeEvents(account.customer_id, db);
     await repo.deleteAccount(accountId, db);
   });
   return getOverview(brandId);
@@ -271,8 +276,49 @@ export async function ingestRows({ runId, rows }) {
   return { received: rows.length, written };
 }
 
+// Change history for the run's range: Google keeps only the last 30 days,
+// so the script sends what it can and older months stay manual uploads.
+export async function ingestChanges({ runId, rows }) {
+  const run = await requireOpenRun(runId);
+  const byKey = new Map();
+  for (const raw of rows) {
+    const changedAt = String(raw?.changedAt ?? '').slice(0, 19);
+    const day = changedAt.slice(0, 10);
+    if (!raw?.key || !ISO_DATE.test(day) || day < run.start_date || day > run.end_date) continue;
+    byKey.set(String(raw.key), {
+      event_key: String(raw.key),
+      changed_at: changedAt,
+      user_email: text(raw.userEmail) || null,
+      client_type: text(raw.clientType) || null,
+      resource_type: text(raw.resourceType) || null,
+      operation: text(raw.operation) || null,
+      campaign_name: text(raw.campaignName) || null,
+      ad_group_name: text(raw.adGroupName) || null,
+      changes: text(raw.changes).slice(0, 2000) || null,
+    });
+  }
+  const written = await repo.upsertChangeEvents({ brandId: run.brand_id, customerId: run.customer_id, runId, rows: [...byKey.values()] });
+  return { received: rows.length, written };
+}
+
 export async function finishRun({ runId, status, rowCount, note }) {
   const run = await requireOpenRun(runId);
+  const result = await finishRunRows({ run, runId, status, rowCount, note });
+  // Data & file shows the month the run covered. A failure there must not
+  // turn a successful fetch into a failed one, so it is only logged.
+  if (status === 'success') {
+    for (const month of monthsBetween(run.start_date, run.end_date)) {
+      try {
+        result.library = await syncLibraryMonth(run.brand_id, month);
+      } catch (err) {
+        console.warn('[google-ads] gagal mengisi Data & file', { brandId: run.brand_id, month, reason: err.message });
+      }
+    }
+  }
+  return result;
+}
+
+function finishRunRows({ run, runId, status, rowCount, note }) {
   return inTransaction(async (db) => {
     let removedStale = 0;
     // Zero rows on a "success" is read as "Google returned nothing", not as
@@ -341,7 +387,28 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
   const coverage = await repo.coverage(brandId);
   const [old, cur] = await Promise.all([periodReport(brandId, oldStart, oldEnd), periodReport(brandId, curStart, curEnd)]);
   const currencies = [...new Set(accounts.map((a) => a.currency_code).filter(Boolean))];
+  const files = await libraryFiles(brandId);
+  const [auctionOld, auctionCur, changes] = await Promise.all([
+    auctionInsightsFor(brandId, files, oldStart, oldEnd),
+    auctionInsightsFor(brandId, files, curStart, curEnd),
+    changeHistoryFor(brandId, files, curStart, curEnd),
+  ]);
+  // An uploaded Search terms report wins over the script's numbers for the
+  // months it covers (user decision 2026-10-02), and fills months the
+  // script never fetched.
+  for (const [period, start, end] of [[old, oldStart, oldEnd], [cur, curStart, curEnd]]) {
+    period.searchTermsSource = 'atlas';
+    const uploaded = await uploadedSearchTerms(brandId, files, start, end);
+    if (!uploaded.rows.length) continue;
+    const kept = uploaded.months.size
+      ? (await repo.reportSearchTerms(brandId, start, end, [...uploaded.months])).map(withRatios)
+      : [];
+    period.searchTerms = mergeTerms([...kept, ...uploaded.rows]).map(withRatios);
+    period.searchTermsSource = kept.length ? 'mixed' : 'upload';
+  }
   return {
+    auctionInsights: { old: auctionOld, cur: auctionCur },
+    changeHistory: changes,
     accounts: accounts.map((a) => ({ customerId: a.customer_id, label: a.label, name: a.account_name, currency: a.currency_code })),
     currency: currencies.length === 1 ? currencies[0] : null,
     mixedCurrency: currencies.length > 1,
@@ -349,4 +416,153 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
     old,
     cur,
   };
+}
+
+// ---------------------------------------------------------------------
+// Data & file (Pengaturan Brand) — the Google Ads tab
+// ---------------------------------------------------------------------
+// Auto-filed months carry this prefix; anything else in a slot was uploaded
+// by someone and is never overwritten (user decision 2026-10-02: a manual
+// file wins over the script's copy).
+const AUTO_FILE_PREFIX = 'ATLAS-auto_google_';
+
+function monthsBetween(start, end) {
+  const out = [];
+  for (let m = monthStart(start); m <= end; m = addDays(monthEnd(m), 1)) out.push(m.slice(0, 7));
+  return out;
+}
+
+async function fileAutoMonth(brand, channel, month, rowCount, buffer) {
+  const parts = await library.listSlotParts(brand.brand_id, 'google', channel, `${month}-01`);
+  const manual = parts.filter((p) => !p.original_filename.startsWith(AUTO_FILE_PREFIX));
+  const auto = parts.find((p) => p.original_filename.startsWith(AUTO_FILE_PREFIX));
+  if (manual.length) {
+    // The upload is what this month uses; an older auto copy beside it would
+    // only make the slot look like two parts of one export.
+    if (auto) await library.deleteLibraryFile(brand.brand_id, auto.id);
+    return { channel, filed: false, reason: 'file manual sudah ada' };
+  }
+  const coverage = library.summariseRange({ start: `${month}-01`, end: monthEnd(`${month}-01`) }, month);
+  const slug = String(brand.brand_name).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'brand';
+  await library.upsertLibraryFile({
+    brandId: brand.brand_id, platform: 'google', channel,
+    periodMonth: coverage.periodMonth, periodStart: coverage.periodStart, periodEnd: coverage.periodEnd,
+    coveredDays: coverage.coveredDays, dayBitmap: coverage.dayBitmap, rowCount, periodSource: 'declared',
+    partIndex: auto?.part_index ?? 1, filename: `${AUTO_FILE_PREFIX}${channel}_${slug}_${month}.xlsx`, buffer, userId: null,
+  });
+  return { channel, filed: true, rowCount };
+}
+
+export async function syncLibraryMonth(brandId, month) {
+  const brand = await assertBrand(brandId);
+  const start = `${month}-01`;
+  const end = monthEnd(start);
+  const out = [];
+  const terms = await repo.searchTermsForFile(brandId, start, end);
+  if (terms.length) out.push(await fileAutoMonth(brand, 'search_terms', month, terms.length, buildSearchTermsWorkbook(month, terms)));
+  const changes = await repo.listChangeEvents(brandId, start, end);
+  if (changes.length) out.push(await fileAutoMonth(brand, 'change_history', month, changes.length, buildChangeHistoryWorkbook(month, changes)));
+  return out;
+}
+
+// ---------------------------------------------------------------------
+// Report reads from the library
+// ---------------------------------------------------------------------
+async function libraryFiles(brandId) {
+  const all = await library.listLibrary(brandId);
+  return all.filter((f) => f.platform === 'google' && f.period_month);
+}
+
+function filesFor(files, channel, start, end, { manualOnly = false } = {}) {
+  const months = new Set(monthsBetween(start, end));
+  return files.filter((f) => f.channel === channel
+    && months.has(String(f.period_month).slice(0, 7))
+    && (!manualOnly || !f.original_filename.startsWith(AUTO_FILE_PREFIX)));
+}
+
+async function readFiles(brandId, files, parse) {
+  const out = [];
+  for (const f of files) {
+    const bytes = await library.getLibraryFileBytes(brandId, f.id);
+    if (!bytes?.raw_file) continue;
+    try {
+      out.push({ file: f, rows: parse(bytes.raw_file) });
+    } catch (err) {
+      console.warn('[google-ads] file tidak terbaca', { fileId: f.id, reason: err.message });
+      out.push({ file: f, rows: [], error: true });
+    }
+  }
+  return out;
+}
+
+const fileMonth = (f) => String(f.period_month).slice(0, 7);
+
+// Auction insights are monthly shares, not sums. A period inside one month
+// uses that month's file; a period spanning several averages each domain's
+// shares over the months it appears in, and says so.
+async function auctionInsightsFor(brandId, files, start, end) {
+  const parsed = (await readFiles(brandId, filesFor(files, 'auction_insights', start, end), parseAuctionInsights)).filter((p) => p.rows.length);
+  const months = [...new Set(parsed.map((p) => fileMonth(p.file)))].sort();
+  const byDomain = new Map();
+  for (const { rows } of parsed) {
+    for (const r of rows) {
+      const key = r.domain.toLowerCase();
+      if (!byDomain.has(key)) byDomain.set(key, { domain: r.domain, isYou: r.isYou, samples: [] });
+      byDomain.get(key).samples.push(r);
+    }
+  }
+  const rows = [...byDomain.values()].map(({ domain, isYou, samples }) => {
+    const out = { domain, isYou };
+    for (const k of AUCTION_METRICS) {
+      const values = samples.map((s) => s[k].value).filter((v) => v != null);
+      out[k] = values.length
+        ? { value: values.reduce((a, b) => a + b, 0) / values.length, text: null }
+        : { value: null, text: samples.find((s) => s[k].text !== '—')?.[k].text ?? '—' };
+    }
+    return out;
+  });
+  return { months, files: parsed.map((p) => p.file.original_filename), rows };
+}
+
+const parseLooseDate = (text) => {
+  const t = Date.parse(String(text).replace(/,(\s*\d{1,2}:)/, ' $1'));
+  return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+};
+
+// What was changed in the account during the period: uploaded exports for
+// the months they cover (a manual file wins), fetched events for the rest.
+async function changeHistoryFor(brandId, files, start, end) {
+  const uploadFiles = filesFor(files, 'change_history', start, end, { manualOnly: true });
+  const uploadedMonths = new Set(uploadFiles.map(fileMonth));
+  const fetched = (await repo.listChangeEvents(brandId, start, end))
+    .filter((r) => !uploadedMonths.has(r.changed_at.slice(0, 7)))
+    .map((r) => ({ ...r, source: 'atlas' }));
+  const uploads = await readFiles(brandId, uploadFiles, parseChangeHistory);
+  const uploaded = uploads.flatMap(({ rows }) => rows
+    .filter((r) => { const d = parseLooseDate(r.changed_at); return !d || (d >= start && d <= end); })
+    .map((r) => ({ ...r, source: 'upload' })));
+  return { rows: [...fetched, ...uploaded], uploadedFiles: uploads.map((u) => u.file.original_filename) };
+}
+
+// Uploaded Search terms reports for the period, and which months they
+// cover — those months are left out of the script's numbers.
+async function uploadedSearchTerms(brandId, files, start, end) {
+  const parsed = (await readFiles(brandId, filesFor(files, 'search_terms', start, end, { manualOnly: true }), parseSearchTerms))
+    .filter((p) => p.rows.length);
+  const months = new Set(parsed.map((p) => fileMonth(p.file)));
+  // Months of the period the uploads do NOT cover keep the script's rows.
+  const others = new Set(monthsBetween(start, end).filter((m) => !months.has(m)));
+  return { rows: parsed.flatMap((p) => p.rows), months: others };
+}
+
+const TERM_METRICS = ['cost', 'impressions', 'clicks', 'conversions', 'conversions_value', 'all_conversions'];
+function mergeTerms(rows) {
+  const byKey = new Map();
+  for (const r of rows) {
+    const key = `${r.search_term.toLowerCase()}|${r.match_type}`;
+    const acc = byKey.get(key) ?? { search_term: r.search_term, match_type: r.match_type, ...Object.fromEntries(TERM_METRICS.map((k) => [k, 0])) };
+    for (const k of TERM_METRICS) acc[k] += Number(r[k] ?? 0);
+    byKey.set(key, acc);
+  }
+  return [...byKey.values()];
 }

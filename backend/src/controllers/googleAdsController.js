@@ -80,6 +80,12 @@ export const ingestRows = asyncHandler(async (req, res) => {
   res.json({ ok: true, ...(await service.ingestRows({ runId: req.body.runId, rows: req.body.rows })) });
 });
 
+// POST /api/google-ads/ingest/changes
+export const ingestChanges = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json({ ok: true, ...(await service.ingestChanges({ runId: req.body.runId, rows: req.body.rows })) });
+});
+
 // POST /api/google-ads/ingest/finish
 export const finishRun = asyncHandler(async (req, res) => {
   validate(req);

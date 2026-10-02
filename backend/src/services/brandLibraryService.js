@@ -36,6 +36,10 @@ export const LIBRARY_CHANNELS = {
     'product_master',
   ],
   tiktok: ['tiktok', 'tiktok_order'],
+  // Google Ads (migration 036). Search terms and change history are also
+  // filed automatically from what the Google Ads Script pushes; auction
+  // insights only ever arrive as an upload (see googleAdsFiles.js).
+  google: ['auction_insights', 'search_terms', 'change_history'],
 };
 
 // Files that describe a mapping rather than a period. They are stored with
@@ -441,6 +445,32 @@ const RANGE_PATTERNS = [
   { re: /(\d{4})-(\d{1,2})-(\d{1,2})\s*(?:-|–|s\/d|to|until)\s*(\d{4})-(\d{1,2})-(\d{1,2})/i, order: 'ymd' },
 ];
 
+// Google Ads exports put the range on its own line under the report title,
+// with month names: "September 1, 2026 - September 30, 2026" (English UI),
+// "1 September 2026 - 30 September 2026" (Indonesian), "Sep 1, 2026 – …".
+const MONTH_NUMBER = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, mei: 5, jun: 6, jul: 7, aug: 8, agu: 8, agt: 8,
+  sep: 9, oct: 10, okt: 10, nov: 11, dec: 12, des: 12,
+};
+const MONTH_WORD = '([A-Za-z]{3,9})\\.?';
+const NAMED_RANGE_PATTERNS = [
+  { re: new RegExp(`${MONTH_WORD}\\s+(\\d{1,2}),?\\s+(\\d{4})\\s*(?:-|–|to|s/d|sampai)\\s*${MONTH_WORD}\\s+(\\d{1,2}),?\\s+(\\d{4})`, 'i'), order: 'mdy' },
+  { re: new RegExp(`(\\d{1,2})\\s+${MONTH_WORD}\\s+(\\d{4})\\s*(?:-|–|to|s/d|sampai)\\s*(\\d{1,2})\\s+${MONTH_WORD}\\s+(\\d{4})`, 'i'), order: 'dmy' },
+];
+const monthOf = (word) => MONTH_NUMBER[String(word).slice(0, 3).toLowerCase()] ?? null;
+
+function namedRangeFromText(text) {
+  for (const { re, order } of NAMED_RANGE_PATTERNS) {
+    const m = text.match(re);
+    if (!m) continue;
+    const [a, b, c, d, e, f] = m.slice(1);
+    const [m1, d1, y1, m2, d2, y2] = order === 'mdy' ? [monthOf(a), b, c, monthOf(d), e, f] : [monthOf(b), a, c, monthOf(e), d, f];
+    if (!m1 || !m2) continue;
+    return { start: iso(Number(y1), m1, Number(d1)), end: iso(Number(y2), m2, Number(d2)) };
+  }
+  return null;
+}
+
 function rangeFromText(text) {
   for (const { re, order } of RANGE_PATTERNS) {
     const m = text.match(re);
@@ -462,6 +492,10 @@ export function detectDeclaredPeriod(workbook, { scanRows = 12 } = {}) {
     for (const row of rows) {
       if (!Array.isArray(row)) continue;
       const text = row.map((c) => (c instanceof Date ? c.toISOString().slice(0, 10) : String(c ?? ''))).join(' ');
+      // A row that is nothing but a named-month range is a declared period
+      // even without a "Period" label — that is how Google Ads writes it.
+      const named = namedRangeFromText(text);
+      if (named && text.replace(/[\s,]/g, '').length <= 60) return named;
       if (!/periode|period|rentang|date range/i.test(text)) continue;
       const range = rangeFromText(text);
       if (range) return range;

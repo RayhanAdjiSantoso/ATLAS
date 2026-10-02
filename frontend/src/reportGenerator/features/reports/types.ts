@@ -3,7 +3,7 @@
 
 import type { SheetRow } from '../../lib/types';
 
-export type Platform = 'meta' | 'shopee' | 'tiktok';
+export type Platform = 'meta' | 'shopee' | 'tiktok' | 'google';
 export type PeriodRole = 'old' | 'cur';
 
 export interface Client {

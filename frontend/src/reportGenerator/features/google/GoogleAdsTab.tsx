@@ -20,6 +20,8 @@ import { computeDelta, deltaClassForSentiment } from '../../lib/delta';
 import type { Sentiment } from '../../lib/types';
 import { GoogleAdsTable, type GadsColumn } from './GoogleAdsTable';
 import { GoogleDailyChart } from './GoogleDailyChart';
+import { AuctionInsightsSection, ChangeHistorySection, aiKpis, aiNotes } from './GoogleAdsContext';
+import { AiSummarySection } from '../ai/AiSummarySection';
 import {
   PRESETS, channelLabel, fetchOverview, fetchReport, formatter, matchTypeLabel, rangeLabel,
   type Formatter, type GadsAdGroup, type GadsCampaign, type GadsCity, type GadsKeyword, type GadsMetrics,
@@ -99,6 +101,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
   const [overviewError, setOverviewError] = useState('');
   const [report, setReport] = useState<GadsReport | null>(null);
   const [labels, setLabels] = useState({ p1: '', p2: '' });
+  const [reportRange, setReportRange] = useState<PeriodPair | null>(null);
   const [generatedAt, setGeneratedAt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -147,6 +150,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
       const data = await fetchReport(clientId, range);
       setReport(data);
       setLabels({ p1: periodOld.label, p2: periodCur.label });
+      setReportRange(range);
       setGeneratedAt(new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }));
       onGenerated();
       armReportScroll();
@@ -262,12 +266,16 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
         </>
       )}
 
-      {report && <GoogleAdsReportView report={report} p1={labels.p1} p2={labels.p2} generatedAt={generatedAt} onReset={reset} />}
+      {report && reportRange && (
+        <GoogleAdsReportView report={report} clientId={clientId} range={reportRange} p1={labels.p1} p2={labels.p2} generatedAt={generatedAt} onReset={reset} />
+      )}
     </div>
   );
 }
 
-function GoogleAdsReportView({ report, p1, p2, generatedAt, onReset }: { report: GadsReport; p1: string; p2: string; generatedAt: string; onReset: () => void }) {
+interface ReportViewProps { report: GadsReport; clientId: number | null; range: PeriodPair; p1: string; p2: string; generatedAt: string; onReset: () => void }
+
+function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onReset }: ReportViewProps) {
   const f = formatter(report.currency);
   const { old, cur } = report;
   const empty = cur.totals.impressions === 0 && cur.totals.cost === 0;
@@ -395,7 +403,7 @@ function GoogleAdsReportView({ report, p1, p2, generatedAt, onReset }: { report:
               content: (
                 <SectionAccordion>
                   <div className="sec-block">
-                    {heading('Top Search Terms', `berdasarkan cost · ${p2}`)}
+                    {heading('Top Search Terms', `berdasarkan cost · ${p2}${cur.searchTermsSource === 'upload' ? ' · file unggahan' : cur.searchTermsSource === 'mixed' ? ' · sebagian file unggahan' : ''}`)}
                     <GoogleAdsTable columns={termCols} rows={cur.searchTerms} sortKey="cost" limit={TABLE_ROWS} />
                   </div>
                   <div className="sec-block">
@@ -456,9 +464,35 @@ function GoogleAdsReportView({ report, p1, p2, generatedAt, onReset }: { report:
                 </SectionAccordion>
               ),
             },
+            {
+              id: 'auction',
+              label: 'Auction Insights',
+              content: (
+                <SectionAccordion>
+                  <AuctionInsightsSection data={report.auctionInsights} p1={p1} p2={p2} />
+                </SectionAccordion>
+              ),
+            },
+            {
+              id: 'changes',
+              label: 'Change History',
+              content: (
+                <SectionAccordion>
+                  <ChangeHistorySection data={report.changeHistory} p2={p2} />
+                </SectionAccordion>
+              ),
+            },
           ]}
         />
       </div>
+      <AiSummarySection
+        clientId={clientId}
+        platform="google"
+        period={{ old: p1, cur: p2 }}
+        periodDates={range}
+        kpis={aiKpis(report, f)}
+        notes={aiNotes(report, f)}
+      />
       <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
         <DownloadPdfButton targetId="report-google" filename="Performance Report - Google Ads.pdf" />
         <button className="btn btn-ghost" onClick={onReset}>

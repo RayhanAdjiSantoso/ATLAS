@@ -39,7 +39,7 @@ const RESPONSE_SCHEMA = {
   propertyOrdering: ['diagnosis', 'objective_alignment', 'winning', 'challenge', 'hypotheses', 'strategic_direction', 'action_items', 'risks', 'data_gaps'],
 };
 
-const PLATFORM_LABEL = { meta: 'Meta Ads', shopee: 'Shopee Ads', tiktok: 'TikTok GMV Max' };
+const PLATFORM_LABEL = { meta: 'Meta Ads', shopee: 'Shopee Ads', tiktok: 'TikTok GMV Max', google: 'Google Ads' };
 
 const SYSTEM_RULES = `Kamu adalah senior business & growth consultant yang bertanggung jawab mengubah data performance menjadi arahan keputusan. Tulis dalam Bahasa Indonesia yang lugas, tajam, dan spesifik seperti decision brief untuk consultant dan pemilik brand. Jangan sekadar menceritakan angka yang sudah terlihat di tabel.
 
