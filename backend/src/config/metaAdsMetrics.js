@@ -52,24 +52,34 @@ const value = (ctx, group) => pickAction(ctx.raw.actionValues, group);
 const costPer = (ctx, group) => ratio(ctx.spend, count(ctx, group));
 
 // "Instagram profile visits" is not an action type the Marketing API returns
-// (see PROXY_KEYS in Weekly.gs), but a profile-visit campaign's cost per
-// result IS its cost per profile visit — the same figure Ads Manager shows.
-// The visits are then derived from it: Amount Spent ÷ Cost per Profile Visit.
+// (see PROXY_KEYS in Weekly.gs), but a profile-visit campaign's main result
+// IS its profile visits (result indicator profile_visit_view), so the visits
+// come straight from Results and Cost per Profile Visit = Amount Spent ÷
+// visits. Spend ÷ cost per result gives the same number wherever there is
+// spend, but loses the rows Meta credits with visits at zero spend (e.g. the
+// Unknown/unknown bucket), which Ads Manager does count.
 // A result is read as a profile visit when Meta's result indicator says so,
 // or when the campaign follows MIL's "… Profile Visit …" naming (its
 // optimisation goal is then profile visits whatever the indicator reads).
 const PROFILE_VISIT_INDICATOR = /profile/i;
 const PROFILE_VISIT_CAMPAIGN = /profile\s*visit/i;
-const costPerProfileVisit = (ctx) => {
-  const cpr = ctx.raw.costPerResult;
-  if (!cpr) return null;
-  const isProfileVisit = PROFILE_VISIT_INDICATOR.test(cpr.indicator ?? '') || PROFILE_VISIT_CAMPAIGN.test(ctx.raw.campaignName ?? '');
-  const cost = num(cpr.value);
-  return isProfileVisit && cost ? cost : null;
+const isProfileVisitResult = (ctx) => {
+  const indicator = ctx.raw.results?.indicator ?? ctx.raw.costPerResult?.indicator ?? '';
+  if (!indicator && !ctx.raw.results && !ctx.raw.costPerResult) return false;
+  return PROFILE_VISIT_INDICATOR.test(indicator) || PROFILE_VISIT_CAMPAIGN.test(ctx.raw.campaignName ?? '');
 };
 const profileVisits = (ctx) => {
-  const visits = ratio(ctx.spend, costPerProfileVisit(ctx));
+  if (!isProfileVisitResult(ctx)) return null;
+  const results = num(ctx.raw.results?.value);
+  if (results != null) return results;
+  // Rows from an Apps Script that only forwards cost_per_result.
+  const visits = ratio(ctx.spend, num(ctx.raw.costPerResult?.value) || null);
   return visits == null ? null : Math.round(visits);
+};
+const costPerProfileVisit = (ctx) => {
+  const visits = profileVisits(ctx);
+  if (!visits) return isProfileVisitResult(ctx) ? (num(ctx.raw.costPerResult?.value) || null) : null;
+  return ratio(ctx.spend, visits);
 };
 
 // unit: 'idr' | 'count' | 'pct' | 'ratio' | 'text' — drives display only.
@@ -98,7 +108,7 @@ export const METRICS = [
   { key: 'cpm', label: 'CPM (cost per 1,000 impressions)', group: 'default', unit: 'idr', compute: (c) => num(c.raw.cpm) },
   {
     key: 'profile_visits', label: 'Instagram profile visits', group: 'default', unit: 'count',
-    note: 'Dihitung dari Amount Spent ÷ Cost per Profile Visit (cost per result campaign profile visit).',
+    note: 'Diambil dari Results campaign profile visit (indicator profile_visit_view); Cost per Profile Visit = Amount Spent ÷ profile visits.',
     compute: profileVisits,
   },
   { key: 'cost_per_profile_visit', label: 'Cost per Profile Visits', group: 'default', unit: 'idr', compute: costPerProfileVisit },
