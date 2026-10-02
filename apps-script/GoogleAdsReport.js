@@ -39,9 +39,14 @@
  *      Property ATLAS_INGEST_KEY milik Apps Script Daily Tracking).
  *   3. Buka akun klien itu di Google Ads > Tools > Bulk actions > Scripts
  *      > + > tempel file ini > Authorize > Preview sekali untuk cek log.
- *   4. Frequency: Daily (mis. jam 03:00). Akun baru otomatis ditarik
- *      mundur sampai tanggal "Tarik data sejak" di Pengaturan Brand,
- *      bertahap kalau satu kali jalan tidak cukup.
+ *   4. Frequency: Daily, jam 01:00 (zona waktu akun). Setiap jalan,
+ *      cost kemarin masuk ke Daily Tracking › Google Ads. Pada tanggal 1,
+ *      jalan itu menutup bulan lalu: ATLAS mengisi Search Terms dan Change
+ *      History bulan itu di Pengaturan Brand › Data & file (change history
+ *      dikumpulkan dari jalan harian sepanjang bulan, karena Google hanya
+ *      menyimpan 30 hari). Akun baru otomatis ditarik mundur sampai tanggal
+ *      "Tarik data sejak" di Pengaturan Brand, bertahap kalau satu kali
+ *      jalan tidak cukup.
  *
  * Mode MCC (belum dipakai): file yang sama bisa dipasang di Manager
  * Account; script lalu memproses semua akun terdaftar yang tertaut ke MCC

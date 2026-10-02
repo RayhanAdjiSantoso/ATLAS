@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, CircleAlert, Loader2, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
-import BrandCombo from '../metaAutomation/BrandCombo.jsx';
 import './metaAdsAutoFetch.css';
 
 const dateTime = (iso) => (iso ? new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -46,8 +45,7 @@ export default function GoogleAdsSection({ brand }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
-  const [form, setForm] = useState({ customerId: '', brandName: brand?.brand_name ?? '', backfillFrom: '' });
-  const [atlasBrands, setAtlasBrands] = useState([]); // [{brand_id, brand_name}]
+  const [form, setForm] = useState({ customerId: '', backfillFrom: '' });
   const [resync, setResync] = useState({ from: firstOfMonth(-1), to: new Date().toISOString().slice(0, 10) });
 
   const load = useCallback(async () => {
@@ -63,15 +61,9 @@ export default function GoogleAdsSection({ brand }) {
 
   useEffect(() => {
     setOverview(null); setNotice(''); setError('');
-    setForm({ customerId: '', brandName: brand?.brand_name ?? '', backfillFrom: '' });
+    setForm({ customerId: '', backfillFrom: '' });
     load();
-  }, [load, brand?.brand_name]);
-
-  useEffect(() => {
-    api.get('/brands')
-      .then((res) => setAtlasBrands(res.data.brands || []))
-      .catch(() => setAtlasBrands([]));
-  }, []);
+  }, [load]);
 
   async function act(key, work, success) {
     setBusy(key); setError(''); setNotice('');
@@ -88,26 +80,15 @@ export default function GoogleAdsSection({ brand }) {
     }
   }
 
-  // The account goes to the brand picked under "Nama Brand" — the brand
-  // open on this page by default, but any ATLAS brand can be chosen.
-  const targetBrand = atlasBrands.find((b) => b.brand_name === form.brandName) ?? null;
-
+  // The account always belongs to the brand open on this page.
   async function addAccount(event) {
     event.preventDefault();
-    if (!targetBrand) return;
-    const elsewhere = targetBrand.brand_id !== brandId;
-    const ok = await act('add', async () => {
-      await api.post('/google-ads/accounts', {
-        brandId: targetBrand.brand_id,
-        customerId: form.customerId,
-        backfillFrom: form.backfillFrom || overview?.defaultBackfillFrom,
-      });
-      // The response lists the target brand's accounts; this page shows this brand's.
-      return api.get('/google-ads/overview', { params: { brandId } });
-    }, elsewhere
-      ? `Akun tersimpan di brand ${targetBrand.brand_name}. Buka brand itu untuk melihat status sinkronnya.`
-      : 'Akun tersimpan. Data mulai ditarik pada jadwal Google Ads Script berikutnya (harian).');
-    if (ok) setForm({ customerId: '', brandName: brand?.brand_name ?? '', backfillFrom: '' });
+    const ok = await act('add', () => api.post('/google-ads/accounts', {
+      brandId,
+      customerId: form.customerId,
+      backfillFrom: form.backfillFrom || overview?.defaultBackfillFrom,
+    }), 'Akun tersimpan. Data mulai ditarik pada jadwal Google Ads Script berikutnya.');
+    if (ok) setForm({ customerId: '', backfillFrom: '' });
   }
 
   const toggleActive = (account) => act(
@@ -136,8 +117,8 @@ export default function GoogleAdsSection({ brand }) {
         <div>
           <h2>Google Ads</h2>
           <p>
-            Hubungkan akun Google Ads brand ini dengan Customer ID-nya. ATLAS menarik data harian per campaign, ad group,
-            keyword, search term, dan kota setiap hari, lalu menyusunnya di Report Generator › Google Ads.
+            Hubungkan akun Google Ads brand ini dengan Customer ID-nya. Setiap hari jam 01.00 ATLAS menarik data harian per campaign,
+            ad group, keyword, search term, dan kota — cost kemarin masuk ke Daily Tracking, dan semuanya tersusun di Report Generator › Google Ads.
           </p>
         </div>
         <span className="brand-section-meta">{accounts.length ? `${accounts.length} akun terhubung` : 'Belum terhubung'}</span>
@@ -223,25 +204,17 @@ export default function GoogleAdsSection({ brand }) {
                     <input className="form-input" placeholder="123-456-7890" value={form.customerId} required
                       onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))} />
                   </label>
-                  <div className="maf-option gads-brand-field">Nama Brand
-                    <BrandCombo
-                      options={atlasBrands.map((b) => b.brand_name).sort()}
-                      value={form.brandName}
-                      placeholder="Pilih brand ATLAS..."
-                      onChange={(v) => setForm((f) => ({ ...f, brandName: v }))}
-                    />
-                  </div>
                   <label className="maf-option">Tarik data sejak
                     <input type="date" className="form-input" value={form.backfillFrom || overview.defaultBackfillFrom}
                       onChange={(e) => setForm((f) => ({ ...f, backfillFrom: e.target.value }))} />
                   </label>
-                  <button type="submit" className="btn btn-primary dt-btn-sm" disabled={busy === 'add' || !form.customerId.trim() || !targetBrand}>
+                  <button type="submit" className="btn btn-primary dt-btn-sm" disabled={busy === 'add' || !form.customerId.trim()}>
                     {busy === 'add' ? <Loader2 size={14} className="maf-spin" /> : <Plus size={14} />} Hubungkan
                   </button>
                 </div>
                 <p className="maf-hint">
                   Setelah menghubungkan, pasang Google Ads Script (apps-script/GoogleAdsReport.js) di akun Google Ads itu sendiri:
-                  Tools › Bulk actions › Scripts, lalu jadwalkan Daily. Tanpa script itu, data akun ini tidak akan masuk.
+                  Tools › Bulk actions › Scripts, lalu jadwalkan Daily jam 01.00. Tanpa script itu, data akun ini tidak akan masuk.
                 </p>
               </form>
             )}

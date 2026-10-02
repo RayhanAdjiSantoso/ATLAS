@@ -146,9 +146,11 @@ export async function requestResync({ brandId, accountId, from, to }) {
 // ---------------------------------------------------------------------
 // One job = one account × one calendar month (clipped to backfill_from and
 // yesterday). A month is due unless a successful run covered all of it and
-// started at least SETTLE_DAYS after its last day — so the current month is
-// re-fetched every run, last month until its conversions have settled, and
-// older months once. A "Tarik ulang" adds: covered by a run started after the
+// started at least SETTLE_DAYS after its last day — so last month is
+// re-fetched until its conversions have settled and older months once. The
+// month in progress (ending yesterday) is due once per day: its range grows
+// every day, and a second run the same day (a Preview, say) finds it
+// covered. A "Tarik ulang" adds: covered by a run started after the
 // request. Newest months come first so fresh numbers land before backfill.
 export function planJobs(accounts, runs, today) {
   const yesterday = addDays(today, -1);
@@ -171,15 +173,16 @@ export function planJobs(accounts, runs, today) {
       const end = minDate(monthEnd(m), yesterday);
       const inResync = resyncAt && account.resync_from <= end && account.resync_to >= start;
       const settledAfter = toDate(addDays(end, SETTLE_DAYS));
+      const inProgress = end === yesterday;
       const covered = own.some((r) => r.start_date <= start && r.end_date >= end
-        && new Date(r.started_at) >= settledAfter
+        && (inProgress || new Date(r.started_at) >= settledAfter)
         && (!inResync || new Date(r.started_at) > resyncAt));
       const resyncCovered = !inResync || own.some((r) => r.start_date <= start && r.end_date >= end && new Date(r.started_at) > resyncAt);
       if (!resyncCovered) resyncPending = true;
       if (!covered) {
         jobs.push({
           brandId: account.brand_id, customerId: account.customer_id, startDate: start, endDate: end,
-          reason: inResync && !resyncCovered ? 'resync' : end === yesterday ? 'current' : 'backfill',
+          reason: inResync && !resyncCovered ? 'resync' : inProgress ? 'current' : 'backfill',
           // Lets an MCC-level fetcher stay quiet about an account it cannot
           // reach once another fetcher (a script in that account) has synced it.
           hasSyncedBefore: own.length > 0,
@@ -305,8 +308,12 @@ export async function ingestChanges({ runId, rows }) {
 export async function finishRun({ runId, status, rowCount, note }) {
   const run = await requireOpenRun(runId);
   const result = await finishRunRows({ run, runId, status, rowCount, note });
-  // Data & file shows the month the run covered. A failure there must not
-  // turn a successful fetch into a failed one, so it is only logged.
+  // Daily Tracking is daily data, filled on every run (the script runs at
+  // 01:00, so yesterday lands then). Data & file is monthly data: a month is
+  // filed only once a run has covered it to its last day — the run on the
+  // 1st — and re-filed if last month is fetched again while conversions
+  // settle. A failure in either must not turn a successful fetch into a
+  // failed one, so it is only logged.
   if (status === 'success') {
     // Daily Tracking › Google Ads: the brand's cost per day over the run's
     // range, written at the time the script runs (the Meta auto-fill rule).
@@ -321,7 +328,9 @@ export async function finishRun({ runId, status, rowCount, note }) {
     }
     for (const month of monthsBetween(run.start_date, run.end_date)) {
       try {
-        result.library = await syncLibraryMonth(run.brand_id, month);
+        result.library = run.end_date >= monthEnd(`${month}-01`)
+          ? await syncLibraryMonth(run.brand_id, month)
+          : await dropPartialAutoFiles(run.brand_id, month);
       } catch (err) {
         console.warn('[google-ads] gagal mengisi Data & file', { brandId: run.brand_id, month, reason: err.message });
       }
@@ -463,6 +472,21 @@ async function fileAutoMonth(brand, channel, month, rowCount, buffer) {
     partIndex: auto?.part_index ?? 1, filename: `${AUTO_FILE_PREFIX}${channel}_${slug}_${month}.xlsx`, buffer, userId: null,
   });
   return { channel, filed: true, rowCount };
+}
+
+// A month still in progress has no file yet. Auto files written for one
+// before this rule (they used to be refreshed daily) are removed so the grid
+// does not show a half month as filed; uploads are left alone.
+async function dropPartialAutoFiles(brandId, month) {
+  const removed = [];
+  for (const channel of ['search_terms', 'change_history']) {
+    const parts = await library.listSlotParts(brandId, 'google', channel, `${month}-01`);
+    for (const p of parts.filter((x) => x.original_filename.startsWith(AUTO_FILE_PREFIX))) {
+      await library.deleteLibraryFile(brandId, p.id);
+      removed.push(channel);
+    }
+  }
+  return { month, inProgress: true, removed };
 }
 
 export async function syncLibraryMonth(brandId, month) {

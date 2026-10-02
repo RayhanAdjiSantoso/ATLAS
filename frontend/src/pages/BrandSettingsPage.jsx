@@ -132,8 +132,8 @@ const PLATFORMS = [
     tint: 'rgba(26,115,232,.13)',
     datasets: [
       { channel: 'auction_insights', name: 'Auction Insights', hint: 'Unggah manual · Google Ads › Insights & reports › Auction insights', kind: 'core' },
-      { channel: 'search_terms', name: 'Search Terms', hint: 'Otomatis dari Google Ads Script · bisa diganti file Search terms report', kind: 'core' },
-      { channel: 'change_history', name: 'Change History', hint: 'Otomatis 30 hari terakhir · bulan lama unggah dari Change history', kind: 'core' },
+      { channel: 'search_terms', name: 'Search Terms', hint: 'Otomatis tiap tanggal 1 untuk bulan lalu · bisa diganti file Search terms report', kind: 'core' },
+      { channel: 'change_history', name: 'Change History', hint: 'Otomatis tiap tanggal 1 untuk bulan lalu · bulan sebelum akun terhubung unggah manual', kind: 'core' },
     ],
   },
 ];
@@ -1208,15 +1208,15 @@ function DataView({ brand, files, months, axis, windowStart, setWindowStart, foc
             <span className="brand-data-guard-icon"><CircleAlert size={18} /></span>
             <span className="brand-data-guard-intro">
               <strong>Sebagian terisi otomatis</strong>
-              <small>Search Terms dan Change History diisi setiap hari oleh Google Ads Script untuk akun di tab <button type="button" className="brand-inline-link" onClick={onOpenGoogleAds}>Google Ads</button>. File yang Anda unggah untuk suatu bulan selalu dipakai menggantikan hasil otomatis.</small>
+              <small>Search Terms dan Change History adalah data bulanan: diisi otomatis setiap tanggal 1 untuk bulan sebelumnya, untuk akun di tab <button type="button" className="brand-inline-link" onClick={onOpenGoogleAds}>Google Ads</button>. Bulan berjalan baru muncul setelah bulannya selesai. File yang Anda unggah untuk suatu bulan selalu dipakai menggantikan hasil otomatis.</small>
             </span>
             <span>
               <strong>Auction Insights</strong>
               <small>Tidak bisa ditarik otomatis oleh Google. Unduh dari Google Ads › Insights &amp; reports › Auction insights, pilih rentang satu bulan, lalu unggah ke bulannya.</small>
             </span>
             <span>
-              <strong>Change History bulan lama</strong>
-              <small>Google hanya menyimpan 30 hari untuk script. Untuk bulan yang lebih lama, unduh dari Google Ads › Change history dan unggah ke bulannya.</small>
+              <strong>Change History sebelum akun terhubung</strong>
+              <small>ATLAS mengumpulkan perubahan setiap hari sejak akun terhubung, tetapi Google hanya menyimpan 30 hari ke belakang. Untuk bulan sebelum itu, unduh dari Google Ads › Change history dan unggah ke bulannya.</small>
             </span>
           </div>
         )}

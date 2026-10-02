@@ -208,7 +208,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
         <div className="empty-note"><Loader2 size={13} className="rg-spin" aria-hidden /> Memeriksa koneksi Google Ads…</div>
       ) : !connected ? (
         <InlineNotice title="Brand ini belum terhubung ke Google Ads" tone="info">
-          Tambahkan Customer ID di <Link to="/pengaturan-brand">Pengaturan Brand › Google Ads</Link>. Data mulai tersedia setelah jalan harian Google Ads Script berikutnya.
+          Tambahkan Customer ID di <Link to="/pengaturan-brand">Pengaturan Brand › Google Ads</Link>. Data mulai tersedia setelah Google Ads Script jalan berikutnya.
         </InlineNotice>
       ) : (
         <>
@@ -345,7 +345,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
         )}
         {empty && (
           <InlineNotice title="Tidak ada data Google Ads pada Periode Ini" tone="info">
-            Periksa rentang tanggal, atau tunggu sinkron harian berikutnya bila akun baru saja dihubungkan. Status sinkron ada di Pengaturan Brand › Google Ads.
+            Periksa rentang tanggal, atau tunggu sinkron berikutnya bila akun baru saja dihubungkan. Status sinkron ada di Pengaturan Brand › Google Ads.
           </InlineNotice>
         )}
         <ReportPages
