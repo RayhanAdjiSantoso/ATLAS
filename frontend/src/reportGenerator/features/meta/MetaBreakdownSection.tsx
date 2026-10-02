@@ -3,7 +3,7 @@ import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { PIE_COLORS, PieChartCanvas } from '../../components/PieChartCanvas';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
-import { AUDIENCE_TYPE_LABEL, audienceTypeOf, buildBrandAudience, buildLeadAudience, buildObjectiveAudience, buildSalesAudience, type AudienceMetricDef, type AudienceType } from '../../lib/metaAudience';
+import { AUDIENCE_TYPE_LABEL, audienceTypeOf, buildB2bAudience, buildBrandAudience, buildLeadAudience, buildObjectiveAudience, buildSalesAudience, type AudienceMetricDef, type AudienceType } from '../../lib/metaAudience';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 import type { AudienceSlice } from '../../lib/metaAudience';
@@ -21,7 +21,7 @@ const SERIES = '#1e3eb8';
 // For the all-pies layout. A ratio has no share of its own, so its pie is
 // drawn from the count the ratio is built on, and the legend carries each
 // group's actual ratio beside that share.
-type Kind = 'sales' | 'brand' | 'objective' | 'lead';
+type Kind = 'sales' | 'brand' | 'objective' | 'lead' | 'b2b';
 const SALES_BASE: Record<string, { key: string; noun: string }> = {
   ctr: { key: 'contentViews', noun: 'klik (content views)' },
   conversionRate: { key: 'orders', noun: 'order' },
@@ -30,6 +30,12 @@ const SALES_BASE: Record<string, { key: string; noun: string }> = {
 const PIE_BASE: Record<Kind, Record<string, { key: string; noun: string }>> = {
   sales: SALES_BASE,
   objective: { ctr: { key: 'linkClicks', noun: 'link click' }, leadRate: { key: 'leads', noun: 'leads' }, interactionRate: { key: 'interactions', noun: 'interaksi' } },
+  b2b: {
+    ctr: { key: 'contentViews', noun: 'klik' },
+    conversionRate: { key: 'purchase', noun: 'leads / purchase' },
+    leadRate: { key: 'leads', noun: 'leads' },
+    aov: { key: 'gmv', noun: 'revenue' },
+  },
   lead: { ctr: { key: 'linkClicks', noun: 'link click' }, leadRate: { key: 'leads', noun: 'leads' }, costPerLead: { key: 'spend', noun: 'spending' } },
   brand: {
     interactionRate: { key: 'interactions', noun: 'interaksi' },
@@ -116,9 +122,8 @@ export function MetaBreakdownSection<M>({
     return (['NV', 'RM', 'NV+RM', 'other'] as const).filter((t) => seen.has(t));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, campCol]);
-  const splitting = types.length >= 2 && types.some((t) => t !== 'other');
   const [aud, setAud] = useState<string>('all');
-  const scoped = useMemo(() => (splitting && aud !== 'all' ? rows.filter((r) => typeOf(r) === aud) : rows), [rows, aud, splitting]); // eslint-disable-line react-hooks/exhaustive-deps
+  const scoped = useMemo(() => (aud !== 'all' ? rows.filter((r) => typeOf(r) === aud) : rows), [rows, aud]); // eslint-disable-line react-hooks/exhaustive-deps
   const slices = useMemo(
     () =>
       (kind === 'brand'
@@ -127,13 +132,23 @@ export function MetaBreakdownSection<M>({
           ? buildObjectiveAudience(scoped, dimCol)
           : kind === 'lead'
             ? buildLeadAudience(scoped, dimCol)
+            : kind === 'b2b'
+              ? buildB2bAudience(scoped, dimCol)
             : buildSalesAudience(scoped, dimCol)) as unknown as AudienceSlice<M>[],
     [scoped, dimCol, kind],
   );
-  const audToggle = splitting ? (
+  // NV, RM and the two together, always offered where the channel buys by
+  // audience; a side the file has no campaign for is shown but disabled.
+  const mixedOnly = types.includes('NV+RM') && !types.includes('NV') && !types.includes('RM');
+  const none = mixedOnly ? 'Campaign di sini memakai NV dan RM dalam satu campaign — tidak bisa dipisah' : 'Tidak ada campaign dengan label ini di periode ini';
+  const audToggle = campCol ? (
     <SegmentedToggle
       label="Audiens"
-      options={[{ value: 'all', label: 'Semua' }, ...types.map((t) => ({ value: t as string, label: t === 'other' ? 'Lainnya' : t === 'NV+RM' ? 'NV + RM' : t }))]}
+      options={[
+        { value: 'all', label: 'Gabungan NV + RM' },
+        { value: 'NV', label: 'NV', disabled: types.includes('NV') ? false : none },
+        { value: 'RM', label: 'RM', disabled: types.includes('RM') ? false : none },
+      ]}
       value={aud}
       onChange={setAud}
       accent="var(--acc)"
@@ -174,7 +189,7 @@ export function MetaBreakdownSection<M>({
         {audToggle && (
           <div className="chart-controls" style={{ padding: '1.1rem 1.4rem 0' }}>
             {audToggle}
-            {aud !== 'all' && <span className="sm-hint">{AUDIENCE_TYPE_LABEL[aud as AudienceType | 'other']}</span>}
+            {aud !== 'all' ? <span className="sm-hint">{AUDIENCE_TYPE_LABEL[aud as AudienceType | 'other']}</span> : mixedOnly ? <span className="sm-hint">{none}.</span> : null}
           </div>
         )}
         <div style={{ padding: '1.1rem 1.4rem 1.4rem' }}>

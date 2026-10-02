@@ -1,16 +1,21 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
+import { BookOpen, ChevronDown } from 'lucide-react';
 
 export function HowTo({ children }: { children: ReactNode }) {
   // Collapsed by default — the step rail + colored upload cards carry the
   // flow now; this is reference material the user opens only when stuck.
   const [open, setOpen] = useState(false);
+  const bodyId = useId();
   return (
     <div className={`howto${open ? ' open' : ''}`}>
-      <div className="howto-header" onClick={() => setOpen((o) => !o)}>
-        <div className="howto-title">Cara penggunaan</div>
-        <div className={`howto-chevron${open ? ' open' : ''}`}>▼</div>
-      </div>
-      <div className={`howto-body${open ? ' open' : ''}`}>
+      <button type="button" className="howto-header" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)}>
+        <span className="howto-title">
+          <BookOpen size={15} aria-hidden="true" /> Cara penggunaan
+        </span>
+        <span className="howto-hint">{open ? 'Tutup panduan' : 'Kolom export, format file & alur'}</span>
+        <ChevronDown size={16} className={`howto-chevron${open ? ' open' : ''}`} aria-hidden="true" />
+      </button>
+      <div id={bodyId} className={`howto-body${open ? ' open' : ''}`}>
         <div className="howto-steps">{children}</div>
       </div>
     </div>

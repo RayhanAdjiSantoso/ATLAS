@@ -32,7 +32,8 @@ export interface LibraryMonth {
   end: string | null; // latest period_end
 }
 
-type Tab = 'library' | 'archive' | 'range';
+export type PeriodSourceTab = 'library' | 'archive' | 'range';
+type Tab = PeriodSourceTab;
 
 interface PeriodSourcePickerProps {
   clientId: number;
@@ -53,6 +54,8 @@ interface PeriodSourcePickerProps {
   // a third tab "Rentang tanggal" appears.
   selectedRange?: { start: string; end: string } | null;
   onPickRange?: (range: AutoRange) => void;
+  // Which source the dialog opens on (the page's source switch names it).
+  initialTab?: PeriodSourceTab;
 }
 
 const SHORT_MONTH = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -76,8 +79,9 @@ export function PeriodSourcePicker({
   onPickArchive,
   selectedRange,
   onPickRange,
+  initialTab = 'library',
 }: PeriodSourcePickerProps) {
-  const [tab, setTab] = useState<Tab>('library');
+  const [tab, setTab] = useState<Tab>(initialTab === 'range' && !onPickRange ? 'library' : initialTab);
   const [months, setMonths] = useState<LibraryMonth[] | null>(null);
   const [libError, setLibError] = useState<string | null>(null);
   const [periods, setPeriods] = useState<SavedPeriod[] | null>(null);

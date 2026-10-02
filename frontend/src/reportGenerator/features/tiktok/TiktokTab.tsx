@@ -8,7 +8,7 @@ import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
 import { KpiTable } from '../../components/KpiTable';
 import { PeriodCompareChip } from '../../components/PeriodCompareChip';
-import { PeriodInputRow } from '../../components/PeriodInputRow';
+import { SetupBoard, SetupGrid, SetupRow, SetupTextInput } from '../../components/SetupBoard';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
@@ -311,6 +311,49 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     { label: 'Lihat & unduh PDF', status: report ? 'current' : 'todo' },
   ];
 
+  function sourceCell(role: 'old' | 'cur') {
+    const pickedRun = role === 'old' ? oldPicked : curPicked;
+    const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
+    const picked = pickedMonth
+      ? { title: pickedMonth.label, sourceComparison: '', savedAt: '', summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
+      : pickedRun
+        ? {
+            title: pickedRun.label || 'Tanpa label',
+            sourceComparison: pickedRun.sourceComparison,
+            savedAt: formatSavedAt(pickedRun.savedAt),
+            summary: formatChannelCoverage(pickedRun.channels),
+            metaLine: 'Arsip Laporan',
+          }
+        : null;
+    const source = role === 'old' ? oldSource : curSource;
+    return (
+      <>
+        <SlotSourceTabs
+          savedFirst
+          value={source}
+          onChange={(v) => {
+            (role === 'old' ? setOldSource : setCurSource)(v);
+            if (v === 'saved' && !picked) setPickerRole(role);
+          }}
+          disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
+        />
+        {source === 'upload' && (
+          <div className="manual-mode-note">
+            <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah di baris TikTok GMV Max — file tidak disimpan ke Pengaturan Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis; periode dibaca dari nama file ekspor TikTok.
+          </div>
+        )}
+        {source === 'saved' &&
+          (applyingRole === role ? (
+            <div className="setup-applying" role="status">
+              <span className="setup-spinner" aria-hidden="true" /> Menerapkan periode…
+            </div>
+          ) : (
+            <SavedSlotCard picked={picked} onOpen={() => setPickerRole(role)} onClear={() => clearPickedPeriod(role)} />
+          ))}
+      </>
+    );
+  }
+
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
       <HowTo>
@@ -324,69 +367,29 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
 
       <StepIndicator steps={steps} accent="var(--tiktok)" />
 
-      <PeriodInputRow
-        colorClass="tiktok-period"
-        oldValue={periodOld.inputValue}
-        curValue={periodCur.inputValue}
-        onOldChange={periodOld.onInput}
-        onCurChange={periodCur.onInput}
-        oldPlaceholder="cth: Apr 2026 / W1–W2 Jun"
-        curPlaceholder="cth: Mei 2026 / W3–W4 Jun"
-      />
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label" style={{ color: 'var(--tiktok)' }}>
-            Pilih Periode
-          </div>
-          <span className="sec-badge">Perpustakaan Brand &amp; Arsip Laporan</span>
-        </div>
-        <div className="dz-grid-4">
-          {(['old', 'cur'] as const).map((role) => {
-            const pickedRun = role === 'old' ? oldPicked : curPicked;
-            const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
-            const picked = pickedMonth
-              ? { title: pickedMonth.label, sourceComparison: '', savedAt: '', summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
-              : pickedRun
-                ? {
-                    title: pickedRun.label || 'Tanpa label',
-                    sourceComparison: pickedRun.sourceComparison,
-                    savedAt: formatSavedAt(pickedRun.savedAt),
-                    summary: formatChannelCoverage(pickedRun.channels),
-                    metaLine: 'Arsip Laporan',
-                  }
-                : null;
-            const source = role === 'old' ? oldSource : curSource;
-            return (
-              <div key={role}>
-                <SlotSourceTabs
-                  savedFirst
-                  value={source}
-                  onChange={(v) => {
-                    (role === 'old' ? setOldSource : setCurSource)(v);
-                    if (v === 'saved' && !picked) setPickerRole(role);
-                  }}
-                  disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
-                />
-                {source === 'upload' && (
-                  <div className="manual-mode-note">
-                    <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah di bagian TikTok GMV Max di bawah — file tidak disimpan ke Pengaturan Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis; periode dibaca dari nama file ekspor TikTok.
-                  </div>
-                )}
-                {source === 'saved' &&
-                  (applyingRole === role ? (
-                    <div className="empty-note">Menerapkan periode…</div>
-                  ) : (
-                    <SavedSlotCard picked={picked}
-                      onOpen={() => setPickerRole(role)}
-                      onClear={() => clearPickedPeriod(role)}
-                    />
-                  ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* Same board as Meta: periods across, inputs down. */}
+      <SetupBoard
+        title="Sumber data"
+        note={
+          <>
+            Pilih file GMV Max tiap periode dari <strong>Perpustakaan Brand</strong> atau <strong>Arsip Laporan</strong>, atau unggah file baru untuk rentang khusus yang
+            tidak disimpan.
+          </>
+        }
+      >
+        <SetupGrid>
+          <SetupRow
+            label="Label periode"
+            sub="tampil di laporan"
+            old={<SetupTextInput label="Label Periode Lalu" value={periodOld.inputValue} onChange={periodOld.onInput} placeholder="cth: Apr 2026 / W1–W2 Jun" />}
+            cur={<SetupTextInput label="Label Periode Ini" value={periodCur.inputValue} onChange={periodCur.onInput} placeholder="cth: Mei 2026 / W3–W4 Jun" />}
+          />
+          <SetupRow label="Sumber" sub="per periode" old={sourceCell('old')} cur={sourceCell('cur')} />
+          <SetupRow label="TikTok GMV Max" req old={dropzone('tiktok-old')} cur={dropzone('tiktok-cur')} />
+        </SetupGrid>
+        {fileErrors['tiktok-old'] && <InlineNotice title="Sumber Periode Lalu belum dapat dibaca">{fileErrors['tiktok-old']}</InlineNotice>}
+        {fileErrors['tiktok-cur'] && <InlineNotice title="Sumber Periode Ini belum dapat dibaca">{fileErrors['tiktok-cur']}</InlineNotice>}
+      </SetupBoard>
 
       {pickerRole && clientId && (
         <PeriodSourcePicker
@@ -405,22 +408,6 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
           onPickArchive={handlePickPeriod}
         />
       )}
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label" style={{ color: 'var(--tiktok)' }}>
-            TikTok GMV Max
-          </div>
-        </div>
-        <div className="dz-grid-4">
-          {dropzone('tiktok-old')}
-          {dropzone('tiktok-cur')}
-        </div>
-        {fileErrors['tiktok-old'] && <InlineNotice title="Sumber Periode Lalu belum dapat dibaca">{fileErrors['tiktok-old']}</InlineNotice>}
-        {fileErrors['tiktok-cur'] && <InlineNotice title="Sumber Periode Ini belum dapat dibaca">{fileErrors['tiktok-cur']}</InlineNotice>}
-      </div>
-
-
 
       {ready && (
         <div id="cta" style={{ marginTop: '1rem' }}>

@@ -7,7 +7,7 @@ import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
 import { KpiTable, type KpiRowDisplay } from '../../components/KpiTable';
 import { PeriodCompareChip } from '../../components/PeriodCompareChip';
-import { PeriodInputRow } from '../../components/PeriodInputRow';
+import { SetupBoard, SetupGrid, SetupRow, SetupTextInput } from '../../components/SetupBoard';
 import { PieChartCanvas } from '../../components/PieChartCanvas';
 import { ReportPages } from '../../components/ReportPages';
 import { SectionAccordion } from '../../components/SectionAccordion';
@@ -185,6 +185,18 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
     return `Data tersedia ${day(first)} – ${day(last)}`;
   }, [accounts]);
 
+  function rangeCell(role: 'old' | 'cur', title: string) {
+    return (
+      <div className="setup-range-inputs">
+        <input type="date" className="setup-input" aria-label={`${title} mulai`} value={range[`${role}Start`]} max={range[`${role}End`]}
+          onChange={(e) => e.target.value && changeRange({ [`${role}Start`]: e.target.value } as Partial<PeriodPair>)} />
+        <span aria-hidden>–</span>
+        <input type="date" className="setup-input" aria-label={`${title} akhir`} value={range[`${role}End`]} min={range[`${role}Start`]}
+          onChange={(e) => e.target.value && changeRange({ [`${role}End`]: e.target.value } as Partial<PeriodPair>)} />
+      </div>
+    );
+  }
+
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
       <HowTo>
@@ -212,42 +224,36 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
         </InlineNotice>
       ) : (
         <>
-          <div className="source-block">
-            <div className="source-header">
-              <div className="source-label" style={{ color: 'var(--google-700)' }}>Pilih Periode</div>
-              <span className="sec-badge">{coverageText ?? 'Menunggu sinkron pertama'}</span>
-            </div>
-            <div className="gads-presets" role="group" aria-label="Preset periode">
-              {PRESETS.map((p) => (
-                <button key={p.id} type="button" className={`gads-preset${preset === p.id ? ' is-active' : ''}`} aria-pressed={preset === p.id} onClick={() => applyPreset(p.id)}>
-                  {p.label}
-                </button>
-              ))}
-              <span className={`gads-preset is-static${preset === 'custom' ? ' is-active' : ''}`}>Kustom</span>
-            </div>
-            <div className="gads-ranges">
-              {([['old', 'Periode Lalu'], ['cur', 'Periode Ini']] as const).map(([role, title]) => (
-                <fieldset key={role} className="gads-range">
-                  <legend>{title}</legend>
-                  <input type="date" aria-label={`${title} mulai`} value={range[`${role}Start`]} max={range[`${role}End`]}
-                    onChange={(e) => e.target.value && changeRange({ [`${role}Start`]: e.target.value } as Partial<PeriodPair>)} />
-                  <span aria-hidden>–</span>
-                  <input type="date" aria-label={`${title} akhir`} value={range[`${role}End`]} min={range[`${role}Start`]}
-                    onChange={(e) => e.target.value && changeRange({ [`${role}End`]: e.target.value } as Partial<PeriodPair>)} />
-                </fieldset>
-              ))}
-            </div>
-          </div>
-
-          <PeriodInputRow
-            colorClass="google-period"
-            oldValue={periodOld.inputValue}
-            curValue={periodCur.inputValue}
-            onOldChange={periodOld.onInput}
-            onCurChange={periodCur.onInput}
-            oldPlaceholder="cth: Agu 2026"
-            curPlaceholder="cth: Sep 2026"
-          />
+          <SetupBoard title="Periode" note={<>Data ditarik otomatis dari akun Google Ads yang terhubung — {coverageText ?? 'menunggu sinkron pertama'}.</>}>
+            <SetupGrid>
+              <SetupRow
+                label="Preset"
+                sub="isi kedua periode sekaligus"
+                both={
+                  <div className="gads-presets" role="group" aria-label="Preset periode">
+                    {PRESETS.map((p) => (
+                      <button key={p.id} type="button" className={`gads-preset${preset === p.id ? ' is-active' : ''}`} aria-pressed={preset === p.id} onClick={() => applyPreset(p.id)}>
+                        {p.label}
+                      </button>
+                    ))}
+                    <span className={`gads-preset is-static${preset === 'custom' ? ' is-active' : ''}`}>Kustom</span>
+                  </div>
+                }
+              />
+              <SetupRow
+                label="Rentang tanggal"
+                req
+                old={rangeCell('old', 'Periode Lalu')}
+                cur={rangeCell('cur', 'Periode Ini')}
+              />
+              <SetupRow
+                label="Label periode"
+                sub="tampil di laporan"
+                old={<SetupTextInput label="Label Periode Lalu" value={periodOld.inputValue} onChange={periodOld.onInput} placeholder="cth: Agu 2026" />}
+                cur={<SetupTextInput label="Label Periode Ini" value={periodCur.inputValue} onChange={periodCur.onInput} placeholder="cth: Sep 2026" />}
+              />
+            </SetupGrid>
+          </SetupBoard>
 
           {error && <InlineNotice title="Laporan belum dapat disusun">{error}</InlineNotice>}
 

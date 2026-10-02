@@ -2,7 +2,7 @@ import { type CSSProperties } from 'react';
 import { NavLink, useParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ReportIcon } from '../components/ReportIcon';
-import { isReportKey, REPORT_NAV, type ReportKey } from './reports';
+import { DISABLED_REPORTS, isReportKey, REPORT_NAV, type ReportKey } from './reports';
 
 // The generator's report-type switcher: a horizontal bar under the site
 // header carrying the five report types and nothing else.
@@ -21,7 +21,9 @@ import { isReportKey, REPORT_NAV, type ReportKey } from './reports';
 //
 // Pengaturan Brand, MRG's seventh entry, is absent because the page is not
 // ported (see reports.ts).
-const PRIMARY: ReportKey[] = ['meta', 'shopee', 'tiktok', 'google', 'business', 'summary', 'reports'];
+const PRIMARY: ReportKey[] = ['meta', 'shopee', 'tiktok', 'google', 'business', 'summary', 'reports'].filter(
+  (k) => !DISABLED_REPORTS.includes(k as ReportKey),
+) as ReportKey[];
 
 export function GenTopNav({ badges }: { badges: Record<ReportKey, string> }) {
   const { platform } = useParams();
@@ -61,7 +63,10 @@ export function GenTopNav({ badges }: { badges: Record<ReportKey, string> }) {
                 <span className="gen-rail-ico" aria-hidden>
                   <ReportIcon name={r.key} className="gen-rail-ico-svg" />
                 </span>
-                <span className="gen-rail-label">{r.label}</span>
+                <span className="gen-rail-text">
+                  <span className="gen-rail-label">{r.label}</span>
+                  <small className="gen-rail-sub">{r.tagline}</small>
+                </span>
                 {badge && badge !== '—' && (
                   <span className={`gen-rail-badge${badge === '✓' ? ' done' : ''}`}>{badge === '✓' ? '' : badge}</span>
                 )}

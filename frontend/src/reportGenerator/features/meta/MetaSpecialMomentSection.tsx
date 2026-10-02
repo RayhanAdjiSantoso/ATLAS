@@ -24,6 +24,7 @@ import type { SheetRow } from '../../lib/types';
 // Occurrences come from the files' own dates, never typed in.
 
 const rp = (v: number | null) => (v === null ? '—' : fmtPivotVal(v, 'rp'));
+const fmtShare = (v: number | null) => (v === null ? '—' : `${v.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`);
 
 export interface MomentPeriod {
   label: string;
@@ -52,22 +53,27 @@ function inWindows(d: Date, windows: { start: Date; end: Date }[]) {
   return windows.some((w) => d >= w.start && d <= w.end);
 }
 
-// One source, one period: its rows split into twin date / payday / the rest.
+// One source, one period: the whole calendar month(s) the period sits in —
+// the pie's "overall" is the month's total revenue, not just the days picked —
+// split into twin date / payday (inside the period) and everything else.
 // A day that is both (a long payday window over 9/9) counts once, as a twin
-// date, so the three slices always add up to the period.
+// date, so the three slices always add up to the month.
 function splitPeriod(rows: SheetRow[], dayCol: string, p: MomentPeriod, twin: { start: Date; end: Date }[], pay: { start: Date; end: Date }[], hasRevenue: boolean): PeriodSplit {
-  const inPeriod = rowsBetween(rows, dayCol, p.start, p.end);
+  const monthStart = new Date(p.start.getFullYear(), p.start.getMonth(), 1);
+  const monthEnd = new Date(p.end.getFullYear(), p.end.getMonth() + 1, 0);
+  const inMonth = rowsBetween(rows, dayCol, monthStart, monthEnd);
   const parts: Record<Bucket, SheetRow[]> = { twin: [], payday: [], rest: [] };
-  for (const r of inPeriod) {
+  for (const r of inMonth) {
     const d = parseMetaDayValue(r[dayCol]);
     if (!d) continue;
-    parts[inWindows(d, twin) ? 'twin' : inWindows(d, pay) ? 'payday' : 'rest'].push(r);
+    const inPeriod = d >= p.start && d <= p.end;
+    parts[inPeriod && inWindows(d, twin) ? 'twin' : inPeriod && inWindows(d, pay) ? 'payday' : 'rest'].push(r);
   }
   const money = (rs: SheetRow[]): Money => ({
     revenue: hasRevenue ? (metaRevenueTotal(rs) ?? 0) : null,
     spending: metaSpendTotal(rs) ?? 0,
   });
-  return { twin: money(parts.twin), payday: money(parts.payday), rest: money(parts.rest), total: money(inPeriod) };
+  return { twin: money(parts.twin), payday: money(parts.payday), rest: money(parts.rest), total: money(inMonth) };
 }
 
 function MomentCard({ title, cur, prev, curLabel, prevLabel, share, shareOf }: { title: string; cur: number | null; prev: number | null; curLabel: string; prevLabel: string; share: number | null; shareOf: string }) {
@@ -197,12 +203,25 @@ export function MetaSpecialMomentSection({ sources, heading }: { sources: Moment
         {blocked ??
           (reading && cur && prev && (
             <>
-              <h4 className="sm-subhead">Kontribusi terhadap total {reading.curLabel}</h4>
+              <h4 className="sm-subhead">Kontribusi special moment terhadap total 1 bulan · {reading.curLabel}</h4>
+              <div className="sm-share-strip">
+                {reading.hasRevenue && cur.total.revenue ? (
+                  <span>
+                    Special moment menyumbang <b>{fmtShare(share(add(cur.twin.revenue, cur.payday.revenue), cur.total.revenue))}</b> dari total revenue bulan ini (
+                    {rp(add(cur.twin.revenue, cur.payday.revenue))} dari {rp(cur.total.revenue)})
+                  </span>
+                ) : null}
+                {cur.total.spending ? (
+                  <span>
+                    dan <b>{fmtShare(share(add(cur.twin.spending, cur.payday.spending), cur.total.spending))}</b> dari total spending ({rp(add(cur.twin.spending, cur.payday.spending))} dari {rp(cur.total.spending)})
+                  </span>
+                ) : null}
+              </div>
               <div className="sm-pies">
                 <div className="sm-pie">
                   <h4>Revenue</h4>
                   {revPie ? (
-                    <PieChartCanvas labels={['Twin Date', 'Payday', 'Hari lain']} values={revPie} format={(v) => rp(v)} centerTitle="Total revenue" legend />
+                    <PieChartCanvas labels={['Twin Date', 'Payday', 'Di luar special moment']} values={revPie} format={(v) => rp(v)} centerTitle="Total revenue 1 bulan" legend />
                   ) : (
                     <div className="empty-note">
                       Sumber ini tidak memuat kolom <strong>Purchases conversion value</strong> — revenue hanya ada di campaign yang menjual (CPAS / Sales).
@@ -212,7 +231,7 @@ export function MetaSpecialMomentSection({ sources, heading }: { sources: Moment
                 <div className="sm-pie">
                   <h4>Spending</h4>
                   {spendPie ? (
-                    <PieChartCanvas labels={['Twin Date', 'Payday', 'Hari lain']} values={spendPie} format={(v) => rp(v)} centerTitle="Total spending" legend />
+                    <PieChartCanvas labels={['Twin Date', 'Payday', 'Di luar special moment']} values={spendPie} format={(v) => rp(v)} centerTitle="Total spending 1 bulan" legend />
                   ) : (
                     <div className="empty-note">Kolom Amount Spent tidak ditemukan.</div>
                   )}
@@ -223,12 +242,12 @@ export function MetaSpecialMomentSection({ sources, heading }: { sources: Moment
               <div className="sm-scorecards sm-scorecards-grid">
                 {reading.hasRevenue && (
                   <>
-                    <MomentCard title="Revenue · Twin Date" cur={cur.twin.revenue} prev={prev.twin.revenue} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.twin.revenue, cur.total.revenue)} shareOf="revenue" />
-                    <MomentCard title="Revenue · Payday" cur={cur.payday.revenue} prev={prev.payday.revenue} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.payday.revenue, cur.total.revenue)} shareOf="revenue" />
+                    <MomentCard title="Revenue · Twin Date" cur={cur.twin.revenue} prev={prev.twin.revenue} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.twin.revenue, cur.total.revenue)} shareOf="revenue 1 bulan" />
+                    <MomentCard title="Revenue · Payday" cur={cur.payday.revenue} prev={prev.payday.revenue} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.payday.revenue, cur.total.revenue)} shareOf="revenue 1 bulan" />
                   </>
                 )}
-                <MomentCard title="Spending · Twin Date" cur={cur.twin.spending} prev={prev.twin.spending} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.twin.spending, cur.total.spending)} shareOf="spending" />
-                <MomentCard title="Spending · Payday" cur={cur.payday.spending} prev={prev.payday.spending} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.payday.spending, cur.total.spending)} shareOf="spending" />
+                <MomentCard title="Spending · Twin Date" cur={cur.twin.spending} prev={prev.twin.spending} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.twin.spending, cur.total.spending)} shareOf="spending 1 bulan" />
+                <MomentCard title="Spending · Payday" cur={cur.payday.spending} prev={prev.payday.spending} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.payday.spending, cur.total.spending)} shareOf="spending 1 bulan" />
               </div>
               <p className="chart-foot">
                 Moment yang ditemukan di file: {reading.occ.length ? reading.occ.join(', ') : 'tidak ada'}. Hari yang sekaligus twin date dan payday dihitung sekali, sebagai

@@ -1,6 +1,7 @@
 import { Chart, type ChartDataset, type TooltipItem } from 'chart.js/auto';
 import { getRelativePosition } from 'chart.js/helpers';
 import { useEffect, useRef, useState } from 'react';
+import { copyText } from '../utils/copyText';
 
 // Grouped vertical bars, one group per product. Canvas rather than SVG for
 // the same reason PieChartCanvas is canvas: these sections are captured by
@@ -147,13 +148,15 @@ export function GroupedBarChart({
         : [],
     });
 
-    // Label copy is wired on the canvas itself: Chart.js only reports clicks
-    // inside the plot area, and the axis labels sit below it.
+    // Copy is wired on the canvas itself: Chart.js only reports clicks inside
+    // the plot area, and the axis labels sit below it. Both a bar's column and
+    // its label copy the name.
     const chart = chartRef.current;
     const labelIndexAt = (e: MouseEvent): number | null => {
       if (!chart) return null;
       const pos = getRelativePosition(e, chart as never);
-      if (pos.y <= chart.chartArea.bottom) return null;
+      const { left, right, top } = chart.chartArea;
+      if (pos.x < left || pos.x > right || pos.y < top) return null;
       const idx = Math.round(Number(chart.scales.x.getValueForPixel(pos.x)));
       return idx >= 0 && idx < labels.length ? idx : null;
     };
@@ -162,11 +165,12 @@ export function GroupedBarChart({
       const idx = labelIndexAt(e);
       if (idx === null) return;
       const name = labels[idx];
-      navigator.clipboard?.writeText(name).then(() => {
+      copyText(name).then((ok) => {
+        if (!ok) return;
         setCopied(name);
         window.clearTimeout(copiedTimer.current);
         copiedTimer.current = window.setTimeout(() => setCopied(null), 1800);
-      }).catch(() => {});
+      });
     };
     if (copyLabels) {
       el.addEventListener('mousemove', onMove);

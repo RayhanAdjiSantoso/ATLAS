@@ -5,6 +5,8 @@
 export interface SegmentedOption<T extends string> {
   value: T;
   label: string;
+  // Shown but not pickable, with the reason as its tooltip.
+  disabled?: string | false;
 }
 
 export function SegmentedToggle<T extends string>({
@@ -30,6 +32,8 @@ export function SegmentedToggle<T extends string>({
             type="button"
             className={`seg-toggle-btn${o.value === value ? ' active' : ''}`}
             aria-pressed={o.value === value}
+            disabled={Boolean(o.disabled)}
+            title={o.disabled || undefined}
             onClick={() => onChange(o.value)}
           >
             {o.label}

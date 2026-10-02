@@ -57,11 +57,16 @@ export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRow
         <SectionDownloadButton />
       </div>
       {aside ? (
-        <div className="sec-split sec-split-padded">
-          <div className="sec-split-main">
-            <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded />
+        // The wrapper is a size container: the table and its root cause sit
+        // side by side when the card is wide enough for both, and stack —
+        // still in this one card — when it is not, so no column is cut off.
+        <div className="sec-split-wrap">
+          <div className="sec-split sec-split-padded">
+            <div className="sec-split-main">
+              <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded />
+            </div>
+            {aside}
           </div>
-          {aside}
         </div>
       ) : (
         <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded />

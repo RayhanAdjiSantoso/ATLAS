@@ -56,13 +56,44 @@ export function buildLeadAudience(rows: SheetRow[], dimCol: string): AudienceSli
   return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaLeadMetrics(g.rows) }));
 }
 
+// Non-Boost B2B Leads, read on the architecture sheet's own purchase-funnel
+// menus: wherever a lead campaign has no purchase event, the lead stands in
+// for the purchase (a chat or a form lead IS that campaign's conversion), so
+// Conversion Rate is leads over clicks. Counts the file really carries
+// (content views, adds to cart, purchases) are used as they are.
+export interface MetaB2bMetrics extends MetaSalesMetrics {
+  leads: number | null;
+  leadRate: number | null;
+  linkClicks: number | null;
+  costPerLead: number | null;
+}
+
+export function metaB2bMetrics(rows: SheetRow[]): MetaB2bMetrics {
+  const s = metaSalesMetrics(rows);
+  const l = metaLeadMetrics(rows);
+  return {
+    ...s,
+    purchase: s.purchase ?? l.leads,
+    conversionRate: s.conversionRate ?? l.leadRate,
+    leads: l.leads,
+    leadRate: l.leadRate,
+    linkClicks: l.linkClicks,
+    costPerLead: l.costPerLead,
+  };
+}
+
+export function buildB2bAudience(rows: SheetRow[], dimCol: string): AudienceSlice<MetaB2bMetrics>[] {
+  return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaB2bMetrics(g.rows) }));
+}
+
 // The metric family a section reads, by the job the ads were bought for.
-export type MetaMetricKind = 'sales' | 'brand' | 'objective' | 'lead';
+export type MetaMetricKind = 'sales' | 'brand' | 'objective' | 'lead' | 'b2b';
 
 export function metricsFor(kind: MetaMetricKind, rows: SheetRow[]): Record<string, unknown> {
   if (kind === 'brand') return metaBrandMetrics(rows) as unknown as Record<string, unknown>;
   if (kind === 'objective') return metaObjectiveMetrics(rows) as unknown as Record<string, unknown>;
   if (kind === 'lead') return metaLeadMetrics(rows) as unknown as Record<string, unknown>;
+  if (kind === 'b2b') return metaB2bMetrics(rows) as unknown as Record<string, unknown>;
   return metaSalesMetrics(rows) as unknown as Record<string, unknown>;
 }
 
@@ -142,20 +173,18 @@ export const SALES_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>
   { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
   { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
 ];
-// Each chart opens on the rate it is named after; the counts behind that
-// rate are the other buttons.
+// Exactly the two metrics the sheet lists under each chart, in its order.
 export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
-  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
   { key: 'purchase', label: 'Purchase', fmt: 'num', additive: true },
 ];
 export const SALES_CLICK_ATC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
-  { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
+  { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
 ];
 export const SALES_ATC_PURCHASE_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'atc', label: 'ATC', fmt: 'num', additive: true },
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
-  { key: 'atc', label: 'Add to Cart', fmt: 'num', additive: true },
 ];
 export const SALES_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },
@@ -242,3 +271,38 @@ export function objectiveAudienceMetrics(key: MetaObjectiveKey): readonly Audien
   if (key === 'traffic') return TRAFFIC_METRICS;
   return REACH_METRICS;
 }
+
+// B2B Leads, on the sheet's menus (see metaB2bMetrics). Age is the one place
+// the sheet itself swaps in Leads Rate.
+type B2bDef = AudienceMetricDef<MetaB2bMetrics>;
+export const B2B_AGE_METRICS: readonly B2bDef[] = [
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+  { key: 'leadRate', label: 'Leads Rate', fmt: 'pct', additive: false },
+];
+export const B2B_GENDER_METRICS: readonly B2bDef[] = [
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'aov', label: 'Average Order Value', fmt: 'rp', additive: false },
+];
+export const B2B_TRAFFIC_METRICS: readonly B2bDef[] = [
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+];
+export const B2B_CONVERSION_METRICS: readonly B2bDef[] = [
+  { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
+  { key: 'purchase', label: 'Purchase / Leads', fmt: 'num', additive: true },
+];
+export const B2B_CLICK_ATC_METRICS: readonly B2bDef[] = [
+  { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
+  { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
+];
+export const B2B_ATC_PURCHASE_METRICS: readonly B2bDef[] = [
+  { key: 'atc', label: 'ATC', fmt: 'num', additive: true },
+  { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
+];
+export const B2B_CREATIVE_CONVERSION_METRICS: readonly B2bDef[] = [
+  { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },
+  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
+  { key: 'leadRate', label: 'Click → Lead Rate', fmt: 'pct', additive: false },
+];

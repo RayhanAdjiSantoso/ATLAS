@@ -415,3 +415,17 @@
 .mil-ui.report-generator-app .sm-scorecards-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 @media (min-width: 1280px) { .mil-ui.report-generator-app .bd-pies.bd-pies-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .mil-ui.report-generator-app.pdf-export-mode .bd-pies.bd-pies-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mil-ui.report-generator-app .seg-toggle-btn:disabled { opacity: .42; cursor: not-allowed; }
+.mil-ui.report-generator-app .seg-toggle-btn:disabled:hover { color: inherit; }
+.mil-ui.report-generator-app .cb-end-name { display: inline-flex; align-items: center; gap: .4rem; min-width: 0; padding: .15rem .35rem; border: 0; border-radius: 7px; background: transparent; color: var(--rs-ink); font: inherit; text-align: left; cursor: copy; }
+.mil-ui.report-generator-app .cb-end-name:hover { background: var(--rs-accent-soft); }
+.mil-ui.report-generator-app .cb-end-name:focus-visible { outline: 2px solid var(--rs-accent); outline-offset: 1px; }
+.mil-ui.report-generator-app .cb-end-name svg { flex: 0 0 auto; color: var(--rs-quiet); }
+.mil-ui.report-generator-app .sm-share-strip { display: flex; flex-wrap: wrap; gap: .3rem; margin: -.2rem 0 1rem; color: var(--rs-muted); font-size: .84rem; }
+.mil-ui.report-generator-app .sm-share-strip b { color: var(--rs-accent); font-weight: 800; }
+
+/* Table + root cause in one card: side by side only when both fit. */
+.mil-ui.report-generator-app .sec-split-wrap { container-type: inline-size; }
+@container (max-width: 1120px) {
+  .mil-ui.report-generator-app .sec-split { grid-template-columns: minmax(0, 1fr); gap: 1.2rem; }
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { ChevronDown, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../../../api/client.js';
 import { LibraryFileSlot, isMisfiledShopeeFile, type LibrarySelection } from '../reports/LibraryFileSlot';
@@ -10,7 +10,6 @@ import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
 import { OmzetField } from '../../components/OmzetField';
 import { PeriodCompareChip } from '../../components/PeriodCompareChip';
-import { PeriodInputRow } from '../../components/PeriodInputRow';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import { usePeriodLabel } from '../../hooks/usePeriodLabel';
@@ -32,6 +31,7 @@ import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { mapShopeeRows, type ShopeeCategorization } from '../reports/rowMapping';
 import { PeriodSourcePicker, type LibraryMonth } from '../reports/PeriodSourcePicker';
 import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
+import { SetupBoard, SetupGrid, SetupRow, SetupTextInput } from '../../components/SetupBoard';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
 import { DEFAULT_PARETO_RANGE, type ParetoRangeSelection, type PerfMetricVars, type ProductPerfMonth } from '../../lib/shopeeProductAnalysis';
@@ -871,6 +871,76 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     if (optionalCount > 0) setOptOpen(true);
   }, [optionalCount]);
 
+  // The "Sumber" cell of one period: library/archive pick, or manual upload.
+  function sourceCell(role: PeriodRole) {
+    const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
+    const pickedRun = role === 'old' ? oldPickedRun : curPickedRun;
+    const picked = pickedMonth
+      ? { title: pickedMonth.label, summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
+      : pickedRun
+        ? {
+            title: pickedRun.label || pickedRun.sourceComparison,
+            summary: formatChannelCoverage(pickedRun.channels),
+            metaLine: `Arsip Laporan · ${pickedRun.sourceComparison}`,
+          }
+        : null;
+    const source = role === 'old' ? oldSource : curSource;
+    return (
+      <>
+        <SlotSourceTabs
+          savedFirst
+          value={source}
+          onChange={(v) => {
+            (role === 'old' ? setOldSource : setCurSource)(v);
+            if (v === 'saved' && !picked) setPickerRole(role);
+          }}
+          disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
+        />
+        {source === 'upload' && (
+          <div className="manual-mode-note">
+            <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah langsung di setiap baris — file hanya dibaca untuk laporan ini dan tidak disimpan ke Pengaturan Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis.
+          </div>
+        )}
+        {source === 'saved' &&
+          (applyingRole === role ? (
+            <div className="setup-applying" role="status">
+              <span className="setup-spinner" aria-hidden="true" /> Menerapkan periode…
+            </div>
+          ) : (
+            <SavedSlotCard
+              picked={picked && { title: picked.title, sourceComparison: '', savedAt: '', summary: picked.summary, metaLine: picked.metaLine }}
+              onOpen={() => setPickerRole(role)}
+              onClear={() => clearPickedPeriod(role)}
+            />
+          ))}
+      </>
+    );
+  }
+
+  function productPerfSlot(role: PeriodRole) {
+    const perf = productPerfFiles[role];
+    const tag = role === 'old' ? 'Periode Lalu' : 'Periode Ini';
+    return sideSource(role) === 'upload' ? (
+      <ManualFileSlot
+        tag={tag} accept=".xlsx,.xls"
+        loaded={Boolean(perf)} fileName={perf?.fileName} infoText={perf ? `${perf.mainRows.length} baris` : undefined}
+        onFiles={(files) => handleProductPerformanceFile(files, role)}
+        onClear={() => clearProductPerformance(role)}
+      />
+    ) : (
+      <LibraryFileSlot clientId={clientId} platform="shopee"
+        tag={tag}
+        accept=".xlsx,.xls"
+        channel="product_performance" onFiles={(files) => handleProductPerformanceFile(files, role)}
+        loaded={Boolean(perf)}
+        fileName={perf?.fileName}
+        infoText={perf ? `${perf.mainRows.length} baris` : undefined}
+        className="shopee-dz"
+        icon="📦"
+      />
+    );
+  }
+
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
       <HowTo>
@@ -890,73 +960,60 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
       <StepIndicator steps={steps} accent="var(--shopee-700)" />
 
-      <PeriodInputRow
-        colorClass="shopee-period"
-        oldValue={periodOld.inputValue}
-        curValue={periodCur.inputValue}
-        onOldChange={periodOld.onInput}
-        onCurChange={periodCur.onInput}
-        oldPlaceholder="cth: Apr 2026 / W1 Mei"
-        curPlaceholder="cth: Mei 2026 / W2 Mei"
-      />
-      <PeriodWarningBanner message={uploadPeriodWarning} />
-      {uploadError && <InlineNotice title="File ini belum kebaca">{uploadError}</InlineNotice>}
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Pilih Periode</div>
-          <span className="sec-badge">isi Iklan Produk/Toko/Keyword/Live/Overview/Product Performance sekaligus dari Pengaturan Brand</span>
-        </div>
-        <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Dua sumber tersedia: <strong>Perpustakaan Brand</strong> (file bulanan dari Pengaturan Brand, bisa dipakai walau belum pernah di-Generate) dan{' '}
-          <strong>Arsip Laporan</strong> (periode dari laporan yang sudah tersimpan — dipakai ulang tanpa unggah file). Total Omzet Toko ikut terisi hanya jika bulan itu
-          pernah di-Generate; kalau belum, isi manual di bawah.
-        </div>
-        <div className="dz-grid-4">
-          {(['old', 'cur'] as const).map((role) => {
-            const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
-            const pickedRun = role === 'old' ? oldPickedRun : curPickedRun;
-            const picked = pickedMonth
-              ? { title: pickedMonth.label, summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
-              : pickedRun
-                ? {
-                    title: pickedRun.label || pickedRun.sourceComparison,
-                    summary: formatChannelCoverage(pickedRun.channels),
-                    metaLine: `Arsip Laporan · ${pickedRun.sourceComparison}`,
-                  }
-                : null;
-            const source = role === 'old' ? oldSource : curSource;
-            return (
-              <div key={role}>
-                <SlotSourceTabs
-                  savedFirst
-                  value={source}
-                  onChange={(v) => {
-                    (role === 'old' ? setOldSource : setCurSource)(v);
-                    if (v === 'saved' && !picked) setPickerRole(role);
-                  }}
-                  disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
-                />
-                {source === 'upload' && (
-                  <div className="manual-mode-note">
-                    <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah langsung di setiap bagian di bawah — file hanya dibaca untuk laporan ini dan tidak disimpan ke Pengaturan Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis.
-                  </div>
-                )}
-                {source === 'saved' &&
-                  (applyingRole === role ? (
-                    <div className="empty-note">Menerapkan periode…</div>
-                  ) : (
-                    <SavedSlotCard
-                      picked={picked && { title: picked.title, sourceComparison: '', savedAt: '', summary: picked.summary, metaLine: picked.metaLine }}
-                      onOpen={() => setPickerRole(role)}
-                      onClear={() => clearPickedPeriod(role)}
-                    />
-                  ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* Same board as Meta: periods across, inputs down. */}
+      <SetupBoard
+        title="Sumber data"
+        note={
+          <>
+            Iklan Produk dan Total Omzet wajib. Pilihan <strong>Perpustakaan Brand</strong> atau <strong>Arsip Laporan</strong> mengisi Iklan Produk/Toko/Keyword/Live/Overview/Product
+            Performance periode itu sekaligus; Total Omzet ikut terisi hanya jika bulan itu pernah di-Generate.
+          </>
+        }
+      >
+        <SetupGrid>
+          <SetupRow
+            label="Label periode"
+            sub="tampil di laporan"
+            old={<SetupTextInput label="Label Periode Lalu" value={periodOld.inputValue} onChange={periodOld.onInput} placeholder="cth: Apr 2026 / W1 Mei" />}
+            cur={<SetupTextInput label="Label Periode Ini" value={periodCur.inputValue} onChange={periodCur.onInput} placeholder="cth: Mei 2026 / W2 Mei" />}
+          />
+          <SetupRow label="Sumber" sub="per periode" old={sourceCell('old')} cur={sourceCell('cur')} />
+          <SetupRow
+            label="Total Omzet Toko"
+            sub="Pesanan Dibuat · isi manual"
+            req
+            old={
+              <OmzetField
+                label="Bulan Lalu"
+                value={omzetOld}
+                onChange={(v) => {
+                  onOmzetOldChange(v);
+                  setReport(null);
+                  setDeepDive(null);
+                  setFunnelReport(null);
+                  onInvalidate();
+                }}
+              />
+            }
+            cur={
+              <OmzetField
+                label="Bulan Ini"
+                value={omzetCur}
+                onChange={(v) => {
+                  onOmzetCurChange(v);
+                  setReport(null);
+                  setDeepDive(null);
+                  setFunnelReport(null);
+                  onInvalidate();
+                }}
+              />
+            }
+          />
+          <SetupRow label="Iklan Produk" req old={adsDropzone('produk-old', 'Periode Lalu')} cur={adsDropzone('produk-cur', 'Periode Ini')} />
+        </SetupGrid>
+        <PeriodWarningBanner message={uploadPeriodWarning} />
+        {uploadError && <InlineNotice title="File ini belum kebaca">{uploadError}</InlineNotice>}
+      </SetupBoard>
 
       {pickerRole && clientId && (
         <PeriodSourcePicker
@@ -972,49 +1029,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         />
       )}
 
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Total Omzet Toko (Pesanan Dibuat)</div>
-        </div>
-        <div className="omzet-row">
-          <OmzetField
-            label="Bulan Lalu"
-            value={omzetOld}
-            onChange={(v) => {
-              onOmzetOldChange(v);
-              setReport(null);
-              setDeepDive(null);
-              setFunnelReport(null);
-              onInvalidate();
-            }}
-          />
-          <OmzetField
-            label="Bulan Ini"
-            value={omzetCur}
-            onChange={(v) => {
-              onOmzetCurChange(v);
-              setReport(null);
-              setDeepDive(null);
-              setFunnelReport(null);
-              onInvalidate();
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="empty-note">Pilih file dari Pengaturan Brand untuk masing-masing periode. Semua bagian ekspor dapat dipilih bersama; data tambahan tetap opsional.</div>
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Iklan Produk</div>
-        </div>
-        <div className="dz-grid-4">
-          {adsDropzone('produk-old', 'Periode Lalu')}
-          {adsDropzone('produk-cur', 'Periode Ini')}
-        </div>
-      </div>
-
-      <details className="opt-group" open={optOpen} onToggle={(e) => setOptOpen((e.target as HTMLDetailsElement).open)}>
+      <details className="opt-group setup-board setup-board-opt" open={optOpen} onToggle={(e) => setOptOpen((e.target as HTMLDetailsElement).open)}>
         <summary className="opt-group-head">
           <span className="opt-group-title">
             Data tambahan <span className="opt-group-tag">opsional</span>
@@ -1023,136 +1038,48 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           <span className="opt-group-sub">
             Iklan Produk Otomatis, Toko, Keyword, Live, Referensi Kategori, Product Overview &amp; Performance — untuk analisis lebih dalam. Laporan tetap bisa dibuat tanpanya.
           </span>
-          <span className="opt-group-chevron" aria-hidden>
-            ▾
-          </span>
+          <ChevronDown size={18} className="opt-group-chevron" aria-hidden="true" />
         </summary>
         <div className="opt-group-body">
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Iklan Produk Otomatis</div>
-          <span className="sec-badge">opsional — untuk analisis per produk</span>
-        </div>
-        <div className="dz-grid-4">
-          {adsDropzone('produk-otomatis-old', 'Periode Lalu')}
-          {adsDropzone('produk-otomatis-cur', 'Periode Ini')}
-        </div>
-      </div>
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Referensi Kategori Produk</div>
-          <span className="sec-badge">opsional — memetakan nama produk ke Category &amp; Series</span>
-        </div>
-        <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Satu file berisi kolom <strong>nama produk</strong>, <strong>Category</strong>, dan <strong>Series</strong> — dipakai untuk mengelompokkan produk di "Analisis Per Item". Pilih referensi dari <strong>Pengaturan Brand</strong> untuk digunakan pada laporan ini. Pemetaan yang sudah tersimpan tetap dipakai sebagai dasar.
-        </div>
-        <div className="dz-grid-4">
-          <LibraryFileSlot clientId={clientId} platform="shopee"
-            tag="1 file · nama produk → Category / Series"
-            accept=".csv,.xlsx,.xls"
-            channel="product_master" onFiles={handleProductMasterRefFile}
-            loaded={Boolean(productMasterRef)}
-            fileName={productMasterRef?.fileName}
-            infoText={
-              productMasterRef
-                ? `${productMasterRef.entries.length} produk terpetakan${productMasterRefSaved ? ' · referensi terpasang' : clientId ? '' : ' · sesi ini saja (pilih klien untuk menyimpan)'}`
-                : undefined
-            }
-            className="shopee-dz"
-            icon="🏷️"
-          />
-        </div>
-        {!productMasterRef && productMaster.length > 0 && (
-          <div className="empty-note" style={{ padding: '.2rem 1.4rem 0', color: 'var(--shopee)' }}>
-            {productMaster.length} produk sudah terpetakan di database untuk klien ini — dipakai otomatis saat generate. Perbarui referensi melalui Pengaturan Brand.
-          </div>
-        )}
-      </div>
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Iklan Toko</div>
-          <span className="sec-badge">opsional</span>
-        </div>
-        <div className="dz-grid-4">
-          {adsDropzone('toko-old', 'Periode Lalu')}
-          {adsDropzone('toko-cur', 'Periode Ini')}
-        </div>
-      </div>
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Iklan Toko - Keyword</div>
-          <span className="sec-badge">opsional — untuk analisis per keyword</span>
-        </div>
-        <div className="dz-grid-4">
-          {adsDropzone('toko-keyword-old', 'Periode Lalu')}
-          {adsDropzone('toko-keyword-cur', 'Periode Ini')}
-        </div>
-      </div>
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Iklan Live</div>
-          <span className="sec-badge">opsional</span>
-        </div>
-        <div className="dz-grid-4">
-          {adsDropzone('live-old', 'Periode Lalu')}
-          {adsDropzone('live-cur', 'Periode Ini')}
-        </div>
-      </div>
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Product Overview (Toko)</div>
-          <span className="sec-badge">opsional — untuk tren harian</span>
-        </div>
-        <div className="dz-grid-4">
-          {overviewDropzone('overview-old')}
-          {overviewDropzone('overview-cur')}
-        </div>
-      </div>
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label shopee-label">Product Performance</div>
-          <span className="sec-badge">opsional — untuk Pareto / Traffic / Conversion Analysis</span>
-        </div>
-        <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Pilih <strong>2 periode</strong> untuk Traffic &amp; Conversion Analysis (perbandingan antar periode). Pareto Analysis cukup pakai periode ini saja — slot periode lalu boleh dikosongkan.
-        </div>
-        <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Saat mengunduh file ini dari Shopee Seller Center, gunakan status <strong>"Siap Dikirim"</strong>.
-        </div>
-        <div className="dz-grid-4">
-          {(['old', 'cur'] as const).map((role) => {
-            const perf = productPerfFiles[role];
-            const tag = role === 'old' ? 'Periode Lalu' : 'Periode Ini';
-            return sideSource(role) === 'upload' ? (
-              <ManualFileSlot
-                key={role} tag={tag} accept=".xlsx,.xls"
-                loaded={Boolean(perf)} fileName={perf?.fileName} infoText={perf ? `${perf.mainRows.length} baris` : undefined}
-                onFiles={(files) => handleProductPerformanceFile(files, role)}
-                onClear={() => clearProductPerformance(role)}
-              />
-            ) : (
-              <LibraryFileSlot key={role} clientId={clientId} platform="shopee"
-                tag={tag}
-                accept=".xlsx,.xls"
-                channel="product_performance" onFiles={(files) => handleProductPerformanceFile(files, role)}
-                loaded={Boolean(perf)}
-                fileName={perf?.fileName}
-                infoText={perf ? `${perf.mainRows.length} baris` : undefined}
-                className="shopee-dz"
-                icon="📦"
-              />
-            );
-          })}
-        </div>
-      </div>
-
+          <SetupGrid>
+            <SetupRow label="Iklan Produk Otomatis" sub="analisis per produk" old={adsDropzone('produk-otomatis-old', 'Periode Lalu')} cur={adsDropzone('produk-otomatis-cur', 'Periode Ini')} />
+            <SetupRow label="Iklan Toko" old={adsDropzone('toko-old', 'Periode Lalu')} cur={adsDropzone('toko-cur', 'Periode Ini')} />
+            <SetupRow label="Iklan Toko - Keyword" sub="analisis per keyword" old={adsDropzone('toko-keyword-old', 'Periode Lalu')} cur={adsDropzone('toko-keyword-cur', 'Periode Ini')} />
+            <SetupRow label="Iklan Live" old={adsDropzone('live-old', 'Periode Lalu')} cur={adsDropzone('live-cur', 'Periode Ini')} />
+            <SetupRow label="Product Overview (Toko)" sub="tren harian" old={overviewDropzone('overview-old')} cur={overviewDropzone('overview-cur')} />
+            <SetupRow
+              label="Product Performance"
+              sub={<>Pareto cukup Periode Ini; Traffic &amp; Conversion butuh 2 periode. Unduh dengan status “Siap Dikirim”.</>}
+              old={productPerfSlot('old')}
+              cur={productPerfSlot('cur')}
+            />
+            <SetupRow
+              label="Referensi Kategori Produk"
+              sub="1 file untuk kedua periode"
+              both={
+                <>
+                  <LibraryFileSlot clientId={clientId} platform="shopee"
+                    tag="1 file · nama produk → Category / Series"
+                    accept=".csv,.xlsx,.xls"
+                    channel="product_master" onFiles={handleProductMasterRefFile}
+                    loaded={Boolean(productMasterRef)}
+                    fileName={productMasterRef?.fileName}
+                    infoText={
+                      productMasterRef
+                        ? `${productMasterRef.entries.length} produk terpetakan${productMasterRefSaved ? ' · referensi terpasang' : clientId ? '' : ' · sesi ini saja (pilih klien untuk menyimpan)'}`
+                        : undefined
+                    }
+                    className="shopee-dz"
+                    icon="🏷️"
+                  />
+                  <p className="setup-cell-note">
+                    Kolom <strong>nama produk</strong>, <strong>Category</strong>, dan <strong>Series</strong> — mengelompokkan produk di “Analisis Per Item”. Pemetaan yang sudah tersimpan tetap dipakai sebagai dasar.
+                    {!productMasterRef && productMaster.length > 0 && <> {productMaster.length} produk sudah terpetakan di database untuk klien ini dan dipakai otomatis saat generate.</>}
+                  </p>
+                </>
+              }
+            />
+          </SetupGrid>
         </div>
       </details>
 

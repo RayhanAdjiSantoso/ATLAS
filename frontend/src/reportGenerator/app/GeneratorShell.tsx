@@ -9,13 +9,12 @@ import { BusinessTab } from '../features/business/BusinessTab';
 import { SummaryTab } from '../features/summary/SummaryTab';
 import { ClientPicker } from '../features/reports/ClientPicker';
 import { ReportsTab } from '../features/reports/ReportsTab';
-import { Reveal } from '../components/Reveal';
 import { GenTopNav } from './GenTopNav';
-import { isReportKey, REPORT_NAV, reportByKey, type ReportKey } from './reports';
+import { ReportIcon } from '../components/ReportIcon';
+import { DISABLED_REPORTS, ENABLED_NAV, isReportKey, reportByKey, type ReportKey } from './reports';
 import type { BizChannelMetrics, BizMetricKey, BizPeriod, BizRow, BizState } from '../lib/business';
 import type { PlatformKey, PlatformResultData, PlatformStateMap } from '../lib/summary';
-import { Database, Sparkles } from 'lucide-react';
-import atlasIcon from '../../assets/atlas-icon.png';
+import { Archive, Layers, LayoutGrid } from 'lucide-react';
 import atlasWordmark from '../../assets/atlas-wordmark.png';
 
 export interface GeneratorShellProps {
@@ -55,50 +54,59 @@ export interface GeneratorShellProps {
 export function GeneratorShell(props: GeneratorShellProps) {
   const { platform } = useParams();
   useEffect(() => () => clearLibraryCatalog(), []);
-  if (!isReportKey(platform)) return <Navigate to="/report-generator/meta" replace />;
+  if (!isReportKey(platform) || DISABLED_REPORTS.includes(platform)) return <Navigate to="/report-generator/meta" replace />;
   const activeTab: ReportKey = platform;
   const active = reportByKey(activeTab);
   const generatedCount = (['meta', 'shopee', 'tiktok', 'google'] as ReportKey[]).filter((key) => props.badges[key] === '✓').length;
 
   return (
     <div className="gen-wrap bleed">
-      <div className="gen-main" id="app">
-        <header className="rg-hero">
-          <span className="rg-hero-fx" aria-hidden="true"><i className="rg-hero-aurora" /><i className="rg-hero-grid" /></span>
-          <div className="rg-hero-main">
-            <Reveal className="rg-hero-copy">
-              <span className="rg-hero-eye"><Sparkles size={13} /> Performance reporting workspace</span>
-              <h1>Report Generator</h1>
-              <p>Bandingkan performa lintas platform, susun insight berbasis konteks brand, lalu hasilkan laporan yang siap dipresentasikan.</p>
-              <div className="rg-hero-stats">
-                <span><strong>{REPORT_NAV.length}</strong> bagian laporan</span>
-                <span><strong>4</strong> platform utama</span>
-                <span><strong>{generatedCount}/4</strong> laporan tersusun</span>
-              </div>
-            </Reveal>
-            <div className="rg-hero-badge" aria-hidden="true">
-              <span className="rg-hero-ring" /><span className="rg-hero-ring rg-hero-ring-b" />
-              <img src={atlasIcon} alt="" className="rg-hero-mark" />
-              <img src={atlasWordmark} alt="" className="rg-hero-logo" />
-              <small>Consultant reporting</small>
-            </div>
+      <div className="gen-main" id="app" data-platform={activeTab}>
+        {/* The same world as the ATLAS Business Overview: a masthead on a soft
+            wash, one command bar for the brand, then the blue report rail. */}
+        <header className="rgx-masthead">
+          <div className="rgx-masthead-copy">
+            <h1>
+              <span>Report</span> Generator<span className="rgx-dot" aria-hidden="true">.</span>
+            </h1>
+            <p>Bandingkan performa lintas platform, susun insight berbasis konteks brand, lalu hasilkan laporan yang siap dipresentasikan.</p>
           </div>
-
-          <div className="rg-dock">
-            <div className="rg-dock-copy">
-              <span><Database size={14} /> Brand untuk laporan</span>
-              <small>Semua sumber, konteks, dan hasil laporan terikat pada brand yang dipilih.</small>
-            </div>
-            <ClientPicker clientId={props.clientId} onChange={props.setClientId} />
+          <div className="rgx-signature">
+            <img src={atlasWordmark} alt="ATLAS" />
+            <span>Ruang pembuatan laporan</span>
           </div>
         </header>
 
+        <section className="rgx-command" aria-label="Brand untuk laporan">
+          <div className="rgx-field rgx-field-brand">
+            <span className="rgx-field-label">Brand untuk laporan</span>
+            <ClientPicker clientId={props.clientId} onChange={props.setClientId} />
+          </div>
+          <dl className="rgx-stats">
+            <div>
+              <dt><LayoutGrid size={14} aria-hidden="true" /> Bagian laporan</dt>
+              <dd>{ENABLED_NAV.length}</dd>
+            </div>
+            <div>
+              <dt><Layers size={14} aria-hidden="true" /> Platform utama</dt>
+              <dd>4</dd>
+            </div>
+            <div>
+              <dt><Archive size={14} aria-hidden="true" /> Laporan tersusun</dt>
+              <dd>{generatedCount}<small>/4</small></dd>
+            </div>
+          </dl>
+        </section>
+
         <GenTopNav badges={props.badges} />
-        <div className="rg-active-caption" key={activeTab} style={{ '--rg-accent': active.accent } as CSSProperties}>
-          <strong>{active.label}</strong>
-          <span>{active.tagline}</span>
-          <i />
-          <p>{active.desc}</p>
+        <div className="rgx-head" key={activeTab} style={{ '--rg-accent': active.accent } as CSSProperties}>
+          <span className="rgx-head-ico" aria-hidden="true">
+            <ReportIcon name={activeTab} />
+          </span>
+          <div>
+            <h2>{active.label}</h2>
+            <p>{active.desc}</p>
+          </div>
         </div>
 
         <MetaTab key={`${props.clientId}-MetaTab`}

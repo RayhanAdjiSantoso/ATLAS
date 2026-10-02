@@ -96,6 +96,12 @@ export const REPORT_NAV: ReportNavItem[] = [
 
 export const REPORT_KEYS = REPORT_NAV.map((r) => r.key);
 
+// Report types switched off for now. Their code, state and route handling stay
+// in place; they are only taken off the rail, and their address falls back to
+// Meta Ads. Business Overview is replaced by the ATLAS Business Overview page.
+export const DISABLED_REPORTS: readonly ReportKey[] = ['business'];
+export const ENABLED_NAV = REPORT_NAV.filter((r) => !DISABLED_REPORTS.includes(r.key));
+
 export function isReportKey(v: string | undefined): v is ReportKey {
   return v !== undefined && (REPORT_KEYS as string[]).includes(v);
 }

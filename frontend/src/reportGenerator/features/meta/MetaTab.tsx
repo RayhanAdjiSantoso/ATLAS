@@ -32,17 +32,18 @@ import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
-import { SymptomTreePanel } from '../shopee/AnalysisSections';
 import { MetaSpecialMomentSection, type MomentPeriod, type MomentSource } from './MetaSpecialMomentSection';
 import { MetaBreakdownSection } from './MetaBreakdownSection';
 import {
   BRAND_AUDIENCE_METRICS,
   BRAND_CREATIVE_METRICS,
-  LEAD_AGE_METRICS,
-  LEAD_CONVERSION_METRICS,
-  LEAD_CREATIVE_CONVERSION_METRICS,
-  LEAD_GENDER_METRICS,
-  LEAD_TRAFFIC_METRICS,
+  B2B_AGE_METRICS,
+  B2B_ATC_PURCHASE_METRICS,
+  B2B_CLICK_ATC_METRICS,
+  B2B_CONVERSION_METRICS,
+  B2B_CREATIVE_CONVERSION_METRICS,
+  B2B_GENDER_METRICS,
+  B2B_TRAFFIC_METRICS,
   SALES_AGE_METRICS,
   SALES_ATC_PURCHASE_METRICS,
   SALES_AUDIENCE_METRICS,
@@ -52,17 +53,18 @@ import {
   SALES_TRAFFIC_METRICS,
   findAdCol,
 } from '../../lib/metaAudience';
-import type { MetaFunnel } from '../../lib/metaFunnel';
 import { MetaCompareBars } from './MetaCompareBars';
 import { MetaLaneSwitch } from './MetaLaneSwitch';
+import { SymptomTreePanel } from '../shopee/AnalysisSections';
+import type { MetaFunnel } from '../../lib/metaFunnel';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
-import { PeriodSourcePicker, type LibraryMonth } from '../reports/PeriodSourcePicker';
+import { PeriodSourcePicker, type LibraryMonth, type PeriodSourceTab } from '../reports/PeriodSourcePicker';
 import type { AutoRange } from '../reports/AutoRangePanel';
 import { getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
-import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
+import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
 import { buildMetaReport, isBoostRow, type MetaReport, type NonBoostLaneKey } from './metaReport';
 
@@ -81,6 +83,13 @@ const INDUSTRY_OPTIONS = [
 const OBJECTIVE_OPTIONS = META_OBJECTIVE_CHOICES.map((o) => ({ id: o.key, name: o.label }));
 
 const META_PERIOD_CHANNELS = ['meta', 'cpas'] as const;
+
+const SOURCE_HINT: Record<PeriodSourceKind, string> = {
+  upload: '',
+  library: 'Buka Perpustakaan Brand — pilih bulan, Meta Ads & CPAS terisi sekaligus',
+  archive: 'Buka Arsip Laporan — pakai ulang periode laporan yang pernah dibuat',
+  range: 'Pilih rentang tanggal bebas dari data harian tarikan otomatis',
+};
 
 interface MetaFileState {
   rows: SheetRow[];
@@ -238,6 +247,33 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const [oldPickedRange, setOldPickedRange] = useState<AutoRange | null>(null);
   const [curPickedRange, setCurPickedRange] = useState<AutoRange | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
+  // Which stored source the switch last asked for, per period, until a pick
+  // lands — and which list the dialog opens on.
+  const [pendingKind, setPendingKind] = useState<Record<PeriodRole, PeriodSourceKind>>({ old: 'library', cur: 'library' });
+  const [pickerTab, setPickerTab] = useState<PeriodSourceTab>('library');
+
+  function sourceKindOf(role: PeriodRole): PeriodSourceKind {
+    if ((role === 'old' ? oldSource : curSource) === 'upload') return 'upload';
+    if (role === 'old' ? oldPickedMonth : curPickedMonth) return 'library';
+    if (role === 'old' ? oldPickedRun : curPickedRun) return 'archive';
+    if (role === 'old' ? oldPickedRange : curPickedRange) return 'range';
+    return pendingKind[role];
+  }
+
+  function openPicker(role: PeriodRole, kind: PeriodSourceKind) {
+    setPickerTab(kind === 'upload' ? 'library' : kind);
+    setPickerRole(role);
+  }
+
+  function chooseSourceKind(role: PeriodRole, kind: PeriodSourceKind) {
+    if (kind === 'upload') {
+      (role === 'old' ? setOldSource : setCurSource)('upload');
+      return;
+    }
+    setPendingKind((prev) => ({ ...prev, [role]: kind }));
+    (role === 'old' ? setOldSource : setCurSource)('saved');
+    openPicker(role, kind);
+  }
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
 
   async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
@@ -571,7 +607,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     prefix: string;
     period: string;
     rows: SheetRow[];
-    kind: 'sales' | 'lead' | 'brand';
+    kind: 'sales' | 'b2b' | 'brand';
     campCol: string | null;
     ageCol: string | null;
     genderCol: string | null;
@@ -585,43 +621,40 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       return (
         <>
           <SectionGroup label="Audience Analysis">
-            <MetaCompareBars heading={`${prefix} · Age Breakdown`} badge={badge} rows={rows} kind="brand" menu={BRAND_AUDIENCE_METRICS} dimCol={ageCol} campCol={campCol} mode="none" sortable dimNoun="kelompok umur" emptyMessage={noAge} />
+            <MetaCompareBars heading={`${prefix} · Age Breakdown`} badge={badge} rows={rows} kind="brand" menu={BRAND_AUDIENCE_METRICS} dimCol={ageCol} campCol={campCol} audience="none" sortable dimNoun="kelompok umur" emptyMessage={noAge} />
             {genderCol ? (
               <MetaBreakdownSection heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} dimCol={genderCol} kind="brand" metrics={BRAND_AUDIENCE_METRICS} prefer="pies" />
             ) : (
-              <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind="brand" menu={BRAND_AUDIENCE_METRICS} dimCol={null} campCol={null} mode="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
+              <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind="brand" menu={BRAND_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
             )}
           </SectionGroup>
           <SectionGroup label="Creative Analysis">
-            <MetaCompareBars heading={`${prefix} · Creative Performance`} badge={`per materi iklan · ${period}`} rows={rows} kind="brand" menu={BRAND_CREATIVE_METRICS} dimCol={adCol} campCol={campCol} mode="none" sortable copyLabels dimNoun="materi iklan" emptyMessage={noAd} />
+            <MetaCompareBars heading={`${prefix} · Creative Performance`} badge={`per materi iklan · ${period}`} rows={rows} kind="brand" menu={BRAND_CREATIVE_METRICS} dimCol={adCol} campCol={campCol} audience="none" sortable copyLabels dimNoun="materi iklan" emptyMessage={noAd} />
           </SectionGroup>
         </>
       );
     }
     const sales = kind === 'sales';
-    const funnels = sales
-      ? [
-          { title: 'Traffic Analysis', menu: SALES_TRAFFIC_METRICS },
-          { title: 'Conversion Rate', menu: SALES_CONVERSION_METRICS },
-          { title: 'Click → ATC Rate', menu: SALES_CLICK_ATC_METRICS },
-          { title: 'ATC → Purchase Rate', menu: SALES_ATC_PURCHASE_METRICS },
-        ]
-      : [
-          { title: 'Traffic Analysis', menu: LEAD_TRAFFIC_METRICS },
-          { title: 'Leads Conversion', menu: LEAD_CONVERSION_METRICS },
-        ];
+    // The architecture sheet's four funnel charts, for both lanes; B2B reads
+    // them through metaB2bMetrics (a lead stands in for a purchase).
+    const funnels = [
+      { title: 'Traffic Analysis', menu: sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS },
+      { title: 'Conversion Rate', menu: sales ? SALES_CONVERSION_METRICS : B2B_CONVERSION_METRICS },
+      { title: 'Click → ATC Rate', menu: sales ? SALES_CLICK_ATC_METRICS : B2B_CLICK_ATC_METRICS },
+      { title: 'ATC → Purchase Rate', menu: sales ? SALES_ATC_PURCHASE_METRICS : B2B_ATC_PURCHASE_METRICS },
+    ];
     return (
       <>
         <SectionGroup label="Audience Analysis">
           <MetaCompareBars
             heading={`${prefix} · Age Breakdown`}
-            badge={`NV vs RM · ${period}`}
+            badge={`NV · RM · ${period}`}
             rows={rows}
             kind={kind}
-            menu={sales ? SALES_AGE_METRICS : LEAD_AGE_METRICS}
+            menu={sales ? SALES_AGE_METRICS : B2B_AGE_METRICS}
             dimCol={ageCol}
             campCol={campCol}
-            mode="series"
+            audience="age"
             sortable={false}
             dimNoun="kelompok umur"
             emptyMessage={noAge}
@@ -629,28 +662,28 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           {genderCol ? (
             <MetaBreakdownSection
               heading={`${prefix} · Gender Breakdown`}
-              badge={badge}
+              badge={`NV · RM · ${period}`}
               rows={rows}
               dimCol={genderCol}
               kind={kind}
-              metrics={(sales ? SALES_AUDIENCE_METRICS : LEAD_GENDER_METRICS) as typeof SALES_AUDIENCE_METRICS}
+              metrics={(sales ? SALES_AUDIENCE_METRICS : B2B_GENDER_METRICS) as typeof SALES_AUDIENCE_METRICS}
               prefer="pies"
               campCol={campCol}
             />
           ) : (
-            <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} mode="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
+            <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
           )}
           {funnels.map((f) => (
             <MetaCompareBars
               key={f.title}
               heading={`${prefix} · ${f.title}`}
-              badge={`per campaign · NV / RM · ${period}`}
+              badge={`per campaign · NV · RM · ${period}`}
               rows={rows}
               kind={kind}
               menu={f.menu}
               dimCol={campCol}
               campCol={campCol}
-              mode="tint"
+              audience="campaign"
               sortable
               copyLabels
               dimNoun="campaign"
@@ -664,10 +697,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             badge={`per materi iklan · ${period}`}
             rows={rows}
             kind={kind}
-            menu={sales ? SALES_TRAFFIC_METRICS : LEAD_TRAFFIC_METRICS}
+            menu={sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS}
             dimCol={adCol}
             campCol={campCol}
-            mode="filter"
+            audience="creative"
             sortable
             copyLabels
             dimNoun="materi iklan"
@@ -678,10 +711,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             badge={`per materi iklan · ${period}`}
             rows={rows}
             kind={kind}
-            menu={sales ? SALES_CREATIVE_CONVERSION_METRICS : LEAD_CREATIVE_CONVERSION_METRICS}
+            menu={sales ? SALES_CREATIVE_CONVERSION_METRICS : B2B_CREATIVE_CONVERSION_METRICS}
             dimCol={adCol}
             campCol={campCol}
-            mode="filter"
+            audience="creative"
             sortable
             copyLabels
             dimNoun="materi iklan"
@@ -751,17 +784,27 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
       <StepIndicator steps={steps} accent="var(--acc)" />
 
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label">Pilih Periode</div>
-          <span className="sec-badge">Perpustakaan Brand &amp; Arsip Laporan</span>
-        </div>
-        <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Tiga sumber tersedia: <strong>Perpustakaan Brand</strong> (file bulanan dari Pengaturan Brand, bisa dipakai walau belum pernah di-Generate),{' '}
-          <strong>Arsip Laporan</strong> (periode dari laporan yang sudah tersimpan — dipakai ulang tanpa unggah file), dan{' '}
-          <strong>Rentang tanggal</strong> (tanggal bebas dari data Meta yang ditarik otomatis tiap hari).
-        </div>
-        <div className="dz-grid-4">
+      {/* One board for every input of the comparison: periods across, sources
+          down. Each period picks its source on the page itself — Upload,
+          Perpustakaan, Arsip, or Rentang tanggal — and one stored pick fills
+          that period's Meta Ads and CPAS together. */}
+      <section className="setup-board" aria-label="Sumber data">
+        <header className="setup-board-head">
+          <h3>Sumber data</h3>
+          <p>
+            Meta Ads wajib, CPAS opsional. Pilihan <strong>Perpustakaan</strong>, <strong>Arsip</strong>, atau <strong>Rentang tanggal</strong> mengisi Meta Ads
+            dan CPAS periode itu sekaligus; upload di satu baris hanya mengganti file baris itu.
+          </p>
+        </header>
+        <div className="setup-grid">
+          <div className="setup-corner" aria-hidden="true" />
+          <div className="setup-col-head">Periode Lalu</div>
+          <div className="setup-col-head">Periode Ini</div>
+
+          <div className="setup-row-head">
+            <strong>Sumber</strong>
+            <small>per periode</small>
+          </div>
           {(['old', 'cur'] as const).map((role) => {
             const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
             const pickedRun = role === 'old' ? oldPickedRun : curPickedRun;
@@ -782,31 +825,122 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                   }
                 : null;
             const source = role === 'old' ? oldSource : curSource;
+            const label = role === 'old' ? 'Periode Lalu' : 'Periode Ini';
             return (
-              <div key={role}>
-                <SlotSourceTabs
-                  value={source}
-                  onChange={(v) => {
-                    (role === 'old' ? setOldSource : setCurSource)(v);
-                    if (v === 'saved' && !picked) setPickerRole(role);
-                  }}
+              <div key={role} className="setup-cell" data-label={label}>
+                <PeriodSourceSwitch
+                  label={label}
+                  value={sourceKindOf(role)}
+                  onChange={(kind) => chooseSourceKind(role, kind)}
                   disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
                 />
                 {source === 'saved' &&
                   (applyingRole === role ? (
-                    <div className="empty-note">Menerapkan periode…</div>
+                    <div className="setup-applying" role="status">
+                      <span className="setup-spinner" aria-hidden="true" /> Menerapkan periode…
+                    </div>
                   ) : (
                     <SavedSlotCard
                       picked={picked && { title: picked.title, sourceComparison: '', savedAt: '', summary: picked.summary, metaLine: picked.metaLine }}
-                      onOpen={() => setPickerRole(role)}
+                      hint={SOURCE_HINT[sourceKindOf(role)]}
+                      onOpen={() => openPicker(role, sourceKindOf(role))}
                       onClear={() => clearPickedPeriod(role)}
                     />
                   ))}
               </div>
             );
           })}
+
+          <div className="setup-row-head">
+            <strong>Meta Ads</strong>
+            <small className="is-req">wajib</small>
+          </div>
+          <div className="setup-cell" data-label="Periode Lalu">{metaDropzone('meta', 'old', 'Periode Lalu')}</div>
+          <div className="setup-cell" data-label="Periode Ini">{metaDropzone('meta', 'cur', 'Periode Ini')}</div>
+
+          <div className="setup-row-head">
+            <strong>CPAS Shopee</strong>
+            <small>opsional</small>
+          </div>
+          <div className="setup-cell" data-label="Periode Lalu">{metaDropzone('cpas', 'old', 'Periode Lalu')}</div>
+          <div className="setup-cell" data-label="Periode Ini">{metaDropzone('cpas', 'cur', 'Periode Ini')}</div>
+
+          {dayCol && (oldDayBounds || curDayBounds) && (
+            <>
+              <div className="setup-row-head">
+                <strong>Rentang dibandingkan</strong>
+                <small>breakdown harian</small>
+              </div>
+              {(['old', 'cur'] as const).map((role) => {
+                const bounds = role === 'old' ? oldDayBounds : curDayBounds;
+                const range = role === 'old' ? oldRange : curRange;
+                const setRange = role === 'old' ? setOldRange : setCurRange;
+                const label = role === 'old' ? 'Periode Lalu' : 'Periode Ini';
+                return (
+                  <div key={role} className="setup-cell" data-label={label}>
+                    {bounds ? (
+                      <div className="setup-range">
+                        <div className="setup-range-inputs">
+                          <input
+                            type="date"
+                            className="period-text-input"
+                            aria-label={`${label} — mulai`}
+                            value={toISODate(range?.start ?? null) ?? ''}
+                            min={toISODate(bounds.min) ?? undefined}
+                            max={toISODate(bounds.max) ?? undefined}
+                            onChange={(e) => {
+                              const d = fromISODate(e.target.value);
+                              if (d) setRange((prev) => ({ start: d, end: prev?.end ?? d }));
+                              setReport(null);
+                              onInvalidate();
+                            }}
+                          />
+                          <span aria-hidden="true">–</span>
+                          <input
+                            type="date"
+                            className="period-text-input"
+                            aria-label={`${label} — selesai`}
+                            value={toISODate(range?.end ?? null) ?? ''}
+                            min={toISODate(bounds.min) ?? undefined}
+                            max={toISODate(bounds.max) ?? undefined}
+                            onChange={(e) => {
+                              const d = fromISODate(e.target.value);
+                              if (d) setRange((prev) => ({ start: prev?.start ?? d, end: d }));
+                              setReport(null);
+                              onInvalidate();
+                            }}
+                          />
+                        </div>
+                        {range && (
+                          <span className="setup-range-meta num">
+                            {formatPeriodLabel(range.start, range.end)} · {daysBetweenInclusive(range.start, range.end)} hari
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="setup-empty">Belum ada file {label}.</div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
-      </div>
+
+        {uploadError && <InlineNotice title="File ini belum kebaca">{uploadError}</InlineNotice>}
+        {dayCol &&
+          ((oldDayBounds ? daysBetweenInclusive(oldDayBounds.min, oldDayBounds.max) : 0) > LONG_DAY_RANGE_WARNING_THRESHOLD ||
+            (curDayBounds ? daysBetweenInclusive(curDayBounds.min, curDayBounds.max) : 0) > LONG_DAY_RANGE_WARNING_THRESHOLD) && (
+            <InlineNotice tone="info" title="Salah satu file breakdown harian ini cukup panjang — pastikan ini yang dimaksud">
+              Tidak masalah untuk digenerate, tapi kalau ini bukan rentang yang dimaksud, cek kembali file yang diexport dari Meta Ads Reporting.
+            </InlineNotice>
+          )}
+        {dayCol && oldRange && curRange && Math.abs(daysBetweenInclusive(oldRange.start, oldRange.end) - daysBetweenInclusive(curRange.start, curRange.end)) > 1 && (
+          <div className="period-warning" style={{ marginTop: '.8rem', marginBottom: 0 }}>
+            Panjang periode berbeda: {daysBetweenInclusive(oldRange.start, oldRange.end)} hari vs {daysBetweenInclusive(curRange.start, curRange.end)} hari — bandingkan dengan hati-hati.
+          </div>
+        )}
+      </section>
 
       {pickerRole && clientId && (
         <PeriodSourcePicker
@@ -825,33 +959,23 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           onPickArchive={handlePickArchive}
           selectedRange={(pickerRole === 'old' ? oldPickedRange : curPickedRange) ?? null}
           onPickRange={handlePickRange}
+          initialTab={pickerTab}
         />
       )}
 
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label">Meta Ads</div>
-        </div>
-        <div className="dz-grid-4">
-          {metaDropzone('meta', 'old', 'Periode Lalu')}
-          {metaDropzone('meta', 'cur', 'Periode Ini')}
-        </div>
-        {uploadError && <InlineNotice title="File ini belum kebaca">{uploadError}</InlineNotice>}
-      </div>
-
       {metaRows && (
-        <div className="industry-selector visible">
-          <div className="industry-label">Industri &amp; Objective</div>
-          {objectiveCol && (
-            <InlineNotice tone="info" title={`Kolom "${objectiveCol}" terdeteksi di file`}>
-              Lajur <strong>Non-Boost</strong> otomatis dipecah per objective (Sales / Leads / Traffic / dst) — tiap objective punya headline &amp;
-              Cost per X sendiri, plus baris <strong>Blended</strong> + <strong>Amount Spent per objective</strong> di atasnya. Breakdown Age, Gender,
-              dan Creative bisa dipilih per objective dengan metrik yang sesuai. Dropdown Objective di bawah cuma prefill (tidak mengubah hasil split).
-            </InlineNotice>
-          )}
-          <div className="dual-select">
-            <div className="dual-select-field">
-              <span className="dual-select-label">Industri</span>
+        <section className="setup-board setup-board-split" aria-label="Industri dan objective">
+          <header className="setup-board-head">
+            <h3>Industri &amp; objective</h3>
+            <p>
+              Non-Boost dipetakan otomatis ke <strong>Retail</strong> atau <strong>B2B Leads</strong> per campaign (nama campaign, lalu objective
+              {objectiveCol ? <> dari kolom “{objectiveCol}”</> : null}). Industri dipakai untuk campaign tanpa sinyal itu; Objective mengisi metrik headline
+              bila file tidak punya kolom Objective.
+            </p>
+          </header>
+          <div className="setup-fields">
+            <div className="setup-field">
+              <span className="setup-field-label">Industri</span>
               <SearchSelect
                 options={INDUSTRY_OPTIONS}
                 value={industry === 'b2b' || industry === 'retail' ? industry : null}
@@ -859,10 +983,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                 placeholder="— pilih —"
                 searchable={false}
               />
-              <span className="dual-select-hint">Manual — tidak ada di export Meta</span>
+              <span className="setup-field-hint">Manual — tidak ada di export Meta</span>
             </div>
-            <div className="dual-select-field">
-              <span className="dual-select-label">Objective{objectiveCol ? ' · prefill dari file' : ''}</span>
+            <div className="setup-field">
+              <span className="setup-field-label">Objective{objectiveCol ? ' · prefill dari file' : ''}</span>
               <SearchSelect
                 options={OBJECTIVE_OPTIONS}
                 value={objective}
@@ -870,134 +994,11 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                 placeholder="— pilih —"
                 searchable={false}
               />
-              <span className="dual-select-hint">
-                {objectiveCol ? 'Info dari file — split tetap per objective' : 'Metrik headline Non-Boost (file tanpa kolom Objective)'}
-              </span>
+              <span className="setup-field-hint">{objectiveCol ? 'Info dari file' : 'Metrik headline Non-Boost (file tanpa kolom Objective)'}</span>
             </div>
           </div>
-        </div>
+        </section>
       )}
-
-      {dayCol && (oldDayBounds || curDayBounds) && (
-        <div className="source-block">
-          <div className="source-header">
-            <div className="source-label">Rentang Tanggal yang Dibandingkan</div>
-          </div>
-          <div className="empty-note" style={{ paddingTop: 0, paddingBottom: '.6rem' }}>
-            File ini pakai breakdown harian — rentang di bawah sudah diambil otomatis dari masing-masing file, bebas diubah selama masih dalam data yang tersedia di file itu.
-          </div>
-          <div className="period-input-row">
-            <div className="period-input-field">
-              <label>Periode Lalu</label>
-              {oldDayBounds ? (
-                <>
-                  <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
-                    <input
-                      type="date"
-                      className="period-text-input"
-                      value={toISODate(oldRange?.start ?? null) ?? ''}
-                      min={toISODate(oldDayBounds.min) ?? undefined}
-                      max={toISODate(oldDayBounds.max) ?? undefined}
-                      onChange={(e) => {
-                        const d = fromISODate(e.target.value);
-                        if (d) setOldRange((prev) => ({ start: d, end: prev?.end ?? d }));
-                        setReport(null);
-                        onInvalidate();
-                      }}
-                    />
-                    <span style={{ color: 'var(--muted)' }}>–</span>
-                    <input
-                      type="date"
-                      className="period-text-input"
-                      value={toISODate(oldRange?.end ?? null) ?? ''}
-                      min={toISODate(oldDayBounds.min) ?? undefined}
-                      max={toISODate(oldDayBounds.max) ?? undefined}
-                      onChange={(e) => {
-                        const d = fromISODate(e.target.value);
-                        if (d) setOldRange((prev) => ({ start: prev?.start ?? d, end: d }));
-                        setReport(null);
-                        onInvalidate();
-                      }}
-                    />
-                  </div>
-                  {oldRange && (
-                    <div className="num" style={{ fontSize: '.65rem', color: 'var(--muted)', fontWeight: 600, marginTop: '.3rem' }}>
-                      {formatPeriodLabel(oldRange.start, oldRange.end)} · {daysBetweenInclusive(oldRange.start, oldRange.end)} hari
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="empty-note" style={{ padding: '.3rem 0 0' }}>Belum ada file Periode Lalu.</div>
-              )}
-            </div>
-            <div className="period-input-field">
-              <label>Periode Ini</label>
-              {curDayBounds ? (
-                <>
-                  <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
-                    <input
-                      type="date"
-                      className="period-text-input"
-                      value={toISODate(curRange?.start ?? null) ?? ''}
-                      min={toISODate(curDayBounds.min) ?? undefined}
-                      max={toISODate(curDayBounds.max) ?? undefined}
-                      onChange={(e) => {
-                        const d = fromISODate(e.target.value);
-                        if (d) setCurRange((prev) => ({ start: d, end: prev?.end ?? d }));
-                        setReport(null);
-                        onInvalidate();
-                      }}
-                    />
-                    <span style={{ color: 'var(--muted)' }}>–</span>
-                    <input
-                      type="date"
-                      className="period-text-input"
-                      value={toISODate(curRange?.end ?? null) ?? ''}
-                      min={toISODate(curDayBounds.min) ?? undefined}
-                      max={toISODate(curDayBounds.max) ?? undefined}
-                      onChange={(e) => {
-                        const d = fromISODate(e.target.value);
-                        if (d) setCurRange((prev) => ({ start: prev?.start ?? d, end: d }));
-                        setReport(null);
-                        onInvalidate();
-                      }}
-                    />
-                  </div>
-                  {curRange && (
-                    <div className="num" style={{ fontSize: '.65rem', color: 'var(--muted)', fontWeight: 600, marginTop: '.3rem' }}>
-                      {formatPeriodLabel(curRange.start, curRange.end)} · {daysBetweenInclusive(curRange.start, curRange.end)} hari
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="empty-note" style={{ padding: '.3rem 0 0' }}>Belum ada file Periode Ini.</div>
-              )}
-            </div>
-          </div>
-          {(oldDayBounds ? daysBetweenInclusive(oldDayBounds.min, oldDayBounds.max) : 0) > LONG_DAY_RANGE_WARNING_THRESHOLD ||
-          (curDayBounds ? daysBetweenInclusive(curDayBounds.min, curDayBounds.max) : 0) > LONG_DAY_RANGE_WARNING_THRESHOLD ? (
-            <InlineNotice tone="info" title="Salah satu file breakdown harian ini cukup panjang — pastikan ini yang dimaksud">
-              Tidak masalah untuk digenerate, tapi kalau ini bukan rentang yang dimaksud, cek kembali file yang diexport dari Meta Ads Reporting.
-            </InlineNotice>
-          ) : null}
-          {oldRange && curRange && Math.abs(daysBetweenInclusive(oldRange.start, oldRange.end) - daysBetweenInclusive(curRange.start, curRange.end)) > 1 && (
-            <div className="period-warning" style={{ marginTop: '.8rem', marginBottom: 0 }}>
-              Panjang periode berbeda: {daysBetweenInclusive(oldRange.start, oldRange.end)} hari vs {daysBetweenInclusive(curRange.start, curRange.end)} hari — bandingkan dengan hati-hati.
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="source-block">
-        <div className="source-header">
-          <div className="source-label">CPAS</div>
-          <span className="sec-badge">opsional — kosongkan jika tidak ada data CPAS</span>
-        </div>
-        <div className="dz-grid-4">
-          {metaDropzone('cpas', 'old', 'Periode Lalu')}
-          {metaDropzone('cpas', 'cur', 'Periode Ini')}
-        </div>
-      </div>
 
       {ready && (
         <div id="cta" style={{ marginTop: '1rem' }}>
@@ -1174,7 +1175,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           prefix: `Non-Boost ${lane.label}`,
                           period: report.p2,
                           rows: lane.curRows,
-                          kind: lane.key === 'retail' ? 'sales' : 'lead',
+                          kind: lane.key === 'retail' ? 'sales' : 'b2b',
                           campCol: lane.campCol,
                           ageCol: lane.ageCol,
                           genderCol: lane.genderCol,
