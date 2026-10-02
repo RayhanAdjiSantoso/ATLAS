@@ -3,8 +3,8 @@
  * GOOGLE ADS -> ATLAS (Report Generator › Google Ads)
  * ============================================================
  * Ini Google Ads SCRIPT (Tools > Bulk actions > Scripts di Google Ads),
- * BUKAN Apps Script. Dipasang sekali di Manager Account (MCC) MIL; tidak
- * perlu developer token Google Ads API.
+ * BUKAN Apps Script. Dipasang di SETIAP akun Google Ads klien (satu
+ * salinan per akun); tidak perlu developer token Google Ads API.
  *
  * Setiap jalan, script ini:
  *   1. Bertanya ke ATLAS akun & rentang tanggal mana yang perlu ditarik
@@ -18,23 +18,28 @@
  *        POST /google-ads/ingest/finish  -> sukses/gagal
  *      Kalau run mati di tengah, data lama bulan itu TIDAK tersentuh.
  *
+ * Di akun klien, script hanya memproses akun tempat ia dipasang, walaupun
+ * ATLAS mengembalikan job untuk semua akun terdaftar.
+ *
  * Script ini sementara. Nanti diganti fetcher Google Ads API di ATLAS yang
  * memakai endpoint & tabel yang sama — jadi jangan taruh logika bisnis di sini.
  *
- * SETUP (sekali)
- *   1. Isi ATLAS_API_BASE_URL dan INGEST_KEY di bawah. INGEST_KEY = nilai
+ * SETUP (per akun klien)
+ *   1. Daftarkan Customer ID akun itu di ATLAS: Pengaturan Brand >
+ *      Google Ads.
+ *   2. Isi ATLAS_API_BASE_URL dan INGEST_KEY di bawah. INGEST_KEY = nilai
  *      env DAILY_TRACKING_INGEST_API_KEY di ATLAS (sama dengan Script
  *      Property ATLAS_INGEST_KEY milik Apps Script Daily Tracking).
- *   2. Google Ads (MCC) > Tools > Bulk actions > Scripts > + > tempel file
- *      ini > Authorize > Preview sekali untuk cek log.
- *   3. Frequency: Daily (mis. jam 03:00). Akun baru otomatis ditarik
+ *   3. Buka akun klien itu di Google Ads > Tools > Bulk actions > Scripts
+ *      > + > tempel file ini > Authorize > Preview sekali untuk cek log.
+ *   4. Frequency: Daily (mis. jam 03:00). Akun baru otomatis ditarik
  *      mundur sampai tanggal "Tarik data sejak" di Pengaturan Brand,
  *      bertahap kalau satu kali jalan tidak cukup.
  *
- * Akun yang belum tertaut ke MCC ini akan muncul GAGAL di Pengaturan
- * Brand ("tidak ditemukan di MCC"). Alternatifnya, file yang sama bisa
- * dipasang langsung di akun klien itu: tanpa MCC, script hanya memproses
- * akun tempat ia dipasang.
+ * Mode MCC (belum dipakai): file yang sama bisa dipasang di Manager
+ * Account; script lalu memproses semua akun terdaftar yang tertaut ke MCC
+ * itu dan melaporkan akun yang belum tertaut ("tidak ditemukan di MCC"),
+ * kecuali akun itu sudah pernah tersinkron dari script di akunnya sendiri.
  */
 
 var CONFIG = {
@@ -75,7 +80,12 @@ function main() {
   while (it.hasNext()) found[it.next().getCustomerId().replace(/-/g, '')] = true;
 
   ids.forEach(function (id) {
-    if (!found[id]) reportUnreachable_(byCustomer[id][0], 'Customer ID ' + dashed_(id) + ' tidak ditemukan di MCC ini — tautkan akunnya ke MCC MIL atau pasang script di akun itu sendiri');
+    if (found[id]) return;
+    var note = 'Customer ID ' + dashed_(id) + ' tidak ditemukan di MCC ini — tautkan akunnya ke MCC MIL atau pasang script di akun itu sendiri';
+    // Akun yang sudah pernah tersinkron diurus script yang dipasang di akun
+    // itu sendiri; melapor gagal di sini hanya akan menimpa status suksesnya.
+    if (byCustomer[id][0].hasSyncedBefore) Logger.log(note + ' (dilewati: sudah disinkron dari tempat lain)');
+    else reportUnreachable_(byCustomer[id][0], note);
   });
 
   var reachable = ids.filter(function (id) { return found[id]; });

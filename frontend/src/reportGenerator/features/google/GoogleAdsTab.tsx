@@ -183,7 +183,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
       <HowTo>
         <HowToStep num={1} numClassName="google-num" title="Hubungkan akun di Pengaturan Brand">
           Buka <strong>Pengaturan Brand › Google Ads</strong>, tambahkan Customer ID akun Google Ads brand ini. Data harian ditarik otomatis setiap hari
-          oleh Google Ads Script di MCC MIL — tidak ada file yang perlu diunduh atau diunggah.
+          oleh Google Ads Script yang dipasang di akun Google Ads klien — tidak ada file yang perlu diunduh atau diunggah.
         </HowToStep>
         <HowToStep num={2} numClassName="google-num" title="Pilih periode & buat laporan">
           Pilih preset atau isi tanggal Periode Lalu dan Periode Ini sendiri, lalu klik <strong>Generate Laporan</strong>. Kartu KPI dibandingkan dengan
