@@ -126,19 +126,24 @@ Response selalu salah satu dari dua bentuk ini:
 | `trackingPreview` | `{ id }` | dry run: `{ label, date, row, boostSpend, nonBoostSpend, campaigns, existingBoost, existingNonBoost, status }` — **tidak menulis apa pun** |
 | `trackingRunAll` | *(tidak perlu)* | **Menjalankan H-1 untuk SEMUA brand & menulis ke sheet.** Beri konfirmasi di UI. |
 
-### Tarik data Meta Ads bulanan (Pengaturan Brand › Data & file › Meta Ads)
+### Tarik data Meta Ads harian (Pengaturan Brand › Data & file › Meta Ads)
 
-Kode ada di `MetaAdsMonthly.gs`. Trigger bulanan (tanggal 1, ~02:00 WIB;
-pasang sekali lewat `setupMetaAdsMonthlyTrigger()`) menarik bulan sebelumnya
-untuk semua akun Brand & Langganan yang `atlasBrandId`-nya terisi
-(MAIN dan CPAS), breakdown campaign × age × gender × day, lalu mendorongnya
-ke ATLAS lewat `POST /api/meta-ads-insights/ingest/{start,rows,finish}`
-(header `X-Ingest-Key`, sama dengan Daily Tracking). Definisi metrik ada di
-ATLAS (`backend/src/config/metaAdsMetrics.js`), bukan di script ini.
+Kode ada di `MetaAdsMonthly.gs`. Trigger harian (~02:00 WIB; pasang sekali
+lewat `setupMetaAdsDailyTrigger()`, yang sekaligus menghapus trigger bulanan
+lama) menarik 7 hari terakhir s/d kemarin (tidak melewati tanggal 1 bulan
+itu), dan pada tanggal 1 seluruh bulan sebelumnya, untuk semua akun Brand &
+Langganan yang `atlasBrandId`-nya terisi (MAIN dan CPAS), breakdown
+campaign × age × gender × day, lalu mendorongnya ke ATLAS lewat
+`POST /api/meta-ads-insights/ingest/{start,rows,finish}` (header
+`X-Ingest-Key`, sama dengan Daily Tracking; `start` membawa `month`, `since`,
+`until`). Script juga meneruskan `cost_per_result`, dari situ ATLAS menghitung
+Cost per Profile Visit dan Profile visits (= Amount Spent ÷ Cost per Profile
+Visit). Definisi metrik ada di ATLAS (`backend/src/config/metaAdsMetrics.js`),
+bukan di script ini.
 
 | action | payload | efek |
 |---|---|---|
-| `metaAdsEnqueue` | `{ atlasBrandId, type: 'MAIN'\|'CPAS', month: 'YYYY-MM' }` | Mengantre penarikan satu bulan lalu langsung membalas `{ queued, month, type }`. Hasilnya muncul beberapa menit kemudian; progres dipantau ATLAS lewat tabel `meta_ads_fetch_log`, bukan lewat response ini. |
+| `metaAdsEnqueue` | `{ atlasBrandId, type: 'MAIN'\|'CPAS', month: 'YYYY-MM' }` | Mengantre penarikan satu bulan (bulan berjalan: s/d kemarin) lalu langsung membalas `{ queued, month, type }`. Hasilnya muncul beberapa menit kemudian; progres dipantau ATLAS lewat tabel `meta_ads_fetch_log`, bukan lewat response ini. |
 
 Auth: `apiKey` harus cocok dengan Script Property `API_SHARED_KEY`. Kalau
 salah/kosong, `doPost` balikin `{ ok: false, error: "apiKey tidak

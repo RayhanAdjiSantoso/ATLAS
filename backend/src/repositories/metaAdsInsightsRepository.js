@@ -95,8 +95,9 @@ export async function deleteMonthRows({ brandId, accountType, startDate, endDate
   return rowCount;
 }
 
-// Every stored row of one month, oldest first — the source for the library file.
-export async function listRowsForMonth({ brandId, accountType, startDate, endDate }, db = pool) {
+// Every stored row in a date range, oldest first — the source for the library
+// file (one month) and for the Report Generator's custom range.
+export async function listRowsInRange({ brandId, accountType, startDate, endDate }, db = pool) {
   const { rows } = await db.query(
     `SELECT entry_date::text AS entry_date, campaign_name, age, gender, objective,
             amount_spent, impressions, reach, link_clicks, purchases, purchase_value, metrics
@@ -127,20 +128,35 @@ export async function summariseMonths(brandId, db = pool) {
   return rows;
 }
 
+// Which days are stored, per account type — what the Report Generator's
+// custom range can be picked from.
+export async function listStoredDays(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT account_type, entry_date::text AS entry_date
+     FROM meta_ads_insights_daily
+     WHERE brand_id = $1
+     GROUP BY account_type, entry_date
+     ORDER BY account_type, entry_date`,
+    [brandId],
+  );
+  return rows;
+}
+
 // ---------------------------------------------------------------------
 // meta_ads_fetch_log
 // ---------------------------------------------------------------------
-export async function insertRun({ brandId, accountType, adAccountId, month, trigger, runId }, db = pool) {
+export async function insertRun({ brandId, accountType, adAccountId, month, rangeStart, rangeEnd, trigger, runId }, db = pool) {
   await db.query(
-    `INSERT INTO meta_ads_fetch_log (brand_id, account_type, ad_account_id, month, trigger, fetch_run_id)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [brandId, accountType, adAccountId, month, trigger, runId],
+    `INSERT INTO meta_ads_fetch_log (brand_id, account_type, ad_account_id, month, range_start, range_end, trigger, fetch_run_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [brandId, accountType, adAccountId, month, rangeStart, rangeEnd, trigger, runId],
   );
 }
 
 export async function getRun(runId, db = pool) {
   const { rows } = await db.query(
-    `SELECT brand_id, account_type, ad_account_id, month::text AS month, status
+    `SELECT brand_id, account_type, ad_account_id, month::text AS month,
+            range_start::text AS range_start, range_end::text AS range_end, status
      FROM meta_ads_fetch_log WHERE fetch_run_id = $1`,
     [runId],
   );
@@ -158,8 +174,9 @@ export async function finishRun({ runId, status, rowCount, note }, db = pool) {
 
 export async function listRecentRuns(brandId, limit = 30, db = pool) {
   const { rows } = await db.query(
-    `SELECT account_type, to_char(month, 'YYYY-MM') AS month, trigger, status, row_count, note,
-            started_at, finished_at
+    `SELECT account_type, to_char(month, 'YYYY-MM') AS month,
+            range_start::text AS range_start, range_end::text AS range_end,
+            trigger, status, row_count, note, started_at, finished_at
      FROM meta_ads_fetch_log
      WHERE brand_id = $1
      ORDER BY started_at DESC

@@ -45,6 +45,18 @@ function monthBounds(month) {
   return { startDate: `${month}-01`, endDate: `${month}-${String(last).padStart(2, '0')}` };
 }
 
+// The days a run fetched. Runs logged before daily fetching (migration 038)
+// have no range and always covered their whole month.
+function runRange(run) {
+  const month = monthBounds(run.month.slice(0, 7));
+  return { startDate: run.range_start ?? month.startDate, endDate: run.range_end ?? month.endDate };
+}
+
+// Longest custom range the Report Generator may ask for in one go — keeps the
+// generated workbook well under Vercel's 4.5MB response cap.
+const MAX_RANGE_DAYS = 93;
+const dayDiff = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+
 // ---------------------------------------------------------------------
 // UI-facing
 // ---------------------------------------------------------------------
@@ -65,7 +77,8 @@ export async function getOverview(brandId) {
       campaignCount: m.campaign_count, amountSpent: Number(m.amount_spent), fetchedAt: m.fetched_at,
     })),
     runs: runs.map((r) => ({
-      accountType: r.account_type, month: r.month, trigger: r.trigger, status: r.status,
+      accountType: r.account_type, month: r.month, rangeStart: r.range_start, rangeEnd: r.range_end,
+      trigger: r.trigger, status: r.status,
       rowCount: r.row_count, note: r.note, startedAt: r.started_at, finishedAt: r.finished_at,
     })),
   };
@@ -93,7 +106,8 @@ export async function saveConfig({ brandId, accountType, extraMetrics, userId })
   return { accountType: saved.account_type, extraMetrics: saved.extra_metrics };
 }
 
-// Queues a background run in Apps Script. It cannot be awaited here: a full
+// Queues a background run in Apps Script for one month (the current month is
+// fetched up to yesterday). It cannot be awaited here: a full
 // month at age × gender × day grain outlives Vercel's 60s function limit, so
 // Apps Script only enqueues (one-off trigger) and answers immediately; the
 // run reports its own progress through the ingest endpoints below.
@@ -154,12 +168,16 @@ export async function syncLibraryFile({ brandId, accountType, month, userId }) {
     );
   }
 
-  const rows = await repo.listRowsForMonth({ brandId, accountType, startDate, endDate });
+  const rows = await repo.listRowsInRange({ brandId, accountType, startDate, endDate });
   if (!rows.length) throw new AppError('Belum ada data tersimpan untuk bulan ini', 404);
 
+  // Daily fetching files the running month too, so the file covers the days
+  // actually stored (1st .. yesterday), not the whole calendar month.
+  const firstDay = rows[0].entry_date;
+  const lastDay = rows[rows.length - 1].entry_date;
   const extraMetrics = await repo.getExtraMetrics(brandId, accountType);
-  const buffer = buildInsightsWorkbook({ month, rows, extraMetrics });
-  const coverage = library.summariseRange({ start: startDate, end: endDate }, month);
+  const buffer = buildInsightsWorkbook({ start: firstDay, end: lastDay, rows, extraMetrics });
+  const coverage = library.summariseRange({ start: firstDay, end: lastDay }, month);
 
   const file = await library.upsertLibraryFile({
     brandId, platform: 'meta', channel: LIBRARY_CHANNEL[accountType],
@@ -187,6 +205,36 @@ export async function syncLibraryFromRun(runId) {
   }
 }
 
+// ---------------------------------------------------------------------
+// Report Generator › Meta › custom range
+//
+// The library holds whole months; the stored daily rows can be cut at any
+// day. The range is served as the same Ads Manager-style workbook, so the
+// Report Generator parses it exactly like a library file or an upload.
+// ---------------------------------------------------------------------
+export async function getStoredDays(brandId) {
+  await assertBrand(brandId);
+  const rows = await repo.listStoredDays(brandId);
+  const days = Object.fromEntries(ACCOUNT_TYPES.map((t) => [t, []]));
+  for (const r of rows) days[r.account_type]?.push(r.entry_date);
+  return { days, maxRangeDays: MAX_RANGE_DAYS };
+}
+
+export async function exportRange({ brandId, accountType, start, end }) {
+  await assertBrand(brandId);
+  assertAccountType(accountType);
+  if (start > end) throw new AppError('Tanggal mulai harus sebelum tanggal akhir', 400);
+  if (dayDiff(start, end) + 1 > MAX_RANGE_DAYS) throw new AppError(`Rentang maksimal ${MAX_RANGE_DAYS} hari`, 400);
+  const rows = await repo.listRowsInRange({ brandId, accountType, startDate: start, endDate: end });
+  if (!rows.length) throw new AppError('Belum ada data tersimpan pada rentang ini', 404);
+  const extraMetrics = await repo.getExtraMetrics(brandId, accountType);
+  return {
+    buffer: buildInsightsWorkbook({ start, end, rows, extraMetrics }),
+    filename: `ATLAS-auto_${LIBRARY_CHANNEL[accountType]}_${start}_${end}.xlsx`,
+    rowCount: rows.length,
+  };
+}
+
 export async function deleteMonth({ brandId, accountType, month }) {
   await assertBrand(brandId);
   assertAccountType(accountType);
@@ -203,13 +251,23 @@ export async function deleteMonth({ brandId, accountType, month }) {
 // ---------------------------------------------------------------------
 // Machine-to-machine (Apps Script), authenticated by the shared ingest key
 // ---------------------------------------------------------------------
-export async function startRun({ brandId, accountType, adAccountId, month, trigger }) {
+// A run covers `since`..`until` inside one month (the daily trigger fetches
+// the last few days; the 1st and "Tarik sekarang" fetch a whole month).
+// Without since/until — an Apps Script deployed before daily fetching — it
+// is the whole month, as before.
+export async function startRun({ brandId, accountType, adAccountId, month, since, until, trigger }) {
   await assertBrand(brandId);
   assertAccountType(accountType);
+  const bounds = monthBounds(month);
+  const rangeStart = since ?? bounds.startDate;
+  const rangeEnd = until ?? bounds.endDate;
+  if (rangeStart < bounds.startDate || rangeEnd > bounds.endDate || rangeStart > rangeEnd) {
+    throw new AppError('since/until harus berada di dalam bulan yang sama dan berurutan', 400);
+  }
   const runId = randomUUID();
   const extraMetrics = await repo.getExtraMetrics(brandId, accountType);
   await repo.insertRun({
-    brandId, accountType, adAccountId, month: `${month}-01`,
+    brandId, accountType, adAccountId, month: `${month}-01`, rangeStart, rangeEnd,
     trigger: trigger === 'scheduled' ? 'scheduled' : 'manual', runId,
   });
   return { runId, actionTypes: requiredActionTypes(extraMetrics) };
@@ -225,10 +283,10 @@ async function requireOpenRun(runId) {
 export async function ingestRows({ runId, rows }) {
   const run = await requireOpenRun(runId);
   const extraMetrics = await repo.getExtraMetrics(run.brand_id, run.account_type);
-  const { startDate, endDate } = monthBounds(run.month.slice(0, 7));
+  const { startDate, endDate } = runRange(run);
 
-  // Rows outside the run's month are dropped rather than trusted: a stray
-  // date would land in a month whose stale-row cleanup this run never owns.
+  // Rows outside the run's range are dropped rather than trusted: a stray
+  // date would land on days whose stale-row cleanup this run never owns.
   const normalized = rows
     .map((raw) => normalizeInsightRow(raw, extraMetrics))
     .filter((r) => r && r.entry_date >= startDate && r.entry_date <= endDate);
@@ -248,13 +306,13 @@ export async function ingestRows({ runId, rows }) {
 
 export async function finishRun({ runId, status, rowCount, note }) {
   const run = await requireOpenRun(runId);
-  const { startDate, endDate } = monthBounds(run.month.slice(0, 7));
+  const { startDate, endDate } = runRange(run);
 
   const result = await inTransaction(async (db) => {
     let removedStale = 0;
     // Zero rows on a "success" is treated as "Meta returned nothing", not as
-    // proof the month is empty — clearing the existing data on that basis
-    // would let one Meta hiccup wipe a good month.
+    // proof the range is empty — clearing the existing data on that basis
+    // would let one Meta hiccup wipe good days.
     if (status === 'success' && rowCount > 0) {
       removedStale = await repo.deleteStaleRows({
         brandId: run.brand_id, accountType: run.account_type, adAccountId: run.ad_account_id,
@@ -263,7 +321,7 @@ export async function finishRun({ runId, status, rowCount, note }) {
     }
     const noteParts = [];
     if (note) noteParts.push(note);
-    if (status === 'success' && rowCount === 0) noteParts.push('Meta tidak mengembalikan data untuk bulan ini; data lama (jika ada) tidak diubah');
+    if (status === 'success' && rowCount === 0) noteParts.push('Meta tidak mengembalikan data untuk rentang ini; data lama (jika ada) tidak diubah');
     if (removedStale) noteParts.push(`${removedStale} baris lama yang tidak ada lagi di Meta dihapus`);
     await repo.finishRun({ runId, status, rowCount, note: noteParts.join(' · ') || null }, db);
     return { status, rowCount, removedStale };

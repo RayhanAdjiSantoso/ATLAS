@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Archive, CalendarRange, Check, Database, History, Library, Search, X } from 'lucide-react';
+import { Archive, CalendarDays, CalendarRange, Check, Database, History, Library, Search, X } from 'lucide-react';
 import { getPortalContainer } from '../../utils/portalTarget';
 import { InlineNotice } from '../../components/InlineNotice';
 import api from '../../../api/client.js';
 import { formatMonth, type LibraryFile } from './LibraryFileSlot';
 import { channelLabel, formatChannelCoverage, formatSavedAt } from './savedPeriodLabels';
 import { getSavedPeriods } from './api';
+import { AutoRangePanel, type AutoRange } from './AutoRangePanel';
 import type { PeriodRole, Platform, SavedPeriod } from './types';
 import './librarySource.css';
 
@@ -31,7 +32,7 @@ export interface LibraryMonth {
   end: string | null; // latest period_end
 }
 
-type Tab = 'library' | 'archive';
+type Tab = 'library' | 'archive' | 'range';
 
 interface PeriodSourcePickerProps {
   clientId: number;
@@ -48,6 +49,10 @@ interface PeriodSourcePickerProps {
   onClose: () => void;
   onPickLibrary: (month: LibraryMonth) => void;
   onPickArchive: (period: SavedPeriod) => void;
+  // Meta only: any day range from the auto-fetched daily rows. When given,
+  // a third tab "Rentang tanggal" appears.
+  selectedRange?: { start: string; end: string } | null;
+  onPickRange?: (range: AutoRange) => void;
 }
 
 const SHORT_MONTH = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -69,6 +74,8 @@ export function PeriodSourcePicker({
   onClose,
   onPickLibrary,
   onPickArchive,
+  selectedRange,
+  onPickRange,
 }: PeriodSourcePickerProps) {
   const [tab, setTab] = useState<Tab>('library');
   const [months, setMonths] = useState<LibraryMonth[] | null>(null);
@@ -183,7 +190,7 @@ export function PeriodSourcePicker({
           </button>
         </header>
 
-        <div className="src-tabs" role="tablist" aria-label="Sumber data tersimpan">
+        <div className={`src-tabs${onPickRange ? ' has-3' : ''}`} role="tablist" aria-label="Sumber data tersimpan">
           <button
             type="button"
             role="tab"
@@ -212,9 +219,24 @@ export function PeriodSourcePicker({
             </span>
             {archiveCount !== null && <span className="src-tab-count">{archiveCount}</span>}
           </button>
+          {onPickRange && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'range'}
+              className={`src-tab${tab === 'range' ? ' is-active' : ''}`}
+              onClick={() => setTab('range')}
+            >
+              <CalendarDays size={16} aria-hidden="true" />
+              <span className="src-tab-text">
+                <strong>Rentang tanggal</strong>
+                <small>Data harian tarikan otomatis</small>
+              </span>
+            </button>
+          )}
         </div>
 
-        <div className="lib-picker-tools">
+        {tab !== 'range' && <div className="lib-picker-tools">
           <label className="lib-picker-search">
             <Search size={15} aria-hidden="true" />
             <input
@@ -227,10 +249,19 @@ export function PeriodSourcePicker({
           </label>
           {tab === 'library' && months && !libError && <span className="lib-picker-count">{shownMonths.length} bulan</span>}
           {tab === 'archive' && periods && !archiveError && <span className="lib-picker-count">{runs.length} laporan</span>}
-        </div>
+        </div>}
 
         <div className="lib-picker-body">
-          {tab === 'library' ? (
+          {tab === 'range' && onPickRange ? (
+            <AutoRangePanel
+              clientId={clientId}
+              selected={selectedRange}
+              onPick={(range) => {
+                onPickRange(range);
+                onClose();
+              }}
+            />
+          ) : tab === 'library' ? (
             <>
               {libError && <InlineNotice title="Perpustakaan tidak bisa dimuat">{libError}</InlineNotice>}
               {!months && !libError && (
@@ -342,11 +373,13 @@ export function PeriodSourcePicker({
         </div>
 
         <footer className="lib-picker-foot">
-          {tab === 'library' ? <Database size={13} aria-hidden="true" /> : <Archive size={13} aria-hidden="true" />}
+          {tab === 'library' ? <Database size={13} aria-hidden="true" /> : tab === 'range' ? <CalendarDays size={13} aria-hidden="true" /> : <Archive size={13} aria-hidden="true" />}
           <span>
             {tab === 'library'
               ? 'Hanya bulan yang punya file di Pengaturan Brand yang ditampilkan.'
-              : 'Data diambil dari laporan yang sudah tersimpan — tidak perlu mengunggah ulang filenya.'}
+              : tab === 'range'
+                ? 'Rentang bebas, tidak harus satu bulan — dari data yang ditarik otomatis tiap hari.'
+                : 'Data diambil dari laporan yang sudah tersimpan — tidak perlu mengunggah ulang filenya.'}
           </span>
           <kbd>Esc</kbd>
         </footer>

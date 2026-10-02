@@ -12,6 +12,7 @@ const TYPES = [
 const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const monthName = (ym) => { const [y, m] = ym.split('-').map(Number); return `${MONTH_NAMES[m - 1]} ${y}`; };
 const idr = (n) => `Rp${Math.round(n).toLocaleString('id-ID')}`;
+const shortDay = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const dateTime = (iso) => (iso ? new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
 
 // A run that never reported back (Apps Script killed at its 6-minute cap, or
@@ -21,15 +22,27 @@ const STALE_RUN_MS = 15 * 60 * 1000;
 const POLL_MS = 10000;
 const POLL_MAX_MS = 6 * 60 * 1000;
 
+// The running month is fetched up to yesterday, so it is offered from the
+// 2nd onwards (on the 1st it has no complete day yet).
 function monthOptions() {
   const now = new Date();
   const out = [];
-  for (let i = 1; i <= 12; i += 1) {
+  for (let i = now.getDate() > 1 ? 0 : 1; i <= 12; i += 1) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    out.push({ value, label: monthName(value) });
+    out.push({ value, label: i === 0 ? `${monthName(value)} (s/d kemarin)` : monthName(value) });
   }
   return out;
+}
+
+// A run's days: a daily run covers a few days, a full-month run its month.
+function runPeriod(run) {
+  if (!run.rangeStart || !run.rangeEnd) return monthName(run.month.slice(0, 7));
+  const [y, m] = run.month.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const wholeMonth = run.rangeStart.endsWith('-01') && Number(run.rangeEnd.slice(8, 10)) === lastDay;
+  if (wholeMonth) return monthName(run.month.slice(0, 7));
+  return run.rangeStart === run.rangeEnd ? shortDay(run.rangeStart) : `${shortDay(run.rangeStart)} – ${shortDay(run.rangeEnd)} ${y}`;
 }
 
 function runState(run) {
@@ -195,8 +208,8 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
         <div>
           <h3>Tarik otomatis dari Meta</h3>
           <p>
-            Tiap tanggal 1, ATLAS menarik data bulan sebelumnya per campaign, umur, gender, dan hari untuk akun yang
-            sudah terdaftar di bagian <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini.
+            Tiap hari, ATLAS menarik data 7 hari terakhir sampai kemarin (tanggal 1: seluruh bulan sebelumnya) per
+            campaign, umur, gender, dan hari untuk akun yang sudah terdaftar di bagian <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini.
           </p>
         </div>
       </header>
@@ -247,8 +260,8 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
               ))}
             </div>
             <p className="maf-hint">
-              Breakdown: campaign name, age, gender, day. * Instagram profile visits memakai link clicks sebagai pendekatan
-              (API Meta tidak menyediakannya), sekitar 3–8% di bawah Ads Manager.
+              Breakdown: campaign name, age, gender, day. * Instagram profile visits dihitung dari Amount Spent ÷ Cost per
+              Profile Visit (cost per result campaign profile visit), karena API Meta tidak menyediakan angkanya langsung.
             </p>
 
             <h4 className="maf-sub">Tambahan (opsional)</h4>
@@ -278,7 +291,7 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
               <button type="button" className="btn btn-primary dt-btn-sm" onClick={fetchNow} disabled={!canAct || busy === 'fetch'}>
                 {busy === 'fetch' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Tarik {typeLabel}
               </button>
-              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta. Hasilnya juga disimpan ke Data & file (Meta Ads / CPAS) dan bisa dipilih di Report Generator.</small>
+              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta. Hasilnya juga disimpan ke Data & file (Meta Ads / CPAS) dan bisa dipilih di Report Generator, per bulan atau dengan rentang tanggal bebas.</small>
             </div>
           </div>
 
@@ -339,7 +352,7 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
                         {state.key === 'running' ? <Loader2 size={12} className="maf-spin" /> : state.key === 'success' ? <Check size={12} /> : <CircleAlert size={12} />}
                         {state.label}
                       </span>
-                      <span>{monthName(run.month.slice(0, 7))} · {run.accountType === 'CPAS' ? 'CPAS' : 'Meta Ads'} · {run.trigger === 'scheduled' ? 'otomatis' : 'manual'}</span>
+                      <span>{runPeriod(run)} · {run.accountType === 'CPAS' ? 'CPAS' : 'Meta Ads'} · {run.trigger === 'scheduled' ? 'otomatis' : 'manual'}</span>
                       <span className="maf-run-meta">
                         {run.status === 'success' ? `${run.rowCount.toLocaleString('id-ID')} baris · ` : ''}{dateTime(run.startedAt)}
                         {run.note ? ` · ${run.note}` : ''}
