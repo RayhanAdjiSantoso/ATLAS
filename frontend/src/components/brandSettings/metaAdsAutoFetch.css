@@ -52,3 +52,7 @@
 .maf .form-input { padding: .4rem .6rem; background: #ffffff; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: .8rem; }
 .maf .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }
 .maf label.maf-option:has(.form-input) { color: var(--text-muted); font-weight: 600; font-size: .75rem; }
+.maf .gads-add-form .maf-actions { align-items: flex-end; }
+.maf .gads-add-form .maf-option { flex-direction: column; align-items: stretch; gap: .25rem; }
+.maf .gads-brand-field { min-width: 260px; color: var(--text-muted); font-weight: 600; font-size: .75rem; cursor: default; }
+.maf .gads-brand-field > div > button { padding: .4rem .6rem !important; border-radius: 8px !important; font-size: .8rem; font-weight: 400; }

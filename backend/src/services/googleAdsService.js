@@ -174,6 +174,9 @@ export function planJobs(accounts, runs, today) {
         jobs.push({
           brandId: account.brand_id, customerId: account.customer_id, startDate: start, endDate: end,
           reason: inResync && !resyncCovered ? 'resync' : end === yesterday ? 'current' : 'backfill',
+          // Lets an MCC-level fetcher stay quiet about an account it cannot
+          // reach once another fetcher (a script in that account) has synced it.
+          hasSyncedBefore: own.length > 0,
         });
       }
     }

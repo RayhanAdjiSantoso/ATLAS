@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, CircleAlert, Loader2, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import BrandCombo from '../metaAutomation/BrandCombo.jsx';
 import './metaAdsAutoFetch.css';
 
 const dateTime = (iso) => (iso ? new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -45,7 +46,8 @@ export default function GoogleAdsSection({ brand }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
-  const [form, setForm] = useState({ customerId: '', label: '', backfillFrom: '' });
+  const [form, setForm] = useState({ customerId: '', brandName: brand?.brand_name ?? '', backfillFrom: '' });
+  const [atlasBrands, setAtlasBrands] = useState([]); // [{brand_id, brand_name}]
   const [resync, setResync] = useState({ from: firstOfMonth(-1), to: new Date().toISOString().slice(0, 10) });
 
   const load = useCallback(async () => {
@@ -61,9 +63,15 @@ export default function GoogleAdsSection({ brand }) {
 
   useEffect(() => {
     setOverview(null); setNotice(''); setError('');
-    setForm({ customerId: '', label: '', backfillFrom: '' });
+    setForm({ customerId: '', brandName: brand?.brand_name ?? '', backfillFrom: '' });
     load();
-  }, [load]);
+  }, [load, brand?.brand_name]);
+
+  useEffect(() => {
+    api.get('/brands')
+      .then((res) => setAtlasBrands(res.data.brands || []))
+      .catch(() => setAtlasBrands([]));
+  }, []);
 
   async function act(key, work, success) {
     setBusy(key); setError(''); setNotice('');
@@ -80,15 +88,26 @@ export default function GoogleAdsSection({ brand }) {
     }
   }
 
+  // The account goes to the brand picked under "Nama Brand" — the brand
+  // open on this page by default, but any ATLAS brand can be chosen.
+  const targetBrand = atlasBrands.find((b) => b.brand_name === form.brandName) ?? null;
+
   async function addAccount(event) {
     event.preventDefault();
-    const ok = await act('add', () => api.post('/google-ads/accounts', {
-      brandId,
-      customerId: form.customerId,
-      label: form.label || null,
-      backfillFrom: form.backfillFrom || overview?.defaultBackfillFrom,
-    }), 'Akun tersimpan. Data mulai ditarik pada jadwal Google Ads Script berikutnya (harian).');
-    if (ok) setForm({ customerId: '', label: '', backfillFrom: '' });
+    if (!targetBrand) return;
+    const elsewhere = targetBrand.brand_id !== brandId;
+    const ok = await act('add', async () => {
+      await api.post('/google-ads/accounts', {
+        brandId: targetBrand.brand_id,
+        customerId: form.customerId,
+        backfillFrom: form.backfillFrom || overview?.defaultBackfillFrom,
+      });
+      // The response lists the target brand's accounts; this page shows this brand's.
+      return api.get('/google-ads/overview', { params: { brandId } });
+    }, elsewhere
+      ? `Akun tersimpan di brand ${targetBrand.brand_name}. Buka brand itu untuk melihat status sinkronnya.`
+      : 'Akun tersimpan. Data mulai ditarik pada jadwal Google Ads Script berikutnya (harian).');
+    if (ok) setForm({ customerId: '', brandName: brand?.brand_name ?? '', backfillFrom: '' });
   }
 
   const toggleActive = (account) => act(
@@ -143,13 +162,12 @@ export default function GoogleAdsSection({ brand }) {
                 <div className="maf-table-wrap">
                   <table className="maf-table">
                     <thead>
-                      <tr><th>Customer ID</th><th>Label</th><th>Nama di Google Ads</th><th>Mata uang</th><th>Data tersedia</th><th>Sinkron terakhir</th><th /></tr>
+                      <tr><th>Customer ID</th><th>Nama di Google Ads</th><th>Mata uang</th><th>Data tersedia</th><th>Sinkron terakhir</th><th /></tr>
                     </thead>
                     <tbody>
                       {accounts.map((a) => (
                         <tr key={a.id}>
                           <td>{dashed(a.customer_id)}{!a.is_active && <small className="maf-run-meta"> · dijeda</small>}</td>
-                          <td>{a.label || '—'}</td>
                           <td>{a.account_name || <span className="maf-run-meta">menunggu sinkron pertama</span>}</td>
                           <td>{a.currency_code || '—'}</td>
                           <td>{a.coverage ? `${dayLabel(a.coverage.first_date)} – ${dayLabel(a.coverage.last_date)}` : <span className="maf-run-meta">sejak {dayLabel(a.backfill_from)}, belum ada</span>}</td>
@@ -198,28 +216,32 @@ export default function GoogleAdsSection({ brand }) {
             </div>
 
             {!isViewOnly && (
-              <form className="maf-block" onSubmit={addAccount}>
+              <form className="maf-block gads-add-form" onSubmit={addAccount}>
                 <h4>Tambah akun</h4>
                 <div className="maf-actions">
                   <label className="maf-option">Customer ID
                     <input className="form-input" placeholder="123-456-7890" value={form.customerId} required
                       onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))} />
                   </label>
-                  <label className="maf-option">Label (opsional)
-                    <input className="form-input" placeholder="mis. KL" maxLength={80} value={form.label}
-                      onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
-                  </label>
+                  <div className="maf-option gads-brand-field">Nama Brand
+                    <BrandCombo
+                      options={atlasBrands.map((b) => b.brand_name).sort()}
+                      value={form.brandName}
+                      placeholder="Pilih brand ATLAS..."
+                      onChange={(v) => setForm((f) => ({ ...f, brandName: v }))}
+                    />
+                  </div>
                   <label className="maf-option">Tarik data sejak
                     <input type="date" className="form-input" value={form.backfillFrom || overview.defaultBackfillFrom}
                       onChange={(e) => setForm((f) => ({ ...f, backfillFrom: e.target.value }))} />
                   </label>
-                  <button type="submit" className="btn btn-primary dt-btn-sm" disabled={busy === 'add' || !form.customerId.trim()}>
+                  <button type="submit" className="btn btn-primary dt-btn-sm" disabled={busy === 'add' || !form.customerId.trim() || !targetBrand}>
                     {busy === 'add' ? <Loader2 size={14} className="maf-spin" /> : <Plus size={14} />} Hubungkan
                   </button>
                 </div>
                 <p className="maf-hint">
-                  Akun harus tertaut ke Manager Account (MCC) MIL tempat Google Ads Script berjalan. Kalau belum, sinkron akan
-                  tercatat gagal dengan keterangan "tidak ditemukan di MCC".
+                  Setelah menghubungkan, pasang Google Ads Script (apps-script/GoogleAdsReport.js) di akun Google Ads itu sendiri:
+                  Tools › Bulk actions › Scripts, lalu jadwalkan Daily. Tanpa script itu, data akun ini tidak akan masuk.
                 </p>
               </form>
             )}
