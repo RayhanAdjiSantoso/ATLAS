@@ -42,6 +42,7 @@ import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
 import { PeriodSourcePicker, type LibraryMonth } from '../reports/PeriodSourcePicker';
+import type { AutoRange } from '../reports/AutoRangePanel';
 import { getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
@@ -76,6 +77,21 @@ interface LibraryFileMeta {
   channel: string;
   original_filename: string;
   period_month: string | null;
+}
+
+// The auto-fetched daily rows of a custom range, served as the same Ads
+// Manager-style workbook a library month is. 404 = nothing stored there.
+async function downloadAutoRange(clientId: number, accountType: 'MAIN' | 'CPAS', range: AutoRange): Promise<File | null> {
+  try {
+    const { data } = await api.get('/meta-ads-insights/export', {
+      params: { brandId: clientId, accountType, start: range.start, end: range.end },
+      responseType: 'blob',
+    });
+    return new File([data], `ATLAS-auto_${accountType === 'CPAS' ? 'cpas' : 'meta'}_${range.start}_${range.end}.xlsx`, { type: (data as Blob).type });
+  } catch (err) {
+    if ((err as { response?: { status?: number } }).response?.status === 404) return null;
+    throw err;
+  }
 }
 
 async function downloadLibraryFile(clientId: number, file: LibraryFileMeta): Promise<File> {
@@ -196,6 +212,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // filled without the original file.
   const [oldPickedRun, setOldPickedRun] = useState<SavedPeriod | null>(null);
   const [curPickedRun, setCurPickedRun] = useState<SavedPeriod | null>(null);
+  // The third stored source: any day range of the auto-fetched daily rows.
+  const [oldPickedRange, setOldPickedRange] = useState<AutoRange | null>(null);
+  const [curPickedRange, setCurPickedRange] = useState<AutoRange | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
 
@@ -242,6 +261,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const targetRole = pickerRole;
     if (!targetRole) return;
     (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
+    (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(null);
     (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(month);
     (targetRole === 'old' ? setOldSource : setCurSource)('saved');
     applyLibraryMonth(targetRole, month);
@@ -275,14 +295,53 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const targetRole = pickerRole;
     if (!targetRole) return;
     (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(null);
     (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(period);
     (targetRole === 'old' ? setOldSource : setCurSource)('saved');
     applyArchivePeriod(targetRole, period);
   }
 
+  async function applyAutoRange(targetRole: PeriodRole, range: AutoRange) {
+    if (!clientId) return;
+    setApplyingRole(targetRole);
+    setUploadError(null);
+    try {
+      const [metaFile, cpasFile] = await Promise.all([
+        downloadAutoRange(clientId, 'MAIN', range),
+        range.channels.cpas ? downloadAutoRange(clientId, 'CPAS', range) : Promise.resolve(null),
+      ]);
+      const metaRowsRange = metaFile ? await readSpreadsheetFile(metaFile) : [];
+      if (!metaRowsRange.length) throw new Error('Belum ada data Meta Ads tersimpan pada rentang ini.');
+      const cpasRowsRange = cpasFile ? await readSpreadsheetFile(cpasFile) : [];
+      const name = `Tarikan otomatis · ${range.label}`;
+      setMetaSides((prev) => ({ ...prev, [targetRole]: { rows: metaRowsRange, fileName: name } }));
+      setCpasSides((prev) => ({ ...prev, [targetRole]: cpasRowsRange.length ? { rows: cpasRowsRange, fileName: name } : null }));
+      setReport(null);
+      onInvalidate();
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } }; message: string };
+      setUploadError('Gagal memuat rentang tanggal: ' + (e.response?.data?.message ?? e.message));
+      (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(null);
+      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+    } finally {
+      setApplyingRole(null);
+    }
+  }
+
+  function handlePickRange(range: AutoRange) {
+    const targetRole = pickerRole;
+    if (!targetRole) return;
+    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+    (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
+    (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(range);
+    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    applyAutoRange(targetRole, range);
+  }
+
   function clearPickedPeriod(role: PeriodRole) {
     (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
     (role === 'old' ? setOldPickedRun : setCurPickedRun)(null);
+    (role === 'old' ? setOldPickedRange : setCurPickedRange)(null);
     (role === 'old' ? setOldSource : setCurSource)('upload');
     setMetaSides((prev) => ({ ...prev, [role]: null }));
     setCpasSides((prev) => ({ ...prev, [role]: null }));
@@ -430,6 +489,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setCurSource('upload');
     setOldPickedMonth(null);
     setCurPickedMonth(null);
+    setOldPickedRange(null);
+    setCurPickedRange(null);
     setIndustry(null);
     setCustomResultsCol(null);
     setObjective(null);
@@ -538,15 +599,23 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           <span className="sec-badge">Perpustakaan Brand &amp; Arsip Laporan</span>
         </div>
         <div className="empty-note" style={{ padding: '0 1.4rem .6rem' }}>
-          Dua sumber tersedia: <strong>Perpustakaan Brand</strong> (file bulanan dari Pengaturan Brand, bisa dipakai walau belum pernah di-Generate) dan{' '}
-          <strong>Arsip Laporan</strong> (periode dari laporan yang sudah tersimpan — dipakai ulang tanpa unggah file).
+          Tiga sumber tersedia: <strong>Perpustakaan Brand</strong> (file bulanan dari Pengaturan Brand, bisa dipakai walau belum pernah di-Generate),{' '}
+          <strong>Arsip Laporan</strong> (periode dari laporan yang sudah tersimpan — dipakai ulang tanpa unggah file), dan{' '}
+          <strong>Rentang tanggal</strong> (tanggal bebas dari data Meta yang ditarik otomatis tiap hari).
         </div>
         <div className="dz-grid-4">
           {(['old', 'cur'] as const).map((role) => {
             const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
             const pickedRun = role === 'old' ? oldPickedRun : curPickedRun;
+            const pickedRange = role === 'old' ? oldPickedRange : curPickedRange;
             const picked = pickedMonth
               ? { title: pickedMonth.label, summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
+              : pickedRange
+                ? {
+                    title: pickedRange.label,
+                    summary: Object.entries(pickedRange.channels).map(([ch, n]) => `${ch === 'cpas' ? 'CPAS' : 'Meta Ads'} ${n} hari`).join(' · '),
+                    metaLine: 'Rentang tanggal · tarikan otomatis',
+                  }
               : pickedRun
                 ? {
                     title: pickedRun.label || pickedRun.sourceComparison,
@@ -596,6 +665,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           onClose={() => setPickerRole(null)}
           onPickLibrary={handlePickMonth}
           onPickArchive={handlePickArchive}
+          selectedRange={(pickerRole === 'old' ? oldPickedRange : curPickedRange) ?? null}
+          onPickRange={handlePickRange}
         />
       )}
 

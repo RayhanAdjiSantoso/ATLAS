@@ -9,6 +9,7 @@
 //   { date, campaignId, campaignName, objective, age, gender,
 //     spend, impressions, reach, frequency,
 //     linkClicks, linkCtr, cpc, cpm, purchaseRoas,
+//     costPerResult: { indicator, value } | null,
 //     actions: { <action_type>: number }, actionValues: { <action_type>: number } }
 
 // Named action-type groups. The first type present on a row wins (never a
@@ -17,10 +18,6 @@
 // is what the rest of the Meta Ads Automation module already treats as
 // canonical.
 const ACTION_TYPES = {
-  // The Marketing API does not return "Instagram profile visits" (see
-  // PROXY_KEYS in Weekly.gs, measured across attribution windows), so link
-  // clicks stand in for it. Consistently 3–8% below Ads Manager.
-  profile_visits: ['link_click'],
   content_views: ['offsite_conversion.fb_pixel_view_content', 'omni_view_content'],
   add_to_cart: ['offsite_conversion.fb_pixel_add_to_cart', 'omni_add_to_cart'],
   initiate_checkout: ['offsite_conversion.fb_pixel_initiate_checkout', 'omni_initiated_checkout'],
@@ -54,6 +51,27 @@ const count = (ctx, group) => pickAction(ctx.raw.actions, group);
 const value = (ctx, group) => pickAction(ctx.raw.actionValues, group);
 const costPer = (ctx, group) => ratio(ctx.spend, count(ctx, group));
 
+// "Instagram profile visits" is not an action type the Marketing API returns
+// (see PROXY_KEYS in Weekly.gs), but a profile-visit campaign's cost per
+// result IS its cost per profile visit — the same figure Ads Manager shows.
+// The visits are then derived from it: Amount Spent ÷ Cost per Profile Visit.
+// A result is read as a profile visit when Meta's result indicator says so,
+// or when the campaign follows MIL's "… Profile Visit …" naming (its
+// optimisation goal is then profile visits whatever the indicator reads).
+const PROFILE_VISIT_INDICATOR = /profile/i;
+const PROFILE_VISIT_CAMPAIGN = /profile\s*visit/i;
+const costPerProfileVisit = (ctx) => {
+  const cpr = ctx.raw.costPerResult;
+  if (!cpr) return null;
+  const isProfileVisit = PROFILE_VISIT_INDICATOR.test(cpr.indicator ?? '') || PROFILE_VISIT_CAMPAIGN.test(ctx.raw.campaignName ?? '');
+  const cost = num(cpr.value);
+  return isProfileVisit && cost ? cost : null;
+};
+const profileVisits = (ctx) => {
+  const visits = ratio(ctx.spend, costPerProfileVisit(ctx));
+  return visits == null ? null : Math.round(visits);
+};
+
 // unit: 'idr' | 'count' | 'pct' | 'ratio' | 'text' — drives display only.
 // actionGroups: which ACTION_TYPES groups compute() reads, so the exact
 // action types to request/forward can be derived from the selected metrics.
@@ -70,10 +88,10 @@ export const METRICS = [
   { key: 'cpm', label: 'CPM (cost per 1,000 impressions)', group: 'default', unit: 'idr', compute: (c) => num(c.raw.cpm) },
   {
     key: 'profile_visits', label: 'Instagram profile visits', group: 'default', unit: 'count',
-    note: 'Pendekatan: memakai link clicks (API Meta tidak menyediakan profile visits), sekitar 3–8% di bawah Ads Manager.',
-    actionGroups: ['profile_visits'], compute: (c) => count(c, 'profile_visits'),
+    note: 'Dihitung dari Amount Spent ÷ Cost per Profile Visit (cost per result campaign profile visit).',
+    compute: profileVisits,
   },
-  { key: 'cost_per_profile_visit', label: 'Cost per Profile Visits', group: 'default', unit: 'idr', actionGroups: ['profile_visits'], compute: (c) => costPer(c, 'profile_visits') },
+  { key: 'cost_per_profile_visit', label: 'Cost per Profile Visits', group: 'default', unit: 'idr', compute: costPerProfileVisit },
   { key: 'content_views', label: 'Content views', group: 'default', unit: 'count', actionGroups: ['content_views'], compute: (c) => count(c, 'content_views') },
   { key: 'cost_per_content_view', label: 'Cost per content view', group: 'default', unit: 'idr', actionGroups: ['content_views'], compute: (c) => costPer(c, 'content_views') },
   {

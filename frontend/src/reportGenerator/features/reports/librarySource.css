@@ -220,3 +220,26 @@
 .mil-ui .src-side strong { font-size: .86rem; font-weight: 750; letter-spacing: -.012em; color: var(--text); overflow-wrap: anywhere; }
 .mil-ui .src-side-coverage { font-size: .68rem; color: var(--muted); overflow-wrap: anywhere; }
 @media (max-width: 560px) { .mil-ui .src-tabs { grid-template-columns: minmax(0, 1fr); } }
+
+/* Third source tab (Meta only): any day range from the auto-fetched daily
+   rows, not just whole library months. */
+.mil-ui .src-tabs.has-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mil-ui .auto-range { display: grid; gap: .8rem; padding: .9rem 0 .2rem; }
+.mil-ui .auto-range-coverage { display: flex; flex-wrap: wrap; gap: .4rem .9rem; color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui .auto-range-coverage strong { color: var(--text); font-weight: 750; margin-right: .2rem; }
+.mil-ui .auto-range-presets { display: flex; flex-wrap: wrap; gap: .4rem; }
+.mil-ui .auto-range-presets button { padding: .35rem .7rem; color: var(--acc-700, #142c82); border: 1px solid var(--border); border-radius: 99px; background: var(--surface, #fff); font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; transition: border-color .15s, background .15s; }
+.mil-ui .auto-range-presets button:hover { border-color: var(--acc-300); background: var(--acc-100); }
+.mil-ui .auto-range-presets button:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mil-ui .auto-range-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.mil-ui .auto-range-inputs label { display: grid; gap: .3rem; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface, #fff); transition: border-color .15s, box-shadow .15s; }
+.mil-ui .auto-range-inputs label:focus-within { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(30, 62, 184, .12); }
+.mil-ui .auto-range-inputs span { color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.mil-ui .auto-range-inputs input { min-width: 0; color: var(--text); border: 0; outline: none; background: transparent; font: inherit; font-size: .86rem; font-weight: 700; }
+.mil-ui .auto-range-summary { margin: 0; color: var(--muted); font-size: .72rem; }
+.mil-ui .auto-range-error { margin: 0; color: var(--bad, #c81e1e); font-size: .72rem; font-weight: 600; }
+.mil-ui .auto-range-actions { display: flex; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .mil-ui .src-tabs.has-3 { grid-template-columns: minmax(0, 1fr); }
+  .mil-ui .auto-range-inputs { grid-template-columns: minmax(0, 1fr); }
+}

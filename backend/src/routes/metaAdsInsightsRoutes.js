@@ -4,14 +4,23 @@ import { requireBrandAccess } from '../middlewares/brandAccess.js';
 import * as ctrl from '../controllers/metaAdsInsightsController.js';
 import {
   brandQueryValidation, saveConfigValidation, fetchNowValidation, syncLibraryValidation, deleteMonthValidation,
+  exportRangeValidation,
 } from '../validators/metaAdsInsightsValidators.js';
 
 // Meta Ads auto-fetch settings for Pengaturan Brand › Data & file. Admin
 // only, like every other route that reaches Apps Script / the Meta tokens
-// (see metaAutomationRoutes.js).
+// (see metaAutomationRoutes.js). The two read-only routes for the Report
+// Generator's custom range come first: they only read stored rows, so they
+// follow the Report Generator's access instead of the admin gate.
 const router = Router();
 
-router.use(authenticate, requireModule('meta_automation'));
+router.use(authenticate);
+
+const reportGenerator = requireModule('report_generator');
+router.get('/days', reportGenerator, requireBrandAccess((req) => req.query.brandId), brandQueryValidation, ctrl.getStoredDays);
+router.get('/export', reportGenerator, requireBrandAccess((req) => req.query.brandId), exportRangeValidation, ctrl.exportRange);
+
+router.use(requireModule('meta_automation'));
 
 router.get('/overview', requireBrandAccess((req) => req.query.brandId), brandQueryValidation, ctrl.getOverview);
 router.get('/accounts', requireBrandAccess((req) => req.query.brandId), brandQueryValidation, ctrl.listAccounts);

@@ -66,6 +66,31 @@ export const deleteMonth = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
+// GET /api/meta-ads-insights/days?brandId=
+// Which days are stored per account type (Report Generator's custom range).
+export const getStoredDays = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getStoredDays(Number(req.query.brandId)));
+});
+
+// GET /api/meta-ads-insights/export?brandId=&accountType=&start=&end=
+// The stored rows of a custom range as an Ads Manager-style .xlsx.
+export const exportRange = asyncHandler(async (req, res) => {
+  validate(req);
+  const { buffer, filename, rowCount } = await service.exportRange({
+    brandId: Number(req.query.brandId),
+    accountType: req.query.accountType,
+    start: req.query.start,
+    end: req.query.end,
+  });
+  res.set({
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'Content-Disposition': `attachment; filename="${filename}"`,
+    'X-Row-Count': String(rowCount),
+  });
+  res.send(buffer);
+});
+
 // ── ingest (Apps Script; no req.user — see dailyTrackingIngestAuth.js) ──
 // POST /api/meta-ads-insights/ingest/start
 export const startRun = asyncHandler(async (req, res) => {
@@ -75,6 +100,8 @@ export const startRun = asyncHandler(async (req, res) => {
     accountType: req.body.accountType,
     adAccountId: req.body.adAccountId,
     month: req.body.month,
+    since: req.body.since ?? undefined,
+    until: req.body.until ?? undefined,
     trigger: req.body.trigger,
   });
   res.json({ ok: true, ...result });
