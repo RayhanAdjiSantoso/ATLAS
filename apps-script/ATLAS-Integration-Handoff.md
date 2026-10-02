@@ -138,8 +138,8 @@ campaign × age × gender × day, lalu mendorongnya ke ATLAS lewat
 `X-Ingest-Key`, sama dengan Daily Tracking; `start` membawa `month`, `since`,
 `until`). Script juga meneruskan `results` dan `cost_per_result` beserta
 result indicator-nya (Results / Result indicator / Cost per result seperti di
-Ads Manager); dari situ ATLAS juga menghitung Cost per Profile Visit dan
-Profile visits (= Amount Spent ÷ Cost per Profile Visit). Definisi metrik ada di ATLAS (`backend/src/config/metaAdsMetrics.js`),
+Ads Manager); dari situ ATLAS juga mengisi Profile visits (Results campaign
+profile visit) dan Cost per Profile Visit (= Amount Spent ÷ Profile visits). Definisi metrik ada di ATLAS (`backend/src/config/metaAdsMetrics.js`),
 bukan di script ini.
 
 | action | payload | efek |

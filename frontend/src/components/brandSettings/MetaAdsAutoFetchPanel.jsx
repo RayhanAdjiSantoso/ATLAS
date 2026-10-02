@@ -260,8 +260,8 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
               ))}
             </div>
             <p className="maf-hint">
-              Breakdown: campaign name, age, gender, day. * Instagram profile visits dihitung dari Amount Spent ÷ Cost per
-              Profile Visit (cost per result campaign profile visit), karena API Meta tidak menyediakan angkanya langsung.
+              Breakdown: campaign name, age, gender, day. * Instagram profile visits diambil dari Results campaign profile visit; Cost
+              per Profile Visit = Amount Spent ÷ profile visits.
             </p>
 
             <h4 className="maf-sub">Tambahan (opsional)</h4>

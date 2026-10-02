@@ -19,8 +19,8 @@
  * Results: script meneruskan `results` dan `cost_per_result` beserta result
  * indicator-nya (result utama tiap campaign, sama seperti kolom Results di
  * Ads Manager: profile visit, purchase, add to cart, view content, dst.).
- * Dari situ ATLAS juga menghitung Cost per Profile Visit dan Profile visits
- * = Amount Spent / Cost per Profile Visit.
+ * Dari situ ATLAS juga mengisi Profile visits (Results campaign profile
+ * visit) dan Cost per Profile Visit = Amount Spent / Profile visits.
  *
  * Breakdown: campaign name x age x gender x day (level=campaign,
  * time_increment=1). Script ini SENGAJA "bodoh": meminta field tetap dan
