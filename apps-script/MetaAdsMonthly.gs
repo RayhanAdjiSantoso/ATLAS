@@ -212,9 +212,17 @@ function metaAdsQueueItem_(acct, range, trigger) {
   };
 }
 
-/** Item antrean lama (sebelum tarikan harian) hanya punya `month`. */
+/**
+ * Item antrean lama (sebelum tarikan harian, atau dari Web App versi lama)
+ * hanya punya `month`. Rentangnya dipotong s/d kemarin di sini juga, bukan
+ * hanya saat mengantre: Meta menolak seluruh tarikan kalau satu jendela
+ * dimulai di masa depan ("since cannot be in the future").
+ */
 function metaAdsItemRange_(item) {
-  return item.since && item.until ? { since: item.since, until: item.until } : metaAdsMonthRange_(item.month);
+  var range = item.since && item.until ? { since: item.since, until: item.until } : metaAdsMonthRange_(item.month);
+  var yesterday = metaAdsYesterday_();
+  if (range.until > yesterday) range.until = yesterday;
+  return range;
 }
 
 function getMetaAdsQueue_() {
@@ -286,6 +294,10 @@ function runMetaAdsFetchItem_(item) {
   var acct = findAccountById_(item.accountId);
   var range = metaAdsItemRange_(item);
   var label = item.client + ' ' + item.type + ' ' + range.since + '..' + range.until;
+  if (range.since > range.until) {
+    writeMetaAdsLog_(startedAt, 'GAGAL', label + ': belum ada hari yang lengkap untuk ditarik (dilewati).');
+    return;
+  }
   var runId = null;
   var total = 0;
 
