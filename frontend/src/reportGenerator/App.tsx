@@ -29,6 +29,8 @@ function App() {
   // Overview tab's own cards and Summary Overview's Cost per Revenue card,
   // same as the original's module-level globals.
   const [platformState, setPlatformState] = useState(emptyPlatformStateMap());
+  // Google Ads is not part of Summary Overview (yet), so it keeps its own flag.
+  const [googleDone, setGoogleDone] = useState(false);
   const [omzetOld, setOmzetOld] = useState<number | null>(null);
   const [omzetCur, setOmzetCur] = useState<number | null>(null);
   const [channelData, setChannelData] = useState<Record<string, BizChannelMetrics>>(defaultChannelData);
@@ -53,6 +55,7 @@ function App() {
     meta: platformState.meta.done ? '✓' : '—',
     shopee: platformState.shopee.done ? '✓' : '—',
     tiktok: platformState.tiktok.done ? '✓' : '—',
+    google: googleDone ? '✓' : '—',
     business: bizBadgeLabel(bizState),
     summary: doneCount === PLATFORM_CONFIG.length ? '✓' : `${doneCount}/${PLATFORM_CONFIG.length}`,
     reports: '—',
@@ -71,6 +74,7 @@ function App() {
           if (id === clientId) return;
           setClientId(id);
           setPlatformState(emptyPlatformStateMap());
+          setGoogleDone(false);
           setOmzetOld(null);
           setOmzetCur(null);
           setChannelData(defaultChannelData());
@@ -81,6 +85,7 @@ function App() {
         platformState={platformState}
         bizState={bizState}
         setPlatformResult={setPlatformResult}
+        setGoogleDone={setGoogleDone}
         invalidatePlatform={invalidatePlatform}
         omzetOld={omzetOld}
         omzetCur={omzetCur}

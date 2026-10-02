@@ -41,6 +41,9 @@
     /* TikTok ink/cyan — hue locked */
     --tiktok:#0a0a0a;--tiktok2:#69c9d0;--tiktok-100:#eafbfc;
 
+    /* Google blue — hue locked */
+    --google:#1a73e8;--google2:#4b9bff;--google-100:#e8f0fe;--google-700:#1557b0;
+
     /* Business teal / Summary violet — already established per-tab identity,
        formalized into tokens here instead of living as scattered hex literals. */
     --biz:#0d9488;--biz-100:#e6f7f5;
@@ -189,11 +192,13 @@
   .sec-heading{font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:10px;padding:.9rem 1.4rem;border-bottom:1px solid var(--border);background:var(--s2);color:var(--acc)}
   .sec-heading.shopee-heading{color:var(--shopee-700)}
   .sec-heading.tiktok-heading{color:var(--tiktok)}
+  .sec-heading.google-heading{color:var(--google-700)}
   .sec-heading.business-heading{color:var(--biz)}
   .sec-heading.summary-heading{color:var(--sum)}
   .sec-heading::before{content:'';width:3px;height:1em;background:linear-gradient(180deg,var(--acc),var(--cyan));border-radius:2px;flex-shrink:0}
   .sec-heading.shopee-heading::before{background:linear-gradient(180deg,var(--shopee),var(--shopee2))}
   .sec-heading.tiktok-heading::before{background:linear-gradient(180deg,var(--tiktok),var(--tiktok2))}
+  .sec-heading.google-heading::before{background:linear-gradient(180deg,var(--google),var(--google2))}
   .sec-heading.business-heading::before{background:linear-gradient(180deg,var(--biz),var(--cyan))}
   .sec-heading.summary-heading::before{background:linear-gradient(180deg,var(--sum),var(--cyan))}
   .sec-badge{font-size:.62rem;background:#fff;border:1px solid var(--border);border-radius:5px;padding:.15rem .55rem;color:var(--muted);font-weight:600;letter-spacing:.03em}
@@ -334,6 +339,7 @@
   .add-metric-opt-all{font-weight:700;color:var(--acc)}
   .add-metric-divider{height:1px;background:var(--border);margin:.2rem 0}
   .howto-step-num.tiktok-num{background:var(--tiktok)}
+  .howto-step-num.google-num{background:var(--google)}
   @media print{.source-block, #cta, .action-row, .metric-picker, .add-metric-wrap, .platform-tabs, .omzet-row, .period-labels, .period-input-row, .metric-drag-handle, .metric-remove-btn{display:none!important}
   &{background:#fff;color:#111}
   #report{margin-top:0}
@@ -368,10 +374,12 @@
   .period-input-field label{font-size:.63rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
   .period-input-field.shopee-period label{color:var(--shopee-700)}
   .period-input-field.tiktok-period label{color:var(--tiktok)}
+  .period-input-field.google-period label{color:var(--google-700)}
   .period-text-input{border:none;outline:none;font-size:.88rem;font-weight:700;color:var(--text);background:transparent;width:100%}
   .period-text-input::placeholder{color:var(--muted2);font-weight:400;font-size:.82rem}
   .period-input-field.filled{border-color:var(--shopee)}
   .period-input-field.tiktok-period.filled{border-color:var(--tiktok)}
+  .period-input-field.google-period.filled{border-color:var(--google)}
   /* ── Industry selector ── */
   .industry-selector{display:none;margin-bottom:1.2rem;background:var(--surface);border:1.5px solid var(--acc);border-radius:12px;padding:1rem 1.4rem;box-shadow:var(--shadow-sm)}
   .industry-selector.visible{display:block}

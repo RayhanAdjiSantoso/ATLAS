@@ -21,7 +21,7 @@ import { isReportKey, REPORT_NAV, type ReportKey } from './reports';
 //
 // Pengaturan Brand, MRG's seventh entry, is absent because the page is not
 // ported (see reports.ts).
-const PRIMARY: ReportKey[] = ['meta', 'shopee', 'tiktok', 'business', 'summary', 'reports'];
+const PRIMARY: ReportKey[] = ['meta', 'shopee', 'tiktok', 'google', 'business', 'summary', 'reports'];
 
 export function GenTopNav({ badges }: { badges: Record<ReportKey, string> }) {
   const { platform } = useParams();

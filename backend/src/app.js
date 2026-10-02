@@ -15,6 +15,8 @@ import dailyTrackingRoutes from './routes/dailyTrackingRoutes.js';
 import metaAdsInsightsRoutes from './routes/metaAdsInsightsRoutes.js';
 import metaAdsInsightsIngestRoutes from './routes/metaAdsInsightsIngestRoutes.js';
 import accessRoutes from './routes/accessRoutes.js';
+import googleAdsRoutes from './routes/googleAdsRoutes.js';
+import googleAdsIngestRoutes from './routes/googleAdsIngestRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 import { securityHeaders } from './middlewares/security.js';
 
@@ -32,6 +34,7 @@ app.use(securityHeaders);
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 // Before the global parser on purpose: it needs a bigger body limit (see the router).
 app.use('/api/meta-ads-insights/ingest', metaAdsInsightsIngestRoutes);
+app.use('/api/google-ads/ingest', googleAdsIngestRoutes);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -50,6 +53,7 @@ app.use('/api/internal-dashboard', internalDashboardRoutes);
 app.use('/api/control-center', controlCenterRoutes);
 app.use('/api/daily-tracking', dailyTrackingRoutes);
 app.use('/api/meta-ads-insights', metaAdsInsightsRoutes);
+app.use('/api/google-ads', googleAdsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

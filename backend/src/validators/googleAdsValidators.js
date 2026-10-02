@@ -1,0 +1,50 @@
+import { body, param, query } from 'express-validator';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const brandId = (source) => source('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan');
+const date = (source, field) => source(field).matches(ISO_DATE).withMessage(`${field} harus format YYYY-MM-DD`);
+const accountId = param('accountId').isInt({ min: 1 }).withMessage('accountId tidak valid');
+
+export const brandQueryValidation = [brandId(query)];
+
+export const addAccountValidation = [
+  brandId(body),
+  body('customerId').isString().trim().notEmpty().withMessage('Customer ID wajib diisi'),
+  body('label').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('backfillFrom').optional({ nullable: true }).matches(ISO_DATE).withMessage('backfillFrom harus format YYYY-MM-DD'),
+];
+
+export const updateAccountValidation = [
+  accountId, brandId(body),
+  body('label').optional().isString().isLength({ max: 80 }),
+  body('isActive').optional().isBoolean(),
+  body('backfillFrom').optional().matches(ISO_DATE).withMessage('backfillFrom harus format YYYY-MM-DD'),
+];
+
+export const removeAccountValidation = [accountId, brandId(query)];
+
+export const resyncValidation = [accountId, brandId(body), date(body, 'from'), date(body, 'to')];
+
+export const reportValidation = [
+  brandId(query), date(query, 'oldStart'), date(query, 'oldEnd'), date(query, 'curStart'), date(query, 'curEnd'),
+];
+
+// ── ingest (Google Ads Script / API fetcher) ──────────────────────────
+export const startRunValidation = [
+  body('customerId').isString().trim().notEmpty().withMessage('customerId wajib diisi'),
+  date(body, 'startDate'), date(body, 'endDate'),
+  body('source').optional().isIn(['ads_script', 'api']),
+  body('account').optional({ nullable: true }).isObject(),
+];
+
+export const rowsValidation = [
+  body('runId').isString().notEmpty().withMessage('runId wajib diisi'),
+  body('rows').isArray({ min: 1 }).withMessage('rows wajib diisi'),
+];
+
+export const finishValidation = [
+  body('runId').isString().notEmpty().withMessage('runId wajib diisi'),
+  body('status').isIn(['success', 'failed']).withMessage('status harus success atau failed'),
+  body('rowCount').isInt({ min: 0 }).withMessage('rowCount harus angka >= 0'),
+  body('note').optional({ nullable: true }).isString().isLength({ max: 500 }),
+];
