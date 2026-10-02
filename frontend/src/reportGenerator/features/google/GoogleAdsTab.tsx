@@ -36,6 +36,9 @@ interface GoogleAdsTabProps {
 
 type MetricKey = keyof GadsMetrics;
 
+// Every table opens on its first 10 rows; the rest are behind "Tampilkan semua".
+const TABLE_ROWS = 10;
+
 // The KPI strip of Looker's "Overall Campaign Performance" page, in its order.
 const KPI_CARDS: { key: MetricKey; label: string; kind: 'money' | 'int' | 'dec' | 'pct'; sentiment: Sentiment; short?: boolean }[] = [
   { key: 'cost', label: 'Cost', kind: 'money', sentiment: 'neutral', short: true },
@@ -393,11 +396,11 @@ function GoogleAdsReportView({ report, p1, p2, generatedAt, onReset }: { report:
                 <SectionAccordion>
                   <div className="sec-block">
                     {heading('Top Search Terms', `berdasarkan cost · ${p2}`)}
-                    <GoogleAdsTable columns={termCols} rows={cur.searchTerms} sortKey="cost" limit={5} />
+                    <GoogleAdsTable columns={termCols} rows={cur.searchTerms} sortKey="cost" limit={TABLE_ROWS} />
                   </div>
                   <div className="sec-block">
                     {heading('Search Term Wasted Spend', `cost tanpa konversi · ${p2}`)}
-                    <GoogleAdsTable columns={wastedCols} rows={wasted} sortKey="cost" limit={3}
+                    <GoogleAdsTable columns={wastedCols} rows={wasted} sortKey="cost" limit={TABLE_ROWS}
                       emptyMessage="Tidak ada search term yang mengeluarkan biaya tanpa konversi pada periode ini." />
                   </div>
                 </SectionAccordion>
@@ -411,11 +414,11 @@ function GoogleAdsReportView({ report, p1, p2, generatedAt, onReset }: { report:
                 <SectionAccordion>
                   <div className="sec-block">
                     {heading('Campaign Performance', `urut cost · ${p2}`)}
-                    <GoogleAdsTable columns={campaignCols} rows={cur.campaigns} sortKey="cost" />
+                    <GoogleAdsTable columns={campaignCols} rows={cur.campaigns} sortKey="cost" limit={TABLE_ROWS} />
                   </div>
                   <div className="sec-block">
                     {heading('Ad Group Performance', `urut cost · ${p2}`)}
-                    <GoogleAdsTable columns={adGroupCols} rows={cur.adGroups} sortKey="cost" limit={15} />
+                    <GoogleAdsTable columns={adGroupCols} rows={cur.adGroups} sortKey="cost" limit={TABLE_ROWS} />
                   </div>
                 </SectionAccordion>
               ),
@@ -428,15 +431,15 @@ function GoogleAdsReportView({ report, p1, p2, generatedAt, onReset }: { report:
                 <SectionAccordion>
                   <div className="sec-block">
                     {heading('Best Performing Keyword', `berdasarkan konversi · ${p2}`)}
-                    <GoogleAdsTable columns={keywordCols} rows={cur.keywords} sortKey="conversions" limit={5} />
+                    <GoogleAdsTable columns={keywordCols} rows={cur.keywords} sortKey="conversions" limit={TABLE_ROWS} />
                   </div>
                   <div className="sec-block">
                     {heading('Low Performing Keyword', `berdasarkan Avg. CPC · ${p2}`)}
-                    <GoogleAdsTable columns={keywordCols} rows={cur.keywords.filter((k) => k.clicks > 0)} sortKey="avg_cpc" sortDir="asc" limit={5} />
+                    <GoogleAdsTable columns={keywordCols} rows={cur.keywords.filter((k) => k.clicks > 0)} sortKey="avg_cpc" sortDir="asc" limit={TABLE_ROWS} />
+                    <p className="gads-footnote">
+                      Impr. (Abs. Top) % dan Search Lost Top IS dihitung dari data harian, dibobot dengan impressions — bisa sedikit berbeda dari angka satu periode di Google Ads.
+                    </p>
                   </div>
-                  <p className="gads-footnote">
-                    Impr. (Abs. Top) % dan Search Lost Top IS dihitung dari data harian, dibobot dengan impressions — bisa sedikit berbeda dari angka satu periode di Google Ads.
-                  </p>
                 </SectionAccordion>
               ),
             },
@@ -448,7 +451,7 @@ function GoogleAdsReportView({ report, p1, p2, generatedAt, onReset }: { report:
                 <SectionAccordion>
                   <div className="sec-block">
                     {heading('Search Campaign · City Performance', `urut konversi · ${p2}`)}
-                    <GoogleAdsTable columns={cityCols} rows={searchCities} sortKey="conversions" limit={10} numbered />
+                    <GoogleAdsTable columns={cityCols} rows={searchCities} sortKey="conversions" limit={TABLE_ROWS} numbered />
                   </div>
                 </SectionAccordion>
               ),
