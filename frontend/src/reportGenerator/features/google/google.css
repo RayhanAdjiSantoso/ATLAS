@@ -24,7 +24,7 @@
 .mil-ui .gads-card h4 { margin: 0 0 .6rem; font-size: .78rem; font-weight: 700; color: var(--text); }
 .mil-ui .gads-line-wrap { position: relative; height: 300px; }
 
-.mil-ui .gads-table-scroll { overflow-x: auto; }
+.mil-ui .gads-table-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .mil-ui .gads-table th { cursor: pointer; user-select: none; white-space: nowrap; text-align: right; }
 .mil-ui .gads-table td { white-space: nowrap; text-align: right; }
 .mil-ui .gads-table th.is-left, .mil-ui .gads-table td.is-left { text-align: left; }
@@ -35,7 +35,7 @@
 .mil-ui .gads-table-foot { display: flex; align-items: center; justify-content: flex-end; gap: .8rem; padding: .6rem 1.2rem; border-top: 1px solid var(--border); font-size: .75rem; color: var(--muted); }
 .mil-ui .gads-more { padding: .3rem .7rem; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--google-700); font-size: .75rem; font-weight: 600; cursor: pointer; }
 .mil-ui .gads-more:hover { border-color: var(--google); }
-.mil-ui .gads-footnote { margin: -.8rem 0 1.4rem; font-size: .72rem; color: var(--muted); }
+.mil-ui .gads-footnote { margin: 0; padding: .6rem 1.2rem .9rem; border-top: 1px solid var(--border); font-size: .72rem; color: var(--muted); }
 
 /* The show-all toggle is a screen control; the PDF keeps the top rows. */
 .mil-ui.pdf-export-mode .gads-table-foot { display: none; }
