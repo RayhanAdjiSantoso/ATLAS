@@ -18,6 +18,7 @@ export const FIXED_SPEND_CHANNELS = [
   { key: 'shopee_iklanku', label: 'Shopee Iklanku' },
   { key: 'gmv_max', label: 'GMV Max' },
   { key: 'ttam', label: 'TTAM' },
+  { key: 'google_ads', label: 'Google Ads' },
 ];
 
 export const META_SYNC_CHANNEL_KEYS = ['meta_boost_post', 'meta_nonboost_post'];

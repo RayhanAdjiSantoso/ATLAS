@@ -126,22 +126,23 @@ export async function upsertManualSpendEntry(v, db = pool) {
   return rows[0];
 }
 
-// A Meta-sync write (scheduled ingest or the manual "Sync Meta Sekarang"
-// button). Silently skipped by Postgres if the row is locked_manual — no rows
-// come back for a skipped channel, which the service uses to report
-// applied vs. skipped per channel.
+// An API-sync write: Meta (scheduled ingest or "Sync Meta Sekarang") or
+// Google Ads (after a Google Ads Script run; v.source 'google_ads_api').
+// Silently skipped by Postgres if the row is locked_manual — no rows come
+// back for a skipped channel, which the service uses to report applied vs.
+// skipped per channel.
 export async function upsertApiSpendEntry(v, db = pool) {
   const { rows } = await db.query(
     `INSERT INTO daily_channel_spend
        (brand_id, entry_date, channel_key, amount_spent, source, locked_manual, synced_at, created_by, updated_by)
-     VALUES ($1, $2, $3, $4, 'meta_api', FALSE, now(), $5, $5)
+     VALUES ($1, $2, $3, $4, $6, FALSE, now(), $5, $5)
      ON CONFLICT (brand_id, entry_date, channel_key) DO UPDATE SET
        amount_spent = EXCLUDED.amount_spent,
-       source       = 'meta_api',
+       source       = EXCLUDED.source,
        synced_at    = now()
      WHERE daily_channel_spend.locked_manual = FALSE
      RETURNING daily_channel_spend_id AS id, channel_key`,
-    [v.brandId, v.entryDate, v.channelKey, v.amountSpent, v.userId ?? null],
+    [v.brandId, v.entryDate, v.channelKey, v.amountSpent, v.userId ?? null, v.source ?? 'meta_api'],
   );
   return rows[0] ?? null; // null => skipped, row is locked_manual
 }
