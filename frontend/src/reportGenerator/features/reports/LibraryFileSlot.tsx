@@ -14,6 +14,16 @@ function getCatalog(id: number) {
 }
 export const formatMonth = (month: string) => new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month.slice(0,7)}-01T00:00:00Z`));
 export function clearLibraryCatalog() { catalog.clear(); }
+// An Iklan Produk Otomatis export filed under Iklan Produk (or the overall
+// export under Otomatis) would be counted twice once the report folds Otomatis
+// into Iklan Produk. Uploads are now rejected server-side; this hides the ones
+// filed before that check existed.
+export function isMisfiledShopeeFile(f: { platform: string; channel: string; original_filename: string }) {
+  if (f.platform !== 'shopee') return false;
+  if (f.channel === 'produk') return /otomatis/i.test(f.original_filename);
+  if (f.channel === 'produk_otomatis') return /keseluruhan/i.test(f.original_filename);
+  return false;
+}
 interface Props {
   clientId: number | null;
   platform: string;
@@ -44,7 +54,7 @@ export function LibraryFileSlot({ clientId, platform, channel, tag, loaded, file
     if (!clientId) return;
     setLoading(true);
     getCatalog(clientId).then(rows => {
-      if (!cancelled) setFiles(rows.filter(f => f.platform === platform && f.channel === channel));
+      if (!cancelled) setFiles(rows.filter(f => f.platform === platform && f.channel === channel && !isMisfiledShopeeFile(f)));
     }).catch(e => { if (!cancelled) setError(e.response?.data?.error || 'Daftar file belum bisa dimuat. Coba muat ulang.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

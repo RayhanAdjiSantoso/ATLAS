@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../../../api/client.js';
-import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSlot';
+import { LibraryFileSlot, isMisfiledShopeeFile, type LibrarySelection } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { combineManualPeriods } from '../../lib/manualPeriod';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
@@ -267,7 +267,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     setUploadError(null);
     try {
       const { data } = await api.get(`/brands/${clientId}/library`);
-      const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'shopee' && f.period_month?.slice(0, 7) === month.month);
+      const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'shopee' && f.period_month?.slice(0, 7) === month.month && !isMisfiledShopeeFile(f));
       const byChannel = new Map<string, LibraryFileMeta[]>();
       for (const f of files) {
         (byChannel.get(f.channel) ?? byChannel.set(f.channel, []).get(f.channel)!).push(f);

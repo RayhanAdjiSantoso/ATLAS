@@ -157,6 +157,10 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
   if (isReference && files.length > 1) throw reject('Dataset referensi hanya menerima satu file');
   if (replaceFileId != null && (!Number.isInteger(replaceFileId) || replaceFileId <= 0)) throw reject('File yang akan diganti tidak valid');
   if (replaceFileId != null && files.length !== 1) throw reject('Penggantian file hanya menerima satu file baru');
+  for (const file of files) {
+    const mismatch = library.shopeeChannelMismatch(platform, channel, file.originalname);
+    if (mismatch) throw reject(mismatch);
+  }
 
   const saved = [];
   const warnings = [];

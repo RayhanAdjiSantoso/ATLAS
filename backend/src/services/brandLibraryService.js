@@ -50,6 +50,26 @@ export function isValidScope(platform, channel) {
   return Boolean(LIBRARY_CHANNELS[platform]?.includes(channel));
 }
 
+// Shopee names its Iklan Produk Otomatis export "Rincian Data Iklan Produk
+// Otomatis …"; the Iklan Produk slot takes "Data Keseluruhan Iklan Shopee …".
+// The Report Generator folds Otomatis rows into Iklan Produk itself, so an
+// Otomatis file filed under 'produk' is counted twice. The name is the only
+// reliable tell — both exports share the same columns.
+export function isShopeeOtomatisFilename(filename = '') {
+  return /otomatis/i.test(String(filename));
+}
+
+export function shopeeChannelMismatch(platform, channel, filename) {
+  if (platform !== 'shopee') return null;
+  if (channel === 'produk' && isShopeeOtomatisFilename(filename)) {
+    return `${filename} adalah ekspor Iklan Produk Otomatis — unggah ke slot Iklan Produk Otomatis, bukan Iklan Produk`;
+  }
+  if (channel === 'produk_otomatis' && /keseluruhan/i.test(String(filename))) {
+    return `${filename} adalah ekspor Data Keseluruhan Iklan — unggah ke slot Iklan Produk, bukan Iklan Produk Otomatis`;
+  }
+  return null;
+}
+
 /* ── Brand profile ──────────────────────────────────────────────────── */
 
 const PROFILE_FIELDS = [
