@@ -16,9 +16,11 @@
  * Satu run tidak pernah melewati batas bulan, karena ATLAS menyimpan dan
  * membersihkan data per rentang di dalam satu bulan.
  *
- * Instagram profile visits: API tidak punya metriknya, jadi script meneruskan
- * cost_per_result (+ indicator-nya). ATLAS menghitung Cost per Profile Visit
- * dari situ dan Profile visits = Amount Spent / Cost per Profile Visit.
+ * Results: script meneruskan `results` dan `cost_per_result` beserta result
+ * indicator-nya (result utama tiap campaign, sama seperti kolom Results di
+ * Ads Manager: profile visit, purchase, add to cart, view content, dst.).
+ * Dari situ ATLAS juga menghitung Cost per Profile Visit dan Profile visits
+ * = Amount Spent / Cost per Profile Visit.
  *
  * Breakdown: campaign name x age x gender x day (level=campaign,
  * time_increment=1). Script ini SENGAJA "bodoh": meminta field tetap dan
@@ -75,8 +77,8 @@ var MAM_FIELDS = [
   'actions', 'action_values', 'purchase_roas'
 ];
 // Diminta terpisah supaya kalau versi API menolak field ini, tarikan tetap
-// jalan tanpa Cost per Profile Visit (lihat fetchMetaAdsRange_).
-var MAM_RESULT_FIELDS = ['cost_per_result'];
+// jalan tanpa Results / Cost per result (lihat fetchMetaAdsRange_).
+var MAM_RESULT_FIELDS = ['results', 'cost_per_result'];
 
 // ============================================================
 // ENTRY POINTS
@@ -336,7 +338,7 @@ function runMetaAdsFetchItem_(item) {
 
     atlasIngestPost_('/finish', {
       runId: runId, status: 'success', rowCount: total,
-      note: fetched.withoutResults ? 'cost_per_result ditolak Meta; Profile visits tidak terisi' : null
+      note: fetched.withoutResults ? 'results/cost_per_result ditolak Meta; Results dan Profile visits tidak terisi' : null
     });
 
     // Langkah terpisah dari /finish: menyimpan bulan ini ke perpustakaan
@@ -377,8 +379,8 @@ function writeMetaAdsLog_(startedAt, status, detail) {
  * Tarik satu rentang (di dalam satu bulan), per jendela MAM_WINDOW_DAYS
  * hari. `onRows(rows)` dipanggil per halaman hasil dengan baris yang sudah
  * dipetakan (mapMetaInsightRow_), supaya memori tidak menampung sebulan
- * penuh. Kalau Meta menolak field cost_per_result, tarikan diulang tanpa
- * field itu (Profile visits kosong) daripada gagal total; hasilnya
+ * penuh. Kalau Meta menolak field results/cost_per_result, tarikan diulang
+ * tanpa field itu (Results & Profile visits kosong) daripada gagal total; hasilnya
  * { withoutResults: true }.
  */
 function fetchMetaAdsRange_(token, accountId, range, actionTypes, onRows) {
@@ -397,8 +399,8 @@ function fetchMetaAdsRange_(token, accountId, range, actionTypes, onRows) {
       fetchMetaAdsWindow_(token, accountId, fields, since, until, wanted, onRows);
     } catch (e) {
       // Ditolak di halaman PERTAMA jendela pertama (belum ada baris terkirim)
-      // karena field-nya tidak dikenal: ulangi tanpa cost_per_result.
-      if (withoutResults || from !== metaAdsParseDate_(range.since) || !/cost_per_result/.test(e.message)) throw e;
+      // karena field-nya tidak dikenal: ulangi tanpa results/cost_per_result.
+      if (withoutResults || from !== metaAdsParseDate_(range.since) || !/results|cost_per_result/.test(e.message)) throw e;
       withoutResults = true;
       fields = MAM_FIELDS;
       fetchMetaAdsWindow_(token, accountId, fields, since, until, wanted, onRows);
@@ -448,6 +450,7 @@ function mapMetaInsightRow_(d, wantedActionTypes) {
     cpc: d.cost_per_inline_link_click,
     cpm: d.cpm,
     purchaseRoas: firstActionValue_(d.purchase_roas),
+    results: firstResult_(d.results),
     costPerResult: firstResult_(d.cost_per_result),
     actions: pickActionList_(d.actions, wantedActionTypes),
     actionValues: pickActionList_(d.action_values, wantedActionTypes)
@@ -464,16 +467,18 @@ function pickActionList_(arr, wanted) {
 }
 
 /**
- * cost_per_result -> { indicator, value } untuk result utama campaign itu
- * (Ads Manager: "Cost per result"). Bentuknya
- * [{ indicator, values: [{ value }] }]; dibaca longgar karena ATLAS
- * yang memutuskan apakah indicator-nya profile visit.
+ * results / cost_per_result -> { indicator, value } untuk result utama
+ * campaign itu (Ads Manager: "Results" / "Cost per result"). Bentuknya
+ * [{ indicator, values: [{ value }] }]. Baris tanpa hasil tetap membawa
+ * indicator-nya (tanpa `values`), jadi value-nya null tapi indicator tetap
+ * dikirim, sama seperti Ads Manager yang menampilkan "—" + jenis result.
  */
 function firstResult_(arr) {
   if (!arr || !arr.length) return null;
   var r = arr[0];
   var value = (r.values && r.values.length) ? r.values[0].value : r.value;
-  if (value === undefined || value === null || value === '') return null;
+  if (value === undefined || value === '') value = null;
+  if (value === null && !r.indicator) return null;
   return { indicator: r.indicator || null, value: value };
 }
 
@@ -585,6 +590,46 @@ function metaAdsPreviousMonth_() {
   var m = parseInt(Utilities.formatDate(now, tz_(), 'M'), 10);
   if (m === 1) { y -= 1; m = 12; } else { m -= 1; }
   return y + '-' + ('0' + m).slice(-2);
+}
+
+/**
+ * Diagnosa dari editor: apakah Meta mengembalikan `results` dan
+ * `cost_per_result` untuk SATU brand ATLAS (ubah angka di bawah), dan apa
+ * indicator-nya per campaign. Diuji dua kali: tanpa breakdown, dan dengan
+ * breakdown age,gender (yang dipakai tarikan harian). Tidak menulis apa pun
+ * ke ATLAS; hasilnya hanya di Logger (View > Logs / Execution log).
+ */
+function diagnoseMetaAdsResults() {
+  // <- isi id brand ATLAS (mis. 12) ATAU id akun iklan Meta (mis. 678276314370782 / act_678276314370782)
+  var target = '0';
+  var wanted = String(target).replace(/^act_/, '');
+  var acct = getAllAccounts_().filter(function (a) {
+    return String(a.atlasBrandId) === wanted || String(a.id).replace(/^act_/, '') === wanted;
+  })[0];
+  if (!acct) throw new Error('Tidak ada akun dengan atlasBrandId atau id akun iklan ' + target + ' di Brand & Langganan.');
+  var yesterday = metaAdsYesterday_();
+  var since = metaAdsFormatDate_(metaAdsParseDate_(yesterday) - 6 * MAM_DAY_MS);
+  [null, 'age,gender'].forEach(function (breakdowns) {
+    var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' + acct.id + '/insights' +
+      '?fields=' + encodeURIComponent('campaign_name,spend,results,cost_per_result') +
+      '&level=campaign' +
+      (breakdowns ? '&breakdowns=' + encodeURIComponent(breakdowns) : '') +
+      '&time_range=' + encodeURIComponent(JSON.stringify({ since: since, until: yesterday })) +
+      '&limit=50&access_token=' + encodeURIComponent(tokenFor_(acct));
+    var tag = '[' + acct.client + ' ' + (acct.type || 'MAIN') + ' ' + since + '..' + yesterday + ' breakdown=' + (breakdowns || 'none') + '] ';
+    try {
+      var body = fetchJson_(url);
+      var data = body.data || [];
+      Logger.log(tag + data.length + ' baris');
+      data.slice(0, 15).forEach(function (d) {
+        Logger.log(tag + d.campaign_name + ' | spend=' + d.spend +
+          ' | results=' + JSON.stringify(d.results || null) +
+          ' | cost_per_result=' + JSON.stringify(d.cost_per_result || null));
+      });
+    } catch (e) {
+      Logger.log(tag + 'DITOLAK: ' + e.message);
+    }
+  });
 }
 
 /** Uji manual dari editor: tarikan harian untuk SATU brand ATLAS (ubah angka di bawah). */

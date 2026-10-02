@@ -9,7 +9,7 @@
 //   { date, campaignId, campaignName, objective, age, gender,
 //     spend, impressions, reach, frequency,
 //     linkClicks, linkCtr, cpc, cpm, purchaseRoas,
-//     costPerResult: { indicator, value } | null,
+//     results: { indicator, value } | null, costPerResult: { indicator, value } | null,
 //     actions: { <action_type>: number }, actionValues: { <action_type>: number } }
 
 // Named action-type groups. The first type present on a row wins (never a
@@ -78,6 +78,16 @@ const profileVisits = (ctx) => {
 export const METRICS = [
   // ── Default: always fetched ───────────────────────────────────────
   { key: 'objective', label: 'Objective', group: 'default', unit: 'text', compute: (c) => c.raw.objective ?? null },
+  // Each campaign's own main result, exactly like Ads Manager's Results
+  // column: what it counts depends on the campaign (profile visits,
+  // purchases, adds to cart, …), named by the result indicator — e.g.
+  // profile_visit_view, actions:offsite_conversion.fb_pixel_purchase.
+  { key: 'results', label: 'Results', group: 'default', unit: 'count', compute: (c) => num(c.raw.results?.value) },
+  {
+    key: 'result_indicator', label: 'Result indicator', group: 'default', unit: 'text',
+    compute: (c) => c.raw.results?.indicator ?? c.raw.costPerResult?.indicator ?? null,
+  },
+  { key: 'cost_per_result', label: 'Cost per result', group: 'default', unit: 'idr', compute: (c) => num(c.raw.costPerResult?.value) },
   { key: 'amount_spent', label: 'Amount Spent', group: 'default', unit: 'idr', compute: (c) => c.spend },
   { key: 'impressions', label: 'Impressions', group: 'default', unit: 'count', compute: (c) => num(c.raw.impressions) },
   { key: 'reach', label: 'Reach', group: 'default', unit: 'count', compute: (c) => num(c.raw.reach) },
@@ -175,7 +185,9 @@ const EXPORT_LABELS = {
 };
 
 export function exportColumns(extraMetrics) {
-  return selectedMetricKeys(extraMetrics).map((key) => ({ key, header: EXPORT_LABELS[key] ?? BY_KEY.get(key).label }));
+  return selectedMetricKeys(extraMetrics).map((key) => ({
+    key, header: EXPORT_LABELS[key] ?? BY_KEY.get(key).label, unit: BY_KEY.get(key).unit,
+  }));
 }
 
 // Typed columns for the additive core metrics; every other selected metric
