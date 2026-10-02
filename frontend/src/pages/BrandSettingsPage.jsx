@@ -6,9 +6,10 @@ import {
   Archive, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
   CloudUpload, Database, Download, FileSpreadsheet, Layers3, Loader2, Plus, RefreshCw, Save,
   Search, Sparkles, Trash2, Upload, UsersRound, PenLine, NotebookPen, Circle, CheckCircle2,
-  ChevronsDownUp, ChevronsUpDown, Megaphone,
+  ChevronsDownUp, ChevronsUpDown, Megaphone, Target,
 } from 'lucide-react';
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
+import GoogleAdsSection from '../components/brandSettings/GoogleAdsSection.jsx';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import DatePicker from '../components/dashboard/DatePicker.jsx';
@@ -150,6 +151,7 @@ const VIEWS = [
   { id: 'mom', hint: 'Recap & to do list', label: 'Minutes of Meeting', Icon: UsersRound, note: 'Recap dan tindak lanjut setiap pertemuan' },
   { id: 'data', hint: 'Perpustakaan file', label: 'Data & file', Icon: Archive, note: 'Satu perpustakaan sumber untuk semua modul' },
   { id: 'meta-automation', hint: 'Ad account & laporan', label: 'Meta Automation', Icon: Megaphone, note: 'Daftarkan ad account Meta dan penerima laporan otomatisnya' },
+  { id: 'google-ads', hint: 'Customer ID & sinkron', label: 'Google Ads', Icon: Target, note: 'Hubungkan akun Google Ads untuk Report Generator' },
 ];
 // The brand list is about every client, not the one picked above — it opens
 // from the brand row as its own view, and the tab rail holds only what
@@ -1695,6 +1697,12 @@ export default function BrandSettingsPage() {
         {activeView === 'meta-automation' && (
           <ViewShell viewId="meta-automation" reduced={reduced}>
             <MetaAutomationSection />
+          </ViewShell>
+        )}
+
+        {activeView === 'google-ads' && (
+          <ViewShell viewId="google-ads" reduced={reduced}>
+            <GoogleAdsSection key={brand?.brand_id ?? 'none'} brand={brand} />
           </ViewShell>
         )}
       </AnimatePresence>

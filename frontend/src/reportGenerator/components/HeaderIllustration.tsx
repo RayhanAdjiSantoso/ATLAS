@@ -11,6 +11,7 @@ const SHAPE: Record<ReportKey, { spark: number[]; donut: [number, number, number
   meta: { spark: [22, 30, 26, 38, 34, 46, 52], donut: [58, 27, 15] },
   shopee: { spark: [18, 24, 22, 33, 40, 37, 49], donut: [64, 24, 12] },
   tiktok: { spark: [12, 20, 28, 24, 36, 44, 54], donut: [72, 18, 10] },
+  google: { spark: [20, 26, 24, 30, 36, 34, 42], donut: [50, 31, 19] },
   business: { spark: [30, 32, 28, 36, 40, 42, 45], donut: [46, 34, 20] },
   summary: { spark: [40, 36, 38, 30, 28, 33, 30], donut: [40, 35, 25] },
   reports: { spark: [10, 14, 20, 26, 30, 38, 44], donut: [55, 30, 15] },

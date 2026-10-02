@@ -1,5 +1,5 @@
 interface PeriodInputRowProps {
-  colorClass: 'shopee-period' | 'tiktok-period';
+  colorClass: 'shopee-period' | 'tiktok-period' | 'google-period';
   oldValue: string;
   curValue: string;
   onOldChange: (v: string) => void;

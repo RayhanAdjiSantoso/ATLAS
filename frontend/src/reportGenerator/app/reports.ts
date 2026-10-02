@@ -8,7 +8,7 @@
 // ATLAS's brands table is (brand_id, brand_name) only. Porting it is backend
 // work — a migration plus routes — not a UI move, so it waits for its own
 // change.
-export type ReportKey = 'meta' | 'shopee' | 'tiktok' | 'business' | 'summary' | 'reports';
+export type ReportKey = 'meta' | 'shopee' | 'tiktok' | 'google' | 'business' | 'summary' | 'reports';
 
 export interface ReportNavItem {
   key: ReportKey;
@@ -51,6 +51,16 @@ export const REPORT_NAV: ReportNavItem[] = [
     accent: '#111827',
     tint: '#eef1f7',
     mark: 'T',
+  },
+  {
+    key: 'google',
+    label: 'Google Ads',
+    short: 'Google',
+    tagline: 'Search, keyword & kota',
+    desc: 'Performa campaign, ad group, keyword, search term, dan kota — ditarik otomatis dari akun Google Ads yang terhubung di Pengaturan Brand.',
+    accent: 'var(--google)',
+    tint: 'var(--google-100)',
+    mark: 'G',
   },
   {
     key: 'business',

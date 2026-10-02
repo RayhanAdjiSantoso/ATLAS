@@ -17,6 +17,12 @@ const PATHS: Record<ReportKey, ReactNode> = {
       <path d="M9.5 4.5c.5 2.6 2.2 4.2 4.8 4.4" />
     </>
   ),
+  google: (
+    <>
+      <circle cx="9.5" cy="9.5" r="5.2" />
+      <path d="m13.4 13.4 4.6 4.6" />
+    </>
+  ),
   business: (
     <>
       <path d="M4 17h14" />

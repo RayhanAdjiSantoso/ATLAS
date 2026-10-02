@@ -4,6 +4,7 @@ import { Navigate, useParams } from 'react-router-dom';
 import { MetaTab } from '../features/meta/MetaTab';
 import { ShopeeTab } from '../features/shopee/ShopeeTab';
 import { TiktokTab } from '../features/tiktok/TiktokTab';
+import { GoogleAdsTab } from '../features/google/GoogleAdsTab';
 import { BusinessTab } from '../features/business/BusinessTab';
 import { SummaryTab } from '../features/summary/SummaryTab';
 import { ClientPicker } from '../features/reports/ClientPicker';
@@ -24,6 +25,7 @@ export interface GeneratorShellProps {
   platformState: PlatformStateMap;
   bizState: BizState;
   setPlatformResult: (key: PlatformKey, data: PlatformResultData) => void;
+  setGoogleDone: (done: boolean) => void;
   invalidatePlatform: (key: PlatformKey) => void;
   omzetOld: number | null;
   omzetCur: number | null;
@@ -56,7 +58,7 @@ export function GeneratorShell(props: GeneratorShellProps) {
   if (!isReportKey(platform)) return <Navigate to="/report-generator/meta" replace />;
   const activeTab: ReportKey = platform;
   const active = reportByKey(activeTab);
-  const generatedCount = (['meta', 'shopee', 'tiktok'] as ReportKey[]).filter((key) => props.badges[key] === '✓').length;
+  const generatedCount = (['meta', 'shopee', 'tiktok', 'google'] as ReportKey[]).filter((key) => props.badges[key] === '✓').length;
 
   return (
     <div className="gen-wrap bleed">
@@ -70,8 +72,8 @@ export function GeneratorShell(props: GeneratorShellProps) {
               <p>Bandingkan performa lintas platform, susun insight berbasis konteks brand, lalu hasilkan laporan yang siap dipresentasikan.</p>
               <div className="rg-hero-stats">
                 <span><strong>{REPORT_NAV.length}</strong> bagian laporan</span>
-                <span><strong>3</strong> platform utama</span>
-                <span><strong>{generatedCount}/3</strong> laporan tersusun</span>
+                <span><strong>4</strong> platform utama</span>
+                <span><strong>{generatedCount}/4</strong> laporan tersusun</span>
               </div>
             </Reveal>
             <div className="rg-hero-badge" aria-hidden="true">
@@ -120,6 +122,12 @@ export function GeneratorShell(props: GeneratorShellProps) {
             clientId={props.clientId}
             onGenerated={(data) => props.setPlatformResult('tiktok', data)}
             onInvalidate={() => props.invalidatePlatform('tiktok')}
+          />
+          <GoogleAdsTab key={`${props.clientId}-GoogleAdsTab`}
+            isActive={activeTab === 'google'}
+            clientId={props.clientId}
+            onGenerated={() => props.setGoogleDone(true)}
+            onInvalidate={() => props.setGoogleDone(false)}
           />
           <ReportsTab isActive={activeTab === 'reports'} clientId={props.clientId} />
           <BusinessTab
