@@ -327,6 +327,34 @@ async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
   return result;
 }
 
+// Google Ads — called after every successful Google Ads Script run with the
+// brand's daily cost (all campaigns of all connected accounts) for the run's
+// range. Same rule as Meta: a day a person saved stays theirs. A day in the
+// range with no row from Google means nothing was spent, so it is written
+// as 0 rather than left looking unsynced.
+export async function applyGoogleAdsSpend({ brandId, days }) {
+  if (!days.length) return { applied: 0, skipped: 0 };
+  const result = await inTransaction(async (db) => {
+    let applied = 0;
+    const skipped = [];
+    for (const d of days) {
+      const row = await repo.upsertApiSpendEntry({
+        brandId, entryDate: d.date, channelKey: 'google_ads', amountSpent: Math.round(d.cost * 100) / 100, source: 'google_ads_api',
+      }, db);
+      if (row) applied += 1; else skipped.push(d.date);
+    }
+    await repo.logIngestion({
+      brandId, targetTable: 'daily_channel_spend', entryDate: days[days.length - 1].date,
+      source: 'google_ads_api', rowCount: applied,
+      status: applied === days.length ? 'success' : applied ? 'partial' : 'failed',
+      note: `Google Ads ${days[0].date} s.d. ${days[days.length - 1].date}${skipped.length ? ` · dilewati (diisi manual): ${skipped.join(', ')}` : ''}`,
+    }, db);
+    return { applied, skipped: skipped.length };
+  });
+  await refreshInternalDashboard(brandId);
+  return result;
+}
+
 // Manual "Sync Meta Sekarang" — reuses an existing Apps Script dry-run
 // action, which already computes {boostSpend, nonBoostSpend[, cpasSpend]}
 // for H-1 without writing anywhere. Two sources, mutually exclusive:

@@ -4,6 +4,7 @@ import { AppError } from '../utils/errors.js';
 import * as brandService from './brandService.js';
 import * as repo from '../repositories/googleAdsRepository.js';
 import * as library from './brandLibraryService.js';
+import { applyGoogleAdsSpend } from './dailyTrackingService.js';
 import {
   parseAuctionInsights, parseSearchTerms, parseChangeHistory, buildSearchTermsWorkbook, buildChangeHistoryWorkbook, AUCTION_METRICS,
 } from './googleAdsFiles.js';
@@ -307,6 +308,17 @@ export async function finishRun({ runId, status, rowCount, note }) {
   // Data & file shows the month the run covered. A failure there must not
   // turn a successful fetch into a failed one, so it is only logged.
   if (status === 'success') {
+    // Daily Tracking › Google Ads: the brand's cost per day over the run's
+    // range, written at the time the script runs (the Meta auto-fill rule).
+    try {
+      const daily = await repo.reportDaily(run.brand_id, run.start_date, run.end_date);
+      const byDate = new Map(daily.map((d) => [d.date, Number(d.cost) || 0]));
+      const days = [];
+      for (let d = run.start_date; d <= run.end_date; d = addDays(d, 1)) days.push({ date: d, cost: byDate.get(d) ?? 0 });
+      result.dailyTracking = await applyGoogleAdsSpend({ brandId: run.brand_id, days });
+    } catch (err) {
+      console.warn('[google-ads] gagal mengisi Daily Tracking', { brandId: run.brand_id, reason: err.message });
+    }
     for (const month of monthsBetween(run.start_date, run.end_date)) {
       try {
         result.library = await syncLibraryMonth(run.brand_id, month);

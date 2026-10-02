@@ -21,6 +21,9 @@ export const FIXED_SPEND_CHANNELS = [
   { key: 'shopee_iklanku', label: 'Shopee Iklanku' },
   { key: 'gmv_max', label: 'GMV Max' },
   { key: 'ttam', label: 'TTAM' },
+  // Filled from the Google Ads Script runs (googleAdsService.finishRun ->
+  // dailyTrackingService.applyGoogleAdsSpend), migration 037.
+  { key: 'google_ads', label: 'Google Ads' },
 ];
 
 // Other names the same fixed channel goes by in client sheets / typed
@@ -32,6 +35,10 @@ export const CHANNEL_ALIASES = {
   spend: {
     cpas_tokped: 'cpas_tokopedia',
     tiktok_gmv: 'gmv_max',
+    google: 'google_ads',
+    gads: 'google_ads',
+    adwords: 'google_ads',
+    google_ad: 'google_ads',
   },
 };
 

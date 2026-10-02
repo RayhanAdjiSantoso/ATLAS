@@ -107,13 +107,13 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                       value={formatThousands(row.amount)}
                       onChange={(e) => onCellChange(date, 'amount', parseThousandsInput(e.target.value))}
                     />
-                    {row.source === 'meta_api' && !row.lockedManual && (
-                      <span className="dt-badge dt-badge-synced" title="Terisi otomatis dari Meta API">
+                    {(row.source === 'meta_api' || row.source === 'google_ads_api') && !row.lockedManual && (
+                      <span className="dt-badge dt-badge-synced" title={row.source === 'google_ads_api' ? 'Terisi otomatis dari Google Ads' : 'Terisi otomatis dari Meta API'}>
                         <Sparkles size={11} /> Synced
                       </span>
                     )}
                     {row.lockedManual && (
-                      <span className="dt-badge dt-badge-locked" title="Diubah manual — tidak akan ditimpa sync Meta">
+                      <span className="dt-badge dt-badge-locked" title="Diubah manual — tidak akan ditimpa sync otomatis">
                         <Lock size={11} /> Manual
                       </span>
                     )}
