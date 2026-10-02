@@ -330,3 +330,88 @@
 .mil-ui.report-generator-app .donut-name { overflow: hidden; color: var(--rs-ink); text-overflow: ellipsis; white-space: nowrap; }
 .mil-ui.report-generator-app .donut-val { color: var(--rs-ink); font-weight: 750; font-variant-numeric: tabular-nums lining-nums; }
 .mil-ui.report-generator-app .donut-share { min-width: 3.6rem; padding: .18rem .5rem; border-radius: 8px; background: #eef4ff; color: var(--rs-accent); font-size: .72rem; font-weight: 750; text-align: center; font-variant-numeric: tabular-nums lining-nums; }
+
+/* ── Deck groups: "Audience Analysis" / "Creative Analysis" in the navigator ─ */
+.mil-ui.report-generator-app .sdeck-group {
+  display: block;
+  margin: .7rem .55rem .2rem;
+  padding-top: .65rem;
+  border-top: 1px solid var(--rs-rule);
+  color: var(--rs-accent);
+  font-size: .6rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.mil-ui.report-generator-app .sdeck-tabs > .sdeck-group:first-child { margin-top: .1rem; padding-top: 0; border-top: 0; }
+@media (max-width: 1100px) {
+  .mil-ui.report-generator-app .sdeck-group { flex: 0 0 auto; align-self: center; margin: 0 .2rem 0 .5rem; padding: 0 0 0 .6rem; border-top: 0; border-left: 1px solid var(--rs-line); }
+  .mil-ui.report-generator-app .sdeck-tabs > .sdeck-group:first-child { padding-left: 0; border-left: 0; }
+}
+
+/* ── Compare bars: the two ends, and the NV / RM key ─────────────────────── */
+.mil-ui.report-generator-app .cb-ends { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; margin-bottom: 1rem; }
+.mil-ui.report-generator-app .cb-end {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .7rem;
+  padding: .7rem .9rem;
+  border: 1px solid var(--rs-line);
+  border-radius: 14px;
+  background: #fbfcff;
+}
+.mil-ui.report-generator-app .cb-end span { padding: .2rem .5rem; border-radius: 7px; font-size: .62rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.mil-ui.report-generator-app .cb-end.is-high span { background: var(--rs-accent); color: #fff; }
+.mil-ui.report-generator-app .cb-end.is-low span { background: var(--rs-accent-soft); color: var(--rs-accent); }
+.mil-ui.report-generator-app .cb-end strong { overflow: hidden; color: var(--rs-ink); font-size: .82rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.mil-ui.report-generator-app .cb-end b { color: var(--rs-ink); font-size: .9rem; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app .cb-legend { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; margin: 0 0 .6rem; padding: 0; list-style: none; color: var(--rs-muted); font-size: .74rem; font-weight: 650; }
+.mil-ui.report-generator-app .cb-legend li { display: inline-flex; align-items: center; gap: .45rem; }
+.mil-ui.report-generator-app .cb-legend span { width: 10px; height: 10px; border-radius: 3px; }
+@media (max-width: 640px) { .mil-ui.report-generator-app .cb-ends { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── Non-Boost lane switch: Retail / B2B Leads ───────────────────────────── */
+.mil-ui.report-generator-app .lane-switch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem 1.4rem;
+  padding: .8rem 1rem;
+  border: 1px solid var(--rs-line);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: var(--rs-shadow);
+}
+.mil-ui.report-generator-app .lane-switch-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 16px; background: var(--rs-canvas); }
+.mil-ui.report-generator-app .lane-tab {
+  display: grid;
+  gap: .1rem;
+  min-width: 150px;
+  padding: .55rem 1rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--rs-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.mil-ui.report-generator-app .lane-tab strong { font-size: .86rem; font-weight: 780; }
+.mil-ui.report-generator-app .lane-tab small { color: var(--rs-quiet); font-size: .68rem; font-weight: 600; }
+.mil-ui.report-generator-app .lane-tab:hover { background: #fff; }
+.mil-ui.report-generator-app .lane-tab:focus-visible { outline: 2px solid var(--rs-accent); outline-offset: 2px; }
+.mil-ui.report-generator-app .lane-tab.is-on { background: var(--rs-accent); color: #fff; box-shadow: 0 12px 26px -16px rgba(40, 86, 182, .8); }
+.mil-ui.report-generator-app .lane-tab.is-on small { color: rgba(255, 255, 255, .82); }
+.mil-ui.report-generator-app .lane-switch-note { margin: 0; color: var(--rs-muted); font-size: .76rem; line-height: 1.55; }
+.mil-ui.report-generator-app .lane-switch-note strong { color: var(--rs-ink); }
+@media (max-width: 900px) { .mil-ui.report-generator-app .lane-switch { grid-template-columns: minmax(0, 1fr); } }
+.mil-ui.report-generator-app.pdf-export-mode .lane-switch-tabs { display: none; }
+
+/* ── Special Moment: contribution pies, then moment-vs-moment cards ──────── */
+.mil-ui.report-generator-app .sm-subhead { margin: 0 0 .8rem; color: var(--rs-quiet); }
+.mil-ui.report-generator-app .sm-pies + .sm-subhead { margin-top: .4rem; padding-top: 1.2rem; border-top: 1px solid var(--rs-rule); }
+.mil-ui.report-generator-app .sm-scorecards-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+@media (min-width: 1280px) { .mil-ui.report-generator-app .bd-pies.bd-pies-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.mil-ui.report-generator-app.pdf-export-mode .bd-pies.bd-pies-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }

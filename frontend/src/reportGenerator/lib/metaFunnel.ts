@@ -261,6 +261,52 @@ export function metaObjectiveMetrics(rows: SheetRow[]): MetaObjectiveMetrics {
   };
 }
 
+// ── Leads: Non-Boost Post, B2B Leads lane ────────────────────────────────
+// The lead is the result. A Send Message campaign has no Leads column — its
+// conversations started are the lead there (MIL counts a chat as a lead), so
+// the count falls back to them rather than reading as missing.
+
+export interface MetaLeadMetrics {
+  leads: number | null;
+  linkClicks: number | null;
+  impressions: number | null;
+  spend: number | null;
+  cpm: number | null;
+  ctr: number | null;
+  leadRate: number | null;
+  costPerLead: number | null;
+  // True when `leads` is messaging conversations, so labels can say so.
+  fromConversations: boolean;
+}
+
+export function metaLeadMetrics(rows: SheetRow[]): MetaLeadMetrics {
+  const o = metaObjectiveMetrics(rows);
+  const fromConversations = o.leads === null && o.conversations !== null;
+  const leads = fromConversations ? o.conversations : o.leads;
+  return {
+    leads,
+    linkClicks: o.linkClicks,
+    impressions: o.impressions,
+    spend: o.spend,
+    cpm: o.cpm,
+    ctr: o.ctr,
+    leadRate: ratio(leads, o.linkClicks),
+    costPerLead: ratio(o.spend, leads, 1),
+    fromConversations,
+  };
+}
+
+const LEAD_TREE: readonly TreeDef<MetaLeadMetrics>[] = [
+  { key: 'leads', metric: 'leads', label: 'Leads', prefix: '', depth: 0, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'clicks', metric: 'linkClicks', label: 'Traffic (Link Clicks)', prefix: '├─ ', depth: 1, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'impressions', metric: 'impressions', label: 'Impressions', prefix: '│  ├─ ', depth: 2, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'spend', metric: 'spend', label: 'Spending', prefix: '│  │  ├─ ', depth: 3, fmt: 'rp', sentiment: 'neutral' },
+  { key: 'cpm', metric: 'cpm', label: 'CPM', prefix: '│  │  └─ ', depth: 3, fmt: 'rp', sentiment: 'lower-better' },
+  { key: 'ctr', metric: 'ctr', label: 'Click-Through Rate', prefix: '│  └─ ', depth: 2, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'leadRate', metric: 'leadRate', label: 'Leads Rate (Leads ÷ Link Clicks)', prefix: '├─ ', depth: 1, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'cpl', metric: 'costPerLead', label: 'Cost per Lead', prefix: '└─ ', depth: 1, fmt: 'rp', sentiment: 'lower-better' },
+];
+
 const BRAND_TREE: readonly TreeDef<MetaBrandMetrics>[] = [
   { key: 'brand', metric: 'brandConsideration', label: 'Brand Consideration', prefix: '', depth: 0, fmt: 'num', sentiment: 'higher-better' },
 
@@ -354,4 +400,8 @@ export function buildMetaSalesFunnel(oldRows: SheetRow[], curRows: SheetRow[]): 
 
 export function buildMetaBrandFunnel(oldRows: SheetRow[], curRows: SheetRow[]): MetaFunnel {
   return assemble(BRAND_TREE, metaBrandMetrics(oldRows), metaBrandMetrics(curRows));
+}
+
+export function buildMetaLeadFunnel(oldRows: SheetRow[], curRows: SheetRow[]): MetaFunnel {
+  return assemble(LEAD_TREE, metaLeadMetrics(oldRows), metaLeadMetrics(curRows));
 }

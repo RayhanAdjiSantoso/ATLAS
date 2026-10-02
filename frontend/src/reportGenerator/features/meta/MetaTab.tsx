@@ -4,7 +4,7 @@ import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { ReportPages } from '../../components/ReportPages';
-import { SectionAccordion } from '../../components/SectionAccordion';
+import { SectionAccordion, SectionGroup } from '../../components/SectionAccordion';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -18,7 +18,6 @@ import {
   stripCampaignSubtotals,
   type MetaIndustry,
   type MetaObjectiveKey,
-  META_OBJECTIVE_SOURCE_LABEL,
 } from '../../lib/meta';
 import { findCol } from '../../lib/columns';
 import { daysBetweenInclusive, formatPeriodLabel } from '../../lib/periodLabel';
@@ -34,10 +33,28 @@ import { StepIndicator, type Step } from '../../components/StepIndicator';
 import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import { SymptomTreePanel } from '../shopee/AnalysisSections';
-import { MetaSpecialMomentSection } from './MetaSpecialMomentSection';
+import { MetaSpecialMomentSection, type MomentPeriod, type MomentSource } from './MetaSpecialMomentSection';
 import { MetaBreakdownSection } from './MetaBreakdownSection';
-import { BRAND_AUDIENCE_METRICS, BRAND_CREATIVE_METRICS, SALES_AUDIENCE_METRICS, SALES_CREATIVE_METRICS, findAdCol, objectiveAudienceMetrics } from '../../lib/metaAudience';
-import { MetaObjectivePicker } from './MetaObjectivePicker';
+import {
+  BRAND_AUDIENCE_METRICS,
+  BRAND_CREATIVE_METRICS,
+  LEAD_AGE_METRICS,
+  LEAD_CONVERSION_METRICS,
+  LEAD_CREATIVE_CONVERSION_METRICS,
+  LEAD_GENDER_METRICS,
+  LEAD_TRAFFIC_METRICS,
+  SALES_AGE_METRICS,
+  SALES_ATC_PURCHASE_METRICS,
+  SALES_AUDIENCE_METRICS,
+  SALES_CLICK_ATC_METRICS,
+  SALES_CONVERSION_METRICS,
+  SALES_CREATIVE_CONVERSION_METRICS,
+  SALES_TRAFFIC_METRICS,
+  findAdCol,
+} from '../../lib/metaAudience';
+import type { MetaFunnel } from '../../lib/metaFunnel';
+import { MetaCompareBars } from './MetaCompareBars';
+import { MetaLaneSwitch } from './MetaLaneSwitch';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
@@ -47,7 +64,7 @@ import { getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
-import { buildMetaReport, isBoostRow, type MetaReport } from './metaReport';
+import { buildMetaReport, isBoostRow, type MetaReport, type NonBoostLaneKey } from './metaReport';
 
 // Meta's export uses either a "Month" breakdown or a "Day" breakdown column
 // as the period dimension — either satisfies the requirement.
@@ -137,9 +154,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // objective; auto-prefilled from the file's "Objective" column when present,
   // still overridable.
   const [industry, setIndustry] = useState<MetaIndustry>(null);
-  // Which Non-Boost objective the Age / Gender / Creative breakdowns show,
-  // when the file runs more than one (null = the highest-spend one).
-  const [nbObjective, setNbObjective] = useState<MetaObjectiveKey | null>(null);
+  // Which Non-Boost lane (Retail / B2B Leads) the Non-Boost page reads.
+  const [nbLane, setNbLane] = useState<NonBoostLaneKey>('retail');
   // Legacy — the "Custom Conversion" column picker is gone; kept so old saved
   // report configs still round-trip.
   const [customResultsCol, setCustomResultsCol] = useState<string | null>(null);
@@ -162,6 +178,12 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const leaves = stripCampaignSubtotals(metaRows);
     const isBoost = isBoostRow(findCol(leaves, ['campaign']));
     return leaves.filter((r) => !isBoost(r));
+  }, [metaRows]);
+  const boostAllRows = useMemo(() => {
+    if (!metaRows) return [];
+    const leaves = stripCampaignSubtotals(metaRows);
+    const isBoost = isBoostRow(findCol(leaves, ['campaign']));
+    return leaves.filter(isBoost);
   }, [metaRows]);
   const cpasAllRows = useMemo(() => (cpasRows ? stripCampaignSubtotals(cpasRows) : []), [cpasRows]);
   const cpasDayCol = useMemo(() => (cpasAllRows.length ? findCol(cpasAllRows, ['day']) : null), [cpasAllRows]);
@@ -475,7 +497,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   function generate() {
     if (!metaRows) return;
     const r = buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
-    setNbObjective(null);
+    setNbLane(r.nonBoostLanes?.[0]?.key ?? 'retail');
     setReport(r);
     setGeneratedAt(formatGeneratedDate());
     onGenerated({ period: { old: r.p1, cur: r.p2 }, kpis: r.summary.kpis, cpasKpis: r.summary.cpasKpis, spend: r.summary.spend });
@@ -494,7 +516,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setIndustry(null);
     setCustomResultsCol(null);
     setObjective(null);
-    setNbObjective(null);
+    setNbLane('retail');
     objectivePrefilledFor.current = '';
     setReport(null);
     setUploadError(null);
@@ -531,8 +553,144 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
 
   const hasAnySection = Boolean(
-    report && (report.boost || report.nonBoost || report.boostAgeDemo || report.boostGenderDemo || report.ageDemo || report.genderDemo || (report.cpas && Object.keys(report.cpas).length)),
+    report && (report.boost || report.nonBoost || report.nonBoostLanes?.length || report.boostAgeDemo || report.boostGenderDemo || report.ageDemo || report.genderDemo || (report.cpas && Object.keys(report.cpas).length)),
   );
+
+  // The Audience & Creative Analysis of one channel, as the architecture
+  // sheet lays them out. Selling channels (CPAS, Non-Boost Retail) read the
+  // purchase funnel; B2B Leads the lead funnel; Boost Post brand actions.
+  function analysisSections({
+    prefix,
+    period,
+    rows,
+    kind,
+    campCol,
+    ageCol,
+    genderCol,
+  }: {
+    prefix: string;
+    period: string;
+    rows: SheetRow[];
+    kind: 'sales' | 'lead' | 'brand';
+    campCol: string | null;
+    ageCol: string | null;
+    genderCol: string | null;
+  }) {
+    const adCol = rows.length ? findAdCol(rows) : null;
+    const badge = `data ${period}`;
+    const noAd = 'Bagian ini membandingkan performa per materi iklan. File yang diunggah tidak dipecah per Ad — export ulang dari Meta Ads Reporting dengan breakdown Ad name.';
+    const noAge = 'File yang diunggah tidak memuat breakdown Age.';
+    const noGender = 'File yang diunggah tidak memuat breakdown Gender.';
+    if (kind === 'brand') {
+      return (
+        <>
+          <SectionGroup label="Audience Analysis">
+            <MetaCompareBars heading={`${prefix} · Age Breakdown`} badge={badge} rows={rows} kind="brand" menu={BRAND_AUDIENCE_METRICS} dimCol={ageCol} campCol={campCol} mode="none" sortable dimNoun="kelompok umur" emptyMessage={noAge} />
+            {genderCol ? (
+              <MetaBreakdownSection heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} dimCol={genderCol} kind="brand" metrics={BRAND_AUDIENCE_METRICS} prefer="pies" />
+            ) : (
+              <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind="brand" menu={BRAND_AUDIENCE_METRICS} dimCol={null} campCol={null} mode="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
+            )}
+          </SectionGroup>
+          <SectionGroup label="Creative Analysis">
+            <MetaCompareBars heading={`${prefix} · Creative Performance`} badge={`per materi iklan · ${period}`} rows={rows} kind="brand" menu={BRAND_CREATIVE_METRICS} dimCol={adCol} campCol={campCol} mode="none" sortable copyLabels dimNoun="materi iklan" emptyMessage={noAd} />
+          </SectionGroup>
+        </>
+      );
+    }
+    const sales = kind === 'sales';
+    const funnels = sales
+      ? [
+          { title: 'Traffic Analysis', menu: SALES_TRAFFIC_METRICS },
+          { title: 'Conversion Rate', menu: SALES_CONVERSION_METRICS },
+          { title: 'Click → ATC Rate', menu: SALES_CLICK_ATC_METRICS },
+          { title: 'ATC → Purchase Rate', menu: SALES_ATC_PURCHASE_METRICS },
+        ]
+      : [
+          { title: 'Traffic Analysis', menu: LEAD_TRAFFIC_METRICS },
+          { title: 'Leads Conversion', menu: LEAD_CONVERSION_METRICS },
+        ];
+    return (
+      <>
+        <SectionGroup label="Audience Analysis">
+          <MetaCompareBars
+            heading={`${prefix} · Age Breakdown`}
+            badge={`NV vs RM · ${period}`}
+            rows={rows}
+            kind={kind}
+            menu={sales ? SALES_AGE_METRICS : LEAD_AGE_METRICS}
+            dimCol={ageCol}
+            campCol={campCol}
+            mode="series"
+            sortable={false}
+            dimNoun="kelompok umur"
+            emptyMessage={noAge}
+          />
+          {genderCol ? (
+            <MetaBreakdownSection
+              heading={`${prefix} · Gender Breakdown`}
+              badge={badge}
+              rows={rows}
+              dimCol={genderCol}
+              kind={kind}
+              metrics={(sales ? SALES_AUDIENCE_METRICS : LEAD_GENDER_METRICS) as typeof SALES_AUDIENCE_METRICS}
+              prefer="pies"
+              campCol={campCol}
+            />
+          ) : (
+            <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} mode="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
+          )}
+          {funnels.map((f) => (
+            <MetaCompareBars
+              key={f.title}
+              heading={`${prefix} · ${f.title}`}
+              badge={`per campaign · NV / RM · ${period}`}
+              rows={rows}
+              kind={kind}
+              menu={f.menu}
+              dimCol={campCol}
+              campCol={campCol}
+              mode="tint"
+              sortable
+              copyLabels
+              dimNoun="campaign"
+              emptyMessage="File yang diunggah tidak memuat kolom Campaign name."
+            />
+          ))}
+        </SectionGroup>
+        <SectionGroup label="Creative Analysis">
+          <MetaCompareBars
+            heading={`${prefix} · Creative Traffic`}
+            badge={`per materi iklan · ${period}`}
+            rows={rows}
+            kind={kind}
+            menu={sales ? SALES_TRAFFIC_METRICS : LEAD_TRAFFIC_METRICS}
+            dimCol={adCol}
+            campCol={campCol}
+            mode="filter"
+            sortable
+            copyLabels
+            dimNoun="materi iklan"
+            emptyMessage={noAd}
+          />
+          <MetaCompareBars
+            heading={`${prefix} · Creative Conversion`}
+            badge={`per materi iklan · ${period}`}
+            rows={rows}
+            kind={kind}
+            menu={sales ? SALES_CREATIVE_CONVERSION_METRICS : LEAD_CREATIVE_CONVERSION_METRICS}
+            dimCol={adCol}
+            campCol={campCol}
+            mode="filter"
+            sortable
+            copyLabels
+            dimNoun="materi iklan"
+            emptyMessage={noAd}
+          />
+        </SectionGroup>
+      </>
+    );
+  }
 
   const steps: Step[] = [
     {
@@ -878,103 +1036,125 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               accent="var(--acc)"
               pages={[
                 {
-                  id: 'cpas',
-                  label: 'CPAS',
-                  hidden: !report.cpas || !Object.keys(report.cpas).length,
+                  // Tab 1 of the architecture sheet: Special Moment, then each
+                  // channel's table with its root cause beside it.
+                  id: 'ads',
+                  label: 'Ads Performance',
+                  hidden: !report.boost && !report.nonBoostLanes?.length && !report.nonBoost && !report.cpas,
                   content: (() => {
                     const cpas = report.cpas;
-                    if (!cpas) return null;
-                    const cur = report.curRows;
-                    const cpasAd = cur?.cpas.length ? findAdCol(cur.cpas) : null;
+                    const mainPeriods = [
+                      oldRange ? { label: report.p1, ...oldRange } : null,
+                      curRange ? { label: report.p2, ...curRange } : null,
+                    ].filter(Boolean) as MomentPeriod[];
+                    const cpasPeriods = [
+                      cpasRanges.old ? { label: cpas?.p1 ?? '', start: cpasRanges.old.min, end: cpasRanges.old.max } : null,
+                      cpasRanges.cur ? { label: cpas?.p2 ?? '', start: cpasRanges.cur.min, end: cpasRanges.cur.max } : null,
+                    ].filter(Boolean) as MomentPeriod[];
+                    const sources: MomentSource[] = [
+                      { key: 'nonboost', label: 'Non-Boost', rows: nonBoostAllRows, dayCol, periods: mainPeriods },
+                      { key: 'boost', label: 'Boost', rows: boostAllRows, dayCol, periods: mainPeriods },
+                      { key: 'cpas', label: 'CPAS', rows: cpasAllRows, dayCol: cpasDayCol, periods: cpasPeriods },
+                    ];
+                    const rca = (f: MetaFunnel | undefined, p1: string, p2: string, title = 'Root Cause Analysis', badge = `${p1} → ${p2}`) =>
+                      f?.hasData ? <SymptomTreePanel tree={f.tree} p1={p1} p2={p2} title={title} badge={badge} /> : undefined;
                     return (
                       <SectionAccordion>
-                        <MetaSpecialMomentSection
-                          rows={cpasAllRows}
-                          dayCol={cpasDayCol}
-                          heading="CPAS Shopee · Special Moment"
-                          periods={[
-                            // metaDayRange gives {min, max}; a period is {start, end}.
-                            cpasRanges.old ? { label: cpas.p1, start: cpasRanges.old.min, end: cpasRanges.old.max } : null,
-                            cpasRanges.cur ? { label: cpas.p2, start: cpasRanges.cur.min, end: cpasRanges.cur.max } : null,
-                          ].filter(Boolean) as { label: string; start: Date; end: Date }[]}
-                        />
-                        {cpas.overall && (
-                          <OverviewDetailedCard
-                            heading="CPAS Shopee"
-                            badge="Overall"
-                            overviewRows={cpas.overall.overviewRows}
-                            detailedRows={cpas.overall.detailedRows}
-                            allCols={cpas.overall.allCols}
-                            p1={cpas.p1}
-                            p2={cpas.p2}
-                            aside={
-                              cpas.funnel?.hasData ? (
-                                <SymptomTreePanel tree={cpas.funnel.tree} p1={cpas.p1} p2={cpas.p2} title="Root Cause Analysis" badge={`${cpas.p1} → ${cpas.p2}`} />
-                              ) : undefined
-                            }
-                          />
+                        <MetaSpecialMomentSection sources={sources} heading="Ads Performance · Special Moment" />
+                        {report.boost && (
+                          <SectionGroup label="Boost Post">
+                            <OverviewDetailedCard
+                              heading="Boost Post · Overall"
+                              badge={report.boostObjective ? `objective ${report.boostObjective.label}${report.boostObjective.mixed ? ' (dominan)' : ''}` : 'Meta Ads'}
+                              overviewRows={report.boost.overviewRows}
+                              detailedRows={report.boost.detailedRows}
+                              allCols={report.boost.allCols}
+                              p1={report.p1}
+                              p2={report.p2}
+                              aside={rca(report.boostFunnel, report.p1, report.p2, 'Root Cause Analysis', 'Brand Consideration')}
+                            />
+                          </SectionGroup>
                         )}
-                        {cpas.nv && (
-                          <OverviewDetailedCard
-                            heading="CPAS Shopee · NV" badge="New Visitor"
-                            overviewRows={cpas.nv.overviewRows} detailedRows={cpas.nv.detailedRows} allCols={cpas.nv.allCols}
-                            p1={cpas.p1} p2={cpas.p2}
-                            aside={cpas.nvFunnel?.hasData ? (
-                              <SymptomTreePanel tree={cpas.nvFunnel.tree} p1={cpas.p1} p2={cpas.p2} title="Root Cause Analysis · NV" badge={`${cpas.p1} → ${cpas.p2}`} />
-                            ) : undefined}
-                          />
+                        {report.nonBoostLanes?.length ? (
+                          <SectionGroup label="Non-Boost Post">
+                            {report.nonBoostLanes.map((lane) => (
+                              <OverviewDetailedCard
+                                key={lane.key}
+                                heading={`Non-Boost Post · ${lane.label}`}
+                                badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
+                                overviewRows={lane.overview.overviewRows}
+                                detailedRows={lane.overview.detailedRows}
+                                allCols={lane.overview.allCols}
+                                p1={report.p1}
+                                p2={report.p2}
+                                aside={rca(lane.funnel, report.p1, report.p2, lane.key === 'b2b' ? 'Root Cause Analysis · Leads' : 'Root Cause Analysis')}
+                              />
+                            ))}
+                          </SectionGroup>
+                        ) : null}
+                        {cpas && (cpas.overall || cpas.nv || cpas.rm) && (
+                          <SectionGroup label="CPAS Shopee">
+                            {cpas.overall && (
+                              <OverviewDetailedCard
+                                heading="CPAS Shopee · Overall"
+                                badge="Overall"
+                                overviewRows={cpas.overall.overviewRows}
+                                detailedRows={cpas.overall.detailedRows}
+                                allCols={cpas.overall.allCols}
+                                p1={cpas.p1}
+                                p2={cpas.p2}
+                                aside={rca(cpas.funnel, cpas.p1, cpas.p2)}
+                              />
+                            )}
+                            {cpas.nv && (
+                              <OverviewDetailedCard
+                                heading="CPAS Shopee · NV"
+                                badge="New Visitor"
+                                overviewRows={cpas.nv.overviewRows}
+                                detailedRows={cpas.nv.detailedRows}
+                                allCols={cpas.nv.allCols}
+                                p1={cpas.p1}
+                                p2={cpas.p2}
+                                aside={rca(cpas.nvFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · NV')}
+                              />
+                            )}
+                            {cpas.rm && (
+                              <OverviewDetailedCard
+                                heading="CPAS Shopee · RM"
+                                badge="Re-Marketing"
+                                overviewRows={cpas.rm.overviewRows}
+                                detailedRows={cpas.rm.detailedRows}
+                                allCols={cpas.rm.allCols}
+                                p1={cpas.p1}
+                                p2={cpas.p2}
+                                aside={rca(cpas.rmFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · RM')}
+                              />
+                            )}
+                          </SectionGroup>
                         )}
-                        {cpas.rm && (
-                          <OverviewDetailedCard
-                            heading="CPAS Shopee · RM" badge="Re-Marketing"
-                            overviewRows={cpas.rm.overviewRows} detailedRows={cpas.rm.detailedRows} allCols={cpas.rm.allCols}
-                            p1={cpas.p1} p2={cpas.p2}
-                            aside={cpas.rmFunnel?.hasData ? (
-                              <SymptomTreePanel tree={cpas.rmFunnel.tree} p1={cpas.p1} p2={cpas.p2} title="Root Cause Analysis · RM" badge={`${cpas.p1} → ${cpas.p2}`} />
-                            ) : undefined}
-                          />
-                        )}
-                        {cpas.ageDemo && (
-                          <MetaBreakdownSection
-                            heading="CPAS Shopee · Age Breakdown"
-                            badge={`data ${cpas.p2}`}
-                            rows={cpas.ageDemo.rows}
-                            dimCol={cpas.ageDemo.dimCol}
-                            kind="sales"
-                            metrics={SALES_AUDIENCE_METRICS}
-                            prefer="bar"
-                          />
-                        )}
-                        {cpas.genderDemo && (
-                          <MetaBreakdownSection
-                            heading="CPAS Shopee · Gender Breakdown"
-                            badge={`data ${cpas.p2}`}
-                            rows={cpas.genderDemo.rows}
-                            dimCol={cpas.genderDemo.dimCol}
-                            kind="sales"
-                            metrics={SALES_AUDIENCE_METRICS}
-                            prefer="pies"
-                          />
-                        )}
-                        {cpasAd && cur ? (
-                          <MetaBreakdownSection
-                            heading="CPAS Shopee · Creative Performance"
-                            badge={`per materi iklan · ${cpas.p2}`}
-                            rows={cur.cpas}
-                            dimCol={cpasAd}
-                            kind="sales"
-                            metrics={SALES_CREATIVE_METRICS}
-                            prefer="bar"
-                          />
-                        ) : (
-                          <div className="sec-block">
-                            <div className="sec-heading">CPAS Shopee · Creative Performance</div>
-                            <div className="empty-note" style={{ margin: '1.1rem 1.4rem 1.4rem' }}>
-                              Bagian ini membandingkan performa per materi iklan. File CPAS yang diunggah dipecah per campaign, bukan per <strong>Ad</strong> — export
-                              ulang dari Meta Ads Reporting dengan breakdown Ad disertakan.
-                            </div>
-                          </div>
-                        )}
+                      </SectionAccordion>
+                    );
+                  })(),
+                },
+                {
+                  id: 'cpas',
+                  label: 'CPAS',
+                  hidden: !report.cpas || !report.curRows?.cpas.length,
+                  content: (() => {
+                    const cpas = report.cpas;
+                    const rows = report.curRows?.cpas ?? [];
+                    if (!cpas || !rows.length) return null;
+                    return (
+                      <SectionAccordion>
+                        {analysisSections({
+                          prefix: 'CPAS Shopee',
+                          period: cpas.p2,
+                          rows,
+                          kind: 'sales',
+                          campCol: report.cols?.cpasCampaign ?? null,
+                          ageCol: report.cols?.cpasAge ?? null,
+                          genderCol: report.cols?.cpasGender ?? null,
+                        })}
                       </SectionAccordion>
                     );
                   })(),
@@ -982,125 +1162,23 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                 {
                   id: 'non-boost',
                   label: 'Non-Boost Post',
-                  hidden: !report.nonBoost && !report.ageDemo && !report.genderDemo,
+                  hidden: !report.nonBoostLanes?.length,
                   content: (() => {
-                    const cur = report.curRows;
-                    const nbAd = cur?.nonBoost.length ? findAdCol(cur.nonBoost) : null;
+                    const lanes = report.nonBoostLanes ?? [];
+                    const lane = lanes.find((l) => l.key === nbLane) ?? lanes[0];
+                    if (!lane) return null;
                     return (
-                      <SectionAccordion>
-                        <MetaSpecialMomentSection
-                          rows={nonBoostAllRows}
-                          dayCol={dayCol}
-                          heading="Non-Boost Post · Special Moment"
-                          periods={[
-                            oldRange ? { label: report.p1, ...oldRange } : null,
-                            curRange ? { label: report.p2, ...curRange } : null,
-                          ].filter(Boolean) as { label: string; start: Date; end: Date }[]}
-                        />
-                        {report.nonBoost && (
-                          <OverviewDetailedCard
-                            heading={report.nonBoostSegments ? 'Non-Boost Post · Blended' : 'Non-Boost Post'}
-                            badge={
-                              report.nonBoostSegments
-                                ? `objective dari ${META_OBJECTIVE_SOURCE_LABEL[report.nonBoostObjectiveSource ?? 'campaign-name']}`
-                                : 'Meta Ads'
-                            }
-                            overviewRows={report.nonBoost.overviewRows}
-                            detailedRows={report.nonBoost.detailedRows}
-                            allCols={report.nonBoost.allCols}
-                            p1={report.p1}
-                            p2={report.p2}
-                            aside={
-                              report.nonBoostFunnel?.hasData ? (
-                                <SymptomTreePanel tree={report.nonBoostFunnel.tree} p1={report.p1} p2={report.p2} title="Root Cause Analysis" badge={`${report.p1} → ${report.p2}`} />
-                              ) : undefined
-                            }
-                          />
-                        )}
-                        {report.nonBoostSegments?.map((seg) => (
-                          <OverviewDetailedCard
-                            key={seg.key}
-                            heading={`Non-Boost Post · ${seg.label}`}
-                            badge="Meta Ads"
-                            overviewRows={seg.overview.overviewRows}
-                            detailedRows={seg.overview.detailedRows}
-                            allCols={seg.overview.allCols}
-                            p1={report.p1}
-                            p2={report.p2}
-                          />
-                        ))}
-                        {(() => {
-                          // The breakdowns read one objective at a time, with
-                          // that objective's metrics — see MetaObjectivePicker.
-                          const objectives = report.nonBoostObjectives ?? [];
-                          const active = objectives.find((o) => o.key === nbObjective) ?? objectives[0] ?? null;
-                          const objKey: MetaObjectiveKey = active?.key ?? objective ?? 'sales';
-                          const rows = active?.rows ?? cur?.nonBoost ?? [];
-                          const selling = objKey === 'sales';
-                          const kind = selling ? 'sales' : 'objective';
-                          const audience = selling ? SALES_AUDIENCE_METRICS : objectiveAudienceMetrics(objKey);
-                          const creative = selling ? SALES_CREATIVE_METRICS : objectiveAudienceMetrics(objKey);
-                          const label = active?.label ?? '';
-                          const suffix = objectives.length > 1 && label ? ` · ${label}` : '';
-                          const adCol = rows.length ? findAdCol(rows) : nbAd;
-                          return (
-                            <>
-                              {objectives.length > 0 && (
-                                <MetaObjectivePicker
-                                  alwaysOpen
-                                  objectives={objectives}
-                                  active={active?.key ?? null}
-                                  source={report.nonBoostObjectiveSource ?? null}
-                                  onPick={setNbObjective}
-                                />
-                              )}
-                              {report.ageDemo && (
-                                <MetaBreakdownSection
-                                  key={`age-${objKey}`}
-                                  heading={`Non-Boost Post · Age Breakdown${suffix}`}
-                                  badge={`data ${report.p2}`}
-                                  rows={rows}
-                                  dimCol={report.ageDemo.dimCol}
-                                  kind={kind}
-                                  metrics={audience as typeof SALES_AUDIENCE_METRICS}
-                                  prefer="bar"
-                                />
-                              )}
-                              {report.genderDemo && (
-                                <MetaBreakdownSection
-                                  key={`gender-${objKey}`}
-                                  heading={`Non-Boost Post · Gender Breakdown${suffix}`}
-                                  badge={`data ${report.p2}`}
-                                  rows={rows}
-                                  dimCol={report.genderDemo.dimCol}
-                                  kind={kind}
-                                  metrics={audience as typeof SALES_AUDIENCE_METRICS}
-                                  prefer="pie"
-                                />
-                              )}
-                              {adCol && rows.length ? (
-                                <MetaBreakdownSection
-                                  key={`creative-${objKey}`}
-                                  heading={`Non-Boost Post · Creative Performance${suffix}`}
-                                  badge={`per materi iklan · ${report.p2}`}
-                                  rows={rows}
-                                  dimCol={adCol}
-                                  kind={kind}
-                                  metrics={creative as typeof SALES_CREATIVE_METRICS}
-                                  prefer="bar"
-                                />
-                              ) : (
-                                <div className="sec-block">
-                                  <div className="sec-heading">Non-Boost Post · Creative Performance</div>
-                                  <div className="empty-note" style={{ margin: '1.1rem 1.4rem 1.4rem' }}>
-                                    Bagian ini membandingkan performa per materi iklan. File yang diunggah dipecah per campaign, bukan per <strong>Ad</strong> — export ulang
-                                    dari Meta Ads Reporting dengan breakdown Ad disertakan.
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
+                      <SectionAccordion key={lane.key}>
+                        {lanes.length > 0 && <MetaLaneSwitch alwaysOpen lanes={lanes} active={lane.key} onPick={setNbLane} />}
+                        {analysisSections({
+                          prefix: `Non-Boost ${lane.label}`,
+                          period: report.p2,
+                          rows: lane.curRows,
+                          kind: lane.key === 'retail' ? 'sales' : 'lead',
+                          campCol: lane.campCol,
+                          ageCol: lane.ageCol,
+                          genderCol: lane.genderCol,
+                        })}
                       </SectionAccordion>
                     );
                   })(),
@@ -1108,69 +1186,21 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                 {
                   id: 'boost',
                   label: 'Boost Post',
-                  hidden: !report.boost && !report.boostAgeDemo && !report.boostGenderDemo,
+                  hidden: !report.curRows?.boost.length,
                   content: (() => {
-                    const cur = report.curRows;
-                    const boostAd = cur?.boost.length ? findAdCol(cur.boost) : null;
+                    const rows = report.curRows?.boost ?? [];
+                    if (!rows.length) return null;
                     return (
                       <SectionAccordion>
-                        {report.boost && (
-                          <OverviewDetailedCard
-                            heading="Boost Post"
-                            badge={report.boostObjective ? `objective ${report.boostObjective.label}${report.boostObjective.mixed ? ' (dominan)' : ''} · dari ${META_OBJECTIVE_SOURCE_LABEL[report.boostObjective.source]}` : 'Meta Ads'}
-                            overviewRows={report.boost.overviewRows}
-                            detailedRows={report.boost.detailedRows}
-                            allCols={report.boost.allCols}
-                            p1={report.p1}
-                            p2={report.p2}
-                            aside={
-                              report.boostFunnel?.hasData ? (
-                                <SymptomTreePanel tree={report.boostFunnel.tree} p1={report.p1} p2={report.p2} title="Root Cause Analysis" badge="Brand Consideration" />
-                              ) : undefined
-                            }
-                          />
-                        )}
-                        {report.boostAgeDemo && (
-                          <MetaBreakdownSection
-                            heading="Boost Post · Age Breakdown"
-                            badge={`data ${report.p2}`}
-                            rows={report.boostAgeDemo.rows}
-                            dimCol={report.boostAgeDemo.dimCol}
-                            kind="brand"
-                            metrics={BRAND_AUDIENCE_METRICS}
-                            prefer="bar"
-                          />
-                        )}
-                        {report.boostGenderDemo && (
-                          <MetaBreakdownSection
-                            heading="Boost Post · Gender Breakdown"
-                            badge={`data ${report.p2}`}
-                            rows={report.boostGenderDemo.rows}
-                            dimCol={report.boostGenderDemo.dimCol}
-                            kind="brand"
-                            metrics={BRAND_AUDIENCE_METRICS}
-                            prefer="pie"
-                          />
-                        )}
-                        {boostAd && cur ? (
-                          <MetaBreakdownSection
-                            heading="Boost Post · Creative Performance"
-                            badge={`per materi iklan · ${report.p2}`}
-                            rows={cur.boost}
-                            dimCol={boostAd}
-                            kind="brand"
-                            metrics={BRAND_CREATIVE_METRICS}
-                            prefer="bar"
-                          />
-                        ) : (
-                          <div className="sec-block">
-                            <div className="sec-heading">Boost Post · Creative Performance</div>
-                            <div className="empty-note" style={{ margin: '1.1rem 1.4rem 1.4rem' }}>
-                              Bagian ini membandingkan performa per materi iklan. File yang diunggah dipecah per campaign, bukan per <strong>Ad</strong> — export ulang
-                              dari Meta Ads Reporting dengan breakdown Ad disertakan.
-                            </div>
-                          </div>
-                        )}
+                        {analysisSections({
+                          prefix: 'Boost Post',
+                          period: report.p2,
+                          rows,
+                          kind: 'brand',
+                          campCol: report.cols?.campaign ?? null,
+                          ageCol: report.cols?.age ?? null,
+                          genderCol: report.cols?.gender ?? null,
+                        })}
                       </SectionAccordion>
                     );
                   })(),

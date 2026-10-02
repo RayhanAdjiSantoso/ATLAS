@@ -27,7 +27,7 @@ import {
   type MetaObjectiveSource,
 } from '../../lib/meta';
 import { findCol, matchDef } from '../../lib/columns';
-import { buildMetaBrandFunnel, buildMetaSalesFunnel, type MetaFunnel } from '../../lib/metaFunnel';
+import { buildMetaBrandFunnel, buildMetaLeadFunnel, buildMetaSalesFunnel, metaLeadMetrics, type MetaFunnel } from '../../lib/metaFunnel';
 import { toISODate } from '../../lib/dateFmt';
 import { buildParsedPeriod, comparePeriodDays, daysBetweenInclusive, type ParsedPeriod } from '../../lib/periodLabel';
 import { toSummaryKpi, type SpendEntry, type SummaryKpi } from '../../lib/summary';
@@ -75,6 +75,29 @@ export interface CpasSections {
   nvFunnel?: MetaFunnel;
   rmFunnel?: MetaFunnel;
 }
+
+// Non-Boost Post read as two lanes, the way MIL plans it: Retail sells
+// (purchase funnel), B2B Leads collects leads (form leads or chats). See
+// laneOfCampaign for how each campaign is placed.
+export type NonBoostLaneKey = 'retail' | 'b2b';
+
+export interface NonBoostLane {
+  key: NonBoostLaneKey;
+  label: string;
+  // The objectives that landed in this lane, for the "why" note.
+  objectives: string[];
+  // How the lane was decided for most of its spend.
+  basis: 'name' | 'objective' | 'industry';
+  overview: OverviewDetailedData;
+  funnel: MetaFunnel;
+  oldRows: SheetRow[];
+  curRows: SheetRow[];
+  campCol: string | null;
+  ageCol: string | null;
+  genderCol: string | null;
+}
+
+export const NON_BOOST_LANE_LABEL: Record<NonBoostLaneKey, string> = { retail: 'Retail', b2b: 'B2B Leads' };
 
 export interface MetaReport {
   p1: string;
@@ -127,6 +150,10 @@ export interface MetaReport {
   // spans both periods and would silently average two months together.
   curRows?: { boost: SheetRow[]; nonBoost: SheetRow[]; cpas: SheetRow[] };
   cpas?: CpasSections;
+  // Non-Boost split into Retail / B2B Leads; only lanes with rows.
+  nonBoostLanes?: NonBoostLane[];
+  // Columns the Audience/Creative sections need, per source.
+  cols?: { campaign: string | null; age: string | null; gender: string | null; cpasCampaign: string | null; cpasAge: string | null; cpasGender: string | null };
   summary: {
     kpis: SummaryKpi[];
     cpasKpis: SummaryKpi[];
@@ -161,6 +188,22 @@ export function isBoostRow(campCol: string | null) {
     const v = String((campCol ? r[campCol] : '') || '').toLowerCase();
     return v.includes('profile visit') || v.includes('instagram post') || /\bpv\b/.test(v) || /\bpost\b/.test(v);
   };
+}
+
+// Which Non-Boost lane a campaign belongs to:
+//   1. its name says so ("… | B2B", "… Retail", "… Lead …") — MIL's own label wins;
+//   2. its objective: Sales → Retail; Leads → B2B Leads; Engagement that
+//      actually produced chats or leads (Send Message) → B2B Leads;
+//   3. anything else (Traffic, Awareness, a post-engagement push) follows the
+//      Industry picked in the form, Retail when none was picked.
+export function laneOfCampaign(name: string, objective: MetaObjectiveKey | null, rows: SheetRow[], industry: MetaIndustry): { lane: NonBoostLaneKey; basis: NonBoostLane['basis'] } {
+  const lc = name.toLowerCase();
+  if (/\bb2b\b|\blead(s|gen)?\b/.test(lc)) return { lane: 'b2b', basis: 'name' };
+  if (/\bretail\b|\bb2c\b/.test(lc)) return { lane: 'retail', basis: 'name' };
+  if (objective === 'sales') return { lane: 'retail', basis: 'objective' };
+  if (objective === 'leads') return { lane: 'b2b', basis: 'objective' };
+  if (objective === 'engagement' && (metaLeadMetrics(rows).leads ?? 0) > 0) return { lane: 'b2b', basis: 'objective' };
+  return { lane: industry === 'b2b' ? 'b2b' : 'retail', basis: 'industry' };
 }
 
 export interface DateRange {
@@ -440,6 +483,52 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     if (mSpentCol) metaSpend.nonboost = { old: agg(mNonOld, mSpentCol), cur: agg(mNonCur, mSpentCol) };
   }
 
+  // ── Non-Boost lanes: Retail / B2B Leads ──
+  if (hasNonBoost) {
+    const resolved = resolveCampaignObjectives([...mNonOld, ...mNonCur], mCampCol);
+    const byCamp = new Map<string, SheetRow[]>();
+    for (const r of [...mNonOld, ...mNonCur]) {
+      const k = mCampCol ? String(r[mCampCol] ?? '').trim() : '';
+      if (!byCamp.has(k)) byCamp.set(k, []);
+      byCamp.get(k)!.push(r);
+    }
+    const laneOf = new Map<string, { lane: NonBoostLaneKey; basis: NonBoostLane['basis']; objective: MetaObjectiveKey | null }>();
+    for (const [camp, rows] of byCamp) {
+      const objective = resolved.get(camp)?.key ?? null;
+      laneOf.set(camp, { ...laneOfCampaign(camp, objective, rows, industry), objective });
+    }
+    const keyOf = (r: SheetRow) => (mCampCol ? String(r[mCampCol] ?? '').trim() : '');
+    const lanes: NonBoostLane[] = [];
+    for (const key of ['retail', 'b2b'] as NonBoostLaneKey[]) {
+      const inLane = (r: SheetRow) => laneOf.get(keyOf(r))?.lane === key;
+      const oldRows = mNonOld.filter(inLane);
+      const curRows = mNonCur.filter(inLane);
+      if (!oldRows.length && !curRows.length) continue;
+      const camps = [...laneOf].filter(([, v]) => v.lane === key);
+      const basisSpend = new Map<NonBoostLane['basis'], number>();
+      for (const [camp, v] of camps) {
+        const spend = mSpentCol ? agg(byCamp.get(camp) ?? [], mSpentCol) ?? 0 : 1;
+        basisSpend.set(v.basis, (basisSpend.get(v.basis) ?? 0) + spend);
+      }
+      const objectives = [...new Set(camps.map(([, v]) => (v.objective ? META_OBJECTIVE_DEFS[v.objective].label : null)).filter((x): x is string => Boolean(x)))];
+      const ovRows = buildMetaOverviewRows(key === 'retail' ? 'ecommerce' : 'b2b', oldRows, curRows, !reachWarning);
+      lanes.push({
+        key,
+        label: NON_BOOST_LANE_LABEL[key],
+        objectives,
+        basis: [...basisSpend].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'industry',
+        overview: { overviewRows: ovRows, detailedRows: deblend(toDisplayRows(buildKPI(oldRows, curRows, mAllCols))), allCols: mAllCols },
+        funnel: key === 'retail' ? buildMetaSalesFunnel(oldRows, curRows) : buildMetaLeadFunnel(oldRows, curRows),
+        oldRows,
+        curRows,
+        campCol: mCampCol,
+        ageCol: mAgeCol,
+        genderCol: mGenderCol,
+      });
+    }
+    if (lanes.length) report.nonBoostLanes = lanes;
+  }
+
   const defDemo = matchDef(DEFS.nonBoostDemo, mAllCols);
   const demoDefCols = defDemo.length ? defDemo : mAllCols.slice(0, 3);
   // A "Formatted data table" export's Age=All/Gender=All rollup row (and,
@@ -537,6 +626,14 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     }
   }
 
+  report.cols = {
+    campaign: mCampCol,
+    age: mAgeCol,
+    gender: mGenderCol,
+    cpasCampaign: cpasRows?.length ? findCol(cpasRows, ['campaign']) : null,
+    cpasAge: cpasRows?.length ? findCol(cpasRows, ['age']) : null,
+    cpasGender: cpasRows?.length ? findCol(cpasRows, ['gender']) : null,
+  };
   report.summary.kpis = metaKpis;
   report.summary.spend = metaSpend;
   return report;

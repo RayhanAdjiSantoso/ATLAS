@@ -14,7 +14,8 @@ import { useEffect, useRef, useState } from 'react';
 export interface BarSeries {
   label: string;
   values: (number | null)[];
-  color: string;
+  // One colour, or one per bar (e.g. each campaign tinted by NV / RM).
+  color: string | string[];
 }
 
 const INTER = "'Inter', system-ui, sans-serif";
@@ -31,6 +32,8 @@ export function GroupedBarChart({
   height = 320,
   ariaLabel,
   copyLabels = false,
+  legend = true,
+  tickLabels,
 }: {
   labels: string[];
   series: BarSeries[];
@@ -43,6 +46,10 @@ export function GroupedBarChart({
   // Clicking an axis label copies its full, untruncated name — for creative
   // names that only fit the axis cut short and slanted.
   copyLabels?: boolean;
+  // Off where the caller draws its own legend (per-bar colours).
+  legend?: boolean;
+  // Shorter names for the axis only; tooltips and copy keep `labels`.
+  tickLabels?: string[];
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const copiedTimer = useRef<number | undefined>(undefined);
@@ -68,7 +75,7 @@ export function GroupedBarChart({
 
     chartRef.current = new Chart(el, {
       type: 'bar',
-      data: { labels: labels.map((l) => truncate(l)), datasets },
+      data: { labels: (tickLabels ?? labels).map((l) => truncate(l, tickLabels ? 26 : 22)), datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -77,6 +84,7 @@ export function GroupedBarChart({
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: {
+            display: legend,
             position: 'top',
             align: 'end',
             labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'rectRounded', font: { family: INTER, size: 11, weight: 700 }, color: '#5a6a90' },
@@ -171,7 +179,7 @@ export function GroupedBarChart({
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [labels, series, zeroLine, copyLabels]);
+  }, [labels, series, zeroLine, copyLabels, legend, tickLabels]);
 
   useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
 

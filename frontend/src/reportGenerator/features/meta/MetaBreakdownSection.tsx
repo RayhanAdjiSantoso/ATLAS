@@ -3,7 +3,7 @@ import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { PIE_COLORS, PieChartCanvas } from '../../components/PieChartCanvas';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
-import { buildBrandAudience, buildObjectiveAudience, buildSalesAudience, type AudienceMetricDef } from '../../lib/metaAudience';
+import { AUDIENCE_TYPE_LABEL, audienceTypeOf, buildBrandAudience, buildLeadAudience, buildObjectiveAudience, buildSalesAudience, type AudienceMetricDef, type AudienceType } from '../../lib/metaAudience';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 import type { AudienceSlice } from '../../lib/metaAudience';
@@ -21,20 +21,32 @@ const SERIES = '#1e3eb8';
 // For the all-pies layout. A ratio has no share of its own, so its pie is
 // drawn from the count the ratio is built on, and the legend carries each
 // group's actual ratio beside that share.
-const PIE_BASE: Record<string, { key: string; noun: string }> = {
+type Kind = 'sales' | 'brand' | 'objective' | 'lead';
+const SALES_BASE: Record<string, { key: string; noun: string }> = {
   ctr: { key: 'contentViews', noun: 'klik (content views)' },
   conversionRate: { key: 'orders', noun: 'order' },
   aov: { key: 'gmv', noun: 'revenue' },
 };
-const PIE_NOTE: Record<string, string> = {
+const PIE_BASE: Record<Kind, Record<string, { key: string; noun: string }>> = {
+  sales: SALES_BASE,
+  objective: { ctr: { key: 'linkClicks', noun: 'link click' }, leadRate: { key: 'leads', noun: 'leads' }, interactionRate: { key: 'interactions', noun: 'interaksi' } },
+  lead: { ctr: { key: 'linkClicks', noun: 'link click' }, leadRate: { key: 'leads', noun: 'leads' }, costPerLead: { key: 'spend', noun: 'spending' } },
+  brand: {
+    interactionRate: { key: 'interactions', noun: 'interaksi' },
+    profileVisitsRate: { key: 'profileVisits', noun: 'profile visit' },
+    followRate: { key: 'follows', noun: 'follow' },
+  },
+};
+const PIE_NOTE_SALES: Record<string, string> = {
   impressions: 'Porsi impressions tiap gender — siapa yang paling banyak melihat iklan.',
   ctr: 'Irisan = porsi klik (content views) tiap gender. Angka di legenda = CTR gender itu.',
   conversionRate: 'Irisan = porsi order tiap gender. Angka di legenda = conversion rate gender itu.',
   aov: 'Irisan = porsi revenue tiap gender. Angka di legenda = rata-rata nilai order gender itu.',
 };
 
-function PieTile<M>({ metric, slices, group }: { metric: AudienceMetricDef<M>; slices: AudienceSlice<M>[]; group: string }) {
-  const base = metric.additive ? null : PIE_BASE[String(metric.key)];
+function PieTile<M>({ metric, slices, group, kind }: { metric: AudienceMetricDef<M>; slices: AudienceSlice<M>[]; group: string; kind: Kind }) {
+  const base = metric.additive ? null : PIE_BASE[kind][String(metric.key)];
+  const PIE_NOTE: Record<string, string> = kind === 'sales' ? PIE_NOTE_SALES : { impressions: PIE_NOTE_SALES.impressions };
   const shareOf = (s: AudienceSlice<M>) => (s.metrics[(base?.key ?? metric.key) as keyof M] ?? null) as number | null;
   const usable = slices.filter((s) => (shareOf(s) ?? 0) > 0);
   const shares = usable.map((s) => shareOf(s) as number);
@@ -50,7 +62,7 @@ function PieTile<M>({ metric, slices, group }: { metric: AudienceMetricDef<M>; s
         <div className="empty-note">Kolom dasar {metric.label} tidak ada di file ini.</div>
       ) : (
         <>
-          <PieChartCanvas labels={usable.map((s) => s.label)} values={shares} format={(v) => fmtPivotVal(v, base ? (base.key === 'gmv' ? 'rp' : 'num') : metric.fmt)} centerTitle={base ? `Total ${base.noun.split(' ')[0]}` : 'Total'} />
+          <PieChartCanvas labels={usable.map((s) => s.label)} values={shares} format={(v) => fmtPivotVal(v, base ? (base.key === 'gmv' || base.key === 'spend' ? 'rp' : 'num') : metric.fmt)} centerTitle={base ? `Total ${base.noun.replace(/\s*\(.*\)$/, '')}` : 'Total'} />
           <ul className="bd-pie-legend">
             {usable.map((s, i) => {
               const value = (s.metrics[metric.key] ?? null) as number | null;
@@ -79,6 +91,7 @@ export function MetaBreakdownSection<M>({
   metrics: menu,
   prefer,
   emptyMessage,
+  campCol = null,
 }: {
   heading: string;
   badge: string;
@@ -87,16 +100,45 @@ export function MetaBreakdownSection<M>({
   // Which metric family this channel belongs to — selling channels decompose
   // the sales funnel, Boost Post decomposes brand actions, and a Non-Boost
   // objective that is not selling (leads, messages, traffic) its own results.
-  kind: 'sales' | 'brand' | 'objective';
+  kind: Kind;
   metrics: readonly AudienceMetricDef<M>[];
   // 'pies' shows every metric as its own pie on one page, no metric toggle.
   prefer: 'bar' | 'pie' | 'pies';
   emptyMessage?: string;
+  // When given, a Semua / NV / RM switch reads the breakdown for one
+  // audience at a time (campaigns named "NV | …" / "RM | …").
+  campCol?: string | null;
 }) {
+  const typeOf = (r: SheetRow): AudienceType | 'other' => (campCol ? audienceTypeOf(r[campCol]) : null) ?? 'other';
+  const types = useMemo(() => {
+    if (!campCol) return [] as (AudienceType | 'other')[];
+    const seen = new Set(rows.map(typeOf));
+    return (['NV', 'RM', 'NV+RM', 'other'] as const).filter((t) => seen.has(t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, campCol]);
+  const splitting = types.length >= 2 && types.some((t) => t !== 'other');
+  const [aud, setAud] = useState<string>('all');
+  const scoped = useMemo(() => (splitting && aud !== 'all' ? rows.filter((r) => typeOf(r) === aud) : rows), [rows, aud, splitting]); // eslint-disable-line react-hooks/exhaustive-deps
   const slices = useMemo(
-    () => (kind === 'brand' ? buildBrandAudience(rows, dimCol) : kind === 'objective' ? buildObjectiveAudience(rows, dimCol) : buildSalesAudience(rows, dimCol)) as unknown as AudienceSlice<M>[],
-    [rows, dimCol, kind],
+    () =>
+      (kind === 'brand'
+        ? buildBrandAudience(scoped, dimCol)
+        : kind === 'objective'
+          ? buildObjectiveAudience(scoped, dimCol)
+          : kind === 'lead'
+            ? buildLeadAudience(scoped, dimCol)
+            : buildSalesAudience(scoped, dimCol)) as unknown as AudienceSlice<M>[],
+    [scoped, dimCol, kind],
   );
+  const audToggle = splitting ? (
+    <SegmentedToggle
+      label="Audiens"
+      options={[{ value: 'all', label: 'Semua' }, ...types.map((t) => ({ value: t as string, label: t === 'other' ? 'Lainnya' : t === 'NV+RM' ? 'NV + RM' : t }))]}
+      value={aud}
+      onChange={setAud}
+      accent="var(--acc)"
+    />
+  ) : null;
   // Only metrics this file can compute are offered — a button that always
   // answers "column missing" is noise. Up to four, in the menu's order; what
   // was left out is named under the chart instead.
@@ -129,12 +171,18 @@ export function MetaBreakdownSection<M>({
           <span className="sec-badge">{badge}</span>
           <SectionDownloadButton />
         </div>
+        {audToggle && (
+          <div className="chart-controls" style={{ padding: '1.1rem 1.4rem 0' }}>
+            {audToggle}
+            {aud !== 'all' && <span className="sm-hint">{AUDIENCE_TYPE_LABEL[aud as AudienceType | 'other']}</span>}
+          </div>
+        )}
         <div style={{ padding: '1.1rem 1.4rem 1.4rem' }}>
           {!slices.length ? (
             <div className="empty-note">{emptyMessage ?? 'Breakdown ini tidak ada di file yang diunggah.'}</div>
           ) : (
-            <div className="bd-pies">
-              {metrics.map((m) => <PieTile key={String(m.key)} metric={m} slices={slices} group={group} />)}
+            <div className={`bd-pies${metrics.length === 3 ? ' bd-pies-3' : ''}`}>
+              {metrics.map((m) => <PieTile key={`${String(m.key)}-${aud}`} metric={m} slices={slices} group={group} kind={kind} />)}
             </div>
           )}
           {missing.length > 0 && (
@@ -161,6 +209,7 @@ export function MetaBreakdownSection<M>({
           onChange={setPick}
           accent="var(--acc)"
         />
+        {audToggle}
         {sortable && !(prefer === 'pie' && metric.additive) && (
           <SegmentedToggle
             label="Urutan"

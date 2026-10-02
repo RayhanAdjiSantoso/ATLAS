@@ -48,7 +48,7 @@ const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate(
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 const within = (d: Date, start: Date, end: Date) => d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
 
-function rowsBetween(rows: SheetRow[], dayCol: string, start: Date, end: Date): SheetRow[] {
+export function rowsBetween(rows: SheetRow[], dayCol: string, start: Date, end: Date): SheetRow[] {
   return rows.filter((r) => {
     const d = parseMetaDayValue(r[dayCol]);
     return d != null && within(d, start, end);

@@ -18,10 +18,26 @@ import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, 
 // Exported under its old name so every page that used the accordion now
 // gets the workspace unchanged.
 
-function flatten(children: ReactNode): ReactNode[] {
-  return Children.toArray(children).flatMap((child) =>
-    isValidElement(child) && child.type === Fragment ? flatten((child as ReactElement<{ children?: ReactNode }>).props.children) : [child],
-  );
+// Names a run of sections in the navigator ("Audience Analysis", "Creative
+// Analysis"). Outside a deck it is transparent.
+export function SectionGroup({ children }: { label: string; children: ReactNode }) {
+  return <>{children}</>;
+}
+
+interface Flat {
+  node: ReactNode;
+  group: string | null;
+}
+
+function flatten(children: ReactNode, group: string | null = null): Flat[] {
+  return Children.toArray(children).flatMap((child): Flat[] => {
+    if (isValidElement(child) && child.type === Fragment) return flatten((child as ReactElement<{ children?: ReactNode }>).props.children, group);
+    if (isValidElement(child) && child.type === SectionGroup) {
+      const p = (child as ReactElement<{ label: string; children?: ReactNode }>).props;
+      return flatten(p.children, p.label);
+    }
+    return [{ node: child, group }];
+  });
 }
 
 interface SectionMeta {
@@ -52,7 +68,8 @@ function readMeta(wrap: HTMLElement | null, fallback: string): SectionMeta {
 }
 
 export function SectionAccordion({ children, defaultOpen = 0 }: { children: ReactNode; defaultOpen?: number }) {
-  const items = flatten(children).filter(Boolean);
+  const flat = flatten(children).filter((f) => Boolean(f.node));
+  const items = flat.map((f) => f.node);
   const statics = items.map((child) => isValidElement(child) && (child.props as { alwaysOpen?: boolean }).alwaysOpen === true);
   const sections = items.map((_, i) => i).filter((i) => !statics[i]);
   const first = sections.includes(defaultOpen) ? defaultOpen : sections[0] ?? 0;
@@ -102,9 +119,16 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
           {sections.map((i, pos) => {
             const m = meta[i];
             const on = i === active;
+            const group = flat[i].group;
+            const prevGroup = pos > 0 ? flat[sections[pos - 1]].group : null;
             return (
+              <Fragment key={i}>
+              {group && group !== prevGroup && (
+                <span className="sdeck-group" role="presentation">
+                  {group}
+                </span>
+              )}
               <button
-                key={i}
                 ref={(el) => {
                   tabRefs.current[i] = el;
                 }}
@@ -124,6 +148,7 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
                   {m?.badge && <small>{m.badge}</small>}
                 </span>
               </button>
+              </Fragment>
             );
           })}
         </div>

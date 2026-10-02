@@ -1,5 +1,5 @@
 import { isAllValue } from './meta';
-import { metaBrandMetrics, metaObjectiveMetrics, metaSalesMetrics, type MetaBrandMetrics, type MetaObjectiveMetrics, type MetaSalesMetrics } from './metaFunnel';
+import { metaBrandMetrics, metaLeadMetrics, metaObjectiveMetrics, metaSalesMetrics, type MetaBrandMetrics, type MetaLeadMetrics, type MetaObjectiveMetrics, type MetaSalesMetrics } from './metaFunnel';
 import type { MetaObjectiveKey } from './meta';
 import type { PivotFmt } from './shopeeDeepDivePivot';
 import type { SheetRow } from './types';
@@ -52,6 +52,47 @@ export function buildObjectiveAudience(rows: SheetRow[], dimCol: string): Audien
   return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaObjectiveMetrics(g.rows) }));
 }
 
+export function buildLeadAudience(rows: SheetRow[], dimCol: string): AudienceSlice<MetaLeadMetrics>[] {
+  return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaLeadMetrics(g.rows) }));
+}
+
+// The metric family a section reads, by the job the ads were bought for.
+export type MetaMetricKind = 'sales' | 'brand' | 'objective' | 'lead';
+
+export function metricsFor(kind: MetaMetricKind, rows: SheetRow[]): Record<string, unknown> {
+  if (kind === 'brand') return metaBrandMetrics(rows) as unknown as Record<string, unknown>;
+  if (kind === 'objective') return metaObjectiveMetrics(rows) as unknown as Record<string, unknown>;
+  if (kind === 'lead') return metaLeadMetrics(rows) as unknown as Record<string, unknown>;
+  return metaSalesMetrics(rows) as unknown as Record<string, unknown>;
+}
+
+// ── New Visitor / Re-Marketing ───────────────────────────────────────────
+// MIL names every campaign by the audience it buys: "NV | …" prospects new
+// people, "RM | …" re-targets people who already visited. A campaign named
+// for both ("NV RM | Send Message | B2B") runs one budget across the two and
+// cannot be split, so it is its own group rather than guessed into one.
+
+export type AudienceType = 'NV' | 'RM' | 'NV+RM';
+
+const hasToken = (v: string, k: string) => new RegExp('(^|[\\s|\\-_/])' + k + '([\\s|\\-_/]|$)', 'i').test(v);
+
+export function audienceTypeOf(campaign: unknown): AudienceType | null {
+  const v = String(campaign ?? '');
+  const nv = hasToken(v, 'nv');
+  const rm = hasToken(v, 'rm');
+  if (nv && rm) return 'NV+RM';
+  if (nv) return 'NV';
+  if (rm) return 'RM';
+  return null;
+}
+
+export const AUDIENCE_TYPE_LABEL: Record<AudienceType | 'other', string> = {
+  NV: 'NV · New Visitor',
+  RM: 'RM · Re-Marketing',
+  'NV+RM': 'NV + RM',
+  other: 'Tanpa label NV/RM',
+};
+
 // ── Metric menus ─────────────────────────────────────────────────────────
 // Exactly the metrics the architecture sheet lists under each visual.
 
@@ -89,6 +130,64 @@ export const SALES_CREATIVE_METRICS: readonly AudienceMetricDef<MetaSalesMetrics
 ];
 
 export const BRAND_CREATIVE_METRICS = BRAND_AUDIENCE_METRICS;
+
+// ── Architecture sheet menus (Audience & Creative Analysis) ──────────────
+// CPAS and Non-Boost Retail sell; they are read on the sales funnel.
+export const SALES_AGE_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'aov', label: 'Average Order Value', fmt: 'rp', additive: false },
+];
+export const SALES_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+];
+// Each chart opens on the rate it is named after; the counts behind that
+// rate are the other buttons.
+export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
+  { key: 'purchase', label: 'Purchase', fmt: 'num', additive: true },
+];
+export const SALES_CLICK_ATC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
+  { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
+];
+export const SALES_ATC_PURCHASE_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
+  { key: 'atc', label: 'Add to Cart', fmt: 'num', additive: true },
+];
+export const SALES_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },
+  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
+];
+
+// Non-Boost B2B Leads: the purchase steps do not exist; the lead is the
+// conversion, so each sales chart has its lead equivalent.
+export const LEAD_AGE_METRICS: readonly AudienceMetricDef<MetaLeadMetrics>[] = [
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+  { key: 'leadRate', label: 'Leads Rate', fmt: 'pct', additive: false },
+];
+export const LEAD_GENDER_METRICS: readonly AudienceMetricDef<MetaLeadMetrics>[] = [
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+  { key: 'leadRate', label: 'Leads Rate', fmt: 'pct', additive: false },
+];
+export const LEAD_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaLeadMetrics>[] = [
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
+];
+export const LEAD_CONVERSION_METRICS: readonly AudienceMetricDef<MetaLeadMetrics>[] = [
+  { key: 'leadRate', label: 'Leads Rate', fmt: 'pct', additive: false },
+  { key: 'linkClicks', label: 'Link Clicks', fmt: 'num', additive: true },
+  { key: 'leads', label: 'Leads', fmt: 'num', additive: true },
+  { key: 'costPerLead', label: 'Cost per Lead', fmt: 'rp', additive: false },
+];
+export const LEAD_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaLeadMetrics>[] = [
+  { key: 'leadRate', label: 'Click → Lead Rate', fmt: 'pct', additive: false },
+  { key: 'leads', label: 'Leads', fmt: 'num', additive: true },
+  { key: 'costPerLead', label: 'Cost per Lead', fmt: 'rp', additive: false },
+];
 
 // The column a creative breakdown needs. Meta names it "Ad name" in a
 // Formatted data table export and "Ad ID" in the API pull.
