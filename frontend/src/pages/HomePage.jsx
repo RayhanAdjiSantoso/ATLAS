@@ -181,6 +181,9 @@ export default function HomePage() {
                 <Link to="/report-generator/meta" className="btn home-band-cta ghost">
                   Buat laporan
                 </Link>
+                <Link to="/selamat-datang" className="btn home-band-cta ghost">
+                  {can('homepage_content') && !isViewOnly ? 'Kelola homepage publik' : 'Lihat homepage publik'}
+                </Link>
               </div>
             </div>
 

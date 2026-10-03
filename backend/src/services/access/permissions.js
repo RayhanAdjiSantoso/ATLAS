@@ -32,6 +32,7 @@ export const MODULES = [
   { key: 'meta_automation', label: 'Meta Ads Automation' },
   { key: 'internal_dashboard', label: 'Internal Dashboard' },
   { key: 'control_center', label: 'Pusat Kendali' },
+  { key: 'homepage_content', label: 'Kelola Homepage' },
 ];
 const MODULE_KEYS = new Set(MODULES.map((m) => m.key));
 
@@ -43,14 +44,17 @@ export const DEFAULTS = {
   admin: {
     dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
     history: true, meta_automation: true, internal_dashboard: true, control_center: true,
+    homepage_content: true,
   },
   user: {
     dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
     history: true, meta_automation: false, internal_dashboard: false, control_center: false,
+    homepage_content: false,
   },
   client: {
     dashboard: true, daily_tracking: true, brand_settings: false, report_generator: false,
     history: false, meta_automation: false, internal_dashboard: false, control_center: false,
+    homepage_content: false,
   },
 };
 

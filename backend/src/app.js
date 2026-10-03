@@ -16,6 +16,7 @@ import metaAdsInsightsRoutes from './routes/metaAdsInsightsRoutes.js';
 import metaAdsInsightsIngestRoutes from './routes/metaAdsInsightsIngestRoutes.js';
 import accessRoutes from './routes/accessRoutes.js';
 import googleAdsRoutes from './routes/googleAdsRoutes.js';
+import { homepageAdminRouter, publicHomepageRouter } from './routes/homepageRoutes.js';
 import googleAdsIngestRoutes from './routes/googleAdsIngestRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 import { securityHeaders } from './middlewares/security.js';
@@ -54,6 +55,8 @@ app.use('/api/control-center', controlCenterRoutes);
 app.use('/api/daily-tracking', dailyTrackingRoutes);
 app.use('/api/meta-ads-insights', metaAdsInsightsRoutes);
 app.use('/api/google-ads', googleAdsRoutes);
+app.use('/api/public/homepage', publicHomepageRouter);
+app.use('/api/homepage', homepageAdminRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

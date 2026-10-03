@@ -13,6 +13,7 @@ import BrandSettingsPage from './pages/BrandSettingsPage.jsx';
 import ControlCenterPage from './pages/ControlCenterPage.jsx';
 import AccessSettingsPage from './pages/AccessSettingsPage.jsx';
 import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
+import LandingPage from './pages/LandingPage.jsx';
 
 export default function App() {
   return (
@@ -21,7 +22,12 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
       </Route>
 
-      <Route element={<ProtectedRoute />}>
+      {/* The public homepage, open to anyone with the link — and where a
+          logged-in team member previews or manages it. A visitor who is not
+          logged in gets the same page at "/". */}
+      <Route path="/selamat-datang" element={<LandingPage />} />
+
+      <Route element={<ProtectedRoute guestHome={<LandingPage />} />}>
         {/* Outside the layout: a temporary password is replaced before the
             rest of ATLAS opens (ProtectedRoute redirects here). */}
         <Route path="/ganti-password" element={<ChangePasswordPage />} />
