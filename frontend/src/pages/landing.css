@@ -142,12 +142,10 @@ html:has(.lp) { scroll-behavior: smooth; }
   gap: 24px;
   padding: 14px var(--lp-pad);
   border-bottom: 1px solid transparent;
-  transition: background-color 260ms ease, border-color 260ms ease, padding 260ms var(--lp-ease-out);
+  transition: background-color 260ms ease, border-color 260ms ease;
   animation: lp-fade-down 700ms var(--lp-ease-out) both;
 }
 .lp-nav.is-scrolled {
-  padding-top: 10px;
-  padding-bottom: 10px;
   border-bottom-color: rgba(221, 226, 238, 0.8);
   background: rgba(251, 252, 254, 0.84);
   backdrop-filter: saturate(160%) blur(14px);
@@ -395,7 +393,7 @@ html:has(.lp) { scroll-behavior: smooth; }
 @keyframes lp-chip-in { from { opacity: 0; transform: translateY(12px) scale(0.94); } to { opacity: 1; transform: none; } }
 @keyframes lp-bob { from { transform: translateY(-5px); } to { transform: translateY(5px); } }
 
-/* Letters rise into place, the i's dot lands last with a small settle. */
+/* Letters rise into place, the i's dot drops in last. */
 .lp-letter {
   transform-box: fill-box;
   transform-origin: 50% 100%;
@@ -404,7 +402,7 @@ html:has(.lp) { scroll-behavior: smooth; }
 }
 .lp-letter-dot {
   transform-origin: 50% 50%;
-  animation: lp-drop 760ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  animation: lp-drop 820ms var(--lp-ease-out) both;
   animation-delay: 520ms;
 }
 @keyframes lp-rise { from { opacity: 0; transform: translateY(16%); } to { opacity: 1; transform: none; } }
