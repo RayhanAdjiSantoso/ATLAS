@@ -32,10 +32,11 @@ const upload = multer({
 // The copy fields the page reads, with the text it shows until someone
 // edits them. Kept to facts the product already states.
 const SETTING_DEFAULTS = {
-  headline: 'Performa iklan klien, dibaca dengan jujur.',
-  lede: 'ATLAS adalah ruang kerja MIL Digital: data Meta, Shopee, TikTok, dan Google dari setiap klien diolah jadi analitik dan laporan yang siap dibaca.',
+  headline: 'Your ads, all in one place.',
+  lede:
+    "ATLAS is MIL Digital's analytics workspace. Meta, Shopee, TikTok and Google data from every client, turned into clear analysis and reports that are ready to send.",
   about:
-    'MIL Digital mengelola iklan performa untuk brand di Meta Ads, Shopee Ads, TikTok GMV Max, dan Google Ads — dari eksekusi kampanye harian sampai laporan bulanan ke klien.',
+    'MIL Digital runs performance marketing for brands across Meta Ads, Shopee Ads, TikTok GMV Max and Google Ads — from daily campaign execution to monthly client reporting.',
 };
 const SETTING_KEYS = Object.keys(SETTING_DEFAULTS);
 

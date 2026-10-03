@@ -42,9 +42,11 @@ function Row({ logos, reverse, labelled }) {
   );
 }
 
-export function LogoMarquee({ logos }) {
+// `rows` is 1 or 2: a short window keeps the band to one line so it still
+// fits on the first screen.
+export function LogoMarquee({ logos, rows = 2 }) {
   if (!logos.length) return null;
-  if (logos.length < 16) return <Row logos={logos} labelled />;
+  if (rows === 1 || logos.length < 16) return <Row logos={logos} labelled />;
   const half = Math.ceil(logos.length / 2);
   return (
     <div className="lp-marquee-rows">

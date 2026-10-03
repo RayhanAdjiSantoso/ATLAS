@@ -224,8 +224,8 @@ export function SqueezeCarousel({
           {head}
           {controls && count > 1 && (
             <div className="sq-arrows">
-              <Arrow back label="Foto sebelumnya" onClick={() => step(-1)} />
-              <Arrow label="Foto berikutnya" onClick={() => step(1)} />
+              <Arrow back label="Previous photo" onClick={() => step(-1)} />
+              <Arrow label="Next photo" onClick={() => step(1)} />
             </div>
           )}
         </div>

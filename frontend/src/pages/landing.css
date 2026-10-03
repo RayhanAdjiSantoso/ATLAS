@@ -251,18 +251,125 @@ html:has(.lp) { scroll-behavior: smooth; }
 .lp main,
 .lp-footer { position: relative; z-index: 1; }
 
+/* ── Blueprint grid: hairlines, beams and registration marks ────────────── */
+/* A 64px grid fading out from the hero, after the drawing-board grids of
+   Vercel and Linear. Two beams of light travel along its lines, and a few
+   "+" marks sit on its crossings. */
+.lp-grid {
+  --cell: 64px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  height: max(100svh, 760px);
+  overflow: hidden;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(30, 62, 184, 0.075) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 62, 184, 0.075) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 34%, #000 30%, transparent 78%);
+  mask-image: radial-gradient(ellipse 75% 70% at 50% 34%, #000 30%, transparent 78%);
+}
+.lp-beam { position: absolute; display: block; }
+.lp-beam-x {
+  top: calc(var(--cell) * 2);
+  left: 0;
+  width: 220px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(11, 141, 246, 0.9), transparent);
+  animation: lp-beam-x 9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+.lp-beam-y {
+  top: 0;
+  left: calc(var(--cell) * 17);
+  width: 1px;
+  height: 180px;
+  background: linear-gradient(180deg, transparent, rgba(11, 141, 246, 0.9), transparent);
+  animation: lp-beam-y 7s cubic-bezier(0.45, 0, 0.55, 1) 2.5s infinite;
+}
+@keyframes lp-beam-x { 0% { transform: translateX(-240px); } 60%, 100% { transform: translateX(100vw); } }
+@keyframes lp-beam-y { 0% { transform: translateY(-200px); } 60%, 100% { transform: translateY(100svh); } }
+.lp-grid b {
+  position: absolute;
+  top: calc(var(--gy) * var(--cell) - 6px);
+  left: calc(var(--gx) * var(--cell) - 6px);
+  width: 13px;
+  height: 13px;
+  background:
+    linear-gradient(rgba(30, 62, 184, 0.45), rgba(30, 62, 184, 0.45)) center / 1px 100% no-repeat,
+    linear-gradient(rgba(30, 62, 184, 0.45), rgba(30, 62, 184, 0.45)) center / 100% 1px no-repeat;
+}
+
+/* Rings that leave the mil mark and fade, like a signal going out. */
+.lp-rings { position: absolute; inset: 0; z-index: -1; display: grid; place-items: center; pointer-events: none; }
+.lp-rings i {
+  position: absolute;
+  width: min(92%, 520px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(30, 62, 184, 0.22);
+  border-radius: 50%;
+  opacity: 0;
+  animation: lp-ring 7.5s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+.lp-rings i:nth-child(2) { animation-delay: 2.5s; }
+.lp-rings i:nth-child(3) { animation-delay: 5s; }
+@keyframes lp-ring { 0% { opacity: 0; transform: scale(0.55); } 15% { opacity: 1; } 100% { opacity: 0; transform: scale(1.15); } }
+.lp-stage-wrap { isolation: isolate; }
+
+/* Dot fields behind the values and the bento, fading at their edges. */
+.lp-values,
+.lp-inside { position: relative; isolation: isolate; }
+.lp-values::before,
+.lp-inside::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 40px -80px -40px;
+  background-image: radial-gradient(rgba(30, 62, 184, 0.24) 1.1px, transparent 1.7px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 50%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 50%, #000 20%, transparent 75%);
+  pointer-events: none;
+}
+/* The statement sits on a wide, soft wash of the mark's blue. */
+.lp-statement { position: relative; isolation: isolate; }
+.lp-statement::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 30%;
+  right: -10%;
+  width: 60%;
+  height: 120%;
+  background: radial-gradient(closest-side, rgba(11, 141, 246, 0.12), transparent);
+  pointer-events: none;
+}
+
+/* A shorter window keeps the hero compact so the client band still shows
+   on the first screen. */
+@media (max-height: 860px) {
+  .lp-headline { font-size: clamp(2.6rem, 8.4vh, 4.3rem); }
+  .lp-stage { width: min(100%, 50vh, 400px); }
+  .lp-stage-wrap { padding: 28px 36px; }
+  .lp-lede { margin-top: 16px; }
+  .lp-hero-actions { margin-top: 22px; }
+  .lp-hero { padding-top: 8px; padding-bottom: 18px; }
+}
+
 /* ── First screen: hero above, client band at its foot ──────────────────── */
 .lp-first {
   display: flex;
   flex-direction: column;
-  min-height: calc(100svh - 72px);
+  min-height: calc(100svh - 77px);
 }
 
 /* ── Hero: pitch left, mark right ───────────────────────────────────────── */
 .lp-hero {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   align-items: center;
   gap: clamp(32px, 5vw, 88px);
   width: 100%;
@@ -405,26 +512,22 @@ html:has(.lp) { scroll-behavior: smooth; }
   transition: opacity 1000ms ease, transform 7000ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ── Client band: a frosted panel at the foot of the first screen ───────── */
+/* ── Client band: edge to edge at the foot of the first screen ──────────── */
 /* Client logos arrive white on transparent. On this light glass they are
    turned to grey ink — grayscale first so coloured marks stay neutral, then
    inverted — and come up to full ink under the pointer. */
 .lp-clients {
   position: relative;
-  width: calc(100% - 2 * var(--lp-pad));
-  max-width: calc(var(--lp-max) + 160px);
-  margin: 0 auto clamp(14px, 2vh, 24px);
-  padding: 22px 0 18px;
+  width: 100%;
+  padding: 18px 0 14px;
   overflow: hidden;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow: 0 24px 60px -34px rgba(15, 26, 58, 0.32), inset 0 1px 0 #fff;
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border-block: 1px solid rgba(201, 212, 238, 0.8);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   animation: lp-fade-up 900ms var(--lp-ease-out) 1000ms both;
 }
-.lp-clients.is-empty { padding: 22px var(--lp-pad); background: rgba(255, 255, 255, 0.7); box-shadow: none; border: 1px dashed #c4cff0; text-align: center; }
+.lp-clients.is-empty { width: calc(100% - 2 * var(--lp-pad)); margin: 0 auto 20px; padding: 22px var(--lp-pad); border: 1px dashed #c4cff0; border-radius: 20px; background: rgba(255, 255, 255, 0.7); text-align: center; }
 /* Centred label between two hairlines that draw outward as it arrives. */
 .lp-divider { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 0 auto 8px; padding: 0 var(--lp-pad); }
 .lp-divider::before,
@@ -443,8 +546,8 @@ html:has(.lp) { scroll-behavior: smooth; }
 .lp-marquee-rows { display: grid; gap: 0; }
 .lp-marquee {
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
 .lp-marquee-track {
   display: flex;
@@ -477,7 +580,7 @@ html:has(.lp) { scroll-behavior: smooth; }
 .lp-values,
 .lp-gallery,
 .lp-platforms,
-.lp-atlas { max-width: var(--lp-max); margin: 0 auto; padding: clamp(72px, 8vw, 120px) var(--lp-pad) 0; }
+.lp-inside { max-width: var(--lp-max); margin: 0 auto; padding: clamp(72px, 8vw, 120px) var(--lp-pad) 0; }
 .lp h2 { margin: 0; font-size: clamp(1.9rem, 2.8vw, 2.8rem); font-weight: 800; line-height: 1.06; letter-spacing: -0.04em; }
 
 /* ── Portfolio ──────────────────────────────────────────────────────────── */
@@ -661,18 +764,171 @@ html:has(.lp) { scroll-behavior: smooth; }
 .lp-platforms strong { font-size: 1.08rem; font-weight: 750; letter-spacing: -0.015em; }
 .lp-platforms li > span:last-child { color: var(--lp-muted); font-size: 0.95rem; line-height: 1.55; }
 
-/* ── Inside ATLAS ───────────────────────────────────────────────────────── */
-.lp-atlas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: clamp(32px, 6vw, 96px); padding-bottom: clamp(72px, 8vw, 120px); }
-.lp-atlas-copy p { max-width: 42ch; margin: 18px 0 30px; color: var(--lp-muted); font-size: 1.08rem; line-height: 1.6; }
-.lp-atlas-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--lp-line); }
-.lp-atlas-list li { display: grid; grid-template-columns: 52px minmax(170px, 0.8fr) minmax(0, 1.4fr); align-items: baseline; gap: 20px; padding: 22px 0; border-bottom: 1px solid var(--lp-line); }
-.lp-atlas-n { color: var(--lp-quiet); font-size: 0.86rem; font-weight: 700; font-variant-numeric: tabular-nums; transition: color 260ms ease; }
-.lp-atlas-list strong { font-size: 1.08rem; font-weight: 750; letter-spacing: -0.015em; transition: transform 380ms var(--lp-ease-out), color 260ms ease; }
-.lp-atlas-list li > span:last-child { color: var(--lp-muted); font-size: 1rem; line-height: 1.5; }
-@media (hover: hover) and (pointer: fine) {
-  .lp-atlas-list li:hover .lp-atlas-n { color: var(--lp-accent); }
-  .lp-atlas-list li:hover strong { color: var(--lp-accent); transform: translateX(6px); }
+/* ── Inside ATLAS: a bento of what the workspace does ───────────────────── */
+.lp-inside { padding-bottom: clamp(72px, 8vw, 120px); }
+.lp-inside-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+.lp-inside-head p { max-width: 44ch; margin: 0; color: var(--lp-muted); font-size: 1.05rem; line-height: 1.55; }
+.lp-bento {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(260px, auto));
+  gap: 16px;
+  margin-top: 36px;
 }
+.lp-tile {
+  --mx: 50%;
+  --my: 0%;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px;
+  overflow: hidden;
+  border: 1px solid var(--lp-line);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 26, 58, 0.04);
+}
+/* The pointer's light, drawn under the content. */
+.lp-tile::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: radial-gradient(420px circle at var(--mx) var(--my), rgba(11, 141, 246, 0.1), transparent 60%);
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .lp-tile:hover::before { opacity: 1; }
+  .lp-tile:hover { border-color: #c9d4f2; }
+}
+.lp-tile-copy strong { display: block; font-size: 1.12rem; font-weight: 750; letter-spacing: -0.02em; }
+.lp-tile-copy p { max-width: 40ch; margin: 8px 0 0; color: var(--lp-muted); font-size: 0.96rem; line-height: 1.55; }
+.lp-tile-report { grid-row: span 2; }
+.lp-tile-platforms { grid-column: span 2; flex-direction: row; align-items: center; justify-content: space-between; }
+
+/* Report Generator: two periods side by side, rising as the tile arrives. */
+.lp-bars {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  gap: clamp(12px, 2.4vw, 30px);
+  min-height: 220px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--lp-line);
+  background-image: repeating-linear-gradient(0deg, transparent 0 calc(25% - 1px), var(--lp-rule) calc(25% - 1px) 25%);
+}
+.lp-bars > span { display: flex; flex: 1; align-items: flex-end; gap: 6px; height: 100%; }
+.lp-bars i {
+  flex: 1;
+  border-radius: 8px 8px 2px 2px;
+  background: #c9d4ee;
+  transform: scaleY(0);
+  transform-origin: 50% 100%;
+  transition: transform 1100ms var(--lp-ease-out);
+  transition-delay: calc(var(--i) * 70ms + 250ms);
+}
+.lp-bars i + i { background: linear-gradient(180deg, var(--lp-mil-a), var(--lp-mil-b)); transition-delay: calc(var(--i) * 70ms + 380ms); }
+.lp-tile[data-in] .lp-bars i { transform: none; }
+.lp-legend { display: flex; gap: 20px; color: var(--lp-quiet); font-size: 0.84rem; font-weight: 600; }
+.lp-legend span { display: inline-flex; align-items: center; gap: 8px; }
+.lp-legend span::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: #c9d4ee; }
+.lp-legend span + span::before { background: var(--lp-accent); }
+
+/* Daily Tracking: a line that draws itself. */
+.lp-spark { display: block; width: 100%; height: 96px; margin-top: auto; overflow: visible; }
+.lp-spark-line { fill: none; stroke: var(--lp-accent); stroke-width: 2.5; stroke-linecap: round; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1600ms var(--lp-ease-out) 300ms; }
+.lp-spark-area { opacity: 0; transition: opacity 900ms ease 900ms; }
+.lp-tile[data-in] .lp-spark-line { stroke-dashoffset: 0; }
+.lp-tile[data-in] .lp-spark-area { opacity: 1; }
+
+/* Business Overview: a funnel narrowing step by step. */
+.lp-funnel { display: grid; gap: 8px; margin-top: auto; }
+.lp-funnel i {
+  display: block;
+  width: var(--w);
+  height: 14px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--lp-mil-a), var(--lp-mil-b));
+  opacity: calc(1 - var(--i) * 0.18);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 1000ms var(--lp-ease-out);
+  transition-delay: calc(var(--i) * 110ms + 300ms);
+}
+.lp-tile[data-in] .lp-funnel i { transform: none; }
+
+/* Platforms: four marks turning slowly on one ring. */
+.lp-orbit { position: relative; flex: 0 0 auto; width: 170px; height: 170px; margin: 0 24px 0 0; border: 1px dashed #c9d4ee; border-radius: 50%; animation: lp-spin 36s linear infinite; }
+.lp-orbit::after { content: ''; position: absolute; inset: 38%; border-radius: 50%; background: linear-gradient(135deg, var(--lp-mil-a), var(--lp-mil-b)); box-shadow: 0 10px 30px -8px rgba(0, 64, 223, 0.5); }
+.lp-orbit span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -22px;
+  border: 1px solid var(--lp-line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 16px -8px rgba(15, 26, 58, 0.3);
+  transform: rotate(calc(var(--i) * 90deg)) translateX(85px) rotate(calc(var(--i) * -90deg));
+}
+.lp-orbit span > * { animation: lp-spin 36s linear infinite reverse; }
+@keyframes lp-spin { to { transform: rotate(360deg); } }
+
+/* Closing call: the mark's own blue, with light moving through it. */
+.lp-closing {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  margin-top: clamp(64px, 7vw, 104px);
+  padding: clamp(56px, 6vw, 88px) var(--lp-pad);
+  overflow: hidden;
+  border-radius: 32px;
+  background: linear-gradient(135deg, var(--lp-mil-a), var(--lp-mil-b) 70%);
+  box-shadow: 0 40px 80px -40px rgba(0, 64, 223, 0.6);
+  color: #fff;
+  text-align: center;
+}
+.lp-closing-light {
+  position: absolute;
+  z-index: -1;
+  inset: -40%;
+  background:
+    radial-gradient(30% 30% at 30% 40%, rgba(255, 255, 255, 0.28), transparent 70%),
+    radial-gradient(26% 26% at 70% 60%, rgba(120, 196, 255, 0.45), transparent 70%);
+  animation: lp-spin 30s linear infinite;
+}
+.lp .lp-closing h2 { max-width: 20ch; color: #fff; font-size: clamp(2.2rem, 3.6vw, 3.6rem); }
+.lp .lp-closing h2 em { color: #cfe6ff; }
+.lp-closing p { max-width: 48ch; margin: 0; color: rgba(255, 255, 255, 0.82); font-size: 1.05rem; line-height: 1.55; }
+.lp-closing .lp-cta { margin-top: 10px; }
+.lp .lp-cta.is-light { background: #fff; color: var(--lp-accent); }
+.lp-cta.is-light .lp-cta-chip { background: var(--lp-accent); color: #fff; }
+@media (hover: hover) and (pointer: fine) {
+  .lp .lp-cta.is-light:hover { background: #eef4ff; box-shadow: 0 14px 30px -14px rgba(0, 0, 0, 0.35); }
+}
+
+/* ── Statement: lights up word by word as it is read ────────────────────── */
+.lp-statement { max-width: var(--lp-max); margin: 0 auto; padding: clamp(80px, 9vw, 140px) var(--lp-pad) 0; }
+.lp-statement p {
+  --p: 0;
+  max-width: 26ch;
+  margin: 0;
+  font-size: clamp(2rem, 3.6vw, 3.6rem);
+  font-weight: 750;
+  line-height: 1.14;
+  letter-spacing: -0.035em;
+}
+.lp-statement span { opacity: clamp(0.16, calc(var(--p) * (var(--n) + 4) - var(--k)), 1); }
+.lp-statement span:nth-child(-n + 5) { color: var(--lp-accent); }
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */
 .lp-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px var(--lp-pad); border-top: 1px solid var(--lp-line); color: var(--lp-quiet); font-size: 0.88rem; }
@@ -776,8 +1032,10 @@ html:has(.lp) { scroll-behavior: smooth; }
   .lp-value:nth-child(n + 4) { border-top: 1px solid var(--lp-rule); }
   .lp-platforms ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-platforms li:nth-child(3) { padding-left: 0; border-left: 0; }
-  .lp-portfolio,
-  .lp-atlas { grid-template-columns: minmax(0, 1fr); }
+  .lp-portfolio { grid-template-columns: minmax(0, 1fr); }
+  .lp-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-tile-report,
+  .lp-tile-platforms { grid-column: span 2; grid-row: auto; }
 }
 @media (max-width: 860px) {
   .lp-nav { grid-template-columns: auto minmax(0, 1fr); }
@@ -809,5 +1067,14 @@ html:has(.lp) { scroll-behavior: smooth; }
   .lp-value-letter,
   .lp-value::after { transition: color 300ms ease; }
   .hm-panel { animation: lp-fade 200ms ease both; }
+  .lp-orbit,
+  .lp-orbit span > *,
+  .lp-closing-light,
+  .lp-beam,
+  .lp-rings i { animation: none; }
+  .lp-bars i,
+  .lp-funnel i { transform: none; transition: none; }
+  .lp-spark-line { stroke-dashoffset: 0; transition: none; }
+  .lp-spark-area { opacity: 1; transition: none; }
 }
 
