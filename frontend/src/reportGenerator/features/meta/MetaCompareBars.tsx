@@ -30,12 +30,13 @@ type Aud = 'split' | 'all' | 'NV' | 'RM';
 type Order = 'default' | 'desc' | 'asc';
 type TypeKey = AudienceType | 'other';
 
+// NV deep indigo, RM terracotta — two audiences, two clearly different hues.
 const TYPE_COLOR: Record<TypeKey | 'all', string> = {
-  NV: '#2856b6',
-  RM: '#38bdf8',
-  'NV+RM': '#7c9cf0',
-  other: '#9fb0cc',
-  all: '#1e3eb8',
+  NV: '#2F4B8C',
+  RM: '#D9694A',
+  'NV+RM': '#5E9C8A',
+  other: '#9AA5B8',
+  all: '#2F4B8C',
 };
 const TYPE_ORDER: TypeKey[] = ['NV', 'RM', 'NV+RM', 'other'];
 const SHORT: Record<TypeKey, string> = { NV: 'NV', RM: 'RM', 'NV+RM': 'NV + RM', other: 'Lainnya' };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { DeltaPill } from '../../components/DeltaPill';
 import { PieChartCanvas } from '../../components/PieChartCanvas';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
@@ -12,10 +12,14 @@ import type { SheetRow } from '../../lib/types';
 
 // Special Moment, as the architecture sheet asks for it:
 //
-//   • Pie (compare overall) — how much of this period's revenue and spending
-//     fell on twin dates (7/7, 8/8 …) and on payday, against every other day.
-//   • Score cards (compare last period) — revenue and spending of each moment
-//     this period, against the same moment last period.
+//   • Pie (compare overall) — how much of the month's revenue and spending fell
+//     on twin dates (7/7, 8/8 …) and on payday, against every other day; this
+//     month, last month, or both side by side.
+//   • Per moment (compare last period) — each moment's revenue, spending, ROAS
+//     and its revenue against an ordinary day, this period against the last.
+//
+// Each figure is said once: amounts in the pie legend and the moment panels,
+// shares in the compare table, the ordinary-day baseline in the footnote.
 //
 // It reads every Meta source the report has (Non-Boost, Boost, CPAS) — one
 // combined reading by default, or one source at a time. Each source keeps its
@@ -44,6 +48,8 @@ type Bucket = 'twin' | 'payday' | 'rest';
 interface Money {
   revenue: number | null;
   spending: number | null;
+  // Distinct days with rows — for per-day figures (revenue a day, lift).
+  days: Set<string>;
 }
 type PeriodSplit = Record<Bucket | 'total', Money>;
 
@@ -69,40 +75,134 @@ function splitPeriod(rows: SheetRow[], dayCol: string, p: MomentPeriod, twin: { 
     const inPeriod = d >= p.start && d <= p.end;
     parts[inPeriod && inWindows(d, twin) ? 'twin' : inPeriod && inWindows(d, pay) ? 'payday' : 'rest'].push(r);
   }
-  const money = (rs: SheetRow[]): Money => ({
-    revenue: hasRevenue ? (metaRevenueTotal(rs) ?? 0) : null,
-    spending: metaSpendTotal(rs) ?? 0,
-  });
+  const money = (rs: SheetRow[]): Money => {
+    const days = new Set<string>();
+    for (const r of rs) {
+      const d = parseMetaDayValue(r[dayCol]);
+      if (d) days.add(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
+    }
+    return { revenue: hasRevenue ? (metaRevenueTotal(rs) ?? 0) : null, spending: metaSpendTotal(rs) ?? 0, days };
+  };
   return { twin: money(parts.twin), payday: money(parts.payday), rest: money(parts.rest), total: money(inMonth) };
 }
 
-function MomentCard({ title, cur, prev, curLabel, prevLabel, share, shareOf }: { title: string; cur: number | null; prev: number | null; curLabel: string; prevLabel: string; share: number | null; shareOf: string }) {
-  const delta = cur !== null && prev !== null ? computeDelta(prev, cur) : null;
+// Moments in warm, rest of the month in a quiet neutral: the eye goes to the
+// two slices the section is about.
+const MOMENT_COLORS = ['#D9694A', '#E9B04F', '#C9D2E3'];
+const BUCKETS: Bucket[] = ['twin', 'payday', 'rest'];
+const BUCKET_LABELS = ['Twin Date', 'Payday', 'Di luar special moment'];
+const pctOf = (part: number | null, whole: number | null) => (part !== null && whole ? (part / whole) * 100 : null);
+const perDay = (m: Money, k: 'revenue' | 'spending') => (m[k] !== null && m.days.size ? (m[k] as number) / m.days.size : null);
+const roasOf = (m: Money) => (m.revenue !== null && m.spending ? m.revenue / m.spending : null);
+const times = (v: number | null, digits = 1) => (v === null ? '—' : `${v.toLocaleString('id-ID', { maximumFractionDigits: digits, minimumFractionDigits: digits })}×`);
+// A moment day against an ordinary day of the same month: 5,2× reads at a glance.
+const liftOf = (split: PeriodSplit, b: Bucket) => {
+  const base = perDay(split.rest, 'revenue');
+  const v = perDay(split[b], 'revenue');
+  return v === null || !base ? null : v / base;
+};
+
+// The one line that matters: what share of the month's revenue the moments
+// brought, for what share of its spending.
+function Headline({ split, other, otherLabel, hasRevenue }: { split: PeriodSplit; other: PeriodSplit | null; otherLabel: string; hasRevenue: boolean }) {
+  const rev = (s: PeriodSplit) => pctOf(add(s.twin.revenue, s.payday.revenue), s.total.revenue);
+  const sp = (s: PeriodSplit) => pctOf(add(s.twin.spending, s.payday.spending), s.total.spending);
   return (
-    <div className="sm-card is-focus">
-      <div className="sm-card-title">
-        {title}
-        <span className="sm-latest">{curLabel}</span>
+    <p className="sm-headline">
+      Special moment membawa {hasRevenue && <><b>{fmtShare(rev(split))}</b> revenue dari </>}
+      <b>{fmtShare(sp(split))}</b> spending bulan ini
+      {other && hasRevenue && rev(other) !== null && <span className="sm-headline-was"> · {otherLabel}: {fmtShare(rev(other))} revenue dari {fmtShare(sp(other))} spending</span>}
+    </p>
+  );
+}
+
+// Both months' rings side by side, and how each slice's share moved — shares
+// only; the amounts live in the moment panels below.
+function ComparePies({ metric, prev, cur, prevLabel, curLabel }: { metric: 'revenue' | 'spending'; prev: PeriodSplit; cur: PeriodSplit; prevLabel: string; curLabel: string }) {
+  return (
+    <section className="sm-compare-card">
+      <h4>{metric === 'revenue' ? 'Revenue' : 'Spending'}</h4>
+      <div className="sm-compare-rings">
+        {([
+          [prevLabel, prev],
+          [curLabel, cur],
+        ] as const).map(([label, split]) => (
+          <PieChartCanvas
+            key={label}
+            size={210}
+            colors={MOMENT_COLORS}
+            labels={BUCKET_LABELS}
+            values={BUCKETS.map((b) => Math.max(0, split[b][metric] ?? 0))}
+            format={(v) => rp(v)}
+            centerTitle={label}
+          />
+        ))}
       </div>
-      <div className="sm-card-figure">{rp(cur)}</div>
-      <div className="sm-card-change">
-        {delta ? (
-          <>
-            <DeltaPill cls={deltaClassForSentiment(delta.deltaNum, title.startsWith('Spending') ? 'neutral' : 'higher-better')}>{formatDeltaID(delta.deltaNum, delta.deltaStr)}</DeltaPill>
-            <span>
-              vs {prevLabel} ({rp(prev)})
-            </span>
-          </>
-        ) : (
-          <span className="sm-nodelta">tidak ada pembanding di file ini</span>
-        )}
+      <table className="sm-compare-table">
+        <thead>
+          <tr>
+            <th scope="col">Porsi</th>
+            <th scope="col">{prevLabel}</th>
+            <th scope="col">{curLabel}</th>
+            <th scope="col">Perubahan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {BUCKETS.map((b, i) => {
+            const a = pctOf(prev[b][metric], prev.total[metric]);
+            const c = pctOf(cur[b][metric], cur.total[metric]);
+            const pp = a !== null && c !== null ? c - a : null;
+            const tone = metric !== 'revenue' || b === 'rest' || pp === null || Math.abs(pp) < 0.05 ? '' : pp > 0 ? 'is-up' : 'is-down';
+            return (
+              <tr key={b}>
+                <th scope="row">
+                  <span className="sm-dot" style={{ background: MOMENT_COLORS[i] }} aria-hidden="true" />
+                  {BUCKET_LABELS[i]}
+                </th>
+                <td>{fmtShare(a)}</td>
+                <td>{fmtShare(c)}</td>
+                <td className={tone}>{pp === null ? '—' : `${pp > 0 ? '+' : ''}${pp.toLocaleString('id-ID', { maximumFractionDigits: 1 })} pp`}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+// One moment, this period against the last: what it earned, what it cost,
+// how hard the money worked (ROAS) and how it compares with an ordinary day.
+function MomentPanel({ bucket, color, name, dates, prev, cur, prevLabel, hasRevenue }: { bucket: Bucket; color: string; name: string; dates: string[]; prev: PeriodSplit; cur: PeriodSplit; prevLabel: string; hasRevenue: boolean }) {
+  // Amounts carry their change as a pill; ratios just name last month's value.
+  const metric = (label: string, c: number | null, p: number | null, fmt: (v: number | null) => string, sentiment: 'higher-better' | 'neutral', pill = true) => {
+    const d = pill && c !== null && p !== null ? computeDelta(p, c) : null;
+    return (
+      <div className="sm-metric">
+        <span className="sm-metric-label">{label}</span>
+        <strong>{fmt(c)}</strong>
+        <span className="sm-metric-was">
+          {d && <DeltaPill cls={deltaClassForSentiment(d.deltaNum, sentiment)}>{formatDeltaID(d.deltaNum, d.deltaStr)}</DeltaPill>}
+          <small>
+            {prevLabel} {fmt(p)}
+          </small>
+        </span>
       </div>
-      {share !== null && (
-        <div className="sm-card-total">
-          <b>{share.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%</b> dari {shareOf} {curLabel}
-        </div>
-      )}
-    </div>
+    );
+  };
+  return (
+    <section className="sm-moment" style={{ '--sm-c': color } as CSSProperties}>
+      <header>
+        <h4>{name}</h4>
+        <span>{dates.length ? dates.join(', ') : 'tidak ada di periode ini'}</span>
+      </header>
+      <div className="sm-metrics">
+        {hasRevenue && metric('Revenue', cur[bucket].revenue, prev[bucket].revenue, rp, 'higher-better')}
+        {metric('Spending', cur[bucket].spending, prev[bucket].spending, rp, 'neutral')}
+        {hasRevenue && metric('ROAS', roasOf(cur[bucket]), roasOf(prev[bucket]), (v) => times(v, 2).replace('×', 'x'), 'higher-better', false)}
+        {hasRevenue && metric('vs hari biasa', liftOf(cur, bucket), liftOf(prev, bucket), (v) => times(v), 'higher-better', false)}
+      </div>
+    </section>
   );
 }
 
@@ -110,6 +210,8 @@ export function MetaSpecialMomentSection({ sources, heading }: { sources: Moment
   const [startDay, setStartDay] = useState(String(DEFAULT_PAYDAY.startDay));
   const [lengthDays, setLengthDays] = useState(String(DEFAULT_PAYDAY.lengthDays));
   const [pick, setPick] = useState('all');
+  // Which month the pies read: this period, the previous one, or both side by side.
+  const [view, setView] = useState<'cur' | 'prev' | 'compare'>('cur');
   const paydayStart = Math.min(28, Math.max(1, Number(startDay) || DEFAULT_PAYDAY.startDay));
   const paydayLength = Math.min(31, Math.max(1, Number(lengthDays) || DEFAULT_PAYDAY.lengthDays));
 
@@ -124,32 +226,38 @@ export function MetaSpecialMomentSection({ sources, heading }: { sources: Moment
     const payday = { startDay: paydayStart, lengthDays: paydayLength };
     const chosen = pick === 'all' ? usable : usable.filter((s) => s.key === pick);
     if (!chosen.length) return null;
-    const occ: string[] = [];
     let hasRevenue = false;
-    // [previous, current], summed over the chosen sources.
-    const per: PeriodSplit[] = [0, 1].map(() => ({
-      twin: { revenue: null, spending: null },
-      payday: { revenue: null, spending: null },
-      rest: { revenue: null, spending: null },
-      total: { revenue: null, spending: null },
-    }));
+    // [previous, current], summed over the chosen sources; with the dates of
+    // each moment that fell inside each period.
+    const empty = (): Money => ({ revenue: null, spending: null, days: new Set() });
+    const per: PeriodSplit[] = [0, 1].map(() => ({ twin: empty(), payday: empty(), rest: empty(), total: empty() }));
+    const dates: Record<'twin' | 'payday', string[]>[] = [0, 1].map(() => ({ twin: [], payday: [] }));
     for (const s of chosen) {
       const dayCol = s.dayCol as string;
       const revenueCol = metaRevenueTotal(s.rows) !== null;
       hasRevenue ||= revenueCol;
       const twin = buildSpecialMoment(s.rows, dayCol, 'double-date').occurrences;
       const pay = buildSpecialMoment(s.rows, dayCol, 'payday', payday).occurrences;
-      for (const o of [...twin, ...pay]) if (!occ.includes(o.label)) occ.push(o.label);
       const pair = [s.periods[0], s.periods[s.periods.length - 1]];
       pair.forEach((p, i) => {
+        for (const [k, list] of [['twin', twin], ['payday', pay]] as const) {
+          for (const o of list) {
+            const label = k === 'payday' ? `${o.start.getDate()}${paydayLength > 1 ? `–${o.end.getDate()}` : ''}/${o.start.getMonth() + 1}` : o.label;
+            if (o.start >= p.start && o.start <= p.end && !dates[i][k].includes(label)) dates[i][k].push(label);
+          }
+        }
         const split = splitPeriod(s.rows, dayCol, p, twin, pay, revenueCol);
         for (const b of ['twin', 'payday', 'rest', 'total'] as const) {
-          per[i][b] = { revenue: add(per[i][b].revenue, split[b].revenue), spending: add(per[i][b].spending, split[b].spending) };
+          per[i][b] = {
+            revenue: add(per[i][b].revenue, split[b].revenue),
+            spending: add(per[i][b].spending, split[b].spending),
+            days: new Set([...per[i][b].days, ...split[b].days]),
+          };
         }
       });
     }
     const lead = chosen[0];
-    return { per, hasRevenue, occ, prevLabel: lead.periods[0].label, curLabel: lead.periods[lead.periods.length - 1].label };
+    return { per, dates, hasRevenue, prevLabel: lead.periods[0].label, curLabel: lead.periods[lead.periods.length - 1].label };
   }, [usable, pick, paydayStart, paydayLength]);
 
   const blocked = !sources.some((s) => s.rows.length) ? (
@@ -163,15 +271,8 @@ export function MetaSpecialMomentSection({ sources, heading }: { sources: Moment
 
   const cur = reading?.per[1];
   const prev = reading?.per[0];
-  const pieOf = (k: keyof Money) => {
-    if (!cur) return null;
-    const vals = [cur.twin[k], cur.payday[k], cur.rest[k]];
-    if (vals.every((v) => v === null)) return null;
-    return vals.map((v) => Math.max(0, v ?? 0));
-  };
-  const share = (part: number | null, whole: number | null) => (part !== null && whole ? (part / whole) * 100 : null);
-  const revPie = reading?.hasRevenue ? pieOf('revenue') : null;
-  const spendPie = pieOf('spending');
+  const shown = view === 'prev' ? prev : cur;
+  const shownLabel = reading ? (view === 'prev' ? reading.prevLabel : reading.curLabel) : '';
   const sourceOptions = [{ value: 'all', label: 'Semua Meta' }, ...usable.map((s) => ({ value: s.key, label: s.label }))];
 
   return (
@@ -201,57 +302,73 @@ export function MetaSpecialMomentSection({ sources, heading }: { sources: Moment
 
       <div style={{ padding: '1.1rem 1.4rem 1.4rem' }}>
         {blocked ??
-          (reading && cur && prev && (
+          (reading && cur && prev && shown && (
             <>
-              <h4 className="sm-subhead">Kontribusi special moment terhadap total 1 bulan · {reading.curLabel}</h4>
-              <div className="sm-share-strip">
-                {reading.hasRevenue && cur.total.revenue ? (
-                  <span>
-                    Special moment menyumbang <b>{fmtShare(share(add(cur.twin.revenue, cur.payday.revenue), cur.total.revenue))}</b> dari total revenue bulan ini (
-                    {rp(add(cur.twin.revenue, cur.payday.revenue))} dari {rp(cur.total.revenue)})
-                  </span>
-                ) : null}
-                {cur.total.spending ? (
-                  <span>
-                    dan <b>{fmtShare(share(add(cur.twin.spending, cur.payday.spending), cur.total.spending))}</b> dari total spending ({rp(add(cur.twin.spending, cur.payday.spending))} dari {rp(cur.total.spending)})
-                  </span>
-                ) : null}
-              </div>
-              <div className="sm-pies">
-                <div className="sm-pie">
-                  <h4>Revenue</h4>
-                  {revPie ? (
-                    <PieChartCanvas labels={['Twin Date', 'Payday', 'Di luar special moment']} values={revPie} format={(v) => rp(v)} centerTitle="Total revenue 1 bulan" legend />
-                  ) : (
-                    <div className="empty-note">
-                      Sumber ini tidak memuat kolom <strong>Purchases conversion value</strong> — revenue hanya ada di campaign yang menjual (CPAS / Sales).
-                    </div>
-                  )}
-                </div>
-                <div className="sm-pie">
-                  <h4>Spending</h4>
-                  {spendPie ? (
-                    <PieChartCanvas labels={['Twin Date', 'Payday', 'Di luar special moment']} values={spendPie} format={(v) => rp(v)} centerTitle="Total spending 1 bulan" legend />
-                  ) : (
-                    <div className="empty-note">Kolom Amount Spent tidak ditemukan.</div>
-                  )}
-                </div>
+              <div className="sm-contrib-head">
+                <h4 className="sm-subhead">Kontribusi terhadap total 1 bulan · {view === 'compare' ? `${reading.prevLabel} vs ${reading.curLabel}` : shownLabel}</h4>
+                <SegmentedToggle
+                  label="Tampilkan"
+                  options={[
+                    { value: 'cur', label: reading.curLabel },
+                    { value: 'prev', label: reading.prevLabel },
+                    { value: 'compare', label: 'Bandingkan' },
+                  ]}
+                  value={view}
+                  onChange={(v) => setView(v as 'cur' | 'prev' | 'compare')}
+                  accent="var(--acc)"
+                />
               </div>
 
-              <h4 className="sm-subhead">Dibanding periode lalu · {reading.prevLabel} → {reading.curLabel}</h4>
-              <div className="sm-scorecards sm-scorecards-grid">
-                {reading.hasRevenue && (
-                  <>
-                    <MomentCard title="Revenue · Twin Date" cur={cur.twin.revenue} prev={prev.twin.revenue} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.twin.revenue, cur.total.revenue)} shareOf="revenue 1 bulan" />
-                    <MomentCard title="Revenue · Payday" cur={cur.payday.revenue} prev={prev.payday.revenue} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.payday.revenue, cur.total.revenue)} shareOf="revenue 1 bulan" />
-                  </>
-                )}
-                <MomentCard title="Spending · Twin Date" cur={cur.twin.spending} prev={prev.twin.spending} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.twin.spending, cur.total.spending)} shareOf="spending 1 bulan" />
-                <MomentCard title="Spending · Payday" cur={cur.payday.spending} prev={prev.payday.spending} curLabel={reading.curLabel} prevLabel={reading.prevLabel} share={share(cur.payday.spending, cur.total.spending)} shareOf="spending 1 bulan" />
+              <Headline
+                split={view === 'prev' ? prev : cur}
+                other={view === 'compare' ? prev : null}
+                otherLabel={reading.prevLabel}
+                hasRevenue={reading.hasRevenue}
+              />
+
+              {view !== 'compare' ? (
+                <div className="sm-pies">
+                  {(['revenue', 'spending'] as const).map((k) => (
+                    <div className="sm-pie" key={k}>
+                      <h4>{k === 'revenue' ? 'Revenue' : 'Spending'}</h4>
+                      {k === 'revenue' && !reading.hasRevenue ? (
+                        <div className="empty-note">
+                          Sumber ini tidak memuat kolom <strong>Purchases conversion value</strong> — revenue hanya ada di campaign yang menjual (CPAS / Sales).
+                        </div>
+                      ) : (
+                        <PieChartCanvas
+                          colors={MOMENT_COLORS}
+                          labels={BUCKET_LABELS}
+                          values={BUCKETS.map((b) => Math.max(0, shown[b][k] ?? 0))}
+                          format={(v) => rp(v)}
+                          centerTitle={`Total ${k} ${shownLabel}`}
+                          legend
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="sm-compare">
+                  {(['revenue', 'spending'] as const)
+                    .filter((k) => k === 'spending' || reading.hasRevenue)
+                    .map((k) => (
+                      <ComparePies key={k} metric={k} prev={prev} cur={cur} prevLabel={reading.prevLabel} curLabel={reading.curLabel} />
+                    ))}
+                </div>
+              )}
+
+              <h4 className="sm-subhead">
+                Per moment · {reading.curLabel} dibanding {reading.prevLabel}
+              </h4>
+              <div className="sm-moments">
+                <MomentPanel bucket="twin" color={MOMENT_COLORS[0]} name="Twin Date" dates={reading.dates[1].twin} prev={prev} cur={cur} prevLabel={reading.prevLabel} hasRevenue={reading.hasRevenue} />
+                <MomentPanel bucket="payday" color={MOMENT_COLORS[1]} name="Payday" dates={reading.dates[1].payday} prev={prev} cur={cur} prevLabel={reading.prevLabel} hasRevenue={reading.hasRevenue} />
               </div>
               <p className="chart-foot">
-                Moment yang ditemukan di file: {reading.occ.length ? reading.occ.join(', ') : 'tidak ada'}. Hari yang sekaligus twin date dan payday dihitung sekali, sebagai
-                twin date.
+                Hari biasa {reading.curLabel}
+                {reading.hasRevenue ? <> rata-rata {rp(perDay(cur.rest, 'revenue'))} revenue/hari, ROAS {times(roasOf(cur.rest), 2).replace('×', 'x')}</> : <> rata-rata {rp(perDay(cur.rest, 'spending'))} spending/hari</>}{' '}
+                — acuan "vs hari biasa". Hari yang sekaligus twin date dan payday dihitung sekali, sebagai twin date.
                 {skipped.length > 0 && <> Tidak ikut dihitung (tanpa breakdown Day atau hanya satu periode): {skipped.map((s) => s.label).join(', ')}.</>}
               </p>
             </>

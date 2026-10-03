@@ -429,3 +429,62 @@
 @container (max-width: 1120px) {
   .mil-ui.report-generator-app .sec-split { grid-template-columns: minmax(0, 1fr); gap: 1.2rem; }
 }
+
+/* ── Special Moment: period switch, side-by-side compare, per-day efficiency ── */
+.mil-ui.report-generator-app .sm-contrib-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; margin-bottom: .9rem; }
+.mil-ui.report-generator-app .sm-contrib-head .sm-subhead { margin: 0; }
+.mil-ui.report-generator-app .sm-dot { display: inline-block; width: 9px; height: 9px; margin-right: .5rem; border-radius: 3px; vertical-align: middle; }
+.mil-ui.report-generator-app .sm-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 1.2rem; margin-bottom: 1.6rem; }
+.mil-ui.report-generator-app .sm-compare-card { padding: 1rem 1.1rem 1.1rem; border: 1px solid var(--rs-line); border-radius: 18px; background: #fbfcff; }
+.mil-ui.report-generator-app .sm-compare-card > h4 { margin: 0 0 .6rem; color: var(--rs-ink); font-size: .95rem; font-weight: 800; }
+.mil-ui.report-generator-app .sm-compare-rings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin: 0 0 .8rem; }
+.mil-ui.report-generator-app .sm-compare-rings figure { display: grid; justify-items: center; margin: 0; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) { width: 100%; border-collapse: collapse; font-size: .86rem; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) th,
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) td { padding: .55rem .7rem; border-bottom: 1px solid var(--rs-rule); text-align: right; vertical-align: top; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) thead th { color: var(--rs-quiet); font-size: .72rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) tbody th { color: var(--rs-ink); font-weight: 700; text-align: left; white-space: nowrap; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) thead th:first-child { text-align: left; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) td { color: var(--rs-ink); font-weight: 650; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) small { display: block; margin-top: 2px; color: var(--rs-quiet); font-size: .74rem; font-weight: 600; }
+.mil-ui.report-generator-app .sm-compare-table td small { display: inline; margin-left: .35rem; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table, .sm-eff-head) .is-up { color: #15803d; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table, .sm-eff-head) .is-down { color: #c0392b; }
+.mil-ui.report-generator-app .sm-eff { margin: .4rem 0 1.6rem; padding: 1rem 1.1rem .6rem; border: 1px solid var(--rs-line); border-radius: 18px; background: #fff; }
+.mil-ui.report-generator-app .sm-eff-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .3rem 1rem; margin-bottom: .4rem; }
+.mil-ui.report-generator-app .sm-eff-head .sm-subhead { margin: 0; }
+.mil-ui.report-generator-app .sm-eff-head p { margin: 0; color: var(--rs-muted); font-size: .88rem; }
+.mil-ui.report-generator-app .sm-eff-table tr.is-base th,
+.mil-ui.report-generator-app .sm-eff-table tr.is-base td { background: #fafbfe; }
+.mil-ui.report-generator-app .sm-eff-table tbody tr:last-child :is(th, td) { border-bottom: 0; }
+.mil-ui.report-generator-app.pdf-export-mode .sm-contrib-head .seg-toggle { display: none; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) tbody th { background: transparent; font-size: .88rem; letter-spacing: 0; text-transform: none; }
+.mil-ui.report-generator-app :is(.sm-compare-table, .sm-eff-table) td { background: transparent; }
+.mil-ui.report-generator-app .sm-scorecards-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+
+/* Special Moment, trimmed: one headline, the rings, two moment panels. */
+.mil-ui.report-generator-app .sm-headline { margin: -.2rem 0 1.1rem; color: var(--rs-muted); font-size: .95rem; line-height: 1.5; }
+.mil-ui.report-generator-app .sm-headline b { color: var(--rs-ink); font-weight: 800; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app .sm-headline-was { color: var(--rs-quiet); font-size: .88rem; }
+.mil-ui.report-generator-app .sm-compare-rings { justify-items: center; align-items: center; }
+.mil-ui.report-generator-app .sm-compare-table td { font-weight: 700; }
+.mil-ui.report-generator-app .sm-moments { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1rem; margin: .2rem 0 1rem; }
+.mil-ui.report-generator-app .sm-moment {
+  position: relative;
+  overflow: hidden;
+  padding: 1rem 1.15rem 1.05rem;
+  border: 1px solid var(--rs-line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sm-c) 7%, #fff), #fff 60%);
+}
+.mil-ui.report-generator-app .sm-moment > header h4::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: .5rem; border-radius: 3px; background: var(--sm-c); vertical-align: 1px; }
+.mil-ui.report-generator-app .sm-moment > header { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; margin-bottom: .85rem; }
+.mil-ui.report-generator-app .sm-moment > header h4 { margin: 0; color: var(--rs-ink); font-size: 1rem; font-weight: 800; }
+.mil-ui.report-generator-app .sm-moment > header span { padding: .15rem .6rem; border-radius: 99px; background: color-mix(in srgb, var(--sm-c) 16%, #fff); color: color-mix(in srgb, var(--sm-c) 70%, #1b2440); font-size: .76rem; font-weight: 750; }
+.mil-ui.report-generator-app .sm-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .9rem 1.2rem; }
+.mil-ui.report-generator-app .sm-metric { display: grid; gap: .2rem; min-width: 0; }
+.mil-ui.report-generator-app .sm-metric-label { color: var(--rs-quiet); font-size: .74rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.mil-ui.report-generator-app .sm-metric > strong { color: var(--rs-ink); font-size: 1.25rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app .sm-metric-was { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.mil-ui.report-generator-app .sm-metric-was small { color: var(--rs-quiet); font-size: .76rem; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app .donut-share { background: #f3f4f7; color: #4a5470; }

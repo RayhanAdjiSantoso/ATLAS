@@ -16,7 +16,7 @@ import type { AudienceSlice } from '../../lib/metaAudience';
 // the SUM of the rates, a quantity that does not exist. The note says so
 // rather than leaving the reader to wonder why the shape changed.
 
-const SERIES = '#1e3eb8';
+const SERIES = '#2F4B8C';
 
 // For the all-pies layout. A ratio has no share of its own, so its pie is
 // drawn from the count the ratio is built on, and the legend carries each

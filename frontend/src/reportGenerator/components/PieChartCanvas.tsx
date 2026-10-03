@@ -1,9 +1,10 @@
 import { Chart, type Plugin } from 'chart.js/auto';
 import { useEffect, useRef } from 'react';
 
-// One blue family, deep to pale, then sky — slices read as parts of one whole
-// rather than unrelated categories. No red: on these pages red means "worse".
-export const PIE_COLORS = ['#2856b6', '#5b8def', '#38bdf8', '#9cc7ff', '#1e3eb8', '#7dd3fc', '#c7dcff', '#0ea5e9', '#3b6fd8', '#bfe6fb'];
+// A muted, editorial set — deep indigo, terracotta, sage, amber, plum… — that
+// tells neighbouring slices apart at a glance without shouting. Terracotta is
+// warm, not the alarm red the delta pills use for "worse".
+export const PIE_COLORS = ['#2F4B8C', '#D9694A', '#5E9C8A', '#E9B04F', '#8C6BB1', '#4FA3C7', '#C98BA5', '#7A8B5A', '#B5875E', '#9AA5B8'];
 
 interface PieChartCanvasProps {
   labels: string[];
@@ -17,6 +18,10 @@ interface PieChartCanvasProps {
   // The built-in legend (colour bar · name · value · share). Off where the
   // caller already draws its own legend beside the chart.
   legend?: boolean;
+  // Slice colours in order, when the slices carry fixed meanings.
+  colors?: string[];
+  // Ring diameter in px (default 260).
+  size?: number;
 }
 
 const INTER = "'Inter', system-ui, sans-serif";
@@ -27,7 +32,8 @@ const pct = (v: number, total: number) => (total > 0 ? ((v / total) * 100).toLoc
 // that slice's name and value in the centre instead. Canvas rather than SVG:
 // report sections are exported through html2canvas, and a canvas comes
 // through as pixels — the centre text is drawn on it for the same reason.
-export function PieChartCanvas({ labels, values, format = defaultFormat, centerTitle = 'Total', centerValue, legend = false }: PieChartCanvasProps) {
+export function PieChartCanvas({ labels, values, format = defaultFormat, centerTitle = 'Total', centerValue, legend = false, colors, size = 260 }: PieChartCanvasProps) {
+  const palette = colors?.length ? colors : PIE_COLORS;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
   const fmtRef = useRef(format);
@@ -75,7 +81,7 @@ export function PieChartCanvas({ labels, values, format = defaultFormat, centerT
         labels,
         datasets: [{
           data: values,
-          backgroundColor: PIE_COLORS.slice(0, labels.length).concat(PIE_COLORS).slice(0, labels.length),
+          backgroundColor: labels.map((_, i) => palette[i % palette.length]),
           borderColor: '#ffffff',
           borderWidth: 3,
           borderRadius: 4,
@@ -110,18 +116,18 @@ export function PieChartCanvas({ labels, values, format = defaultFormat, centerT
       chartRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(labels), JSON.stringify(values), centerTitle, centerValue]);
+  }, [JSON.stringify(labels), JSON.stringify(values), centerTitle, centerValue, palette.join(), size]);
 
   return (
     <div className={`donut${legend ? ' has-legend' : ''}`}>
-      <div className="pie-canvas-wrap donut-canvas">
-        <canvas ref={canvasRef} width={260} height={260} />
+      <div className="pie-canvas-wrap donut-canvas" style={{ width: size, height: size }}>
+        <canvas ref={canvasRef} width={size} height={size} style={{ width: size, height: size }} />
       </div>
       {legend && (
         <ul className="donut-legend">
           {labels.map((l, i) => (
             <li key={`${l}-${i}`}>
-              <span className="donut-bar" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} aria-hidden="true" />
+              <span className="donut-bar" style={{ background: palette[i % palette.length] }} aria-hidden="true" />
               <span className="donut-name">{l}</span>
               <b className="donut-val">{format(values[i] ?? 0)}</b>
               <span className="donut-share">{pct(values[i] ?? 0, total)}</span>
