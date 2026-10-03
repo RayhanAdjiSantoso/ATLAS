@@ -426,7 +426,7 @@ export function ParetoAnalysisSection({
       <div style={{ padding: '.6rem 1.4rem 1.4rem' }}>
         <ParetoRangeControl range={range} months={availableMonths} onChange={onRangeChange} />
         {!hasData ? (
-          <div className="empty-note">Upload file Product Performance (bulan berapa pun) di Pengaturan Brand untuk melihat analisis 80/20.</div>
+          <div className="empty-note">Upload file Product Performance (bulan berapa pun) di Data Brand untuk melihat analisis 80/20.</div>
         ) : !rows.length ? (
           <div className="empty-note">Tidak ada produk dengan penjualan pada cakupan bulan ini.</div>
         ) : (

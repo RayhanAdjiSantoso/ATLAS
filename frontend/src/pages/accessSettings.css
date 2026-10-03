@@ -13,7 +13,7 @@
 .acc-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .acc-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 .acc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-card); color: var(--text-muted); font: inherit; font-size: .74rem; font-weight: 650; cursor: pointer; }
-.acc-chip b { min-width: 18px; padding: 0 5px; border-radius: 99px; background: var(--bg-elevated); color: var(--text-muted); font-size: .66rem; text-align: center; }
+.acc-chip b { min-width: 18px; padding: 0 5px; border-radius: 99px; background: var(--bg-elevated); color: var(--text-muted); font-size: .75rem; text-align: center; }
 .acc-chip.is-active { border-color: var(--acc); color: var(--acc); background: var(--acc-100, #eef2ff); }
 .acc-chip.is-active b { background: var(--acc); color: #fff; }
 .acc-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-placeholder); background: var(--bg-card); }
@@ -34,7 +34,7 @@
 
 .acc-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
 .acc-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
-.acc-table th { padding: 10px 14px; background: var(--bg-elevated); color: var(--text-muted); font-size: .66rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.acc-table th { padding: 10px 14px; background: var(--bg-elevated); color: var(--text-muted); font-size: .75rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--border); }
 .acc-table td { padding: 11px 14px; border-bottom: 1px solid var(--rule, var(--border)); color: var(--text); vertical-align: middle; }
 .acc-table tbody tr:last-child td { border-bottom: 0; }
 .acc-table tbody tr:hover td { background: var(--bg-elevated); }
@@ -44,9 +44,9 @@
 .acc-person small { color: var(--text-muted); font-size: .72rem; }
 .acc-person > span:last-child { display: grid; gap: 1px; min-width: 0; }
 .acc-avatar { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: 10px; background: var(--acc-100, #eef2ff); color: var(--acc); font-size: .78rem; font-weight: 800; }
-.acc-you { padding: 1px 6px; border-radius: 99px; background: var(--bg-elevated); color: var(--text-muted); font-size: .6rem; font-style: normal; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.acc-you { padding: 1px 6px; border-radius: 99px; background: var(--bg-elevated); color: var(--text-muted); font-size: .72rem; font-style: normal; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .acc-muted { color: var(--text-muted); }
-.acc-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 99px; background: var(--bg-elevated); color: var(--text-muted); font-size: .64rem; font-weight: 700; white-space: nowrap; }
+.acc-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 99px; background: var(--bg-elevated); color: var(--text-muted); font-size: .75rem; font-weight: 700; white-space: nowrap; }
 .acc-tag.is-warn { background: #fff4e0; color: #9a5b00; }
 .acc-status { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; font-weight: 700; }
 .acc-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; }
@@ -57,7 +57,7 @@
 .acc-actions { display: flex; justify-content: flex-end; gap: 2px; }
 .acc-locked { display: flex; justify-content: flex-end; color: var(--text-placeholder); padding-right: 8px; }
 
-.acc-role { display: inline-block; padding: 3px 9px; border-radius: 99px; font-size: .68rem; font-weight: 800; white-space: nowrap; }
+.acc-role { display: inline-block; padding: 3px 9px; border-radius: 99px; font-size: .75rem; font-weight: 800; white-space: nowrap; }
 .acc-role-superadmin { background: #1e1b4b; color: #fff; }
 .acc-role-admin { background: var(--acc, #1e3eb8); color: #fff; }
 .acc-role-user { background: var(--acc-100, #eef2ff); color: var(--acc, #1e3eb8); }
@@ -72,7 +72,7 @@
 .acc-perm-intro { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--acc-100, #eef2ff); color: var(--acc); }
 .acc-perm-intro p { margin: 0; color: var(--text); font-size: .78rem; line-height: 1.6; }
 .acc-perm th:not(:first-child), .acc-perm td:not(:first-child) { text-align: center; width: 130px; }
-.acc-perm td small { display: block; color: var(--text-placeholder); font-size: .66rem; }
+.acc-perm td small { display: block; color: var(--text-placeholder); font-size: .75rem; }
 .acc-perm-fixed td { background: var(--bg-elevated); }
 .acc-switch { position: relative; display: inline-block; width: 38px; height: 22px; padding: 0; border: 0; border-radius: 99px; background: #cfd6e6; cursor: pointer; transition: background .18s; vertical-align: middle; }
 .acc-switch > span { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(15, 26, 58, .25); transition: transform .18s; }
@@ -112,13 +112,13 @@
 .acc-form { display: flex; flex-direction: column; gap: 14px; }
 .acc-field { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .acc-field > span { color: #0f1a3a; font-size: .74rem; font-weight: 750; }
-.acc-field > span em { margin-left: 6px; color: #5a6a90; font-size: .66rem; font-style: normal; font-weight: 600; }
+.acc-field > span em { margin-left: 6px; color: #5a6a90; font-size: .75rem; font-style: normal; font-weight: 600; }
 .acc-field input, .acc-field select { padding: 10px 12px; border: 1px solid #d5dcea; border-radius: 10px; background: #fff; color: #0f1a3a; font: inherit; font-size: .84rem; }
 .acc-field input:focus, .acc-field select:focus { outline: 0; border-color: #1e3eb8; box-shadow: 0 0 0 3px rgba(30, 62, 184, .12); }
 .acc-role-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .acc-role-option { display: grid; gap: 5px; padding: 10px 12px; border: 1px solid #d5dcea; border-radius: 12px; cursor: pointer; transition: border-color .15s, background .15s; }
 .acc-role-option input { position: absolute; opacity: 0; pointer-events: none; }
-.acc-role-option small { color: #5a6a90; font-size: .7rem; line-height: 1.45; }
+.acc-role-option small { color: #5a6a90; font-size: .75rem; line-height: 1.45; }
 /* The modal is portalled out of .con, so badges here must not lean on its tokens,
    and a badge sits at its own width rather than stretching across the card. */
 .acc-role-option .acc-role { justify-self: start; }
@@ -130,7 +130,7 @@
 .acc-check small { color: #5a6a90; font-size: .72rem; line-height: 1.45; }
 .acc-secret { display: grid; gap: 10px; padding: 14px; border: 1px solid #d5dcea; border-radius: 12px; background: #f7f8fc; }
 .acc-secret > div { display: grid; gap: 2px; }
-.acc-secret span { color: #5a6a90; font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.acc-secret span { color: #5a6a90; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .acc-secret strong { color: #0f1a3a; font-size: .95rem; overflow-wrap: anywhere; }
 .acc-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; font-size: 1.05rem !important; }
 .acc-secret .acc-btn { justify-self: start; }

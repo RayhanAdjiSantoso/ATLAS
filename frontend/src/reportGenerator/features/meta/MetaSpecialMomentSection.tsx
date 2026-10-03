@@ -86,9 +86,9 @@ function splitPeriod(rows: SheetRow[], dayCol: string, p: MomentPeriod, twin: { 
   return { twin: money(parts.twin), payday: money(parts.payday), rest: money(parts.rest), total: money(inMonth) };
 }
 
-// Moments in warm, rest of the month in a quiet neutral: the eye goes to the
-// two slices the section is about.
-const MOMENT_COLORS = ['#D9694A', '#E9B04F', '#C9D2E3'];
+// Moments in vivid warm hues, the rest of the month in ATLAS blue: the ring
+// reads as one living object, and the two warm slices still pop against it.
+const MOMENT_COLORS = ['#F0643C', '#F6B12B', '#5B86F5'];
 const BUCKETS: Bucket[] = ['twin', 'payday', 'rest'];
 const BUCKET_LABELS = ['Twin Date', 'Payday', 'Di luar special moment'];
 const pctOf = (part: number | null, whole: number | null) => (part !== null && whole ? (part / whole) * 100 : null);

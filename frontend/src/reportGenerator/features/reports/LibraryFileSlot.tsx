@@ -66,7 +66,7 @@ export function LibraryFileSlot({ clientId, platform, channel, tag, loaded, file
     setBusy(true); setError('');
     try {
       const choices = files.filter(f => selected.includes(f.id));
-      if (choices.some(f => f.period_source === 'mismatch')) throw new Error('Periode file tidak sesuai slot bulan. Perbaiki file di Pengaturan Brand terlebih dahulu.');
+      if (choices.some(f => f.period_source === 'mismatch')) throw new Error('Periode file tidak sesuai slot bulan. Perbaiki file di Data Brand terlebih dahulu.');
       if (new Set(choices.map(f => f.period_month)).size > 1) throw new Error('Pilih file dari satu bulan untuk satu sisi perbandingan.');
       // Sequential downloads keep large multipart selections within memory limits.
       const downloaded: File[] = [];
@@ -94,14 +94,14 @@ export function LibraryFileSlot({ clientId, platform, channel, tag, loaded, file
     </button>
     {loaded && infoText && <p className="library-source-info">{infoText}</p>}
     {expanded && <div className="library-source-panel">
-      <div className="library-panel-tools"><span>File di Pengaturan Brand</span><button type="button" aria-label={`Muat ulang file ${tag}`} disabled={loading || busy} onClick={() => { if (clientId) catalog.delete(clientId); setRevision(v => v + 1); }}><RefreshCw size={14}/> Muat ulang</button></div>
+      <div className="library-panel-tools"><span>File di Data Brand</span><button type="button" aria-label={`Muat ulang file ${tag}`} disabled={loading || busy} onClick={() => { if (clientId) catalog.delete(clientId); setRevision(v => v + 1); }}><RefreshCw size={14}/> Muat ulang</button></div>
       {months.length > 0 && <div className="library-month-tabs" role="group" aria-label={`Bulan sumber ${tag}`}>
         <button type="button" aria-pressed={!month} onClick={() => setMonth('')}>Semua bulan</button>
         {months.map(m => <button type="button" key={m} aria-pressed={month === m} onClick={() => setMonth(m!)}>{formatMonth(m!)}</button>)}
       </div>}
       <div className="library-file-list">
         {shown.map(f => <label key={f.id} className={`library-file-row${selected.includes(f.id) ? ' is-selected' : ''}`}><input type="checkbox" disabled={busy} checked={selected.includes(f.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, f.id] : ids.filter(id => id !== f.id))} /><FileSpreadsheet size={17} aria-hidden="true"/><span><strong>{f.original_filename}</strong><small>{f.period_month ? formatMonth(f.period_month) : 'Referensi lintas periode'} · Bagian {f.part_index ?? 1}{f.row_count != null ? ` · ${f.row_count.toLocaleString('id-ID')} baris` : ''}{f.period_source === 'mismatch' ? ' · periode tidak sesuai' : ''}</small></span></label>)}
-        {!shown.length && <div className="library-source-empty"><Database size={22}/><strong>Sumber ini belum tersedia</strong><p>Unggah file melalui <Link to="/pengaturan-brand">Pengaturan Brand → Data &amp; file</Link>, lalu muat ulang daftar ini.</p></div>}
+        {!shown.length && <div className="library-source-empty"><Database size={22}/><strong>Sumber ini belum tersedia</strong><p>Unggah file melalui <Link to="/data-brand">Data Brand → Data &amp; file</Link>, lalu muat ulang daftar ini.</p></div>}
       </div>
       {files.length > 0 && <div className="library-slot-actions"><span>{selected.length ? `${selected.length} file dipilih` : 'Pilih file yang akan digunakan'}<small>Ekspor terbagi? Pilih semua bagiannya.</small></span><button type="button" className="btn btn-primary" disabled={!selected.length || busy} onClick={apply}>{busy ? 'Membaca…' : 'Gunakan sumber'}</button></div>}
     </div>}

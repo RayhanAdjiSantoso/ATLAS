@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, History, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, CalendarCheck, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, History, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, FolderOpen, CalendarCheck, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import api from '../../api/client.js';
 import atlasIcon from '../../assets/atlas-icon.png';
@@ -9,15 +9,18 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 
 // One entry per destination so the collapsed rail, the expanded list and the
 // tooltips can never drift apart.
+// Ordered the way ATLAS is worked: a brand is set up first (status, context,
+// direction), its data comes in next, and only then is it read and reported.
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
+  { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal, group: 'Workspace', module: 'brand_settings' },
+  // The brand's files, Minutes of Meeting and ad accounts — what Business
+  // Overview and Report Generator read. Same permission as Pengaturan Brand.
+  { to: '/data-brand', label: 'Data Brand', Icon: FolderOpen, group: 'Workspace', module: 'brand_settings' },
   { to: '/dashboard', label: 'Business Overview', Icon: LayoutDashboard, group: 'Workspace', module: 'dashboard' },
   // No adminOnly: both internal staff and client accounts fill this in
   // themselves, unlike everywhere else a view-only account can only read.
   { to: '/daily-tracking', label: 'Daily Tracking', Icon: CalendarCheck, group: 'Workspace', module: 'daily_tracking' },
-  // Sits directly under the dashboard it feeds: this is where the data those
-  // charts read comes in, and it used to be that page's first tab.
-  { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal, group: 'Workspace', module: 'brand_settings' },
   { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace', module: 'report_generator' },
   { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, group: 'Operasional', module: 'meta_automation' },
   { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, group: 'Operasional', module: 'internal_dashboard' },

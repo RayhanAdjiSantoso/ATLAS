@@ -427,7 +427,7 @@ function MinutesOverview({ filters }) {
           {status === 'ready' && allMinutes.length > 0 && <span className="brand-section-meta"><CalendarDays size={12} /> Terbaru {dateLabel(allMinutes[0].meeting_date)}</span>}
           {status === 'ready' && <span className="brand-section-meta">{periodMinutes.length} meeting di periode</span>}
           {status === 'ready' && activeTasks > 0 && <span className="brand-section-meta is-tasks">{activeTasks} tugas aktif</span>}
-          <Link to="/pengaturan-brand" className="mom-head-link" onClick={openInSettings}>Kelola catatan <ArrowUpRight size={13} /></Link>
+          <Link to="/data-brand" className="mom-head-link" onClick={openInSettings}>Kelola catatan <ArrowUpRight size={13} /></Link>
         </div>
       </header>
 
@@ -453,7 +453,7 @@ function MinutesOverview({ filters }) {
               <div className="mom-dash-state is-empty">
                 <FileText size={18} />
                 <span>Belum ada catatan meeting untuk brand ini.</span>
-                <Link to="/pengaturan-brand" onClick={openInSettings}>Tambah di Pengaturan Brand <ArrowUpRight size={13} /></Link>
+                <Link to="/data-brand" onClick={openInSettings}>Tambah di Data Brand <ArrowUpRight size={13} /></Link>
               </div>
             )}
 
@@ -650,7 +650,7 @@ export default function DashboardPage() {
         <ExecutiveSummary filters={filters} />
         {/* Cross-channel reading of the month's product performance. */}
         <CrossChannelPanel filters={filters} />
-        {/* Meeting notes are internal and live under Pengaturan Brand;
+        {/* Meeting notes are internal and live under Data Brand;
             a role without that module (a client) does not see them. */}
         {can('brand_settings') && <MinutesOverview filters={filters} />}
       </>
@@ -700,14 +700,14 @@ export default function DashboardPage() {
                 </div>
               </div>
               <ol className="channel-pending-steps">
-                <li>Unggah file {channel.label} pada Pengaturan Brand</li>
+                <li>Unggah file {channel.label} pada Data Brand</li>
                 <li>Importer memindahkannya ke tabel fakta</li>
                 <li>Seluruh domain {channel.label} di atas ikut terisi</li>
               </ol>
               <p className="channel-pending-note">
                 Belanja iklan {channel.label} yang sudah diisi di Daily Tracking tetap terbaca pada Executive Snapshot.
               </p>
-              <Link to="/pengaturan-brand" className="mom-head-link">Buka Pengaturan Brand <ArrowUpRight size={13} /></Link>
+              <Link to="/data-brand" className="mom-head-link">Buka Data Brand <ArrowUpRight size={13} /></Link>
             </div>
           )}
         </section>
@@ -861,7 +861,7 @@ export default function DashboardPage() {
       <div className="dashboard-domain-caption">
         <span>{isSnapshot ? EXECUTIVE_VIEW.question : channel.ready ? active.question : channel.note}</span>
         <span className="brand-caption-rule" />
-        <Link to="/pengaturan-brand"><Database size={13} /> Data bersumber dari <strong>Pengaturan Brand</strong></Link>
+        <Link to="/data-brand"><Database size={13} /> Data bersumber dari <strong>Data Brand</strong></Link>
       </div>
 
       <div className="con-body dashboard-body">

@@ -136,7 +136,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     try {
       const { data } = await api.get(`/brands/${clientId}/library`);
       const list = (data.files as LibraryFile[]).filter((f) => f.platform === 'tiktok' && f.channel === 'tiktok' && f.period_month?.slice(0, 7) === month.month);
-      if (!list.length) throw new Error('Bulan ini tidak punya file campaign TikTok di Pengaturan Brand.');
+      if (!list.length) throw new Error('Bulan ini tidak punya file campaign TikTok di Data Brand.');
       const buffers = await Promise.all(
         list.map(async (f) => {
           const res = await api.get(`/brands/${clientId}/library/${f.id}/download`, { responseType: 'arraybuffer' });
@@ -339,7 +339,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
         />
         {source === 'upload' && (
           <div className="manual-mode-note">
-            <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah di baris TikTok GMV Max — file tidak disimpan ke Pengaturan Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis; periode dibaca dari nama file ekspor TikTok.
+            <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah di baris TikTok GMV Max — file tidak disimpan ke Data Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis; periode dibaca dari nama file ekspor TikTok.
           </div>
         )}
         {source === 'saved' &&

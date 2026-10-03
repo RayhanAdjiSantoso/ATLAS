@@ -109,7 +109,7 @@ export const CHANNELS = [
     accent: '#1e3eb8',
     Icon: Megaphone,
     ready: false,
-    note: 'Data Meta belum diimpor ke tabel fakta — file-nya masih berupa arsip di Pengaturan Brand.',
+    note: 'Data Meta belum diimpor ke tabel fakta — file-nya masih berupa arsip di Data Brand.',
   },
   {
     id: 'shopee',
@@ -118,7 +118,7 @@ export const CHANNELS = [
     accent: '#ee4d2d',
     Icon: ShoppingBag,
     ready: true,
-    note: 'Dibaca dari data Shopee yang sudah diimpor lewat Pengaturan Brand.',
+    note: 'Dibaca dari data Shopee yang sudah diimpor lewat Data Brand.',
   },
   {
     id: 'tiktok',
@@ -127,7 +127,7 @@ export const CHANNELS = [
     accent: '#0a0a0a',
     Icon: Video,
     ready: false,
-    note: 'Data TikTok belum diimpor ke tabel fakta — file-nya masih berupa arsip di Pengaturan Brand.',
+    note: 'Data TikTok belum diimpor ke tabel fakta — file-nya masih berupa arsip di Data Brand.',
   },
 ];
 
@@ -280,8 +280,8 @@ export const HEADLINES = {
 // `pct` marks the 0..1 fractions the API returns for rate metrics; `invert`
 // marks the one where a rise is bad news. `note` carries the explanations the
 // old KpiCards held, so nothing a user could hover for was lost in the move.
-const SHOP_STATS = "file Performance Overview Shopee (shop-stats) yang di-upload di Pengaturan Brand";
-const ORDER_FILE = 'file Order (Pesanan) Shopee yang di-upload di Pengaturan Brand';
+const SHOP_STATS = "file Performance Overview Shopee (shop-stats) yang di-upload di Data Brand";
+const ORDER_FILE = 'file Order (Pesanan) Shopee yang di-upload di Data Brand';
 
 export const STRIP_METRICS = [
   {
@@ -293,7 +293,7 @@ export const STRIP_METRICS = [
     note: `Sumber: ${SHOP_STATS}, sheet "Pesanan Dibayar", kolom "Total Pesanan".\nSama dengan "Pesanan" di Performa Toko.\n\nBaris Net = Total Pesanan − Pesanan Dibatalkan − Pesanan Dikembalikan.`,
   },
   {
-    key: 'unitsSold', label: 'Produk Terjual', kind: 'number', absent: 'Butuh file Order (Pesanan) Shopee. Upload di Pengaturan Brand > Data untuk periode ini.',
+    key: 'unitsSold', label: 'Produk Terjual', kind: 'number', absent: 'Butuh file Order (Pesanan) Shopee. Upload di Data Brand > Data & file untuk periode ini.',
     note: `Sumber: ${ORDER_FILE}. Jumlah kolom "Jumlah" untuk pesanan yang dibuat pada periode ini, kecuali pesanan berstatus Batal.`,
   },
   {
@@ -301,7 +301,7 @@ export const STRIP_METRICS = [
     note: 'GMV ÷ Transaksi (keduanya gross).\nSama dengan "Penjualan per Pesanan" di Performa Toko.',
   },
   {
-    key: 'uniqueCustomers', label: 'Pelanggan Unik', kind: 'number', absent: 'Butuh file Order (Pesanan) Shopee. Upload di Pengaturan Brand > Data untuk periode ini.',
+    key: 'uniqueCustomers', label: 'Pelanggan Unik', kind: 'number', absent: 'Butuh file Order (Pesanan) Shopee. Upload di Data Brand > Data & file untuk periode ini.',
     note: `Sumber: ${ORDER_FILE}. Jumlah pembeli (username) yang berbeda dari pesanan berstatus Selesai dan diselesaikan pada periode ini. Satu pembeli dihitung sekali walau belanja berkali-kali.`,
   },
   {
@@ -313,7 +313,7 @@ export const STRIP_METRICS = [
     note: `Pesanan Dibatalkan ÷ Total Pesanan, dari ${SHOP_STATS}, sheet "Pesanan Dibayar".\nKenaikan ditandai merah karena merupakan sinyal negatif.`,
   },
   {
-    key: 'totalDiscount', label: 'Total Diskon', kind: 'currency', absent: 'Butuh file Order (Pesanan) Shopee. Upload di Pengaturan Brand > Data untuk periode ini.',
+    key: 'totalDiscount', label: 'Total Diskon', kind: 'currency', absent: 'Butuh file Order (Pesanan) Shopee. Upload di Data Brand > Data & file untuk periode ini.',
     note: `Sumber: ${ORDER_FILE}. Voucher Penjual + Voucher Shopee + Diskon Kartu Kredit + Paket Diskon (Penjual & Shopee) + Diskon Produk (Penjual & Shopee), untuk pesanan berstatus Selesai pada periode ini.`,
   },
 ];

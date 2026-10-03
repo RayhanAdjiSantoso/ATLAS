@@ -13,7 +13,7 @@
 .dashboard-brand-results { max-height:260px; overflow:auto; }
 .dashboard-brand-result { display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%; padding:10px; border:0; border-radius:8px; background:transparent; color:#0f1a3a; font:inherit; font-size:.85rem; text-align:left; cursor:pointer; }
 .dashboard-brand-result span { min-width:0; overflow-wrap:anywhere; }
-.dashboard-brand-result small { display:block; margin-top:3px; color:#5a6a90; font-size:.7rem; }
+.dashboard-brand-result small { display:block; margin-top:3px; color:#5a6a90; font-size:.75rem; }
 .dashboard-brand-result:hover, .dashboard-brand-result[aria-pressed="true"] { background:#eef1fc; color:#1e3eb8; }
 .dashboard-brand-results p { padding:12px; color:#5a6a90; font-size:.8rem; }
 .dashboard-brand-trigger:focus-visible, .dashboard-brand-menu button:focus-visible { outline:2px solid #1e3eb8; outline-offset:2px; }

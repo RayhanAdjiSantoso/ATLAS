@@ -170,7 +170,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
   }
 
   const steps: Step[] = [
-    { label: 'Hubungkan akun Google Ads di Pengaturan Brand', sub: connected ? `${accounts.length} akun terhubung` : undefined, status: connected ? 'done' : 'current' },
+    { label: 'Hubungkan akun Google Ads di Data Brand', sub: connected ? `${accounts.length} akun terhubung` : undefined, status: connected ? 'done' : 'current' },
     { label: 'Pilih periode', sub: validRange ? `${rangeLabel(range.oldStart, range.oldEnd)} → ${rangeLabel(range.curStart, range.curEnd)}` : undefined, status: !connected ? 'todo' : validRange ? 'done' : 'current' },
     { label: 'Generate laporan', status: report ? 'done' : ready ? 'current' : 'todo' },
     { label: 'Lihat & unduh PDF', status: report ? 'current' : 'todo' },
@@ -200,8 +200,8 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
       <HowTo>
-        <HowToStep num={1} numClassName="google-num" title="Hubungkan akun di Pengaturan Brand">
-          Buka <strong>Pengaturan Brand › Google Ads</strong>, tambahkan Customer ID akun Google Ads brand ini. Data harian ditarik otomatis setiap hari
+        <HowToStep num={1} numClassName="google-num" title="Hubungkan akun di Data Brand">
+          Buka <strong>Data Brand › Google Ads</strong>, tambahkan Customer ID akun Google Ads brand ini. Data harian ditarik otomatis setiap hari
           oleh Google Ads Script yang dipasang di akun Google Ads klien — tidak ada file yang perlu diunduh atau diunggah.
         </HowToStep>
         <HowToStep num={2} numClassName="google-num" title="Pilih periode & buat laporan">
@@ -220,7 +220,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
         <div className="empty-note"><Loader2 size={13} className="rg-spin" aria-hidden /> Memeriksa koneksi Google Ads…</div>
       ) : !connected ? (
         <InlineNotice title="Brand ini belum terhubung ke Google Ads" tone="info">
-          Tambahkan Customer ID di <Link to="/pengaturan-brand">Pengaturan Brand › Google Ads</Link>. Data mulai tersedia setelah Google Ads Script jalan berikutnya.
+          Tambahkan Customer ID di <Link to="/data-brand">Data Brand › Google Ads</Link>. Data mulai tersedia setelah Google Ads Script jalan berikutnya.
         </InlineNotice>
       ) : (
         <>
@@ -351,7 +351,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
         )}
         {empty && (
           <InlineNotice title="Tidak ada data Google Ads pada Periode Ini" tone="info">
-            Periksa rentang tanggal, atau tunggu sinkron berikutnya bila akun baru saja dihubungkan. Status sinkron ada di Pengaturan Brand › Google Ads.
+            Periksa rentang tanggal, atau tunggu sinkron berikutnya bila akun baru saja dihubungkan. Status sinkron ada di Data Brand › Google Ads.
           </InlineNotice>
         )}
         <ReportPages

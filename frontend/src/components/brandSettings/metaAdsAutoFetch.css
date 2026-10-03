@@ -9,7 +9,7 @@
 
 .maf-types { display: flex; gap: .4rem; border-bottom: 1px solid var(--border); }
 .maf-type { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0; padding: .45rem .9rem; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-muted); font-weight: 600; font-size: .85rem; cursor: pointer; }
-.maf-type small { font-size: .68rem; font-weight: 500; color: var(--text-placeholder); }
+.maf-type small { font-size: .75rem; font-weight: 500; color: var(--text-placeholder); }
 .maf-type small.is-on { color: var(--success); }
 .maf-type.is-active { color: var(--primary); border-bottom-color: var(--primary); }
 
@@ -36,7 +36,7 @@
 .maf-runs { list-style: none; display: flex; flex-direction: column; gap: .4rem; font-size: .78rem; }
 .maf-runs li { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .7rem; }
 .maf-run-meta { color: var(--text-muted); font-size: .72rem; }
-.maf-badge { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .5rem; border-radius: 999px; font-size: .7rem; font-weight: 700; }
+.maf-badge { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; }
 .maf-badge.is-running { background: var(--info-bg); color: var(--primary); }
 .maf-badge.is-success { background: var(--success-bg); color: var(--success); }
 .maf-badge.is-failed { background: var(--danger-bg); color: #991b1b; }

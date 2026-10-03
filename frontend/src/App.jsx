@@ -10,6 +10,7 @@ import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
 import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
 import BrandSettingsPage from './pages/BrandSettingsPage.jsx';
+import BrandDataPage from './pages/BrandDataPage.jsx';
 import ControlCenterPage from './pages/ControlCenterPage.jsx';
 import AccessSettingsPage from './pages/AccessSettingsPage.jsx';
 import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
@@ -45,6 +46,8 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute module="brand_settings" />}>
             <Route path="/pengaturan-brand" element={<BrandSettingsPage />} />
+            {/* Files, MOM and ad accounts — split out of Pengaturan Brand, same permission. */}
+            <Route path="/data-brand" element={<BrandDataPage />} />
           </Route>
           <Route element={<ProtectedRoute module="history" />}>
             <Route path="/history" element={<HistoryPage />} />

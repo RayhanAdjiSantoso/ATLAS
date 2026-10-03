@@ -82,7 +82,7 @@ export default function CrossChannelPanel({ filters }) {
             {fallback && <> File {monthLabel} belum lengkap, jadi dipakai {usedLabel} — bulan terdekat yang filenya lengkap.</>}
           </p>
         </div>
-        <Link to="/pengaturan-brand" className="mom-head-link">Sumber file <ArrowUpRight size={13} /></Link>
+        <Link to="/data-brand" className="mom-head-link">Sumber file <ArrowUpRight size={13} /></Link>
       </div>
 
       <div className="con-focus-body xc-body">
@@ -90,7 +90,7 @@ export default function CrossChannelPanel({ filters }) {
         {state.status === 'error' && <div className="xc-note is-bad">Rekomendasi belum bisa dihitung: {state.message}</div>}
         {state.status === 'missing' && (
           <div className="xc-note">
-            Butuh file bulan {monthLabel} di Pengaturan Brand: <strong>{state.missing.join(', ')}</strong>.
+            Butuh file bulan {monthLabel} di Data Brand: <strong>{state.missing.join(', ')}</strong>.
           </div>
         )}
 

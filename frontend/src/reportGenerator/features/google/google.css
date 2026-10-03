@@ -9,15 +9,15 @@
 
 .mil-ui .gads-ranges { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 .mil-ui .gads-range { display: flex; align-items: center; gap: .5rem; margin: 0; padding: .7rem 1rem; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-sm); }
-.mil-ui .gads-range legend { padding: 0 .3rem; font-size: .63rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--google-700); }
+.mil-ui .gads-range legend { padding: 0 .3rem; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--google-700); }
 .mil-ui .gads-range input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: .85rem; font-weight: 600; }
 .mil-ui .gads-range input:focus-visible { outline: 2px solid var(--google); outline-offset: 2px; border-radius: 4px; }
 
 .mil-ui .gads-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .7rem; margin-bottom: 1.2rem; }
 .mil-ui .gads-kpi { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; padding: .85rem 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.mil-ui .gads-kpi-label { font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.mil-ui .gads-kpi-label { font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .mil-ui .gads-kpi-value { font-size: 1.35rem; font-weight: 800; color: var(--text); line-height: 1.15; }
-.mil-ui .gads-kpi-old { font-size: .7rem; color: var(--muted); }
+.mil-ui .gads-kpi-old { font-size: .75rem; color: var(--muted); }
 
 .mil-ui .gads-overall-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1rem; }
 .mil-ui .gads-card { border: 1px solid var(--border); border-radius: 12px; padding: .9rem 1rem; background: var(--surface); min-width: 0; }
@@ -31,7 +31,7 @@
 .mil-ui .gads-table td.is-left { white-space: normal; min-width: 160px; }
 .mil-ui .gads-table th:first-child, .mil-ui .gads-table td:first-child { width: auto; }
 .mil-ui .gads-table .gads-num-col { width: 2.5rem; color: var(--muted); text-align: left; }
-.mil-ui .gads-sort { margin-left: .3rem; font-size: .6rem; color: var(--google); }
+.mil-ui .gads-sort { margin-left: .3rem; font-size: .72rem; color: var(--google); }
 .mil-ui .gads-table-foot { display: flex; align-items: center; justify-content: flex-end; gap: .8rem; padding: .6rem 1.2rem; border-top: 1px solid var(--border); font-size: .75rem; color: var(--muted); }
 .mil-ui .gads-more { padding: .3rem .7rem; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--google-700); font-size: .75rem; font-weight: 600; cursor: pointer; }
 .mil-ui .gads-more:hover { border-color: var(--google); }

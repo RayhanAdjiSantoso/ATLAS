@@ -133,7 +133,7 @@ export default function DataQualityTab() {
                   <h3 style={{ fontSize: '1rem' }}>Status Sumber Data — client aktif</h3>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.3rem 0 0' }}>
                     {Object.entries(data.source_status.summary).map(([k, n]) => `${SOURCE_STATE[k]?.[1] || k}: ${n}`).join(' · ')}.
-                    {' '}Data masuk otomatis dari halaman Daily Tracking (sales & spend) dan Pengaturan Brand (Meta Ads Auto Fetch, Meta Ads Automation).
+                    {' '}Data masuk otomatis dari halaman Daily Tracking (sales & spend) dan Data Brand (Meta Ads Auto Fetch, Meta Ads Automation).
                   </p>
                 </div>
               </div>

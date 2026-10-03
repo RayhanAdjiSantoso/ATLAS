@@ -41,9 +41,9 @@
 }
 @keyframes atlas-menu-in { from { opacity: 0; transform: translateY(-4px) scale(.985); } }
 .atlas-menu-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .55rem .6rem .55rem .8rem; border-bottom: 1px solid var(--rule); background: linear-gradient(110deg, #f8faff, #fff); }
-.atlas-menu-head > span:first-child { color: var(--text); font-size: .64rem; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
+.atlas-menu-head > span:first-child { color: var(--text); font-size: .75rem; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
 .atlas-menu-bulk { display: flex; gap: .15rem; }
-.atlas-menu-bulk button { padding: .22rem .45rem; color: var(--acc); border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: .66rem; font-weight: 700; cursor: pointer; }
+.atlas-menu-bulk button { padding: .22rem .45rem; color: var(--acc); border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; }
 .atlas-menu-bulk button:hover { background: var(--primary-light); }
 .atlas-menu ul { display: grid; align-content: start; gap: 2px; margin: 0; padding: .35rem; overflow-y: auto; list-style: none; scrollbar-width: thin; }
 .atlas-menu li button { display: flex; width: 100%; min-height: 44px; align-items: center; gap: .6rem; padding: .45rem .6rem; color: var(--text); border: 1px solid transparent; border-radius: 10px; background: transparent; font: inherit; text-align: left; cursor: pointer; transition: background .14s ease, border-color .14s ease, color .14s ease; }
@@ -52,7 +52,7 @@
 .atlas-menu li button.is-active { color: var(--acc); border-color: var(--acc-300); background: var(--primary-light); }
 .atlas-menu-copy { display: grid; flex: 1; min-width: 0; gap: .08rem; }
 .atlas-menu-copy strong { overflow: hidden; font-size: .77rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.atlas-menu-copy small { overflow: hidden; color: var(--text-muted); font-size: .65rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-menu-copy small { overflow: hidden; color: var(--text-muted); font-size: .75rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .atlas-menu-tick { flex: 0 0 auto; color: var(--acc); }
 .atlas-menu-check { display: grid; place-items: center; flex: 0 0 auto; width: 16px; height: 16px; color: #fff; border: 1.5px solid var(--acc-300); border-radius: 5px; background: #fff; transition: background .14s ease, border-color .14s ease; }
 .atlas-menu li button.is-active .atlas-menu-check { border-color: var(--acc); background: var(--acc); }

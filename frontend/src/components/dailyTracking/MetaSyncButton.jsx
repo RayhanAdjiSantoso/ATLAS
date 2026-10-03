@@ -166,7 +166,7 @@ export default function MetaSyncButton({ brandId, onSynced }) {
     return (
       <span className="dt-meta-sync-error">
         Belum ada sumber Meta Ads Automation untuk brand ini — isi Nama Brand + Kata Kunci Boost
-        Post di Pengaturan Brand &gt; Meta Automation (atau tautkan lewat config di tab
+        Post di Data Brand &gt; Meta Automation (atau tautkan lewat config di tab
         Daily Tracking).
       </span>
     );

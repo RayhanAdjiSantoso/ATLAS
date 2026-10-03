@@ -61,7 +61,7 @@ export type PeriodSourceKind = 'upload' | 'library' | 'archive' | 'range';
 
 const SOURCE_OPTIONS: { value: PeriodSourceKind; label: string; hint: string; Icon: typeof Upload }[] = [
   { value: 'upload', label: 'Upload', hint: 'File dari perangkat ini', Icon: Upload },
-  { value: 'library', label: 'Perpustakaan', hint: 'File bulanan di Pengaturan Brand', Icon: Library },
+  { value: 'library', label: 'Perpustakaan', hint: 'File bulanan di Data Brand', Icon: Library },
   { value: 'archive', label: 'Arsip', hint: 'Periode dari laporan yang pernah dibuat', Icon: Archive },
   { value: 'range', label: 'Rentang tanggal', hint: 'Tanggal bebas dari data harian tarikan otomatis', Icon: CalendarDays },
 ];

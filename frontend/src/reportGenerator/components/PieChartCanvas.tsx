@@ -1,10 +1,10 @@
 import { Chart, type Plugin } from 'chart.js/auto';
 import { useEffect, useRef } from 'react';
 
-// A muted, editorial set — deep indigo, terracotta, sage, amber, plum… — that
-// tells neighbouring slices apart at a glance without shouting. Terracotta is
+// A lively set — ATLAS blue, coral, teal, amber, violet… — saturated enough
+// that the chart reads at a glance, each hue far from its neighbours. Coral is
 // warm, not the alarm red the delta pills use for "worse".
-export const PIE_COLORS = ['#2F4B8C', '#D9694A', '#5E9C8A', '#E9B04F', '#8C6BB1', '#4FA3C7', '#C98BA5', '#7A8B5A', '#B5875E', '#9AA5B8'];
+export const PIE_COLORS = ['#3D6BEA', '#F0643C', '#14B8A6', '#F6B12B', '#8B5CF6', '#2CB1E8', '#EC5B93', '#6DB33F', '#FF8A3D', '#94A3B8'];
 
 interface PieChartCanvasProps {
   labels: string[];
@@ -60,14 +60,14 @@ export function PieChartCanvas({ labels, values, format = defaultFormat, centerT
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#7a889f';
-        ctx.font = `600 12px ${INTER}`;
+        ctx.font = `600 13px ${INTER}`;
         ctx.fillText(title, cx, cy - 13, room);
         ctx.fillStyle = '#202e45';
-        ctx.font = `800 ${value.length > 12 ? 15 : 19}px ${INTER}`;
+        ctx.font = `800 ${value.length > 12 ? 16 : 20}px ${INTER}`;
         ctx.fillText(value, cx, cy + 10, room);
         if (active) {
           ctx.fillStyle = '#2856b6';
-          ctx.font = `700 11px ${INTER}`;
+          ctx.font = `700 12px ${INTER}`;
           ctx.fillText(pct(raw, total), cx, cy + 30, room);
         }
         ctx.restore();

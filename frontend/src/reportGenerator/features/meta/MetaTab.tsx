@@ -783,7 +783,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           </div>
         </HowToStep>
         <HowToStep num={2} title="Pilih sumber & buat laporan">
-          Pilih file Meta Ads untuk periode lalu dan periode ini dari Pengaturan Brand (wajib). Pilih juga file CPAS jika tersedia. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
+          Pilih file Meta Ads untuk periode lalu dan periode ini dari Data Brand (wajib). Pilih juga file CPAS jika tersedia. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
         </HowToStep>
       </HowTo>
 

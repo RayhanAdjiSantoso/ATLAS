@@ -155,7 +155,7 @@ function CompletenessView({ state, month, scope, onScope, onRetry }) {
                   <strong>{brand.brand_name}</strong>
                   <span className={`cc-pill is-${tone}`}>{BRAND_STATE[brand.status].label}</span>
                 </div>
-                <Link to="/pengaturan-brand" className="mom-head-link" onClick={() => presetBrandSettings({ brandId: brand.brand_id, view: 'data', platform: focus?.platform })}>
+                <Link to="/data-brand" className="mom-head-link" onClick={() => presetBrandSettings({ brandId: brand.brand_id, view: 'data', platform: focus?.platform })}>
                   Buka perpustakaan <ArrowUpRight size={13} />
                 </Link>
               </div>
@@ -261,7 +261,7 @@ function TasksView({ state, items, busyMinute, onToggle, undo, onUndo, error, on
               <strong>{group.name}</strong>
               <span className="cc-count">{group.tasks.length}</span>
               {groupBy === 'brand' && (
-                <Link to="/pengaturan-brand" className="mom-head-link" onClick={() => presetBrandSettings({ brandId: group.brandId, view: 'mom' })}>
+                <Link to="/data-brand" className="mom-head-link" onClick={() => presetBrandSettings({ brandId: group.brandId, view: 'mom' })}>
                   Buka catatan <ArrowUpRight size={13} />
                 </Link>
               )}

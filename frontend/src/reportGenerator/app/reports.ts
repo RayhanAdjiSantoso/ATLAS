@@ -57,7 +57,7 @@ export const REPORT_NAV: ReportNavItem[] = [
     label: 'Google Ads',
     short: 'Google',
     tagline: 'Search, keyword & kota',
-    desc: 'Performa campaign, ad group, keyword, search term, dan kota — ditarik otomatis dari akun Google Ads yang terhubung di Pengaturan Brand.',
+    desc: 'Performa campaign, ad group, keyword, search term, dan kota — ditarik otomatis dari akun Google Ads yang terhubung di Data Brand.',
     accent: 'var(--google)',
     tint: 'var(--google-100)',
     mark: 'G',

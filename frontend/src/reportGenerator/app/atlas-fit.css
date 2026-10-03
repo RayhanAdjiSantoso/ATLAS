@@ -58,23 +58,23 @@
 .mil-ui .rg-hero-grid { position: absolute; inset: 0; opacity: .45; background-image: linear-gradient(rgba(30, 62, 184, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(30, 62, 184, .05) 1px, transparent 1px); background-size: 46px 46px; -webkit-mask-image: radial-gradient(72% 90% at 78% 22%, #000, transparent 72%); mask-image: radial-gradient(72% 90% at 78% 22%, #000, transparent 72%); }
 .mil-ui .rg-hero-main { position: relative; z-index: 1; overflow: hidden; display: flex; min-height: 178px; align-items: center; justify-content: space-between; gap: 2rem; padding: clamp(1.15rem, 2vw, 1.7rem) clamp(1.2rem, 2.7vw, 2.2rem) clamp(1rem, 1.8vw, 1.45rem); border-radius: 24px 24px 0 0; }
 .mil-ui .rg-hero-copy { max-width: 660px; }
-.mil-ui .rg-hero-eye { display: inline-flex; align-items: center; gap: .4rem; color: var(--acc); font-size: .655rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.mil-ui .rg-hero-eye { display: inline-flex; align-items: center; gap: .4rem; color: var(--acc); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .mil-ui .rg-hero h1 { margin: .4rem 0 .3rem; color: var(--text); font-size: clamp(1.5rem, 2.2vw, 2rem); font-weight: 820; letter-spacing: -.045em; line-height: 1.04; }
 .mil-ui .rg-hero-copy > p { max-width: 58ch; color: var(--muted); font-size: .8rem; line-height: 1.5; }
 .mil-ui .rg-hero-stats { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
-.mil-ui .rg-hero-stats span { display: inline-flex; align-items: center; gap: .3rem; padding: .28rem .52rem; color: var(--muted); border: 1px solid rgba(198, 209, 241, .85); border-radius: 99px; background: rgba(255, 255, 255, .66); font-size: .64rem; font-weight: 620; }
+.mil-ui .rg-hero-stats span { display: inline-flex; align-items: center; gap: .3rem; padding: .28rem .52rem; color: var(--muted); border: 1px solid rgba(198, 209, 241, .85); border-radius: 99px; background: rgba(255, 255, 255, .66); font-size: .75rem; font-weight: 620; }
 .mil-ui .rg-hero-stats strong { color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums lining-nums; }
 .mil-ui .rg-hero-badge { position: relative; display: grid; place-items: center; flex: 0 0 auto; gap: .38rem; width: 190px; padding: .8rem .9rem .7rem; border: 1px solid rgba(255, 255, 255, .9); border-radius: 16px; background: linear-gradient(150deg, rgba(255, 255, 255, .92), rgba(255, 255, 255, .62)); box-shadow: 0 12px 30px rgba(21, 43, 108, .11), inset 0 1px #fff; animation: rg-badge-in .45s var(--ease-out) both; }
 .mil-ui .rg-hero-mark { position: relative; z-index: 1; display: block; width: 42px; height: 42px; filter: drop-shadow(0 6px 14px rgba(21, 43, 108, .2)); animation: rg-float 6s ease-in-out infinite alternate; }
 .mil-ui .rg-hero-logo { position: relative; z-index: 1; display: block; width: 100%; max-width: 132px; height: auto; opacity: .95; }
-.mil-ui .rg-hero-badge small { position: relative; z-index: 1; color: var(--muted); font-size: .56rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.mil-ui .rg-hero-badge small { position: relative; z-index: 1; color: var(--muted); font-size: .72rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
 .mil-ui .rg-hero-ring { position: absolute; inset: -26% -14%; border: 1px solid rgba(30, 62, 184, .16); border-radius: 50%; animation: rg-spin 22s linear infinite; }
 .mil-ui .rg-hero-ring-b { inset: -8% 12%; border-color: rgba(0, 194, 224, .22); animation-duration: 16s; animation-direction: reverse; }
 .mil-ui .rg-dock { position: relative; z-index: 2; padding: .72rem clamp(1.2rem, 2.7vw, 2.2rem); border-top: 1px solid rgba(255, 255, 255, .9); border-radius: 0 0 24px 24px; background: linear-gradient(180deg, rgba(255, 255, 255, .52), rgba(255, 255, 255, .86)); box-shadow: inset 0 1px rgba(255, 255, 255, .95); }
 .mil-ui .rg-dock-copy { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; }
 .mil-ui .rg-dock-copy > span { display: inline-flex; align-items: center; gap: .4rem; color: var(--text); font-size: .78rem; font-weight: 780; }
 .mil-ui .rg-dock-copy > span svg { color: var(--acc); }
-.mil-ui .rg-dock-copy small { color: var(--muted); font-size: .67rem; }
+.mil-ui .rg-dock-copy small { color: var(--muted); font-size: .75rem; }
 .mil-ui .rg-dock .client-bar { margin: .55rem 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .mil-ui .rg-dock .client-bar-label { order: 0; }
 .mil-ui .rg-dock .ssel { order: 1; min-width: 260px; max-width: 340px; }
@@ -116,9 +116,9 @@
 }
 .mil-ui .rg-active-caption { display: flex; align-items: center; gap: .5rem; min-height: 25px; padding: 0 .3rem; color: var(--muted); animation: rg-caption-in .3s var(--ease-out) both; }
 .mil-ui .rg-active-caption strong { color: var(--rg-accent, var(--acc)); font-size: .72rem; }
-.mil-ui .rg-active-caption span { font-size: .68rem; font-weight: 650; }
+.mil-ui .rg-active-caption span { font-size: .75rem; font-weight: 650; }
 .mil-ui .rg-active-caption i { width: 22px; height: 1px; flex: 0 0 auto; background: var(--border); }
-.mil-ui .rg-active-caption p { margin-left: auto; overflow: hidden; max-width: 62%; color: var(--muted); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+.mil-ui .rg-active-caption p { margin-left: auto; overflow: hidden; max-width: 62%; color: var(--muted); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
 .mil-ui .rg-active-caption + .panel.active { margin-top: .8rem; }
 
 @keyframes rg-aurora { to { transform: translate3d(4%, 2%, 0) scale(1.04); } }
@@ -169,7 +169,7 @@
 .mil-ui .ai-sum-tools { display: inline-flex; gap: .4rem; }
 .mil-ui .ai-sum-btn { padding: .32rem .7rem; font-size: .78rem; }
 .mil-ui .ai-sum-contextbar { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; padding: .68rem 1.4rem; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--acc) 4%, var(--surface)); }
-.mil-ui .ai-sum-contextbar > span:not(.ai-sum-context-note) { display: inline-flex; align-items: center; gap: .35rem; padding: .28rem .55rem; border: 1px solid color-mix(in srgb, var(--acc) 18%, var(--border)); border-radius: 999px; background: var(--surface); color: var(--acc); font-size: .7rem; font-weight: 700; }
+.mil-ui .ai-sum-contextbar > span:not(.ai-sum-context-note) { display: inline-flex; align-items: center; gap: .35rem; padding: .28rem .55rem; border: 1px solid color-mix(in srgb, var(--acc) 18%, var(--border)); border-radius: 999px; background: var(--surface); color: var(--acc); font-size: .75rem; font-weight: 700; }
 .mil-ui .ai-sum-context-note { margin-left: auto; color: var(--muted); font-size: .72rem; }
 .mil-ui .ai-sum-body { padding: 1.35rem 1.4rem 1.4rem; }
 
@@ -187,7 +187,7 @@
 
 .mil-ui .ai-sum-lead-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr); gap: 1rem; }
 .mil-ui .ai-sum-diagnosis { padding: 1.15rem 1.2rem; border: 1px solid color-mix(in srgb, var(--acc) 16%, var(--border)); border-radius: 14px; background: linear-gradient(145deg, color-mix(in srgb, var(--acc) 5%, var(--surface)), var(--surface) 55%); }
-.mil-ui .ai-sum-eyebrow { display: inline-flex; align-items: center; gap: .38rem; font-size: .7rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--acc); }
+.mil-ui .ai-sum-eyebrow { display: inline-flex; align-items: center; gap: .38rem; font-size: .75rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--acc); }
 .mil-ui .ai-sum-diagnosis > p { margin-top: .55rem; font-size: .92rem; line-height: 1.7; }
 .mil-ui .ai-sum-alignment { margin-top: 1rem; padding-top: .85rem; border-top: 1px solid var(--border); }
 .mil-ui .ai-sum-alignment h4 { display: flex; align-items: center; gap: .4rem; color: var(--text); font-size: .77rem; }
@@ -195,10 +195,10 @@
 .mil-ui .ai-sum-pulse { padding: 1rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
 .mil-ui .ai-sum-pulse-head { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin-bottom: .8rem; }
 .mil-ui .ai-sum-pulse-head span { font-size: .82rem; font-weight: 800; }
-.mil-ui .ai-sum-pulse-head small, .mil-ui .ai-sum-pulse-note { color: var(--muted2); font-size: .65rem; }
+.mil-ui .ai-sum-pulse-head small, .mil-ui .ai-sum-pulse-note { color: var(--muted2); font-size: .75rem; }
 .mil-ui .ai-sum-pulse-row { margin-top: .62rem; }
-.mil-ui .ai-sum-pulse-row > div:first-child { display: flex; justify-content: space-between; gap: .6rem; font-size: .71rem; }
-.mil-ui .ai-sum-pulse-row strong { white-space: nowrap; font-size: .7rem; }
+.mil-ui .ai-sum-pulse-row > div:first-child { display: flex; justify-content: space-between; gap: .6rem; font-size: .75rem; }
+.mil-ui .ai-sum-pulse-row strong { white-space: nowrap; font-size: .75rem; }
 .mil-ui .ai-sum-pulse-track { height: 5px; margin-top: .28rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--muted2) 13%, transparent); }
 .mil-ui .ai-sum-pulse-track i { display: block; height: 100%; border-radius: inherit; background: var(--muted2); }
 .mil-ui .ai-sum-pulse-track i.delta-good { background: var(--good); }
@@ -212,7 +212,7 @@
 .mil-ui .ai-sum-card-idea h4 > svg { color: var(--acc); }
 .mil-ui .ai-sum-card h4 { display: flex; align-items: flex-start; gap: .45rem; font-size: .81rem; font-weight: 750; }
 .mil-ui .ai-sum-card h4 > span { display: grid; gap: .1rem; }
-.mil-ui .ai-sum-card h4 small { font-size: .65rem; font-weight: 500; color: var(--muted2); }
+.mil-ui .ai-sum-card h4 small { font-size: .75rem; font-weight: 500; color: var(--muted2); }
 .mil-ui .ai-sum-card ul { margin: .55rem 0 0; padding-left: 1.05rem; display: grid; gap: .4rem; }
 .mil-ui .ai-sum-card li { font-size: .84rem; line-height: 1.55; }
 .mil-ui .ai-sum-none { margin-top: .5rem; font-size: .8rem; color: var(--muted2); }
@@ -221,18 +221,18 @@
 .mil-ui .ai-sum-direction, .mil-ui .ai-sum-actions { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--acc) 2%, var(--surface)); }
 .mil-ui .ai-sum-direction > h4, .mil-ui .ai-sum-actions > h4 { display: flex; align-items: center; gap: .45rem; font-size: .84rem; }
 .mil-ui .ai-sum-actions > h4 { justify-content: space-between; }
-.mil-ui .ai-sum-actions > h4 small { color: var(--muted2); font-size: .65rem; font-weight: 500; }
+.mil-ui .ai-sum-actions > h4 small { color: var(--muted2); font-size: .75rem; font-weight: 500; }
 .mil-ui .ai-sum-direction ol { display: grid; gap: .7rem; margin: .75rem 0 0; padding: 0; list-style: none; }
 .mil-ui .ai-sum-direction li { display: grid; grid-template-columns: auto 1fr; gap: .55rem; font-size: .82rem; line-height: 1.55; }
-.mil-ui .ai-sum-direction li b { color: var(--acc); font-size: .69rem; letter-spacing: .05em; }
+.mil-ui .ai-sum-direction li b { color: var(--acc); font-size: .75rem; letter-spacing: .05em; }
 .mil-ui .ai-sum-action { display: grid; grid-template-columns: auto 1fr; gap: .7rem; padding: .75rem 0; border-bottom: 1px solid var(--border); }
 .mil-ui .ai-sum-action:last-child { padding-bottom: 0; border-bottom: 0; }
-.mil-ui .ai-sum-priority { display: grid; place-items: center; width: 30px; height: 24px; border-radius: 7px; background: color-mix(in srgb, var(--acc) 10%, var(--surface)); color: var(--acc); font-size: .68rem; font-weight: 850; }
+.mil-ui .ai-sum-priority { display: grid; place-items: center; width: 30px; height: 24px; border-radius: 7px; background: color-mix(in srgb, var(--acc) 10%, var(--surface)); color: var(--acc); font-size: .75rem; font-weight: 850; }
 .mil-ui .ai-sum-priority.p1 { background: color-mix(in srgb, var(--bad) 10%, var(--surface)); color: var(--bad); }
 .mil-ui .ai-sum-priority.p2 { background: color-mix(in srgb, var(--warn, #b45309) 11%, var(--surface)); color: var(--warn, #b45309); }
 .mil-ui .ai-sum-action-head { display: flex; align-items: baseline; justify-content: space-between; gap: .7rem; }
 .mil-ui .ai-sum-action-head strong { font-size: .82rem; line-height: 1.45; }
-.mil-ui .ai-sum-action-head small { flex: none; color: var(--muted); font-size: .67rem; }
+.mil-ui .ai-sum-action-head small { flex: none; color: var(--muted); font-size: .75rem; }
 .mil-ui .ai-sum-action p { margin-top: .25rem; color: var(--muted); font-size: .75rem; line-height: 1.5; }
 .mil-ui .ai-sum-gaps { display: flex; gap: .65rem; margin-top: .8rem; padding: .75rem .85rem; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); }
 .mil-ui .ai-sum-gaps strong { color: var(--text); font-size: .75rem; }

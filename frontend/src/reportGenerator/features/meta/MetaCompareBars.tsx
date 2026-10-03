@@ -30,13 +30,14 @@ type Aud = 'split' | 'all' | 'NV' | 'RM';
 type Order = 'default' | 'desc' | 'asc';
 type TypeKey = AudienceType | 'other';
 
-// NV deep indigo, RM terracotta — two audiences, two clearly different hues.
+// NV ATLAS blue, RM coral — two audiences, two clearly different hues, the
+// same pair the pie charts use.
 const TYPE_COLOR: Record<TypeKey | 'all', string> = {
-  NV: '#2F4B8C',
-  RM: '#D9694A',
-  'NV+RM': '#5E9C8A',
-  other: '#9AA5B8',
-  all: '#2F4B8C',
+  NV: '#3D6BEA',
+  RM: '#F0643C',
+  'NV+RM': '#14B8A6',
+  other: '#94A3B8',
+  all: '#3D6BEA',
 };
 const TYPE_ORDER: TypeKey[] = ['NV', 'RM', 'NV+RM', 'other'];
 const SHORT: Record<TypeKey, string> = { NV: 'NV', RM: 'RM', 'NV+RM': 'NV + RM', other: 'Lainnya' };

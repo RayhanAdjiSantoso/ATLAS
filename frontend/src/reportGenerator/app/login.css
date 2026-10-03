@@ -74,7 +74,7 @@
   .auth-access-badge {
     display: inline-flex; align-items: center; gap: .38rem;
     padding: .38rem .58rem; border: 1px solid var(--border); border-radius: 999px;
-    color: var(--muted); background: #f9fbff; font-size: .65rem; font-weight: 750; white-space: nowrap;
+    color: var(--muted); background: #f9fbff; font-size: .75rem; font-weight: 750; white-space: nowrap;
   }
   .auth-access-badge svg { color: var(--good); }
   .auth-entry-body { width: 100%; max-width: 430px; margin: auto; padding: 2.5rem 0; }
@@ -89,8 +89,8 @@
   .auth-heading p { max-width: 43ch; margin-top: .7rem; color: var(--muted); font-size: .9rem; line-height: 1.58; }
   .auth-form { display: flex; flex-direction: column; gap: 1rem; margin-top: 2rem; }
   .auth-field { display: flex; flex-direction: column; gap: .42rem; }
-  .auth-field > span:first-child { color: var(--text); font-size: .7rem; font-weight: 760; letter-spacing: .02em; }
-  .auth-field > span:first-child small { margin-left: .35rem; color: var(--muted2); font-size: .66rem; font-weight: 550; }
+  .auth-field > span:first-child { color: var(--text); font-size: .75rem; font-weight: 760; letter-spacing: .02em; }
+  .auth-field > span:first-child small { margin-left: .35rem; color: var(--muted2); font-size: .75rem; font-weight: 550; }
   .auth-input-shell {
     display: flex; min-height: 52px; align-items: center; gap: .68rem; padding: 0 .9rem;
     border: 1px solid var(--border); border-radius: 13px; color: var(--muted2); background: #fbfcff;
@@ -127,10 +127,10 @@
   .auth-switch { margin-top: 1.35rem; color: var(--muted2); font-size: .78rem; text-align: center; }
   .auth-switch a { color: var(--acc); font-weight: 750; text-underline-offset: 3px; }
   /* Ganti password: rule feedback under the field, and text-style actions. */
-  .auth-hint { color: var(--muted2); font-size: .68rem; line-height: 1.45; }
+  .auth-hint { color: var(--muted2); font-size: .75rem; line-height: 1.45; }
   .auth-hint.is-bad { color: var(--bad, #c81e1e); }
   .auth-link-button { padding: 0; border: 0; background: none; color: var(--acc); font: inherit; font-weight: 750; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-  .auth-entry-note { color: var(--muted2); font-size: .68rem; line-height: 1.5; }
+  .auth-entry-note { color: var(--muted2); font-size: .75rem; line-height: 1.5; }
 
   .auth-story {
     position: relative; min-width: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;
@@ -156,7 +156,7 @@
   .auth-story-ring-two { right: 12%; bottom: -28%; width: 360px; height: 360px; animation: auth-orbit 42s linear reverse infinite; }
   .auth-story-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
   .auth-story-top > svg { color: #80dfff; }
-  .auth-story-status { display: inline-flex; align-items: center; gap: .5rem; color: #c7d6f4; font-size: .68rem; font-weight: 720; letter-spacing: .07em; text-transform: uppercase; }
+  .auth-story-status { display: inline-flex; align-items: center; gap: .5rem; color: #c7d6f4; font-size: .75rem; font-weight: 720; letter-spacing: .07em; text-transform: uppercase; }
   .auth-story-status i { width: 7px; height: 7px; border-radius: 50%; background: #55e6ae; box-shadow: 0 0 14px rgba(85,230,174,.7); }
   .auth-story-copy { margin: auto 0 2.5rem; }
   .auth-story-copy h2 {
@@ -170,15 +170,15 @@
     border: 1px solid rgba(176, 204, 255, .17); border-radius: 14px; background: rgba(255,255,255,.075);
     animation: auth-step-in .5s cubic-bezier(.22, 1, .36, 1) both;
   }
-  .auth-workflow-index { grid-column: 1 / -1; color: #70b9ff; font-size: .63rem; font-weight: 800; letter-spacing: .08em; }
+  .auth-workflow-index { grid-column: 1 / -1; color: #70b9ff; font-size: .75rem; font-weight: 800; letter-spacing: .08em; }
   .auth-workflow-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; color: #8bdfff; background: rgba(93, 158, 255, .14); }
   .auth-workflow-icon svg { width: 17px; height: 17px; }
   .auth-workflow strong, .auth-workflow small { display: block; }
   .auth-workflow strong { color: #fff; font-size: .72rem; line-height: 1.25; }
-  .auth-workflow small { margin-top: .18rem; color: #aabbdc; font-size: .61rem; line-height: 1.4; }
+  .auth-workflow small { margin-top: .18rem; color: #aabbdc; font-size: .72rem; line-height: 1.4; }
   .auth-story-footer {
     display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; padding-top: 1rem;
-    border-top: 1px solid rgba(176, 204, 255, .16); color: #9fb1d5; font-size: .63rem;
+    border-top: 1px solid rgba(176, 204, 255, .16); color: #9fb1d5; font-size: .75rem;
   }
   .auth-story-footer span:first-child { display: inline-flex; align-items: center; gap: .42rem; color: #dbe7ff; font-weight: 700; }
 

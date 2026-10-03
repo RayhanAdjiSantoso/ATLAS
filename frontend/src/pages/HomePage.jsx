@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, FileBarChart, Megaphone, Building2, History, CalendarCheck, SlidersHorizontal, Radar, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, FileBarChart, Megaphone, Building2, History, CalendarCheck, SlidersHorizontal, FolderOpen, Radar, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 // Reveal and MilMark are part of the design system ported from the Monthly
 // Report Generator, which is why they live under reportGenerator/components
@@ -23,6 +23,26 @@ import '../reportGenerator/app/atlas-fit.css';
 
 const MODULES = [
   {
+    key: 'brand-settings',
+    to: '/pengaturan-brand',
+    label: 'Pengaturan Brand',
+    tagline: 'Langkah pertama',
+    desc: 'Daftar klien dan statusnya, lalu brand context dan current direction setiap brand yang dibaca analisis ATLAS.',
+    accent: 'var(--acc)',
+    tint: 'var(--acc-100)',
+    Icon: SlidersHorizontal,
+  },
+  {
+    key: 'brand-data',
+    to: '/data-brand',
+    label: 'Data Brand',
+    tagline: 'Data sumber per brand',
+    desc: 'File bulanan tiap marketplace, Minutes of Meeting, dan akun Meta & Google Ads — sumber yang dibaca dashboard dan laporan.',
+    accent: 'var(--acc)',
+    tint: 'var(--acc-100)',
+    Icon: FolderOpen,
+  },
+  {
     key: 'dashboard',
     to: '/dashboard',
     label: 'Business Overview',
@@ -41,16 +61,6 @@ const MODULES = [
     accent: 'var(--gold)',
     tint: '#fdf3e0',
     Icon: CalendarCheck,
-  },
-  {
-    key: 'brand-settings',
-    to: '/pengaturan-brand',
-    label: 'Pengaturan Brand',
-    tagline: 'Data sumber per brand',
-    desc: 'Status klien, konteks brand, Minutes of Meeting, dan file bulanan tiap marketplace yang dibaca dashboard dan laporan.',
-    accent: 'var(--acc)',
-    tint: 'var(--acc-100)',
-    Icon: SlidersHorizontal,
   },
   {
     key: 'report-generator',
@@ -147,7 +157,7 @@ export default function HomePage() {
   // still the thing that actually enforces this.
   // Same rule as the sidebar: a card shows only if this role may open it.
   const PERMISSION_OF = {
-    dashboard: 'dashboard', 'daily-tracking': 'daily_tracking', 'brand-settings': 'brand_settings', 'report-generator': 'report_generator',
+    dashboard: 'dashboard', 'daily-tracking': 'daily_tracking', 'brand-settings': 'brand_settings', 'brand-data': 'brand_settings', 'report-generator': 'report_generator',
     'meta-automation': 'meta_automation', 'internal-dashboard': 'internal_dashboard', 'control-center': 'control_center', history: 'history',
   };
   const allowed = (m) => (!PERMISSION_OF[m.key] || can(PERMISSION_OF[m.key])) && (!m.adminOnly || m.key !== 'access' || (isAdmin && !isViewOnly));

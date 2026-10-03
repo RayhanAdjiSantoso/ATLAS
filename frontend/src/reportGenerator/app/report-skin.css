@@ -52,7 +52,7 @@
   border-radius: 99px;
   background: var(--rs-canvas);
   color: var(--rs-muted);
-  font-size: .66rem;
+  font-size: .75rem;
   font-weight: 700;
   letter-spacing: .01em;
 }
@@ -62,7 +62,7 @@
   border-radius: 99px;
   background: #fff;
   color: var(--rs-muted);
-  font-size: .66rem;
+  font-size: .75rem;
 }
 .mil-ui.report-generator-app .sec-download-btn:hover { border-color: var(--rs-accent); background: var(--rs-accent-soft); color: var(--rs-accent); }
 
@@ -87,7 +87,7 @@
   box-shadow: var(--rs-shadow);
   scrollbar-width: thin;
 }
-.mil-ui.report-generator-app .sdeck-nav-label { padding: 0 .55rem; color: var(--rs-quiet); font-size: .6rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.mil-ui.report-generator-app .sdeck-nav-label { padding: 0 .55rem; color: var(--rs-quiet); font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .mil-ui.report-generator-app .sdeck-tabs { display: grid; gap: 3px; }
 .mil-ui.report-generator-app .sdeck-tab {
   position: relative;
@@ -110,7 +110,7 @@
 .mil-ui.report-generator-app .sdeck-dot { flex: 0 0 auto; width: 8px; height: 8px; margin-top: .38rem; border-radius: 50%; background: #c9d3e8; transition: background .2s ease, box-shadow .2s ease; }
 .mil-ui.report-generator-app .sdeck-tab-text { display: grid; gap: .15rem; min-width: 0; }
 .mil-ui.report-generator-app .sdeck-tab-text strong { font-size: .84rem; font-weight: 750; letter-spacing: -.01em; line-height: 1.3; overflow-wrap: anywhere; }
-.mil-ui.report-generator-app .sdeck-tab-text small { color: var(--rs-quiet); font-size: .67rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.mil-ui.report-generator-app .sdeck-tab-text small { color: var(--rs-quiet); font-size: .75rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .mil-ui.report-generator-app .sdeck-tab.is-on {
   background: var(--rs-accent);
   color: #fff;
@@ -160,30 +160,59 @@
 .mil-ui.report-generator-app .gen-rail-badge { border: 0; background: rgba(255, 255, 255, .14); color: #fff; }
 .mil-ui.report-generator-app .gen-rail-link.active .gen-rail-badge { background: var(--rs-accent-soft); color: var(--rs-accent); }
 
-/* ── Page tabs (CPAS / Non-Boost / Boost): secondary, underlined ─────────── */
+/* ── Page tabs (Ads Performance / CPAS / Non-Boost / Boost) ─────────────── */
+/* A floating segmented control: one white surface that parks just under the
+   top of the window while the report scrolls beneath it, the active page
+   filled with the platform's colour. It is a contained object, not a strip,
+   so nothing reads as cut off when content passes behind it. */
 .mil-ui.report-generator-app .report-tabs {
-  display: flex;
-  width: 100%;
-  gap: 1.6rem;
-  padding: 0 .4rem;
-  border: 0;
-  border-bottom: 1px solid var(--rs-line);
-  border-radius: 0;
-  background: rgba(251, 252, 254, .92);
-  box-shadow: none;
+  position: sticky;
+  top: 12px;
+  z-index: 30;
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  gap: 4px;
+  margin: 0 0 1.25rem;
+  padding: 5px;
+  border: 1px solid var(--rs-line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .92);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 8px 22px -16px rgba(15, 26, 58, .45);
 }
-.mil-ui.report-generator-app .report-tabs.is-stuck { background: rgba(255, 255, 255, .96); box-shadow: 0 10px 24px -20px rgba(15, 26, 58, .5); }
-.mil-ui.report-generator-app .report-tab { padding: .95rem 0 1rem; border-radius: 0; color: var(--rs-muted); font-size: .9rem; font-weight: 700; }
-.mil-ui.report-generator-app .report-tab:hover { color: var(--rs-ink); }
-.mil-ui.report-generator-app .report-tab.active { color: var(--rs-ink); font-weight: 800; }
+.mil-ui.report-generator-app .report-tabs.is-stuck { background: #fff; box-shadow: 0 16px 34px -18px rgba(15, 26, 58, .5); }
+.mil-ui.report-generator-app .report-tab {
+  gap: .55rem;
+  padding: .62rem 1.15rem;
+  border-radius: 11px;
+  color: var(--rs-muted);
+  font-size: .9rem;
+  font-weight: 700;
+  transition: color .2s ease, background-color .2s ease;
+}
+.mil-ui.report-generator-app .report-tab:hover:not(.active) { background: #f3f6fc; color: var(--rs-ink); }
+.mil-ui.report-generator-app .report-tab.active { color: #fff; font-weight: 750; }
+.mil-ui.report-generator-app .report-tab.active .report-tab-dot { background: #fff; transform: none; }
 .mil-ui.report-generator-app .report-tab-pill {
-  top: auto;
-  bottom: -1px;
-  height: 3px;
-  border-radius: 3px 3px 0 0;
+  top: 5px;
+  bottom: 5px;
+  height: auto;
+  border-radius: 11px;
   background: var(--rt-accent, var(--rs-accent));
-  box-shadow: none;
+  box-shadow: 0 8px 16px -10px var(--rt-accent, var(--rs-accent));
 }
+
+/* ── AI Consultant Brief: sits in the report's reading column ──────────── */
+/* Under a two-column section deck the brief lines up with the section on the
+   right, not the full width beneath both columns. */
+@media (min-width: 1101px) {
+  .mil-ui.report-generator-app [data-role="r-body"]:has(.sdeck) + .ai-sum { margin-left: calc(270px + 22px); }
+}
+.mil-ui.report-generator-app .ai-sum { margin-top: 22px; }
+.mil-ui.report-generator-app .ai-sum-heading { justify-content: flex-start; }
+.mil-ui.report-generator-app .ai-sum-tools { margin-left: auto; }
 
 /* ── Tables: current period carries the weight, rows breathe ─────────────── */
 .mil-ui.report-generator-app .kpi-compact {
@@ -199,7 +228,7 @@
   border-bottom: 1px solid var(--rs-line);
   background: #f7f9fd;
   color: var(--rs-muted);
-  font-size: .64rem;
+  font-size: .75rem;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -267,7 +296,7 @@
 }
 .mil-ui.report-generator-app .symptom-tree-head {
   color: var(--rs-quiet);
-  font-size: .6rem;
+  font-size: .72rem;
   font-weight: 800;
   letter-spacing: .09em;
   text-transform: uppercase;
@@ -287,7 +316,7 @@
 .mil-ui.report-generator-app .st-node[data-depth="1"] { border-color: #dbe3f3; background: #fff; }
 .mil-ui.report-generator-app .st-node[data-depth="1"] .st-label { font-weight: 780; }
 .mil-ui.report-generator-app .st-label { color: var(--rs-ink); font-size: .8rem; font-weight: 620; }
-.mil-ui.report-generator-app .st-vals { color: var(--rs-quiet); font-size: .68rem; }
+.mil-ui.report-generator-app .st-vals { color: var(--rs-quiet); font-size: .75rem; }
 .mil-ui.report-generator-app .st-cur { color: var(--rs-ink); font-weight: 780; }
 /* The root: the number the whole tree explains, set in the accent blue. */
 .mil-ui.report-generator-app .st-node.st-root {
@@ -338,7 +367,7 @@
   padding-top: .65rem;
   border-top: 1px solid var(--rs-rule);
   color: var(--rs-accent);
-  font-size: .6rem;
+  font-size: .72rem;
   font-weight: 800;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -361,7 +390,7 @@
   border-radius: 14px;
   background: #fbfcff;
 }
-.mil-ui.report-generator-app .cb-end span { padding: .2rem .5rem; border-radius: 7px; font-size: .62rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.mil-ui.report-generator-app .cb-end span { padding: .2rem .5rem; border-radius: 7px; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .mil-ui.report-generator-app .cb-end.is-high span { background: var(--rs-accent); color: #fff; }
 .mil-ui.report-generator-app .cb-end.is-low span { background: var(--rs-accent-soft); color: var(--rs-accent); }
 .mil-ui.report-generator-app .cb-end strong { overflow: hidden; color: var(--rs-ink); font-size: .82rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
@@ -399,7 +428,7 @@
   transition: background .2s ease, color .2s ease, box-shadow .2s ease;
 }
 .mil-ui.report-generator-app .lane-tab strong { font-size: .86rem; font-weight: 780; }
-.mil-ui.report-generator-app .lane-tab small { color: var(--rs-quiet); font-size: .68rem; font-weight: 600; }
+.mil-ui.report-generator-app .lane-tab small { color: var(--rs-quiet); font-size: .75rem; font-weight: 600; }
 .mil-ui.report-generator-app .lane-tab:hover { background: #fff; }
 .mil-ui.report-generator-app .lane-tab:focus-visible { outline: 2px solid var(--rs-accent); outline-offset: 2px; }
 .mil-ui.report-generator-app .lane-tab.is-on { background: var(--rs-accent); color: #fff; box-shadow: 0 12px 26px -16px rgba(40, 86, 182, .8); }
@@ -488,3 +517,6 @@
 .mil-ui.report-generator-app .sm-metric-was { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
 .mil-ui.report-generator-app .sm-metric-was small { color: var(--rs-quiet); font-size: .76rem; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
 .mil-ui.report-generator-app .donut-share { background: #f3f4f7; color: #4a5470; }
+/* The brief's one action reads as the primary button it is, not a disabled grey. */
+.mil-ui.report-generator-app .ai-sum-cta { border: 0; background: var(--rs-accent); color: #fff; box-shadow: 0 10px 20px -14px var(--rs-accent); }
+.mil-ui.report-generator-app .ai-sum-cta:hover:not(:disabled) { background: #142c82; }
