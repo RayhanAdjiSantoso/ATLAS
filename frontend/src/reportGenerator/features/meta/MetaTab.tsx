@@ -61,6 +61,7 @@ import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
 import { PeriodSourcePicker, type LibraryMonth, type PeriodSourceTab } from '../reports/PeriodSourcePicker';
+import { RangeCalendar } from '../reports/RangeCalendar';
 import type { AutoRange } from '../reports/AutoRangePanel';
 import { getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
@@ -251,6 +252,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // lands — and which list the dialog opens on.
   const [pendingKind, setPendingKind] = useState<Record<PeriodRole, PeriodSourceKind>>({ old: 'library', cur: 'library' });
   const [pickerTab, setPickerTab] = useState<PeriodSourceTab>('library');
+  const [rangeAutoOpen, setRangeAutoOpen] = useState<PeriodRole | null>(null);
 
   function sourceKindOf(role: PeriodRole): PeriodSourceKind {
     if ((role === 'old' ? oldSource : curSource) === 'upload') return 'upload';
@@ -272,7 +274,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     }
     setPendingKind((prev) => ({ ...prev, [role]: kind }));
     (role === 'old' ? setOldSource : setCurSource)('saved');
-    openPicker(role, kind);
+    // A date range is picked on the page (RangeCalendar opens under its
+    // field); the library and the archive are lists, so they open the dialog.
+    if (kind === 'range') setRangeAutoOpen(role);
+    else openPicker(role, kind);
   }
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
 
@@ -386,9 +391,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     }
   }
 
-  function handlePickRange(range: AutoRange) {
-    const targetRole = pickerRole;
-    if (!targetRole) return;
+  // The inline "Rentang tanggal" field applies straight to its own period.
+  function applyRangeFor(targetRole: PeriodRole, range: AutoRange) {
+    setRangeAutoOpen(null);
     (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
     (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
     (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(range);
@@ -839,6 +844,18 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     <div className="setup-applying" role="status">
                       <span className="setup-spinner" aria-hidden="true" /> Menerapkan periode…
                     </div>
+                  ) : sourceKindOf(role) === 'range' && clientId ? (
+                    <RangeCalendar
+                      clientId={clientId}
+                      role={role}
+                      value={pickedRange ? { start: pickedRange.start, end: pickedRange.end } : null}
+                      other={(() => {
+                        const o = role === 'old' ? curPickedRange : oldPickedRange;
+                        return o ? { start: o.start, end: o.end } : null;
+                      })()}
+                      autoOpen={rangeAutoOpen === role}
+                      onApply={(range) => applyRangeFor(role, range)}
+                    />
                   ) : (
                     <SavedSlotCard
                       picked={picked && { title: picked.title, sourceComparison: '', savedAt: '', summary: picked.summary, metaLine: picked.metaLine }}
@@ -957,9 +974,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           onClose={() => setPickerRole(null)}
           onPickLibrary={handlePickMonth}
           onPickArchive={handlePickArchive}
-          selectedRange={(pickerRole === 'old' ? oldPickedRange : curPickedRange) ?? null}
-          onPickRange={handlePickRange}
-          initialTab={pickerTab}
+          initialTab={pickerTab === 'range' ? 'library' : pickerTab}
         />
       )}
 

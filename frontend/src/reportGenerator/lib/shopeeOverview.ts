@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 import { computeDelta, deltaClassForSentiment, safeDiv } from './delta';
 import type { DeltaClassName, Sentiment, SheetRow } from './types';
 
@@ -150,4 +151,49 @@ export function buildOverviewKPIRows(mOld: OverviewMetrics | null, mCur: Overvie
 // Same shape as buildOverviewKPIRows, for the derived ratio metrics.
 export function buildOverviewCalcRows(mOld: OverviewMetrics | null, mCur: OverviewMetrics | null): OverviewKpiRow[] {
   return OVERVIEW_CALC_METRIC_DEFS.map((def) => buildOverviewRow(def.key, def.label, mOld ? def.calc(mOld) : null, mCur ? def.calc(mCur) : null, def.fmt, def.sentiment));
+}
+
+// Total Omzet Toko (Pesanan Dibuat) as the Product Overview export states it:
+// the sum of its daily "Total Penjualan (Pesanan Dibuat)" — the same figure
+// Seller Centre's Performa Toko shows for "Pesanan Dibuat". Rows without a
+// date (a totals line some exports add) are left out so nothing is counted
+// twice. Null when the file has no such column or no sales at all.
+export function omzetFromOverview(rows: SheetRow[]): number | null {
+  if (!rows.length) return null;
+  const headers = Object.keys(rows[0]);
+  const col = headers.find((h) => /total penjualan \(pesanan dibuat\)/i.test(h));
+  if (!col) return null;
+  const dateCol = headers.find((h) => /^tanggal/i.test(h.trim()));
+  const total = rows
+    .filter((r) => !dateCol || /\d/.test(String(r[dateCol] ?? '')))
+    .reduce((s, r) => s + parseOverviewNum(r[col]), 0);
+  return total > 0 ? Math.round(total) : null;
+}
+
+// Total Omzet Toko from Shopee's Performa Toko export ("…shopee-shop-stats…",
+// Pengaturan Brand › Performance Overview): its "Pesanan Dibuat" sheet opens
+// with the period's own total line ("01-08-2026-31-08-2026 | Total Penjualan
+// (IDR) …") above the daily rows. That line is read as is; without it the
+// daily rows are summed. Null when the file is not a Performa Toko export.
+export function omzetFromShopStats(buffer: ArrayBuffer): number | null {
+  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+  const name = wb.SheetNames.find((n) => n.trim().toLowerCase() === 'pesanan dibuat');
+  if (!name) return null;
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: '' });
+  const head = aoa.findIndex((r) => String(r[0]).trim().toLowerCase() === 'tanggal' && r.some((c) => /total penjualan/i.test(String(c))));
+  if (head < 0) return null;
+  const col = aoa[head].findIndex((c) => /total penjualan/i.test(String(c)));
+  const first = aoa[head + 1];
+  const isRange = (v: unknown) => /^\d{2}-\d{2}-\d{4}-\d{2}-\d{2}-\d{4}$/.test(String(v).trim());
+  if (first && isRange(first[0])) {
+    const v = parseOverviewNum(first[col]);
+    return v > 0 ? Math.round(v) : null;
+  }
+  let total = 0;
+  for (let i = head + 1; i < aoa.length; i++) {
+    const r = aoa[i];
+    if (!/^\d{2}-\d{2}-\d{4}$/.test(String(r[0]).trim())) break;
+    total += parseOverviewNum(r[col]);
+  }
+  return total > 0 ? Math.round(total) : null;
 }

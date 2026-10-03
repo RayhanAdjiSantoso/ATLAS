@@ -35,7 +35,7 @@ function CostPerRevenueCard({ bizState, spendItems }: { bizState: BizState; spen
       <div style={{ padding: '1rem 1.4rem 1.4rem' }}>
         <KpiTable rows={[row]} p1="Periode Lalu" p2="Periode Ini" />
         <div className="empty-note" style={{ paddingTop: '.6rem' }}>
-          Cost per Revenue = Total Amount Spent ÷ Total Revenue (seluruh channel). Total Revenue diambil dari tab Business Overview.
+          Cost per Revenue = Total Amount Spent ÷ Total Revenue. Total Revenue saat ini = Total Omzet Toko Shopee (terisi otomatis dari Performa Toko di tab Shopee Ads).
         </div>
       </div>
     </div>
@@ -190,7 +190,7 @@ function SummaryPending({ platformState }: { platformState: PlatformStateMap }) 
           Ringkasan performa ads &amp; rekomendasi akan tersedia setelah minimal satu laporan platform berhasil dibuat.
         </div>
         <div style={{ fontSize: '.78rem', color: 'var(--muted)', marginBottom: '1.1rem', lineHeight: 1.5 }}>
-          Buka salah satu tab (Meta Ads, Shopee Ads, atau TikTok GMV Max), lengkapi data, lalu klik <strong>Generate Laporan</strong>. Summary akan langsung menampilkan hasil dari platform yang sudah "Selesai"; platform lain bisa ditambahkan kapan saja. Tab <strong>Business Overview</strong> tetap bisa diisi kapan saja, terlepas dari status ini.
+          Buka salah satu tab (Meta Ads, Shopee Ads, atau TikTok GMV Max), lengkapi data, lalu klik <strong>Generate Laporan</strong>. Summary akan langsung menampilkan hasil dari platform yang sudah "Selesai"; platform lain bisa ditambahkan kapan saja.
         </div>
         <table className="kpi-table">
           <tbody>
@@ -241,7 +241,7 @@ export function SummaryTab({ isActive, platformState, bizState }: SummaryTabProp
       <div className="report-top">
         <div className="report-title">Summary Overview</div>
         <div className="report-period">Ringkasan Eksekutif — Seluruh Channel</div>
-        <div className="report-meta">{periodMeta || 'Business Overview & ringkasan performa lintas channel'} · Generated {formatGeneratedDate()}</div>
+        <div className="report-meta">{periodMeta || 'Ringkasan performa lintas channel'} · Generated {formatGeneratedDate()}</div>
       </div>
 
       <CostPerRevenueCard bizState={bizState} spendItems={spendItems} />

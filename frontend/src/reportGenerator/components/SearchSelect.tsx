@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 
 export interface SearchOption {
   id: string | number;
@@ -18,6 +19,7 @@ export function SearchSelect({
   searchPlaceholder = 'Cari…',
   emptyLabel = 'Tidak ada hasil',
   searchable = true,
+  header,
 }: {
   options: SearchOption[];
   value: string | number | null;
@@ -26,6 +28,9 @@ export function SearchSelect({
   searchPlaceholder?: string;
   emptyLabel?: string;
   searchable?: boolean;
+  // Extra controls at the top of the popup, under the search box — e.g. the
+  // client picker's status filter, so it lives with the list it filters.
+  header?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -93,7 +98,7 @@ export function SearchSelect({
       <button type="button" className="ssel-trigger" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
         <span className={selected ? 'ssel-value' : 'ssel-placeholder'}>{selected ? selected.name : placeholder}</span>
         <span className="ssel-caret" aria-hidden>
-          ▾
+          <ChevronDown size={16} />
         </span>
       </button>
 
@@ -102,7 +107,7 @@ export function SearchSelect({
           {searchable && (
             <div className="ssel-search">
               <span className="ssel-search-icon" aria-hidden>
-                ⌕
+                <Search size={15} />
               </span>
               <input
                 ref={inputRef}
@@ -114,6 +119,13 @@ export function SearchSelect({
                 onKeyDown={onKeyDown}
                 placeholder={searchPlaceholder}
               />
+            </div>
+          )}
+          {header && (
+            // Clicking a header control hands focus back to the search box, so
+            // typing right after picking a filter still searches.
+            <div className="ssel-header" onClick={() => window.setTimeout(() => inputRef.current?.focus(), 0)}>
+              {header}
             </div>
           )}
           <div className="ssel-list" ref={listRef} tabIndex={searchable ? undefined : -1} onKeyDown={searchable ? undefined : onKeyDown}>
@@ -131,7 +143,11 @@ export function SearchSelect({
                   onClick={() => pick(o.id)}
                 >
                   <span className="ssel-opt-name">{o.name}</span>
-                  {o.id === value && <span className="ssel-opt-check" aria-hidden>✓</span>}
+                  {o.id === value && (
+                    <span className="ssel-opt-check" aria-hidden>
+                      <Check size={15} />
+                    </span>
+                  )}
                 </button>
               ))
             )}

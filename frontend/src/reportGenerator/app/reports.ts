@@ -37,7 +37,7 @@ export const REPORT_NAV: ReportNavItem[] = [
     label: 'Shopee Ads',
     short: 'Shopee',
     tagline: 'Iklan Produk & deep-dive',
-    desc: 'Funnel iklan, analisis per produk, tren harian, dan Total Omzet toko yang diisi manual.',
+    desc: 'Funnel iklan, analisis per produk, tren harian, dan Total Omzet toko yang terisi otomatis dari Performa Toko.',
     accent: 'var(--shopee)',
     tint: 'var(--shopee-100)',
     mark: 'S',

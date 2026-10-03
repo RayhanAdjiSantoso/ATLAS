@@ -2,6 +2,7 @@ import { type CSSProperties } from 'react';
 import { NavLink, useParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ReportIcon } from '../components/ReportIcon';
+import { BRAND_KEYS, BrandLogo, type BrandKey } from '../components/BrandLogo';
 import { DISABLED_REPORTS, isReportKey, REPORT_NAV, type ReportKey } from './reports';
 
 // The generator's report-type switcher: a horizontal bar under the site
@@ -60,9 +61,15 @@ export function GenTopNav({ badges }: { badges: Record<ReportKey, string> }) {
                     transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 44, mass: 0.6 }}
                   />
                 )}
-                <span className="gen-rail-ico" aria-hidden>
-                  <ReportIcon name={r.key} className="gen-rail-ico-svg" />
-                </span>
+                {BRAND_KEYS.includes(r.key) ? (
+                  <span className="gen-rail-ico is-brand" aria-hidden>
+                    <BrandLogo name={r.key as BrandKey} size={20} />
+                  </span>
+                ) : (
+                  <span className="gen-rail-ico" aria-hidden>
+                    <ReportIcon name={r.key} className="gen-rail-ico-svg" />
+                  </span>
+                )}
                 <span className="gen-rail-text">
                   <span className="gen-rail-label">{r.label}</span>
                   <small className="gen-rail-sub">{r.tagline}</small>

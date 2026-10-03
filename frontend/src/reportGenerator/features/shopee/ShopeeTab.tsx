@@ -18,7 +18,7 @@ import { fromISODate, toISODate } from '../../lib/dateFmt';
 import { parseShopeeCSV } from '../../lib/shopeeAds';
 import { categorizeProdukRows, mergeProdukOtomatis, mergeProductMaster, parseProductMasterRows, type ProductMasterEntry } from '../../lib/shopeeDeepDive';
 import { comparePeriodDays, daysBetweenInclusive, emptyParsedPeriod, type ParsedPeriod } from '../../lib/periodLabel';
-import { periodFromOverviewFilename } from '../../lib/shopeeOverview';
+import { omzetFromOverview, omzetFromShopStats, periodFromOverviewFilename } from '../../lib/shopeeOverview';
 import type { SheetRow } from '../../lib/types';
 import { requireColumns, validateFileBasics } from '../../lib/validation';
 import { readSpreadsheetFile } from '../../lib/xlsxUtils';
@@ -246,10 +246,9 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // channel that has a file for that month (Iklan Produk/Produk Otomatis/
   // Toko/Keyword/Live/Overview/Product Performance); the user can still
   // drop a fresh file on any individual channel slot below to override just
-  // that one channel. Total Omzet Toko is the one thing no file ever
-  // carries — it only fills in when this exact month was already Generated
-  // before (cross-checked against report_runs below), otherwise it's left
-  // blank for manual entry.
+  // that one channel. Total Omzet Toko is read from that month's Product
+  // Overview (Total Penjualan, Pesanan Dibuat); without one it falls back to
+  // the value of a report already Generated for the month, else manual.
   const [oldSource, setOldSource] = useState<SlotSource>('saved');
   const [curSource, setCurSource] = useState<SlotSource>('saved');
   const [oldPickedMonth, setOldPickedMonth] = useState<LibraryMonth | null>(null);
@@ -260,6 +259,11 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
+  // Where each side's Total Omzet came from — the Performa Toko file, the
+  // Product Overview file, or typed in (null) — said under the field.
+  type OmzetSource = 'toko' | 'overview' | null;
+  const [omzetAuto, setOmzetAuto] = useState<Record<PeriodRole, OmzetSource>>({ old: null, cur: null });
+  const [omzetReading, setOmzetReading] = useState<PeriodRole | null>(null);
 
   async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
     if (!clientId) return;
@@ -295,8 +299,10 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       setAdsFiles((prev) => ({ ...prev, ...adsUpdates }));
 
       const overviewList = byChannel.get('overview') ?? [];
+      let overviewOmzet: number | null = null;
       if (overviewList.length) {
         const rows = (await Promise.all((await downloadAll(overviewList)).map(readSpreadsheetFile))).flat();
+        overviewOmzet = omzetFromOverview(rows);
         setOverviewFiles((prev) => ({ ...prev, [`overview-${targetRole}`]: rows.length ? { rows, fileName: overviewList.map((f) => f.original_filename).join(' · '), period: month.label } : null }));
       } else {
         setOverviewFiles((prev) => ({ ...prev, [`overview-${targetRole}`]: null }));
@@ -332,8 +338,22 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       // exact month was already Generated before (a report_runs side whose
       // date range overlaps this month). No match => genuinely unknown =>
       // cleared for manual entry, not left holding a stale value.
-      let omzetValue: number | null = null;
-      try {
+      // Total Omzet: the month's Performa Toko file first (the shop's own
+      // total), then its Product Overview, then a report already Generated.
+      let tokoOmzet: number | null = null;
+      const tokoList = byChannel.get('performance_overview') ?? [];
+      if (tokoList.length) {
+        try {
+          const parts = await downloadAll(tokoList);
+          const values = await Promise.all(parts.map(async (f) => omzetFromShopStats(await f.arrayBuffer())));
+          const found = values.filter((v): v is number => v !== null);
+          tokoOmzet = found.length ? found.reduce((a, b) => a + b, 0) : null;
+        } catch {
+          /* fall through to the Product Overview figure */
+        }
+      }
+      let omzetValue: number | null = tokoOmzet ?? overviewOmzet;
+      if (omzetValue === null) try {
         const saved = await getSavedPeriods(clientId, 'shopee');
         const hit = saved.find((p) => p.start && p.end && p.start <= rangeEnd && p.end >= rangeStart);
         if (hit) {
@@ -345,6 +365,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         /* Omzet cross-reference is best-effort — a lookup failure just leaves it blank */
       }
       (targetRole === 'old' ? onOmzetOldChange : onOmzetCurChange)(omzetValue);
+      setOmzetAuto((prev) => ({ ...prev, [targetRole]: tokoOmzet !== null ? 'toko' : overviewOmzet !== null ? 'overview' : null }));
 
       setReport(null);
       setDeepDive(null);
@@ -404,7 +425,9 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         (targetRole === 'old' ? setPeriodOldDays : setPeriodCurDays)(daysBetweenInclusive(fromISODate(detail.period.start)!, fromISODate(detail.period.end)!));
       }
       const config = (detail.reportConfig ?? {}) as { omzetOld?: number; omzetCur?: number };
-      (targetRole === 'old' ? onOmzetOldChange : onOmzetCurChange)((period.role === 'old' ? config.omzetOld : config.omzetCur) ?? null);
+      const archivedOmzet = detail.overview.length ? omzetFromOverview(detail.overview) : null;
+      (targetRole === 'old' ? onOmzetOldChange : onOmzetCurChange)(archivedOmzet ?? (period.role === 'old' ? config.omzetOld : config.omzetCur) ?? null);
+      setOmzetAuto((prev) => ({ ...prev, [targetRole]: archivedOmzet !== null ? 'overview' : null }));
 
       setReport(null);
       setDeepDive(null);
@@ -435,6 +458,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     setOverviewFiles((prev) => ({ ...prev, [`overview-${role}`]: null }));
     setProductPerfFiles((prev) => ({ ...prev, [role]: null }));
     (role === 'old' ? onOmzetOldChange : onOmzetCurChange)(null);
+    setOmzetAuto((prev) => ({ ...prev, [role]: null }));
     setReport(null);
     setDeepDive(null);
     setFunnelReport(null);
@@ -500,6 +524,12 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
   function clearOverviewChannel(key: OverviewFileKey) {
     setOverviewFiles((prev) => ({ ...prev, [key]: null }));
+    // An omzet that came from this file goes with it.
+    const role = key === 'overview-old' ? 'old' : 'cur';
+    if (omzetAuto[role] === 'overview') {
+      (role === 'old' ? onOmzetOldChange : onOmzetCurChange)(null);
+      setOmzetAuto((prev) => ({ ...prev, [role]: null }));
+    }
     invalidateReport();
   }
 
@@ -560,6 +590,14 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       setUploadError(null);
       const period = periodFromOverviewFilename(file.name);
       setOverviewFiles((prev) => ({ ...prev, [key]: { rows, fileName: file.name, period } }));
+      // Total Omzet Toko comes straight from this file.
+      const omzet = omzetFromOverview(rows);
+      const role = key === 'overview-old' ? 'old' : 'cur';
+      // A Performa Toko figure already in place is the shop's own total; it wins.
+      if (omzet !== null && omzetAuto[role] !== 'toko') {
+        (role === 'old' ? onOmzetOldChange : onOmzetCurChange)(omzet);
+        setOmzetAuto((prev) => (prev[role] === 'toko' ? prev : { ...prev, [role]: 'overview' }));
+      }
       setReport(null);
       setDeepDive(null);
       setFunnelReport(null);
@@ -850,7 +888,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
   const steps: Step[] = [
     {
-      label: 'Isi Total Omzet Toko & pilih Iklan Produk',
+      label: 'Pilih Iklan Produk & Product Overview',
       sub: hasProduk ? 'Iklan Produk 2 periode sudah terbaca' : undefined,
       status: hasProduk && (omzetOld ?? 0) > 0 && (omzetCur ?? 0) > 0 ? 'done' : 'current',
     },
@@ -864,12 +902,78 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     adsFiles['toko-old'] || adsFiles['toko-cur'],
     adsFiles['toko-keyword-old'] || adsFiles['toko-keyword-cur'],
     adsFiles['live-old'] || adsFiles['live-cur'],
-    overviewFiles['overview-old'] || overviewFiles['overview-cur'],
     productPerfFiles.old || productPerfFiles.cur,
   ].filter(Boolean).length;
   useEffect(() => {
     if (optionalCount > 0) setOptOpen(true);
   }, [optionalCount]);
+
+  // A Performa Toko file dropped straight on the omzet cell (upload mode, or a
+  // month whose file is not in Pengaturan Brand).
+  async function readShopStats(role: PeriodRole, file: File | undefined) {
+    if (!file) return;
+    setOmzetReading(role);
+    setUploadError(null);
+    try {
+      const omzet = omzetFromShopStats(await file.arrayBuffer());
+      if (omzet === null) throw new Error('sheet "Pesanan Dibuat" dengan kolom Total Penjualan tidak ditemukan — pastikan ini file Performa Toko (shop-stats) dari Seller Centre.');
+      (role === 'old' ? onOmzetOldChange : onOmzetCurChange)(omzet);
+      setOmzetAuto((prev) => ({ ...prev, [role]: 'toko' }));
+      setReport(null);
+      setDeepDive(null);
+      setFunnelReport(null);
+      onInvalidate();
+    } catch (err) {
+      setUploadError('Gagal membaca Performa Toko: ' + (err as Error).message);
+    } finally {
+      setOmzetReading(null);
+    }
+  }
+
+  function omzetCell(role: PeriodRole) {
+    const value = role === 'old' ? omzetOld : omzetCur;
+    const src = omzetAuto[role];
+    return (
+      <>
+        <OmzetField
+          label={role === 'old' ? 'Bulan Lalu' : 'Bulan Ini'}
+          value={value}
+          onChange={(v) => {
+            (role === 'old' ? onOmzetOldChange : onOmzetCurChange)(v);
+            setOmzetAuto((prev) => ({ ...prev, [role]: null }));
+            setReport(null);
+            setDeepDive(null);
+            setFunnelReport(null);
+            onInvalidate();
+          }}
+        />
+        <div className="omzet-source">
+          <span className={`setup-cell-note${src ? ' is-auto' : ''}`}>
+            {omzetReading === role
+              ? 'Membaca Performa Toko…'
+              : src === 'toko'
+                ? 'Otomatis dari Performa Toko · Total Penjualan (Pesanan Dibuat)'
+                : src === 'overview'
+                  ? 'Otomatis dari Product Overview · Total Penjualan (Pesanan Dibuat)'
+                  : value
+                    ? 'Diisi manual / dari laporan tersimpan'
+                    : 'Terisi otomatis dari Performa Toko atau Product Overview periode ini'}
+          </span>
+          <label className="omzet-upload">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => {
+                readShopStats(role, e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+            Ambil dari file Performa Toko
+          </label>
+        </div>
+      </>
+    );
+  }
 
   // The "Sumber" cell of one period: library/archive pick, or manual upload.
   function sourceCell(role: PeriodRole) {
@@ -947,14 +1051,14 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         <HowToStep num={1} numClassName="shopee-num" title="Download report Iklan Produk">
           Dari dashboard Shopee Seller Center, buka menu <strong>Iklan Saya</strong> dan download laporan <strong>Iklan Produk</strong> dan iklan lainnya (jika tersedia), untuk periode lalu dan periode ini.
         </HowToStep>
-        <HowToStep num={2} numClassName="shopee-num" title="Catat Total Omzet Toko dari dashboard">
-          Buka halaman <strong>Performa Toko</strong> di Shopee Seller Center dan pilih status <strong>'Pesanan Dibuat'</strong>. Angka ini tidak tersedia di dalam file sehingga perlu diisi manual.
+        <HowToStep num={2} numClassName="shopee-num" title="Total Omzet Toko terisi otomatis">
+          Total Omzet diambil dari file <strong>Performa Toko</strong> (Seller Centre › Performa Toko, sheet <strong>Pesanan Dibuat</strong> › Total Penjualan) yang ada di Pengaturan Brand › Performance Overview. Tanpa file itu, angkanya dijumlah dari <strong>Product Overview</strong>. File Performa Toko juga bisa diunggah langsung di kolom Total Omzet.
         </HowToStep>
         <HowToStep num={3} numClassName="shopee-num" title="(Opsional) Upload data untuk analisis mendalam">
           Untuk analisis lebih dalam, tambahkan juga Iklan Produk Otomatis, Iklan Toko - Keyword (jika menggunakan iklan toko), Referensi Kategori Produk, Product Overview & Product Performance untuk insight tambahan. Semuanya opsional, laporan tetap bisa dibuat tanpanya.
         </HowToStep>
         <HowToStep num={4} numClassName="shopee-num" title="Pilih sumber & buat laporan">
-          Isi kolom Total Omzet, upload Iklan Produk, lalu klik <strong>Generate Laporan</strong>.
+          Pilih Iklan Produk dan Product Overview kedua periode (Total Omzet ikut terisi), lalu klik <strong>Generate Laporan</strong>.
         </HowToStep>
       </HowTo>
 
@@ -965,8 +1069,9 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         title="Sumber data"
         note={
           <>
-            Iklan Produk dan Total Omzet wajib. Pilihan <strong>Perpustakaan Brand</strong> atau <strong>Arsip Laporan</strong> mengisi Iklan Produk/Toko/Keyword/Live/Overview/Product
-            Performance periode itu sekaligus; Total Omzet ikut terisi hanya jika bulan itu pernah di-Generate.
+            Iklan Produk dan Total Omzet wajib. Pilihan <strong>Perpustakaan Brand</strong> atau <strong>Arsip Laporan</strong> mengisi semua file periode itu sekaligus.
+            Total Omzet terisi otomatis dari file <strong>Performa Toko</strong> di Pengaturan Brand (Total Penjualan, Pesanan Dibuat), atau dari Product Overview bila file itu
+            tidak ada — ketik manual hanya bila keduanya tidak tersedia.
           </>
         }
       >
@@ -978,37 +1083,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
             cur={<SetupTextInput label="Label Periode Ini" value={periodCur.inputValue} onChange={periodCur.onInput} placeholder="cth: Mei 2026 / W2 Mei" />}
           />
           <SetupRow label="Sumber" sub="per periode" old={sourceCell('old')} cur={sourceCell('cur')} />
-          <SetupRow
-            label="Total Omzet Toko"
-            sub="Pesanan Dibuat · isi manual"
-            req
-            old={
-              <OmzetField
-                label="Bulan Lalu"
-                value={omzetOld}
-                onChange={(v) => {
-                  onOmzetOldChange(v);
-                  setReport(null);
-                  setDeepDive(null);
-                  setFunnelReport(null);
-                  onInvalidate();
-                }}
-              />
-            }
-            cur={
-              <OmzetField
-                label="Bulan Ini"
-                value={omzetCur}
-                onChange={(v) => {
-                  onOmzetCurChange(v);
-                  setReport(null);
-                  setDeepDive(null);
-                  setFunnelReport(null);
-                  onInvalidate();
-                }}
-              />
-            }
-          />
+          <SetupRow label="Product Overview (Toko)" sub="tren harian · cadangan sumber omzet" old={overviewDropzone('overview-old')} cur={overviewDropzone('overview-cur')} />
+          <SetupRow label="Total Omzet Toko" sub="Pesanan Dibuat · otomatis" req old={omzetCell('old')} cur={omzetCell('cur')} />
           <SetupRow label="Iklan Produk" req old={adsDropzone('produk-old', 'Periode Lalu')} cur={adsDropzone('produk-cur', 'Periode Ini')} />
         </SetupGrid>
         <PeriodWarningBanner message={uploadPeriodWarning} />
@@ -1036,7 +1112,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
             {optionalCount > 0 && <span className="opt-group-count">{optionalCount} terisi</span>}
           </span>
           <span className="opt-group-sub">
-            Iklan Produk Otomatis, Toko, Keyword, Live, Referensi Kategori, Product Overview &amp; Performance — untuk analisis lebih dalam. Laporan tetap bisa dibuat tanpanya.
+            Iklan Produk Otomatis, Toko, Keyword, Live, Referensi Kategori, Product Performance — untuk analisis lebih dalam. Laporan tetap bisa dibuat tanpanya.
           </span>
           <ChevronDown size={18} className="opt-group-chevron" aria-hidden="true" />
         </summary>
@@ -1046,7 +1122,6 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
             <SetupRow label="Iklan Toko" old={adsDropzone('toko-old', 'Periode Lalu')} cur={adsDropzone('toko-cur', 'Periode Ini')} />
             <SetupRow label="Iklan Toko - Keyword" sub="analisis per keyword" old={adsDropzone('toko-keyword-old', 'Periode Lalu')} cur={adsDropzone('toko-keyword-cur', 'Periode Ini')} />
             <SetupRow label="Iklan Live" old={adsDropzone('live-old', 'Periode Lalu')} cur={adsDropzone('live-cur', 'Periode Ini')} />
-            <SetupRow label="Product Overview (Toko)" sub="tren harian" old={overviewDropzone('overview-old')} cur={overviewDropzone('overview-cur')} />
             <SetupRow
               label="Product Performance"
               sub={<>Pareto cukup Periode Ini; Traffic &amp; Conversion butuh 2 periode. Unduh dengan status “Siap Dikirim”.</>}

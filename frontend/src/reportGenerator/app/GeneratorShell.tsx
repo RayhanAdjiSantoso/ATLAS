@@ -11,6 +11,7 @@ import { ClientPicker } from '../features/reports/ClientPicker';
 import { ReportsTab } from '../features/reports/ReportsTab';
 import { GenTopNav } from './GenTopNav';
 import { ReportIcon } from '../components/ReportIcon';
+import { BRAND_KEYS, BrandLogo, type BrandKey } from '../components/BrandLogo';
 import { DISABLED_REPORTS, ENABLED_NAV, isReportKey, reportByKey, type ReportKey } from './reports';
 import type { BizChannelMetrics, BizMetricKey, BizPeriod, BizRow, BizState } from '../lib/business';
 import type { PlatformKey, PlatformResultData, PlatformStateMap } from '../lib/summary';
@@ -100,9 +101,15 @@ export function GeneratorShell(props: GeneratorShellProps) {
 
         <GenTopNav badges={props.badges} />
         <div className="rgx-head" key={activeTab} style={{ '--rg-accent': active.accent } as CSSProperties}>
-          <span className="rgx-head-ico" aria-hidden="true">
-            <ReportIcon name={activeTab} />
-          </span>
+          {BRAND_KEYS.includes(activeTab) ? (
+            <span className="rgx-head-ico is-brand" aria-hidden="true">
+              <BrandLogo name={activeTab as BrandKey} size={28} />
+            </span>
+          ) : (
+            <span className="rgx-head-ico" aria-hidden="true">
+              <ReportIcon name={activeTab} />
+            </span>
+          )}
           <div>
             <h2>{active.label}</h2>
             <p>{active.desc}</p>
