@@ -17,7 +17,9 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    api.get('/auth/me')
+    // An expired token just means a guest; the homepage greets them rather
+    // than the 401 handler bouncing them to the login form.
+    api.get('/auth/me', { skipAuthRedirect: true })
       .then((res) => setUser(res.data.user))
       .catch(() => {
         localStorage.removeItem('atlas_token');

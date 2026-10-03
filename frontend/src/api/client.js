@@ -42,7 +42,10 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('atlas_token');
       localStorage.removeItem('atlas_user');
-      if (!window.location.pathname.startsWith('/login')) {
+      // The start-up session check handles its own failure (AuthContext): an
+      // expired visitor simply becomes a guest and meets the homepage. Only a
+      // session that lapses mid-work is sent to log in again.
+      if (!err.config?.skipAuthRedirect && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
       }
     }

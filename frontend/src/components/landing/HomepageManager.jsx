@@ -149,7 +149,7 @@ export function HomepageManager({ onClose, onChanged }) {
                   <small>
                     {tab === 'photo'
                       ? 'Tampil di galeri dan di dalam huruf mil. Dikompres otomatis (maks. 1600px, WebP); foto lanskap paling pas.'
-                      : 'Logo versi putih/terang di latar transparan — tampil di band navy. PNG atau SVG, dikompres otomatis (lebar maks. 480px).'}
+                      : 'Logo versi putih/terang di latar transparan — halaman menampilkannya abu gelap otomatis. PNG atau SVG, dikompres otomatis (lebar maks. 480px).'}
                   </small>
                 </span>
               </label>
