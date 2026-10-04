@@ -75,7 +75,7 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
       assert.ok(job, 'last month is planned');
       assert.ok(!job.datasets.includes('core') || job.reason === 'reconcile' || job.reason === 'backfill');
       assert.ok(job.datasets.includes('ads') && job.datasets.includes('conversions') && job.datasets.includes('competitive'));
-      assert.deepEqual(jobs.body.snapshots, ['campaign_settings', 'conversion_actions', 'ad_assets']);
+      assert.deepEqual(jobs.body.snapshots, ['campaign_settings', 'conversion_actions', 'ad_assets', 'keyword_quality']);
     });
 
     await t.test('v2 run: every dataset lands, retry does not duplicate, bad declarations are refused', async () => {
@@ -188,11 +188,51 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
       await assert.rejects(service.setConversionGoal({ brandId, customerId: '1234567890', conversionActionId: '22', goal: 'lead', userId: null }), /tidak ditemukan/);
     });
 
+    await t.test('041 datasets land and the report carries rule-based insights', async () => {
+      const datasets = ['core', 'devices', 'hourly', 'landing_pages', 'keyword_quality'];
+      const start = await call('POST', '/start', { customerId: CUSTOMER, startDate: mStart, endDate: mEnd, datasets });
+      const runId = start.body.runId;
+      const send = (dataset, rows) => call('POST', '/dataset', { runId, dataset, rows });
+      await call('POST', '/rows', { runId, rows: [
+        coreRow(day(1), 100, 2), coreRow(day(2), 200, 3),
+        { date: day(1), level: 'keyword', campaignId: 'c1', campaignName: 'Search Brand', adGroupId: 'g1', adGroupName: 'Bunga', item: 'bunga kl', matchType: 'PHRASE', cost: 3, clicks: 2, impressions: 40, conversions: 0 },
+        { date: day(1), level: 'search_term', campaignId: 'c1', campaignName: 'Search Brand', adGroupId: 'g1', adGroupName: 'Bunga', item: 'cara merangkai bunga', matchType: 'BROAD', cost: 160, clicks: 40, impressions: 400, conversions: 0 },
+      ] });
+      assert.equal((await send('devices', [
+        { date: day(1), campaignId: 'c1', device: 'MOBILE', cost: 80, impressions: 800, clicks: 40, conversions: 1 },
+        { date: day(1), campaignId: 'c1', device: 'DESKTOP', cost: 20, impressions: 200, clicks: 10, conversions: 1 },
+      ])).body.written, 2);
+      assert.equal((await send('hourly', [{ date: day(1), hour: 9, campaignId: 'c1', cost: 50, impressions: 500, clicks: 25, conversions: 1 }, { date: day(1), hour: 25, campaignId: 'c1' }])).body.written, 1);
+      await send('landing_pages', [{ date: day(1), url: 'https://example.com/bunga', campaignId: 'c1', clicks: 60, impressions: 900, cost: 70, conversions: null, conversionsValue: null, unavailable: ['conversions', 'conversions_value'] }]);
+      await send('keyword_quality', [{ adGroupId: 'g1', criterionId: '77', keyword: 'bunga kl', matchType: 'PHRASE', qualityScore: 3, adRelevance: 'BELOW_AVERAGE' }]);
+      const fin = await call('POST', '/finish', { runId, status: 'success', rowCount: 4, datasets: Object.fromEntries(datasets.map((d) => [d, { status: 'success', rowCount: 1 }])) });
+      assert.equal(fin.status, 200);
+
+      const report = await service.getReport({ brandId, oldStart: mStart, oldEnd: mStart, curStart: mStart, curEnd: mEnd });
+      assert.equal(report.cur.totals.cost, 300, 'device/hour/landing page cost never added to the total');
+      const kw = report.cur.keywordDetail.find((k) => k.keyword === 'bunga kl');
+      assert.equal(kw.quality_score, 3);
+      assert.equal(kw.classification, 'insufficient_data');
+      assert.ok(kw.quality_flags.includes('Ad relevance di bawah rata-rata'));
+      const st = report.cur.searchTermDetail.find((t) => t.search_term === 'cara merangkai bunga');
+      assert.equal(st.classification, 'informational');
+      assert.equal(st.campaign_name, 'Search Brand');
+      assert.equal(report.cur.searchTermSummary.confirmed_irrelevant_spend, null);
+      assert.equal(report.cur.devices.devices[0].device, 'MOBILE');
+      assert.equal(report.cur.schedule.data_sufficient, false);
+      assert.equal(report.cur.landingPages.conversions_available, false);
+      assert.equal(report.cur.landingPages.pages[0].cvr, null);
+      assert.ok(Array.isArray(report.diagnostics));
+      assert.ok(['normal', 'monitoring', 'anomaly'].includes(report.anomalies.status));
+      assert.ok(report.dataAvailability.keyword_quality.last_date);
+    });
+
     await t.test('removing the account removes every dataset', async () => {
       const { rows: [acc] } = await pool.query(`SELECT google_ads_account_id AS id FROM google_ads_accounts WHERE customer_id = $1`, [CUSTOMER]);
       await service.removeAccount({ brandId, accountId: acc.id });
       for (const table of ['google_ads_daily', 'google_ads_ads_daily', 'google_ads_conversion_daily', 'google_ads_competitive_metrics',
-        'google_ads_campaign_settings', 'google_ads_conversion_actions', 'google_ads_ad_assets', 'google_ads_conversion_goal_map']) {
+        'google_ads_campaign_settings', 'google_ads_conversion_actions', 'google_ads_ad_assets', 'google_ads_conversion_goal_map',
+        'google_ads_device_daily', 'google_ads_hourly', 'google_ads_landing_pages_daily', 'google_ads_keyword_quality']) {
         assert.equal(await count(table), 0, table);
       }
     });
