@@ -331,7 +331,7 @@
 
 /* ── Master/detail: brand list left, Brand Setting right ────────────────── */
 .bp-stats.is-start { justify-content: flex-start; }
-.bp-master { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.bp-master { display: grid; grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); gap: 16px; align-items: start; }
 .bp-list {
   position: sticky; top: 14px; display: flex; flex-direction: column;
   max-height: calc(100vh - 28px); border: 1px solid var(--bp-line);
@@ -384,3 +384,44 @@
    same edge clipping without being a scroll container, so the brand list
    can stay in view beside a long Brand Setting. */
 main.main-content:has(.bp-master) { overflow: clip; }
+
+/* ── Brand list v2: room to breathe, a status chip per brand ────────────── */
+.bp-list-head { gap: 12px; padding: 16px 16px 14px; }
+.bp-list-item { gap: 12px; min-height: 48px; padding: 0 12px 0 14px; font-size: .9rem; }
+.bp-list-items { padding: 8px; }
+.bp-list-items li + li { margin-top: 2px; }
+.bp-list-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-list-item .bp-status-chip {
+  flex: 0 0 auto; gap: 5px; padding: 3px 9px; font-size: .72rem; font-weight: 700;
+  box-shadow: none; background: #eef1f7; color: #52617c;
+}
+.bp-list-item .bp-status-chip.is-active { background: #e7f7ee; color: #166534; }
+.bp-list-item .bp-status-chip.is-freeze { background: #fef3c7; color: #92400e; }
+.bp-list-item .bp-status-chip.is-unknown { background: #fff; color: var(--soft-muted); box-shadow: inset 0 0 0 1px var(--bp-line); }
+.bp-list-item .bp-status-chip i { width: 6px; height: 6px; }
+.bp-list-item.is-on .bp-status-chip { box-shadow: inset 0 0 0 1px rgba(30, 62, 184, .12); }
+
+/* Status filter: five clear segments, each with its count. */
+.bp-filter { display: flex; flex-wrap: wrap; gap: 6px; }
+.bp-filter button {
+  display: flex; flex: 1 1 auto; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 11px;
+  border: 1px solid var(--bp-line); border-radius: 11px; background: #fff; color: var(--soft-muted);
+  font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms var(--bp-ease);
+}
+.bp-filter button:active { transform: scale(0.97); }
+.bp-filter button span { white-space: nowrap; }
+.bp-filter button b { flex: 0 0 auto; padding: 1px 7px; border-radius: 99px; background: #f1f4fa; color: var(--soft-muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.bp-filter button i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #8693ab; }
+.bp-filter button.is-active i { background: #22a06b; }
+.bp-filter button.is-freeze i { background: #d97706; }
+.bp-filter button.is-unknown i { background: #fff; box-shadow: inset 0 0 0 1.5px #9aa5b8; }
+.bp-filter button:hover:not(.is-on) { border-color: #b8c5f5; color: var(--soft-ink); }
+.bp-filter button.is-on { border-color: var(--soft-accent); background: var(--soft-accent); color: #fff; box-shadow: 0 6px 14px -10px var(--soft-accent); }
+.bp-filter button.is-on b { background: rgba(255, 255, 255, .2); color: #fff; }
+.bp-filter button.is-on i { box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
+.bp-filter button:focus-visible { outline: 2px solid var(--soft-accent); outline-offset: 2px; }
+.bp-danger-actions.is-split { justify-content: space-between; align-items: center; }
+.bp-danger-note { max-width: 46ch; color: #9b1c1c; font-size: .76rem; line-height: 1.45; text-align: right; }
+.bp-danger-body.is-force { border-top-color: #c81e1e; }
+.bp-danger-body.is-force > p:first-child { color: #9b1c1c; }

@@ -165,3 +165,106 @@ export async function deleteBrand(brandId) {
     client.release();
   }
 }
+
+// Deletes a brand together with every row of data it still has — the
+// explicit "Hapus beserta semua data" path, admin-only and confirmed by
+// typing. Tables that cascade go with the brand row; the rest (Shopee facts,
+// saved reports, upload history…) are cleared first, children before the
+// tables they point at (order_items before orders, orders before uploads…),
+// in an order read from the database's own foreign keys — so every delete
+// succeeds first time (a failed attempt on a big table is what made the
+// first version too slow for the 60s server limit) and a table added later
+// is placed correctly without touching this. A savepoint retry stays as the
+// safety net for anything the ordering cannot see. A login account
+// bound to the brand is never removed with it: deleting the brand would
+// leave that client account unrestricted, so it blocks until the account is
+// moved or removed in Pengaturan Akses.
+export async function deleteBrandWithData(brandId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT brand_id, brand_name FROM public.brands WHERE brand_id = $1 FOR UPDATE', [brandId]);
+    if (!found.rowCount) {
+      await client.query('ROLLBACK');
+      return { deleted: false, notFound: true };
+    }
+    const bound = await client.query('SELECT count(*)::int AS n FROM public.users WHERE allowed_brand_id = $1', [brandId]);
+    if (bound.rows[0].n) {
+      await client.query('ROLLBACK');
+      return { deleted: false, boundAccounts: bound.rows[0].n };
+    }
+
+    // What the brand holds, for the summary shown afterwards (rows that go
+    // by cascade are not counted by the deletes themselves).
+    const before = await getBrandReferences(brandId, client);
+    const unordered = (await listReferenceTables(client))
+      .filter(({ s, t, rule }) => rule === 'NO ACTION' && `${s}.${t}` !== 'public.users');
+    const tables = await orderChildrenFirst(client, unordered);
+    let pending = tables;
+    let lastError = null;
+    for (let pass = 0; pending.length && pass <= tables.length; pass += 1) {
+      const next = [];
+      for (const table of pending) {
+        await client.query('SAVEPOINT bp_del');
+        try {
+          await client.query(`DELETE FROM "${table.s}"."${table.t}" WHERE "${table.col}" = $1`, [brandId]);
+          await client.query('RELEASE SAVEPOINT bp_del');
+        } catch (err) {
+          await client.query('ROLLBACK TO SAVEPOINT bp_del');
+          if (err.code !== '23503') throw err;
+          lastError = err;
+          next.push(table);
+        }
+      }
+      if (next.length === pending.length) break;
+      pending = next;
+    }
+    if (pending.length) throw lastError ?? new Error('Data brand tidak dapat dihapus seluruhnya.');
+
+    await client.query('DELETE FROM public.brands WHERE brand_id = $1', [brandId]);
+    await client.query('COMMIT');
+    return { deleted: true, brand: found.rows[0], removed: [...before.blocking, ...before.cleared] };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Sorts tables so each comes before every table it references (a child
+// before its parent), from the foreign keys among them.
+async function orderChildrenFirst(db, tables) {
+  const key = ({ s, t }) => `${s}.${t}`;
+  const names = new Set(tables.map(key));
+  const { rows } = await db.query(`
+    SELECT cn.nspname || '.' || c.relname AS child, pn.nspname || '.' || p.relname AS parent
+      FROM pg_constraint con
+      JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace cn ON cn.oid = c.relnamespace
+      JOIN pg_class p ON p.oid = con.confrelid JOIN pg_namespace pn ON pn.oid = p.relnamespace
+     WHERE con.contype = 'f'`);
+  const parentsOf = new Map();
+  for (const { child, parent } of rows) {
+    if (child === parent || !names.has(child) || !names.has(parent)) continue;
+    if (!parentsOf.has(parent)) parentsOf.set(parent, new Set());
+    parentsOf.get(parent).add(child); // parent must wait for these children
+  }
+  const done = new Set();
+  const out = [];
+  const visit = (table, trail = new Set()) => {
+    const name = key(table);
+    if (done.has(name) || trail.has(name)) return;
+    trail.add(name);
+    for (const child of parentsOf.get(name) ?? []) visit(tables.find((x) => key(x) === child), trail);
+    done.add(name);
+    out.push(...tables.filter((x) => key(x) === name));
+  };
+  tables.forEach((t) => visit(t));
+  return out;
+}
+
+// Login accounts restricted to this brand (client accounts).
+export async function countBoundAccounts(brandId) {
+  const { rows } = await pool.query('SELECT count(*)::int AS n FROM public.users WHERE allowed_brand_id = $1', [brandId]);
+  return rows[0].n;
+}

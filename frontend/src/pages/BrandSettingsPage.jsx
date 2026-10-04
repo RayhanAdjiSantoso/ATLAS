@@ -7,7 +7,7 @@ import {
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
-import BrandStatusFilter, { matchesBrandStatus, BRAND_STATUS_LABELS } from '../components/common/BrandStatusFilter.jsx';
+import { matchesBrandStatus, BRAND_STATUS_LABELS } from '../components/common/BrandStatusFilter.jsx';
 import { presetBrandSettings } from '../components/common/brandSettingsLink.js';
 import { describeError } from '../components/brandSettings/describeError.js';
 import atlasWordmark from '../assets/atlas-wordmark.png';
@@ -63,15 +63,18 @@ function Field({ label, guidance, value, onChange, disabled }) {
 }
 
 const STATUS_CHOICES = ['active', 'off', 'freeze'];
+const FILTERS = ['all', 'active', 'off', 'freeze', 'unknown'];
 
-// Deleting a brand, at the foot of Brand Setting. The server decides what is
-// safe: a brand that still holds data (files, reports, daily tracking…) is
-// never deleted — the panel lists that data and points at "Nonaktif"
-// instead. Only an empty brand (a duplicate, a typo) gets the final confirm,
-// and that asks for its name typed back.
+// Deleting a brand, at the foot of Brand Setting (admins only). An empty
+// brand (a duplicate, a typo) is deleted after its name is typed back. A
+// brand that still holds data shows that data first and suggests "Nonaktif";
+// deleting it anyway is a separate, deliberate step that wipes everything the
+// brand holds and asks for "HAPUS <nama brand>". The server checks the same
+// phrase, and refuses while a client login account is bound to the brand.
 function DeleteBrand({ brand, onDeleted }) {
   const [state, setState] = useState({ phase: 'idle' });
   const [typed, setTyped] = useState('');
+  const phrase = `HAPUS ${brand.brand_name.trim()}`;
 
   const check = async () => {
     setState({ phase: 'checking' });
@@ -94,6 +97,16 @@ function DeleteBrand({ brand, onDeleted }) {
     }
   };
 
+  const removeWithData = async () => {
+    setState((s) => ({ ...s, phase: 'wiping' }));
+    try {
+      const { data } = await api.delete(`/brands/${brand.brand_id}?withData=1`, { data: { confirm: phrase } });
+      onDeleted(brand, data.removed);
+    } catch (err) {
+      setState((s) => ({ ...s, phase: 'force', error: describeError(err, 'Gagal menghapus brand beserta datanya') }));
+    }
+  };
+
   return (
     <section className="bp-danger" aria-label="Hapus brand">
       <div className="bp-danger-head">
@@ -111,7 +124,35 @@ function DeleteBrand({ brand, onDeleted }) {
         <div className="bp-danger-body">
           <p>{brand.brand_name} masih punya data, jadi tidak bisa dihapus. Ubah statusnya menjadi <b>Nonaktif</b> — data dan laporannya tetap aman.</p>
           <ul>{state.blocking.map((b) => <li key={b.label}><span>{b.label}</span><b>{b.count.toLocaleString('id-ID')}</b></li>)}</ul>
-          <button type="button" className="bp-ghost" onClick={() => setState({ phase: 'idle' })}>Tutup</button>
+          <div className="bp-danger-actions is-split">
+            <button type="button" className="bp-ghost" onClick={() => setState({ phase: 'idle' })}>Tutup</button>
+            {state.boundAccounts ? (
+              <small className="bp-danger-note">Ada {state.boundAccounts} akun login klien yang terikat ke brand ini — pindahkan atau hapus di Pengaturan Akses dulu sebelum menghapus beserta data.</small>
+            ) : (
+              <button type="button" className="bp-danger-btn is-ghost" onClick={() => { setTyped(''); setState((s) => ({ ...s, phase: 'force', error: null })); }}>
+                <Trash2 size={15} aria-hidden="true" /> Hapus beserta semua data…
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {(state.phase === 'force' || state.phase === 'wiping') && (
+        <div className="bp-danger-body is-force">
+          <p>
+            <b>Ini tidak bisa dibatalkan.</b> {brand.brand_name} dan <b>semua datanya</b> akan dihapus permanen dari ATLAS:
+            file Data Brand, laporan tersimpan, data Shopee, Daily Tracking, Google &amp; Meta Ads, catatan meeting, dan lainnya.
+          </p>
+          <ul>{state.blocking.map((b) => <li key={b.label}><span>{b.label}</span><b>{b.count.toLocaleString('id-ID')}</b></li>)}</ul>
+          {state.error && <p className="bp-drawer-msg is-error" role="alert"><CircleAlert size={15} /> {state.error}</p>}
+          <p>Ketik <b>{phrase}</b> untuk konfirmasi.</p>
+          <input value={typed} onChange={(event) => setTyped(event.target.value)} placeholder={phrase} aria-label="Ketik konfirmasi hapus beserta data" autoFocus />
+          <div className="bp-danger-actions">
+            <button type="button" className="bp-ghost" onClick={() => { setTyped(''); setState((s) => ({ ...s, phase: 'blocked', error: null })); }} disabled={state.phase === 'wiping'}>Batal</button>
+            <button type="button" className="bp-danger-btn" onClick={removeWithData} disabled={typed.trim() !== phrase || state.phase === 'wiping'}>
+              {state.phase === 'wiping' ? <Loader2 size={15} className="brand-spin" /> : <Trash2 size={15} aria-hidden="true" />}
+              {state.phase === 'wiping' ? 'Menghapus…' : 'Hapus brand & semua data'}
+            </button>
+          </div>
         </div>
       )}
       {(state.phase === 'confirm' || state.phase === 'deleting') && (
@@ -350,11 +391,12 @@ export default function BrandSettingsPage() {
     }
   }
 
-  const brandDeleted = (b) => {
+  const brandDeleted = (b, removed) => {
     setBrands((list) => list.filter((x) => x.brand_id !== b.brand_id));
     dirtyRef.current = false;
     setDetail(null);
-    setNotice(`Brand "${b.brand_name}" dihapus.`);
+    const what = removed?.length ? ` beserta ${removed.map((r) => `${r.count.toLocaleString('id-ID')} ${r.label.toLowerCase()}`).join(', ')}` : '';
+    setNotice(`Brand "${b.brand_name}" dihapus${what}.`);
   };
 
   const createBrand = async (event) => {
@@ -436,8 +478,21 @@ export default function BrandSettingsPage() {
                 <Search size={16} aria-hidden="true" />
                 <input value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
               </label>
-              <BrandStatusFilter value={listStatus} onChange={setListStatus} />
-              <small>{loaded ? `${shown.length} dari ${brands.length} brand` : 'Memuat…'}</small>
+              {/* The status filter as a clear segmented control, each choice
+                  carrying its own count. */}
+              <div className="bp-filter" role="radiogroup" aria-label="Filter status klien">
+                {FILTERS.map((key) => {
+                  const on = listStatus === key;
+                  const n = key === 'all' ? brands.length : brands.filter((b) => matchesBrandStatus(b, key)).length;
+                  return (
+                    <button key={key} type="button" role="radio" aria-checked={on} className={`is-${key}${on ? ' is-on' : ''}`} onClick={() => setListStatus(key)}>
+                      {key !== 'all' && <i aria-hidden="true" />}
+                      <span>{key === 'all' ? 'Semua' : BRAND_STATUS_LABELS[key]}</span>
+                      <b>{loaded ? n : '…'}</b>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <ul className="bp-list-items">
               {shown.map((b) => {
@@ -446,9 +501,8 @@ export default function BrandSettingsPage() {
                 return (
                   <li key={b.brand_id}>
                     <button type="button" className={`bp-list-item${on ? ' is-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => select(b)}>
-                      <i className={`brand-status-dot is-${status}`} aria-hidden="true" />
-                      <span>{b.brand_name}</span>
-                      {status !== 'active' && <small>{BRAND_STATUS_LABELS[status]}</small>}
+                      <span className="bp-list-name">{b.brand_name}</span>
+                      <span className={`bp-status-chip is-${status}`}><i aria-hidden="true" />{BRAND_STATUS_LABELS[status]}</span>
                     </button>
                   </li>
                 );

@@ -41,3 +41,9 @@ frontend/.claude/skills/
 # category as the skill packs above: reinstalled locally, never committed.
 .agents/
 .codex/
+
+# Local-only: agent skills and the scale-check sandbox page
+.claude/
+skills-lock.json
+frontend/scale-check.html
+frontend/src/scale-check.jsx

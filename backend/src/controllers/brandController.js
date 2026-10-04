@@ -50,11 +50,28 @@ export const getBrandDeleteCheck = asyncHandler(async (req, res) => {
   const brand = await brandService.getBrandById(brandId);
   if (!brand) throw new AppError('Brand tidak ditemukan', 404);
   const refs = await brandService.getBrandReferences(brandId);
-  res.json({ brand, canDelete: refs.blocking.length === 0, ...refs });
+  const boundAccounts = await brandService.countBoundAccounts(brandId);
+  res.json({ brand, canDelete: refs.blocking.length === 0, boundAccounts, ...refs });
 });
 
 export const deleteBrand = asyncHandler(async (req, res) => {
   const brandId = parseBrandId(req.params.brandId);
+  // ?withData=1 deletes the brand and everything it holds. The client must
+  // send the confirmation phrase it showed the user ("HAPUS <nama brand>"),
+  // so a stray request can never wipe a client.
+  if (req.query.withData === '1') {
+    const brand = await brandService.getBrandById(brandId);
+    if (!brand) throw new AppError('Brand tidak ditemukan', 404);
+    if (String(req.body?.confirm ?? '').trim() !== `HAPUS ${brand.brand_name.trim()}`) {
+      throw new AppError('Konfirmasi tidak cocok. Ketik HAPUS diikuti nama brand.', 400);
+    }
+    const forced = await brandService.deleteBrandWithData(brandId);
+    if (forced.notFound) throw new AppError('Brand tidak ditemukan', 404);
+    if (forced.boundAccounts) {
+      throw new AppError(`Ada ${forced.boundAccounts} akun login klien yang terikat ke brand ini. Pindahkan atau hapus akun tersebut di Pengaturan Akses terlebih dahulu.`, 409);
+    }
+    return res.json({ deleted: true, brand: forced.brand, removed: forced.removed });
+  }
   const result = await brandService.deleteBrand(brandId);
   if (result.notFound) throw new AppError('Brand tidak ditemukan', 404);
   if (!result.deleted) {
