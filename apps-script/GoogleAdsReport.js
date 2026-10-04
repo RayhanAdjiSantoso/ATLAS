@@ -211,7 +211,8 @@ function runJob_(job, meta, snapshots) {
     var summary = Object.keys(results).filter(function (d) { return d !== 'core'; }).map(function (d) {
       return d + ' ' + (results[d].status === 'success' ? results[d].rowCount : results[d].status);
     });
-    return job.startDate + '..' + job.endDate + ' ok (' + sent + ' baris, ' + changes.length + ' perubahan'
+    var core = withCore ? sent + ' baris, ' + changes.length + ' perubahan' : 'laporan utama sudah lengkap';
+    return job.startDate + '..' + job.endDate + ' ok (' + core
       + (summary.length ? '; ' + summary.join(', ') : '') + ')' + (note ? ' — ' + note : '');
   } catch (e) {
     atlas_('post', '/google-ads/ingest/finish', { runId: runId, status: 'failed', rowCount: sent, note: String(e.message || e).slice(0, 480) });

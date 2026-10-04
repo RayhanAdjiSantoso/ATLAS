@@ -6,6 +6,7 @@ import {
 } from '../src/services/googleAdsDatasets.js';
 import {
   safeDiv, withRatios, pctChange, ppChange, classifyActions, goalTotals, campaignGoals, costPerGoal, periodShares, defaultGoal, contentHash,
+  countedAsPrimary,
 } from '../src/services/googleAdsAnalytics.js';
 
 // ── planJobs ──────────────────────────────────────────────────────────
@@ -182,6 +183,31 @@ test('purchase and lead stay apart; a manual mapping wins over the category defa
   assert.equal(totals.micro.all_conversions, 40, 'secondary actions only show in all conversions');
   assert.equal(totals.purchase.unverified, 1);
   assert.equal(defaultGoal('SOMETHING_NEW'), 'other');
+});
+
+// Seen in Petite Fleur KL (2026-10-04): WhatsApp leads arrive as UNKNOWN and
+// are missing from Google's conversion_action listing; View Item is primary
+// for the account but counted 0 in the campaigns.
+test('message leads without a category default to lead; the name only decides when the category cannot', () => {
+  assert.equal(defaultGoal('UNKNOWN', 'Conversation started'), 'lead');
+  assert.equal(defaultGoal('', 'WhatsApp click'), 'lead');
+  assert.equal(defaultGoal('DEFAULT', 'Google Shopping App Add Payment Info'), 'other');
+  assert.equal(defaultGoal('PAGE_VIEW', 'Chat page view'), 'micro', 'a real category wins over the name');
+  const [msg] = classifyActions([{ ...conv('c1', '99', 'UNKNOWN', 21, 21, 21), conversion_action_name: 'Conversation started' }]);
+  assert.equal(msg.goal, 'lead');
+  assert.equal(msg.goal_source, 'default');
+  assert.equal(msg.account_primary, null, 'no metadata');
+  assert.equal(msg.primary, true, 'counted in Conversions');
+});
+
+test('primary is read from the numbers, not the account setting', () => {
+  assert.equal(countedAsPrimary(0, 2116, true), false, 'primary for the account, left out by the campaign goals');
+  assert.equal(countedAsPrimary(23.3, 23.3, null), true);
+  assert.equal(countedAsPrimary(0, 0, true), true, 'no numbers: the setting answers');
+  assert.equal(countedAsPrimary(0, 0, null), null);
+  const [viewItem] = classifyActions([conv('c1', '50', 'PAGE_VIEW', 0, 2116)], [{ customer_id: '1', conversion_action_id: '50', include_in_conversions: true, category: 'PAGE_VIEW' }]);
+  assert.equal(viewItem.account_primary, true);
+  assert.equal(viewItem.primary, false);
 });
 
 test('campaign goal comes from bidding first, then from its conversions; cost per result has both views', () => {

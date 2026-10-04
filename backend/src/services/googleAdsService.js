@@ -497,10 +497,11 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
     period.searchTerms = mergeTerms([...kept, ...uploaded.rows]).map(withRatios);
     period.searchTermsSource = kept.length ? 'mixed' : 'upload';
   }
-  const [meta, goalMap, settings] = await Promise.all([
+  const [meta, goalMap, settings, seenActions] = await Promise.all([
     datasetsRepo.listConversionActions(brandId), datasetsRepo.listGoalMap(brandId), datasetsRepo.latestCampaignSettings(brandId),
+    datasetsRepo.listSeenConversionActions(brandId),
   ]);
-  const lookups = { meta, goalMap, settings };
+  const lookups = { meta, goalMap, settings, seenActions };
   const [intelOld, intelCur, shared] = await Promise.all([
     periodIntelligence(brandId, oldStart, oldEnd, old.campaigns, lookups),
     periodIntelligence(brandId, curStart, curEnd, cur.campaigns, lookups),
@@ -543,13 +544,14 @@ async function periodIntelligence(brandId, start, end, campaigns, { meta, goalMa
     const key = `${r.customer_id}|${r.conversion_action_id}`;
     const acc = byAction.get(key) ?? {
       customer_id: r.customer_id, conversion_action_id: r.conversion_action_id, name: r.name, category: r.category,
-      status: r.status, primary: r.primary, goal: r.goal, goal_source: r.goal_source,
+      status: r.status, account_primary: r.account_primary, goal: r.goal, goal_source: r.goal_source,
       conversions: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0, campaigns: [],
     };
     for (const k of ['conversions', 'conversions_value', 'all_conversions', 'all_conversions_value']) acc[k] += Number(r[k]) || 0;
     acc.campaigns.push({ campaign_id: r.campaign_id, campaign_name: r.campaign_name, conversions: r.conversions, all_conversions: r.all_conversions, conversions_value: r.conversions_value });
     byAction.set(key, acc);
   }
+  for (const acc of byAction.values()) acc.primary = analytics.countedAsPrimary(acc.conversions, acc.all_conversions, acc.account_primary);
   const goalsByCampaign = analytics.campaignGoals(classified, settings);
   const goals = analytics.goalTotals(classified);
   for (const g of ['purchase', 'lead', 'micro']) Object.assign(goals[g], analytics.costPerGoal(g, campaigns, classified, goalsByCampaign));
@@ -590,15 +592,27 @@ async function periodIntelligence(brandId, start, end, campaigns, { meta, goalMa
 
 // Every conversion action Google reported for the brand, with the goal it
 // counts toward and whether the brand set that goal or it is derived.
-function withGoals(meta, map) {
+// `seen` adds the actions that have conversions but are missing from
+// Google's conversion_action listing (built-in message leads are), so they
+// can be mapped too; their metadata is marked unavailable.
+function withGoals(meta, map, seen = []) {
   const goalOf = new Map(map.map((m) => [`${m.customer_id}|${m.conversion_action_id}`, m.goal]));
-  return meta.map((m) => {
+  const listed = new Set(meta.map((m) => `${m.customer_id}|${m.conversion_action_id}`));
+  const unlisted = seen
+    .filter((s) => !listed.has(`${s.customer_id}|${s.conversion_action_id}`))
+    .map((s) => ({
+      customer_id: s.customer_id, conversion_action_id: s.conversion_action_id, name: s.name, category: s.category || null,
+      status: null, type: null, origin: null, primary_for_goal: null, include_in_conversions: null, counting_type: null,
+      attribution_model: null, click_through_window_days: null, view_through_window_days: null,
+      unavailable: ['metadata'], source: 'conversions_only', last_seen_at: null,
+    }));
+  return [...meta, ...unlisted].map((m) => {
     const manual = goalOf.get(`${m.customer_id}|${m.conversion_action_id}`);
-    return { ...m, goal: manual ?? analytics.defaultGoal(m.category), goal_source: manual ? 'manual' : 'default' };
+    return { ...m, goal: manual ?? analytics.defaultGoal(m.category, m.name), goal_source: manual ? 'manual' : 'default' };
   });
 }
 
-async function sharedIntelligence(brandId, curStart, curEnd, { meta, goalMap, settings }) {
+async function sharedIntelligence(brandId, curStart, curEnd, { meta, goalMap, settings, seenActions }) {
   const [settingChanges, availability] = await Promise.all([
     datasetsRepo.campaignSettingChanges(brandId, curStart, curEnd),
     datasetsRepo.availability(brandId),
@@ -606,7 +620,7 @@ async function sharedIntelligence(brandId, curStart, curEnd, { meta, goalMap, se
   return {
     campaignSettings: settings,
     campaignSettingChanges: settingChanges.map(({ prev, prev_hash: _hash, ...row }) => ({ ...row, changed_fields: changedSettingFields(prev, row) })),
-    conversionActionMeta: withGoals(meta, goalMap),
+    conversionActionMeta: withGoals(meta, goalMap, seenActions),
     dataAvailability: Object.fromEntries(availability.map((a) => [a.dataset, a])),
   };
 }
@@ -632,8 +646,10 @@ function changedSettingFields(prev, cur) {
 // ---------------------------------------------------------------------
 export async function getConversionGoals(brandId) {
   await assertBrand(brandId);
-  const [meta, map] = await Promise.all([datasetsRepo.listConversionActions(brandId), datasetsRepo.listGoalMap(brandId)]);
-  return { actions: withGoals(meta, map), goals: analytics.GOALS };
+  const [meta, map, seen] = await Promise.all([
+    datasetsRepo.listConversionActions(brandId), datasetsRepo.listGoalMap(brandId), datasetsRepo.listSeenConversionActions(brandId),
+  ]);
+  return { actions: withGoals(meta, map, seen), goals: analytics.GOALS };
 }
 
 // goal null = back to the default derived from Google's category.
