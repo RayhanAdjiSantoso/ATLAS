@@ -5,6 +5,12 @@ import * as brandService from './brandService.js';
 import * as repo from '../repositories/googleAdsRepository.js';
 import * as library from './brandLibraryService.js';
 import { applyGoogleAdsSpend } from './dailyTrackingService.js';
+import * as datasetsRepo from '../repositories/googleAdsDatasetsRepository.js';
+import {
+  CORE, KNOWN_DATASETS, PLANNED_DATASETS, SNAPSHOT_DATASETS, ingestDataset as writeDataset, normalizeDatasetResults,
+  deleteStaleDatasets, describeResults,
+} from './googleAdsDatasets.js';
+import * as analytics from './googleAdsAnalytics.js';
 import {
   parseAuctionInsights, parseSearchTerms, parseChangeHistory, buildSearchTermsWorkbook, buildChangeHistoryWorkbook, AUCTION_METRICS,
 } from './googleAdsFiles.js';
@@ -19,9 +25,6 @@ import {
 
 const LEVELS = new Set(['campaign', 'ad_group', 'keyword', 'search_term', 'city']);
 const SOURCES = new Set(['ads_script', 'api']);
-// A day's conversions keep arriving for a while after it ends. A month only
-// counts as fetched once a run covered it at least this long after its last day.
-const SETTLE_DAYS = 3;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -128,6 +131,7 @@ export async function removeAccount({ brandId, accountId }) {
   await inTransaction(async (db) => {
     await repo.deleteCustomerRows(account.customer_id, db);
     await repo.deleteCustomerChangeEvents(account.customer_id, db);
+    await datasetsRepo.deleteCustomerDatasets(account.customer_id, db);
     await repo.deleteAccount(accountId, db);
   });
   return getOverview(brandId);
@@ -145,14 +149,53 @@ export async function requestResync({ brandId, accountId, from, to }) {
 // Fetch planning (asked by the fetcher at the start of every run)
 // ---------------------------------------------------------------------
 // One job = one account × one calendar month (clipped to backfill_from and
-// yesterday). A month is due unless a successful run covered all of it and
-// started at least SETTLE_DAYS after its last day — so last month is
-// re-fetched until its conversions have settled and older months once. The
-// month in progress (ending yesterday) is due once per day: its range grows
-// every day, and a second run the same day (a Preview, say) finds it
-// covered. A "Tarik ulang" adds: covered by a run started after the
+// yesterday). The month in progress (ending yesterday) is due once per day:
+// its range grows every day, and a second run the same day (a Preview, say)
+// finds it covered. A "Tarik ulang" adds: covered by a run started after the
 // request. Newest months come first so fresh numbers land before backfill.
-export function planJobs(accounts, runs, today) {
+//
+// A finished month keeps receiving conversions for as long as its
+// conversion windows run (30 days by default in Google Ads), so it is
+// re-fetched at checkpoints counted from its last day — by default day 3
+// (most late conversions are in) and day 30 (the default window has
+// closed). A month is covered once a run started on or after the latest
+// checkpoint that has passed; before the first one it is re-fetched daily.
+// That is two extra fetches per month, not a rolling re-fetch of history.
+// GOOGLE_ADS_RECONCILE_DAYS="3,30" changes the checkpoints (e.g. "3,30,90"
+// for accounts with 90-day windows).
+//
+// Each fetcher declares the datasets it can send. A run covers a dataset
+// when that dataset finished well in it, so a dataset that failed — or one
+// added after its month was fetched — is planned again on its own, without
+// re-fetching the rest. A fetcher that declares nothing (the script from
+// before migration 040) gets exactly the old jobs: core only, no
+// `datasets` field.
+export const DEFAULT_RECONCILE_DAYS = [3, 30];
+
+export function reconcileCheckpoints(value = process.env.GOOGLE_ADS_RECONCILE_DAYS) {
+  const days = String(value ?? '').split(',').map((d) => d.trim()).filter(Boolean).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 400);
+  return days.length ? [...new Set(days)].sort((a, b) => a - b) : DEFAULT_RECONCILE_DAYS;
+}
+
+// The checkpoint a finished month has to be fetched after: the latest one
+// already passed, or the first one while none has.
+function requiredCheckpoint(end, today, checkpoints) {
+  let required = checkpoints[0];
+  for (const c of checkpoints) if (addDays(end, c) <= today) required = c;
+  return required;
+}
+
+export function runCovers(run, dataset) {
+  if (!run.datasets) return dataset === CORE;
+  if (!run.datasets.includes(dataset)) return false;
+  const result = run.dataset_results?.[dataset];
+  // A run only reports success when its core rows went in.
+  if (dataset === CORE) return !result || result.status === 'success';
+  return result?.status === 'success';
+}
+
+export function planJobs(accounts, runs, today, { datasets = null, checkpoints = DEFAULT_RECONCILE_DAYS } = {}) {
+  const wanted = datasets?.length ? datasets : [CORE];
   const yesterday = addDays(today, -1);
   const runsByCustomer = new Map();
   for (const r of runs) {
@@ -172,34 +215,52 @@ export function planJobs(accounts, runs, today) {
       const start = maxDate(m, account.backfill_from);
       const end = minDate(monthEnd(m), yesterday);
       const inResync = resyncAt && account.resync_from <= end && account.resync_to >= start;
-      const settledAfter = toDate(addDays(end, SETTLE_DAYS));
       const inProgress = end === yesterday;
-      const covered = own.some((r) => r.start_date <= start && r.end_date >= end
-        && (inProgress || new Date(r.started_at) >= settledAfter)
-        && (!inResync || new Date(r.started_at) > resyncAt));
-      const resyncCovered = !inResync || own.some((r) => r.start_date <= start && r.end_date >= end && new Date(r.started_at) > resyncAt);
-      if (!resyncCovered) resyncPending = true;
-      if (!covered) {
-        jobs.push({
-          brandId: account.brand_id, customerId: account.customer_id, startDate: start, endDate: end,
-          reason: inResync && !resyncCovered ? 'resync' : inProgress ? 'current' : 'backfill',
-          // Lets an MCC-level fetcher stay quiet about an account it cannot
-          // reach once another fetcher (a script in that account) has synced it.
-          hasSyncedBefore: own.length > 0,
-        });
+      const settledAfter = toDate(addDays(end, requiredCheckpoint(end, today, checkpoints)));
+      const spans = (r) => r.start_date <= start && r.end_date >= end;
+      const afterResync = (r) => new Date(r.started_at) > resyncAt;
+
+      const due = [];
+      let reason = null;
+      for (const ds of wanted) {
+        const fetched = own.filter((r) => spans(r) && runCovers(r, ds));
+        const covered = fetched.some((r) => (inProgress || new Date(r.started_at) >= settledAfter) && (!inResync || afterResync(r)));
+        const resyncCovered = !inResync || fetched.some(afterResync);
+        if (!resyncCovered) resyncPending = true;
+        if (covered) continue;
+        due.push(ds);
+        const why = inResync && !resyncCovered ? 'resync' : inProgress ? 'current' : fetched.length ? 'reconcile' : 'backfill';
+        // The job's reason is the most specific one among its datasets.
+        if (!reason || ['resync', 'current', 'reconcile', 'backfill'].indexOf(why) < ['resync', 'current', 'reconcile', 'backfill'].indexOf(reason)) reason = why;
       }
+      if (!due.length) continue;
+      jobs.push({
+        brandId: account.brand_id, customerId: account.customer_id, startDate: start, endDate: end,
+        reason: !datasets && reason === 'reconcile' ? 'backfill' : reason,
+        // Lets an MCC-level fetcher stay quiet about an account it cannot
+        // reach once another fetcher (a script in that account) has synced it.
+        hasSyncedBefore: own.length > 0,
+        ...(datasets ? { datasets: due } : {}),
+      });
     }
     if (resyncAt && !resyncPending) resyncDone.push(account.id);
   }
   return { jobs, resyncDone };
 }
 
-export async function getJobs() {
+// `datasets` is what the fetcher says it can send ("core,ads,..."); only
+// planned (per-month) datasets matter here — snapshots ride along with the
+// first job of each account. Unknown names are ignored.
+export async function getJobs({ datasets: declared } = {}) {
+  const datasets = declared
+    ? String(declared).split(',').map((d) => d.trim()).filter((d) => PLANNED_DATASETS.includes(d))
+    : null;
+  if (datasets && !datasets.includes(CORE)) datasets.unshift(CORE);
   const accounts = await repo.listActiveAccounts();
   const runs = await repo.listSuccessfulRuns(accounts.map((a) => a.customer_id));
-  const { jobs, resyncDone } = planJobs(accounts, runs, todayJakarta());
+  const { jobs, resyncDone } = planJobs(accounts, runs, todayJakarta(), { datasets, checkpoints: reconcileCheckpoints() });
   await Promise.all(resyncDone.map((id) => repo.clearResync(id)));
-  return { today: todayJakarta(), jobs };
+  return { today: todayJakarta(), jobs, ...(datasets ? { snapshots: SNAPSHOT_DATASETS } : {}) };
 }
 
 // ---------------------------------------------------------------------
@@ -212,15 +273,18 @@ async function requireOpenRun(runId) {
   return run;
 }
 
-export async function startRun({ customerId, startDate, endDate, source, account }) {
+// `datasets` (optional) is what this run will send; without it the run is
+// core only, as every run was before migration 040.
+export async function startRun({ customerId, startDate, endDate, source, account, datasets }) {
   const id = normalizeCustomerId(customerId);
   const registered = id && await repo.getAccountByCustomerId(id);
   if (!registered) throw new AppError('Customer ID belum terdaftar di Pengaturan Brand', 404);
   if (!ISO_DATE.test(startDate) || !ISO_DATE.test(endDate) || startDate > endDate) throw new AppError('Rentang tanggal tidak valid', 400);
+  const declared = Array.isArray(datasets) ? [...new Set(datasets.filter((d) => KNOWN_DATASETS.includes(d)))] : null;
   const runId = randomUUID();
   await repo.insertRun({
     brandId: registered.brand_id, customerId: id, startDate, endDate,
-    source: SOURCES.has(source) ? source : 'ads_script', runId,
+    source: SOURCES.has(source) ? source : 'ads_script', runId, datasets: declared?.length ? declared : null,
   });
   if (account) {
     await repo.updateAccountMeta(id, {
@@ -305,9 +369,19 @@ export async function ingestChanges({ runId, rows }) {
   return { received: rows.length, written };
 }
 
-export async function finishRun({ runId, status, rowCount, note }) {
+// One of the datasets of migration 040 (see googleAdsDatasets.js).
+export async function ingestDataset({ runId, dataset, rows }) {
   const run = await requireOpenRun(runId);
-  const result = await finishRunRows({ run, runId, status, rowCount, note });
+  return writeDataset(run, dataset, rows);
+}
+
+const carriesCore = (run) => !run.datasets || run.datasets.includes(CORE);
+
+export async function finishRun({ runId, status, rowCount, note, datasets }) {
+  const run = await requireOpenRun(runId);
+  const datasetResults = run.datasets ? normalizeDatasetResults(datasets, run.datasets) : {};
+  const result = await finishRunRows({ run, runId, status, rowCount, note, datasetResults });
+  if (!carriesCore(run)) return result;
   // Daily Tracking is daily data, filled on every run (the script runs at
   // 01:00, so yesterday lands then). Data & file is monthly data: a month is
   // filed only once a run has covered it to its last day — the run on the
@@ -339,23 +413,29 @@ export async function finishRun({ runId, status, rowCount, note }) {
   return result;
 }
 
-function finishRunRows({ run, runId, status, rowCount, note }) {
+function finishRunRows({ run, runId, status, rowCount, note, datasetResults }) {
   return inTransaction(async (db) => {
+    const core = carriesCore(run);
     let removedStale = 0;
     // Zero rows on a "success" is read as "Google returned nothing", not as
     // proof the range is empty — one hiccup must not wipe a good month.
-    if (status === 'success' && rowCount > 0) {
+    if (core && status === 'success' && rowCount > 0) {
       removedStale = await repo.deleteStaleRows({
         customerId: run.customer_id, startDate: run.start_date, endDate: run.end_date, runId,
       }, db);
     }
+    // Each extra dataset replaces its own rows only when it finished well;
+    // one that failed leaves its older rows as they were.
+    const removedByDataset = status === 'success' ? await deleteStaleDatasets(run, datasetResults, db) : {};
     const parts = [];
     if (note) parts.push(note);
-    if (status === 'success' && rowCount === 0) parts.push('Google Ads tidak mengembalikan data untuk rentang ini; data lama (jika ada) tidak diubah');
+    if (core && status === 'success' && rowCount === 0) parts.push('Google Ads tidak mengembalikan data untuk rentang ini; data lama (jika ada) tidak diubah');
     if (removedStale) parts.push(`${removedStale} baris lama yang tidak ada lagi di Google Ads dihapus`);
-    await repo.finishRun({ runId, status, rowCount, note: parts.join(' · ') || null }, db);
+    const summary = describeResults(datasetResults);
+    if (summary) parts.push(summary);
+    await repo.finishRun({ runId, status, rowCount, note: parts.join(' · ').slice(0, 2000) || null, datasetResults }, db);
     await repo.recordSyncResult(run.customer_id, { status, error: status === 'failed' ? (note || 'Gagal') : null }, db);
-    return { status, rowCount, removedStale };
+    return { status, rowCount, removedStale, removedByDataset };
   });
 }
 
@@ -364,17 +444,7 @@ function finishRunRows({ run, runId, status, rowCount, note }) {
 // ---------------------------------------------------------------------
 // Ratios the Looker report shows, derived from the summed metrics so a
 // period's CTR is total clicks / total impressions, never an average of days.
-function withRatios(row) {
-  const r = { ...row };
-  for (const k of ['cost', 'impressions', 'clicks', 'conversions', 'conversions_value', 'all_conversions']) r[k] = Number(r[k] ?? 0);
-  r.ctr = r.impressions ? r.clicks / r.impressions : null;
-  r.avg_cpc = r.clicks ? r.cost / r.clicks : null;
-  r.avg_cpm = r.impressions ? (r.cost / r.impressions) * 1000 : null;
-  r.cost_per_conv = r.conversions ? r.cost / r.conversions : null;
-  r.cvr = r.clicks ? r.conversions / r.clicks : null;
-  r.roas = r.cost ? r.conversions_value / r.cost : null;
-  return r;
-}
+const { withRatios } = analytics;
 
 async function periodReport(brandId, start, end) {
   const [totals, daily, campaigns, adGroups, keywords, searchTerms, cities] = await Promise.all([
@@ -427,7 +497,20 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
     period.searchTerms = mergeTerms([...kept, ...uploaded.rows]).map(withRatios);
     period.searchTermsSource = kept.length ? 'mixed' : 'upload';
   }
+  const [meta, goalMap, settings, seenActions] = await Promise.all([
+    datasetsRepo.listConversionActions(brandId), datasetsRepo.listGoalMap(brandId), datasetsRepo.latestCampaignSettings(brandId),
+    datasetsRepo.listSeenConversionActions(brandId),
+  ]);
+  const lookups = { meta, goalMap, settings, seenActions };
+  const [intelOld, intelCur, shared] = await Promise.all([
+    periodIntelligence(brandId, oldStart, oldEnd, old.campaigns, lookups),
+    periodIntelligence(brandId, curStart, curEnd, cur.campaigns, lookups),
+    sharedIntelligence(brandId, curStart, curEnd, lookups),
+  ]);
+  Object.assign(old, intelOld);
+  Object.assign(cur, intelCur);
   return {
+    ...shared,
     auctionInsights: { old: auctionOld, cur: auctionCur },
     changeHistory: changes,
     accounts: accounts.map((a) => ({ customerId: a.customer_id, label: a.label, name: a.account_name, currency: a.currency_code })),
@@ -437,6 +520,150 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
     old,
     cur,
   };
+}
+
+// ---------------------------------------------------------------------
+// Report: datasets of migration 040
+// ---------------------------------------------------------------------
+// Added to each period of GET /report beside the core tables. Empty arrays
+// mean "not fetched yet" for accounts whose script predates these datasets;
+// `dataAvailability` tells the two apart.
+async function periodIntelligence(brandId, start, end, campaigns, { meta, goalMap: map, settings }) {
+  const [convRows, ads, campRange, campDays, adGroupRange, keywordRange] = await Promise.all([
+    datasetsRepo.conversionsByCampaignAction(brandId, start, end),
+    datasetsRepo.adsReport(brandId, start, end),
+    datasetsRepo.competitiveRange(brandId, 'campaign', start, end),
+    datasetsRepo.competitiveDays(brandId, start, end),
+    datasetsRepo.competitiveRange(brandId, 'ad_group', start, end),
+    datasetsRepo.competitiveRange(brandId, 'keyword', start, end),
+  ]);
+
+  const classified = analytics.classifyActions(convRows, meta, map);
+  const byAction = new Map();
+  for (const r of classified) {
+    const key = `${r.customer_id}|${r.conversion_action_id}`;
+    const acc = byAction.get(key) ?? {
+      customer_id: r.customer_id, conversion_action_id: r.conversion_action_id, name: r.name, category: r.category,
+      status: r.status, account_primary: r.account_primary, goal: r.goal, goal_source: r.goal_source,
+      conversions: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0, campaigns: [],
+    };
+    for (const k of ['conversions', 'conversions_value', 'all_conversions', 'all_conversions_value']) acc[k] += Number(r[k]) || 0;
+    acc.campaigns.push({ campaign_id: r.campaign_id, campaign_name: r.campaign_name, conversions: r.conversions, all_conversions: r.all_conversions, conversions_value: r.conversions_value });
+    byAction.set(key, acc);
+  }
+  for (const acc of byAction.values()) acc.primary = analytics.countedAsPrimary(acc.conversions, acc.all_conversions, acc.account_primary);
+  const goalsByCampaign = analytics.campaignGoals(classified, settings);
+  const goals = analytics.goalTotals(classified);
+  for (const g of ['purchase', 'lead', 'micro']) Object.assign(goals[g], analytics.costPerGoal(g, campaigns, classified, goalsByCampaign));
+
+  const daysByCampaign = new Map();
+  for (const d of campDays) {
+    const key = `${d.customer_id}|${d.campaign_id}`;
+    if (!daysByCampaign.has(key)) daysByCampaign.set(key, { customer_id: d.customer_id, campaign_id: d.campaign_id, campaign_name: d.campaign_name, days: [] });
+    daysByCampaign.get(key).days.push(d);
+  }
+  const rangeByCampaign = new Map(campRange.map((r) => [`${r.customer_id}|${r.campaign_id}`, r]));
+  const competitiveCampaigns = [...new Set([...rangeByCampaign.keys(), ...daysByCampaign.keys()])].map((key) => {
+    const range = rangeByCampaign.get(key);
+    const day = daysByCampaign.get(key);
+    return {
+      customer_id: range?.customer_id ?? day.customer_id,
+      campaign_id: range?.campaign_id ?? day.campaign_id,
+      campaign_name: range?.campaign_name || day?.campaign_name || '',
+      ...analytics.periodShares({ rangeRow: range, dayRows: day?.days ?? [] }),
+    };
+  });
+
+  return {
+    conversionActions: [...byAction.values()],
+    goals,
+    campaignGoals: Object.fromEntries(goalsByCampaign),
+    ads: ads.map(withRatios),
+    competitive: {
+      campaigns: competitiveCampaigns,
+      // Ad group and keyword shares exist only as Google's figure for a
+      // fetched range (a calendar month, or month-to-date): other periods
+      // have none rather than an invented one.
+      adGroups: adGroupRange.map((r) => ({ ...r, granularity: 'range' })),
+      keywords: keywordRange.map((r) => ({ ...r, granularity: 'range' })),
+    },
+  };
+}
+
+// Every conversion action Google reported for the brand, with the goal it
+// counts toward and whether the brand set that goal or it is derived.
+// `seen` adds the actions that have conversions but are missing from
+// Google's conversion_action listing (built-in message leads are), so they
+// can be mapped too; their metadata is marked unavailable.
+function withGoals(meta, map, seen = []) {
+  const goalOf = new Map(map.map((m) => [`${m.customer_id}|${m.conversion_action_id}`, m.goal]));
+  const listed = new Set(meta.map((m) => `${m.customer_id}|${m.conversion_action_id}`));
+  const unlisted = seen
+    .filter((s) => !listed.has(`${s.customer_id}|${s.conversion_action_id}`))
+    .map((s) => ({
+      customer_id: s.customer_id, conversion_action_id: s.conversion_action_id, name: s.name, category: s.category || null,
+      status: null, type: null, origin: null, primary_for_goal: null, include_in_conversions: null, counting_type: null,
+      attribution_model: null, click_through_window_days: null, view_through_window_days: null,
+      unavailable: ['metadata'], source: 'conversions_only', last_seen_at: null,
+    }));
+  return [...meta, ...unlisted].map((m) => {
+    const manual = goalOf.get(`${m.customer_id}|${m.conversion_action_id}`);
+    return { ...m, goal: manual ?? analytics.defaultGoal(m.category, m.name), goal_source: manual ? 'manual' : 'default' };
+  });
+}
+
+async function sharedIntelligence(brandId, curStart, curEnd, { meta, goalMap, settings, seenActions }) {
+  const [settingChanges, availability] = await Promise.all([
+    datasetsRepo.campaignSettingChanges(brandId, curStart, curEnd),
+    datasetsRepo.availability(brandId),
+  ]);
+  return {
+    campaignSettings: settings,
+    campaignSettingChanges: settingChanges.map(({ prev, prev_hash: _hash, ...row }) => ({ ...row, changed_fields: changedSettingFields(prev, row) })),
+    conversionActionMeta: withGoals(meta, goalMap, seenActions),
+    dataAvailability: Object.fromEntries(availability.map((a) => [a.dataset, a])),
+  };
+}
+
+const SETTING_COMPARE = [
+  'status', 'budget_amount', 'budget_shared', 'bidding_strategy_type', 'bidding_strategy_source', 'bidding_strategy_name',
+  'target_cpa', 'target_roas', 'target_impression_share', 'conversion_goals', 'network_google_search', 'network_search_partners',
+  'network_display', 'locations_included', 'locations_excluded', 'positive_geo_target_type', 'start_date', 'end_date', 'campaign_name',
+];
+
+// prev is the earlier version as stored (to_jsonb of the row): numbers may
+// arrive as strings, so values are compared in their JSON form.
+function changedSettingFields(prev, cur) {
+  if (!prev) return [];
+  const norm = (v) => (v == null ? null : typeof v === 'number' || /^-?\d+(\.\d+)?$/.test(String(v)) ? Number(v) : v);
+  return SETTING_COMPARE
+    .filter((f) => JSON.stringify(norm(prev[f])) !== JSON.stringify(norm(cur[f])))
+    .map((f) => ({ field: f, from: prev[f] ?? null, to: cur[f] ?? null }));
+}
+
+// ---------------------------------------------------------------------
+// Conversion goal mapping (Pengaturan Brand › Google Ads)
+// ---------------------------------------------------------------------
+export async function getConversionGoals(brandId) {
+  await assertBrand(brandId);
+  const [meta, map, seen] = await Promise.all([
+    datasetsRepo.listConversionActions(brandId), datasetsRepo.listGoalMap(brandId), datasetsRepo.listSeenConversionActions(brandId),
+  ]);
+  return { actions: withGoals(meta, map, seen), goals: analytics.GOALS };
+}
+
+// goal null = back to the default derived from Google's category.
+export async function setConversionGoal({ brandId, customerId, conversionActionId, goal, userId }) {
+  await assertBrand(brandId);
+  const id = normalizeCustomerId(customerId);
+  const account = id && await repo.getAccountByCustomerId(id);
+  if (!account || account.brand_id !== brandId) throw new AppError('Akun Google Ads tidak ditemukan di brand ini', 404);
+  const actionId = String(conversionActionId ?? '').trim();
+  if (!/^\d+$/.test(actionId)) throw new AppError('Conversion action tidak valid', 400);
+  if (goal == null) await datasetsRepo.clearGoal({ customerId: id, conversionActionId: actionId });
+  else if (analytics.GOALS.includes(goal)) await datasetsRepo.setGoal({ brandId, customerId: id, conversionActionId: actionId, goal, userId });
+  else throw new AppError('Goal tidak dikenal', 400);
+  return getConversionGoals(brandId);
 }
 
 // ---------------------------------------------------------------------

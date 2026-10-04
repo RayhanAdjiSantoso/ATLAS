@@ -10,7 +10,7 @@
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "test": "node --test test/",
-    "test:integration": "INTERNAL_DASHBOARD_IT=1 node --test test/"
+    "test:integration": "INTERNAL_DASHBOARD_IT=1 GOOGLE_ADS_IT=1 node --test test/"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

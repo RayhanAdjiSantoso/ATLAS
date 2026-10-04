@@ -4,7 +4,7 @@ import { requireBrandAccess, blockWriteIfViewOnly } from '../middlewares/brandAc
 import * as ctrl from '../controllers/googleAdsController.js';
 import {
   brandQueryValidation, addAccountValidation, updateAccountValidation, removeAccountValidation,
-  resyncValidation, reportValidation,
+  resyncValidation, reportValidation, conversionGoalValidation,
 } from '../validators/googleAdsValidators.js';
 
 // Google Ads: which accounts feed a brand (Pengaturan Brand › Google Ads)
@@ -21,6 +21,11 @@ router.post('/accounts', settings, requireBrandAccess((req) => req.body.brandId)
 router.patch('/accounts/:accountId', settings, requireBrandAccess((req) => req.body.brandId), updateAccountValidation, ctrl.updateAccount);
 router.delete('/accounts/:accountId', settings, requireBrandAccess((req) => req.query.brandId), removeAccountValidation, ctrl.removeAccount);
 router.post('/accounts/:accountId/resync', settings, requireBrandAccess((req) => req.body.brandId), resyncValidation, ctrl.requestResync);
+
+// Which goal (purchase / lead / micro / other / ignore) each conversion
+// action counts toward — read by the report, set in Pengaturan Brand.
+router.get('/conversion-goals', requireModule('brand_settings', 'report_generator'), requireBrandAccess((req) => req.query.brandId), brandQueryValidation, ctrl.getConversionGoals);
+router.put('/conversion-goals', settings, requireBrandAccess((req) => req.body.brandId), conversionGoalValidation, ctrl.setConversionGoal);
 
 router.get('/report', requireModule('report_generator'), requireBrandAccess((req) => req.query.brandId), reportValidation, ctrl.getReport);
 

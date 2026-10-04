@@ -1,11 +1,13 @@
 import express, { Router } from 'express';
 import { verifyIngestKey } from '../middlewares/dailyTrackingIngestAuth.js';
 import * as ctrl from '../controllers/googleAdsController.js';
-import { startRunValidation, rowsValidation, finishValidation } from '../validators/googleAdsValidators.js';
+import { startRunValidation, rowsValidation, datasetValidation, finishValidation } from '../validators/googleAdsValidators.js';
 
 // Machine-to-machine: the Google Ads Script (apps-script/GoogleAdsReport.js)
 // asks /jobs what to fetch, then reports each job through start -> rows
-// (repeated) -> changes (change history, optional) -> finish. A future Google Ads API fetcher uses the same calls.
+// (repeated) -> changes (change history, optional) -> dataset (the datasets
+// of migration 040, optional) -> finish. A future Google Ads API fetcher
+// uses the same calls.
 // No user JWT; the Daily Tracking ingest's shared secret stands in for it.
 //
 // Mounted in app.js BEFORE the global express.json() (100kb limit): a chunk
@@ -19,6 +21,7 @@ router.get('/jobs', ctrl.getJobs);
 router.post('/start', startRunValidation, ctrl.startRun);
 router.post('/rows', rowsValidation, ctrl.ingestRows);
 router.post('/changes', rowsValidation, ctrl.ingestChanges);
+router.post('/dataset', datasetValidation, ctrl.ingestDataset);
 router.post('/finish', finishValidation, ctrl.finishRun);
 
 export default router;
