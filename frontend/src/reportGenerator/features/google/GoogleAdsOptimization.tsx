@@ -105,7 +105,7 @@ export function OptimizationCenter({ clientId, range, onExperiment }: { clientId
   const list = (recs ?? []).filter((r) => (filter === 'active' ? !['completed', 'dismissed'].includes(r.status) : filter === 'done' ? r.status === 'completed' : r.status === 'dismissed'));
   const count = (f: RecFilter) => (recs ?? []).filter((r) => (f === 'active' ? !['completed', 'dismissed'].includes(r.status) : f === 'done' ? r.status === 'completed' : r.status === 'dismissed')).length;
   return (
-    <div className="sec-block" data-exec>
+    <div className="sec-block">
       <div className="sec-heading google-heading">AI Optimization Center <span className="sec-badge">rencana optimasi</span><SectionDownloadButton /></div>
       <div className="sec-inner">
         <div className="gads-opt-bar">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, RotateCcw } from 'lucide-react';
+import { FileSpreadsheet, Loader2, RotateCcw } from 'lucide-react';
 import { DeltaPill } from '../../components/DeltaPill';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { HowTo, HowToStep } from '../../components/HowTo';
@@ -26,6 +26,7 @@ import {
   FreshnessLine, GoalOverviewSection, KeywordIntelSection, SearchTermIntelSection,
 } from './GoogleAdsInsights';
 import { AlertsPanel, ExperimentTracker, OptimizationCenter, type ExperimentDraft } from './GoogleAdsOptimization';
+import { downloadGoogleAdsWorkbook } from './googleAdsExcel';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import {
   PRESETS, channelLabel, fetchOverview, fetchReport, formatter, matchTypeLabel, rangeLabel,
@@ -290,6 +291,7 @@ interface ReportViewProps { report: GadsReport; clientId: number | null; range: 
 function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onReset }: ReportViewProps) {
   const f = formatter(report.currency);
   const [draft, setDraft] = useState<ExperimentDraft | null>(null);
+  const [excelBusy, setExcelBusy] = useState(false);
   const { old, cur } = report;
   const empty = cur.totals.impressions === 0 && cur.totals.cost === 0;
 
@@ -378,7 +380,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Overall',
               content: (
                 <SectionAccordion>
-                  <div className="sec-block" data-exec>
+                  <div className="sec-block">
                     {heading('Overall Campaign Performance', `${p1} → ${p2}`, false)}
                     <div className="sec-inner">
                       <div className="gads-kpis">
@@ -414,8 +416,8 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
                       </div>
                     </div>
                   </div>
-                  <div data-exec><GoalOverviewSection report={report} f={f} p1={p1} p2={p2} /></div>
-                  <div data-exec><AlertsSection report={report} f={f} p2={p2} /></div>
+                  <GoalOverviewSection report={report} f={f} p1={p1} p2={p2} />
+                  <AlertsSection report={report} f={f} p2={p2} />
                   <div className="sec-block">
                     {heading('Ringkasan Periode', 'semua metrik')}
                     <KpiTable rows={summaryRows} p1={p1} p2={p2} padded />
@@ -429,7 +431,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               hidden: !report.diagnostics,
               content: (
                 <SectionAccordion>
-                  <div data-exec><DiagnosticsSection report={report} p1={p1} p2={p2} /></div>
+                  <DiagnosticsSection report={report} p1={p1} p2={p2} />
                 </SectionAccordion>
               ),
             },
@@ -501,7 +503,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               hidden: !cur.ads,
               content: (
                 <SectionAccordion>
-                  <AdPerformanceSection report={report} f={f} p2={p2} />
+                  <AdPerformanceSection report={report} f={f} p2={p2} copy={clientId ? { clientId, range } : undefined} />
                 </SectionAccordion>
               ),
             },
@@ -578,21 +580,22 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
           ]}
         />
       </div>
-      <div data-exec>
-        <AiSummarySection
-          clientId={clientId}
-          platform="google"
-          period={{ old: p1, cur: p2 }}
-          periodDates={range}
-          kpis={aiKpis(report, f)}
-          notes={aiNotes(report, f)}
-        />
-      </div>
+      <AiSummarySection
+        clientId={clientId}
+        platform="google"
+        period={{ old: p1, cur: p2 }}
+        periodDates={range}
+        kpis={aiKpis(report, f)}
+        notes={aiNotes(report, f)}
+      />
       <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
-        {/* Executive: KPI, business goals, alerts, diagnostics, AI brief and
-            the optimisation plan. Full: every page and supporting table. */}
-        <DownloadPdfButton targetId="report-google" filename="Executive Report - Google Ads.pdf" label="Download PDF Executive" only="[data-exec]" />
-        <DownloadPdfButton targetId="report-google" filename="Performance Report - Google Ads.pdf" label="Download PDF Full" />
+        <DownloadPdfButton targetId="report-google" filename="Performance Report - Google Ads.pdf" />
+        <button className="btn btn-ghost" disabled={excelBusy} onClick={async () => {
+          setExcelBusy(true);
+          try { await downloadGoogleAdsWorkbook(report, { p1, p2, brand: report.accounts.map((a) => a.name || a.label || a.customerId).join(', ') }); } finally { setExcelBusy(false); }
+        }}>
+          {excelBusy ? <Loader2 size={15} className="rg-spin" aria-hidden /> : <FileSpreadsheet size={15} aria-hidden />} Download Excel (semua tabel)
+        </button>
         <button className="btn btn-ghost" onClick={onReset}>
           <RotateCcw size={15} aria-hidden /> Ganti Periode
         </button>

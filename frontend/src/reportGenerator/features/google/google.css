@@ -191,3 +191,12 @@
 
 .mil-ui .gads-exp-hypo { min-width: 280px; }
 .mil-ui .gads-finding-body ul + h5, .mil-ui .gads-finding-body p + h5 { margin-top: .7rem; }
+
+/* Rows past a table's limit: in the DOM (Excel reads them), off screen and out of the PDF. */
+.mil-ui .gads-row-folded { display: none; }
+
+.mil-ui .gads-copy-box { margin-bottom: .9rem; padding: .8rem 1rem; border: 1px dashed var(--google); border-radius: 12px; background: var(--google-100); }
+.mil-ui .gads-copy-box .gads-assets li { background: var(--surface); align-items: flex-start; }
+.mil-ui .gads-copy-why { display: block; margin-top: .15rem; color: var(--muted); font-size: .7rem; }
+.mil-ui .gads-copy-all { margin-left: .6rem; font-size: .7rem; font-weight: 600; }
+.mil-ui.pdf-export-mode .gads-copy-box { display: none; }

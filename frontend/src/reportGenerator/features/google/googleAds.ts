@@ -395,3 +395,9 @@ export const apiError = (err: unknown, fallback: string) => {
   const e = err as { response?: { data?: { message?: string; details?: { msg?: string }[] } }; message?: string };
   return e.response?.data?.details?.[0]?.msg || e.response?.data?.message || e.message || fallback;
 };
+
+export interface GadsCopySuggestion { text: string; length: number; rationale: string | null; has_keyword: boolean }
+export interface GadsAdCopy { ad_group: string; campaign: string; headlines: GadsCopySuggestion[]; descriptions: GadsCopySuggestion[]; dropped: { text: string; reason: string }[]; notes: string[] }
+export async function fetchAdCopy(brandId: number, ad: { customer_id: string; ad_group_id: string }, p: PeriodPair): Promise<GadsAdCopy> {
+  return (await api.post('/google-ads/ad-copy', { brandId, customerId: ad.customer_id, adGroupId: ad.ad_group_id, ...p })).data;
+}

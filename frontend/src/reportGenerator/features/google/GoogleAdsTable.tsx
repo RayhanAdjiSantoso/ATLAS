@@ -37,7 +37,10 @@ export function GoogleAdsTable<T>({ columns, rows, sortKey, sortDir = 'desc', li
     const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
     return sort.dir === 'asc' ? cmp : -cmp;
   });
-  const shown = limit && !expanded ? sorted.slice(0, limit) : sorted;
+  // Every row is rendered; the ones past `limit` are hidden by CSS until
+  // "Tampilkan semua". The per-section Excel export reads this DOM table,
+  // so it gets every row, while the screen and the PDF keep the top ones.
+  const folded = Boolean(limit && !expanded);
 
   if (!rows.length) return <div className="empty-note" style={{ margin: '1.1rem 1.4rem 1.4rem' }}>{emptyMessage ?? 'Tidak ada data pada periode ini.'}</div>;
 
@@ -62,8 +65,8 @@ export function GoogleAdsTable<T>({ columns, rows, sortKey, sortDir = 'desc', li
             </tr>
           </thead>
           <tbody>
-            {shown.map((row, i) => (
-              <tr key={i}>
+            {sorted.map((row, i) => (
+              <tr key={i} className={folded && i >= (limit as number) ? 'gads-row-folded' : undefined}>
                 {numbered && <td className="gads-num-col">{i + 1}.</td>}
                 {columns.map((c) => (
                   <td key={c.key} className={c.align === 'left' ? 'is-left' : ''}>

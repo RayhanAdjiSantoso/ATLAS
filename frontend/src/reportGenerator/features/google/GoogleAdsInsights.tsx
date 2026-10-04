@@ -1,6 +1,6 @@
 import { Chart } from 'chart.js/auto';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Check, Copy, X } from 'lucide-react';
+import { Check, Copy, Loader2, Sparkles, X } from 'lucide-react';
 import { DeltaPill } from '../../components/DeltaPill';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
@@ -9,7 +9,7 @@ import { computeDelta, deltaClassForSentiment } from '../../lib/delta';
 import type { Sentiment } from '../../lib/types';
 import { GoogleAdsTable, type GadsColumn } from './GoogleAdsTable';
 import {
-  GOAL_LABELS, channelLabel, matchTypeLabel,
+  GOAL_LABELS, apiError, channelLabel, fetchAdCopy, matchTypeLabel, type GadsAdCopy, type PeriodPair,
   type Formatter, type GadsAd, type GadsCampaign, type GadsConversionAction, type GadsDay, type GadsFinding, type GadsKeywordDetail,
   type GadsLandingPage, type GadsMessageMatch, type GadsReport, type GadsTermDetail, type GoalKey, type KeywordClass, type Severity, type TermClass,
 } from './googleAds';
@@ -632,7 +632,9 @@ export function KeywordIntelSection({ report, f, p2 }: { report: GadsReport; f: 
 // ── Ad performance ──────────────────────────────────────────────────
 const STRENGTH_TONE: Record<string, Tone> = { EXCELLENT: 'good', GOOD: 'good', AVERAGE: 'warn', POOR: 'bad' };
 
-export function AdPerformanceSection({ report, f, p2 }: { report: GadsReport; f: Formatter; p2: string }) {
+export interface CopyContext { clientId: number; range: PeriodPair }
+
+export function AdPerformanceSection({ report, f, p2, copy }: { report: GadsReport; f: Formatter; p2: string; copy?: CopyContext }) {
   const [open, setOpen] = useState<string | null>(null);
   const ads = report.cur.ads;
   if (!ads) return <EmptyBlock title="Ad Performance">{NOT_YET}</EmptyBlock>;
@@ -662,7 +664,7 @@ export function AdPerformanceSection({ report, f, p2 }: { report: GadsReport; f:
       <div className="sec-block">
         <Heading title="Ad Performance" badge={`${p2} · klik iklan untuk melihat headline`} />
         <GoogleAdsTable columns={columns} rows={ads} sortKey="cost" limit={TABLE_ROWS} />
-        {detail && <AdDetail ad={detail} />}
+        {detail && <AdDetail ad={detail} copy={copy} />}
         <p className="gads-footnote">
           Iklan dibandingkan dengan iklan lain di ad group yang sama. Label aset (Best/Good/Low) adalah penilaian Google — Google tidak memberi konversi per headline, jadi ATLAS tidak mengklaimnya.
         </p>
@@ -696,9 +698,10 @@ function AssetList({ title, items }: { title: string; items: { text: string; pin
   );
 }
 
-function AdDetail({ ad }: { ad: GadsAd }) {
+function AdDetail({ ad, copy }: { ad: GadsAd; copy?: CopyContext }) {
   return (
     <div className="sec-inner gads-ad-detail">
+      {copy && <AdCopySuggestions key={`${ad.customer_id}|${ad.ad_group_id}`} ad={ad} copy={copy} />}
       <p className="gads-kpi-label">{ad.campaign_name} › {ad.ad_group_name}{ad.final_urls?.[0] ? ` · ${ad.final_urls[0]}` : ''}{ad.path1 ? ` · /${ad.path1}${ad.path2 ? `/${ad.path2}` : ''}` : ''}</p>
       {ad.headlines?.length || ad.descriptions?.length ? (
         <div className="gads-ad-grid">
@@ -706,6 +709,63 @@ function AdDetail({ ad }: { ad: GadsAd }) {
           <AssetList title="Description" items={ad.descriptions ?? []} />
         </div>
       ) : <p className="empty-note">Teks iklan tidak tersedia (bukan Responsive Search Ad, atau iklan sudah dihapus).</p>}
+    </div>
+  );
+}
+
+// Gemini's headline/description ideas for the ad's ad group, already
+// checked against Google's limits by the backend. Copy-and-paste only.
+function AdCopySuggestions({ ad, copy }: { ad: GadsAd; copy: CopyContext }) {
+  const [data, setData] = useState<GadsAdCopy | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState('');
+  async function run() {
+    setBusy(true); setError('');
+    try { setData(await fetchAdCopy(copy.clientId, ad, copy.range)); } catch (err) { setError(apiError(err, 'Gagal membuat saran copy')); } finally { setBusy(false); }
+  }
+  async function put(t: string) {
+    await navigator.clipboard.writeText(t);
+    setCopied(t);
+    window.setTimeout(() => setCopied(''), 1500);
+  }
+  const list = (title: string, items: GadsAdCopy['headlines'], max: number) => (
+    <div>
+      <h5>{title} ({items.length})<button type="button" className="gads-link gads-copy-all" onClick={() => put(items.map((i) => i.text).join('\n'))}>{copied === items.map((i) => i.text).join('\n') ? 'Tersalin' : 'Salin semua'}</button></h5>
+      <ul className="gads-assets">
+        {items.map((i) => (
+          <li key={i.text} title={i.rationale ?? undefined}>
+            <span>{i.text}{i.rationale && <small className="gads-copy-why">{i.rationale}</small>}</span>
+            <span className="gads-asset-meta">{i.length}/{max}{i.has_keyword ? ' · memuat keyword' : ''}</span>
+            <button type="button" className="gads-icon-btn" onClick={() => put(i.text)} aria-label={`Salin ${i.text}`}>{copied === i.text ? <Check size={13} /> : <Copy size={13} />}</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+  return (
+    <div className="gads-copy-box">
+      <div className="gads-opt-bar" style={{ marginBottom: data ? '.7rem' : 0 }}>
+        <span className="gads-kpi-label">Saran copy AI · ad group {ad.ad_group_name}</span>
+        <button type="button" className="btn btn-ghost dt-btn-sm" onClick={run} disabled={busy}>
+          {busy ? <Loader2 size={13} className="rg-spin" aria-hidden /> : <Sparkles size={13} aria-hidden />} {data ? 'Buat ulang' : 'Buat saran headline & description'}
+        </button>
+      </div>
+      {error && <p className="gads-error">{error}</p>}
+      {data && (
+        <>
+          <div className="gads-ad-grid">
+            {list('Headline baru', data.headlines, 30)}
+            {list('Description baru', data.descriptions, 90)}
+          </div>
+          {data.notes.length > 0 && <ul className="gads-alert-list" style={{ marginTop: '.7rem' }}>{data.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
+          <p className="gads-footnote is-inline">
+            Disusun Gemini dari keyword, search term yang berkonversi, dan aset iklan ad group ini; batas karakter dan aturan tanda seru sudah dicek.
+            {data.dropped.length > 0 && ` ${data.dropped.length} usulan dibuang (${[...new Set(data.dropped.map((d) => d.reason))].join(', ')}).`}
+            {' '}Tidak ada klaim performa per headline. Tempel manual di Google Ads setelah direview.
+          </p>
+        </>
+      )}
     </div>
   );
 }
