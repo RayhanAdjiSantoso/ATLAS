@@ -576,3 +576,106 @@ export async function setAlertStatus({ brandId, id, status, userId }) {
   if (!(await repo.setAlertStatus(id, brandId, status, userId, until))) throw new AppError('Alert tidak ditemukan', 404);
   return { alerts: await repo.listAlerts(brandId) };
 }
+
+// =====================================================================
+// AI ad copy suggestions (Responsive Search Ads)
+// =====================================================================
+// Headlines and descriptions for one ad group, written from its keywords,
+// the search terms that converted, the copy it already runs (with Google's
+// asset labels) and the brand profile. Checked against Google's limits
+// before they reach anyone; nothing is written to the account.
+export const AD_COPY_LIMITS = { headline: 30, description: 90, headlines: 15, descriptions: 4 };
+
+const AD_COPY_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    headlines: { type: 'ARRAY', items: { type: 'OBJECT', properties: { text: { type: 'STRING' }, rationale: { type: 'STRING' } }, required: ['text', 'rationale'] } },
+    descriptions: { type: 'ARRAY', items: { type: 'OBJECT', properties: { text: { type: 'STRING' }, rationale: { type: 'STRING' } }, required: ['text', 'rationale'] } },
+    notes: { type: 'ARRAY', items: { type: 'STRING' } },
+  },
+  required: ['headlines', 'descriptions', 'notes'],
+};
+
+const AD_COPY_RULES = `Tulis usulan aset Responsive Search Ad untuk ad group di atas.
+
+Aturan yang mengikat:
+1. Headline maksimal ${AD_COPY_LIMITS.headline} karakter, tanpa tanda seru. Description maksimal ${AD_COPY_LIMITS.description} karakter, paling banyak satu tanda seru. Hitung karakter dengan teliti.
+2. Pakai bahasa yang sama dengan iklan yang sudah berjalan.
+3. Gunakan keyword utama ad group dan search term yang berkonversi secara alami; sebagian headline harus memuat keyword utama.
+4. Jangan mengarang harga, diskon, promo, garansi, jumlah pelanggan, atau klaim superlatif ("terbaik", "#1", "termurah") yang tidak ada di konteks brand atau iklan yang sudah ada.
+5. Jangan mengulang headline/description yang sudah ada. Variasikan sudut: produk, manfaat, pengiriman/lokasi, ajakan bertindak, pembeda brand.
+6. Jangan mengklaim performa (mis. "headline ini akan menaikkan konversi"): label aset Google adalah penilaian, bukan atribusi konversi per headline.
+7. "rationale" satu kalimat: alasan berbasis data yang diberikan (keyword/search term/aset yang dirujuk).
+8. notes: 0–3 catatan (mis. aset berlabel Low yang layak diganti, keyword yang belum tercermin).
+Berikan 8–15 headline dan 2–4 description.`;
+
+const COPY_TOKENS = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9À-ɏ]+/).filter((t) => t.length >= 3);
+
+// Google's limits and the rules above that can be checked mechanically.
+// Over-long or duplicate text is dropped, never trimmed into something the
+// model did not write.
+export function validateAdCopy(raw, { existing = [], keywords = [] } = {}) {
+  const seen = new Set(existing.map((t) => String(t).trim().toLowerCase()));
+  const kwTokens = keywords.map((k) => COPY_TOKENS(k)).filter((t) => t.length);
+  const take = (list, kind) => {
+    const max = AD_COPY_LIMITS[kind];
+    const out = [];
+    const dropped = [];
+    for (const item of Array.isArray(list) ? list : []) {
+      const t = String(item?.text ?? '').replace(/\s+/g, ' ').trim();
+      if (!t) continue;
+      const key = t.toLowerCase();
+      const bangs = (t.match(/!/g) ?? []).length;
+      const reason = t.length > max ? `lebih dari ${max} karakter`
+        : seen.has(key) ? 'duplikat'
+        : kind === 'headline' && bangs ? 'headline tidak boleh memakai tanda seru'
+        : kind === 'description' && bangs > 1 ? 'lebih dari satu tanda seru'
+        : null;
+      if (reason) { dropped.push({ text: t, reason }); continue; }
+      seen.add(key);
+      const words = COPY_TOKENS(t);
+      out.push({ text: t, length: t.length, rationale: text(item?.rationale, 240) || null, has_keyword: kwTokens.some((kt) => kt.every((w) => words.some((x) => x === w || (w.length >= 5 && x.startsWith(w.slice(0, -1)))))) });
+    }
+    return { out: out.slice(0, AD_COPY_LIMITS[`${kind}s`]), dropped };
+  };
+  const h = take(raw?.headlines, 'headline');
+  const d = take(raw?.descriptions, 'description');
+  return {
+    headlines: h.out, descriptions: d.out, dropped: [...h.dropped, ...d.dropped],
+    notes: (Array.isArray(raw?.notes) ? raw.notes : []).map((n) => text(n, 300)).filter(Boolean).slice(0, 3),
+  };
+}
+
+export async function suggestAdCopy({ brandId, customerId, adGroupId, oldStart, oldEnd, curStart, curEnd }) {
+  const brand = await assertBrand(brandId);
+  const [report, profile] = await Promise.all([
+    getReport({ brandId, oldStart, oldEnd, curStart, curEnd }),
+    library.getProfile(brandId).catch(() => null),
+  ]);
+  const inGroup = (r) => String(r.ad_group_id) === String(adGroupId) && (!customerId || r.customer_id === customerId);
+  const ads = (report.cur.ads ?? []).filter(inGroup);
+  const keywords = (report.cur.keywordDetail ?? []).filter(inGroup).sort((a, b) => b.cost - a.cost);
+  const groupName = ads[0]?.ad_group_name ?? keywords[0]?.ad_group_name;
+  if (!groupName) throw new AppError('Ad group tidak ditemukan pada periode ini', 404);
+  const campaignName = ads[0]?.campaign_name ?? keywords[0]?.campaign_name ?? '';
+  const terms = (report.cur.searchTermDetail ?? []).filter((t) => t.ad_group_name === groupName && t.campaign_name === campaignName);
+  const existing = ads.flatMap((a) => [...(a.headlines ?? []), ...(a.descriptions ?? [])].map((x) => x.text));
+  const money = moneyFormatter(report.currency);
+  const input = {
+    brand: brand.brand_name,
+    campaign: campaignName,
+    ad_group: groupName,
+    final_urls: [...new Set(ads.flatMap((a) => a.final_urls ?? []))].slice(0, 3),
+    keywords: keywords.slice(0, 15).map((k) => ({ keyword: k.keyword, match: k.match_type, cost: money(k.cost), conversions: k.conversions, ad_relevance: k.ad_relevance, class: k.classification })),
+    converting_search_terms: terms.filter((t) => t.conversions > 0).sort((a, b) => b.conversions - a.conversions).slice(0, 12).map((t) => ({ term: t.search_term, conversions: t.conversions })),
+    current_ads: ads.map((a) => ({
+      ad_strength: a.ad_strength, ctr: a.ctr == null ? null : Math.round(a.ctr * 10000) / 10000, conversions: a.conversions,
+      headlines: (a.headlines ?? []).map((h) => ({ text: h.text, pinned: h.pinned, google_label: h.label })),
+      descriptions: (a.descriptions ?? []).map((d) => ({ text: d.text, google_label: d.label })),
+    })),
+    missing_in_headlines: (report.cur.messageMatch ?? []).find((m) => String(m.ad_group_id) === String(adGroupId))?.missing_in_headlines ?? [],
+    brand_context: profile ? { context: brandContextBlock(profile), direction: currentDirectionBlock(profile) } : null,
+  };
+  const raw = await requestGeminiJson(`# Ad group Google Ads\n${JSON.stringify(input)}\n\n${AD_COPY_RULES}`, AD_COPY_SCHEMA);
+  return { ad_group: groupName, campaign: campaignName, ...validateAdCopy(raw, { existing, keywords: keywords.slice(0, 5).map((k) => k.keyword) }) };
+}

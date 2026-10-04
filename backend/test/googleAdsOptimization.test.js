@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  validateRecommendations, fingerprintOf, dedupeDecision, appendMomTask, experimentVerdict, computeAlertChanges, metricValue,
+  validateRecommendations, fingerprintOf, dedupeDecision, appendMomTask, experimentVerdict, computeAlertChanges, metricValue, validateAdCopy,
 } from '../src/services/googleAdsOptimization.js';
 import { taskGroups } from '../src/utils/momTasks.js';
 
@@ -106,4 +106,31 @@ test('alerts: open new, refresh firing, resolve stopped, no reopening inside the
   assert.deepEqual(ch.refresh.map((x) => x.alert_key), ['a']);
   assert.deepEqual(ch.resolve.map((x) => x.alert_key), ['b']);
   assert.equal(ch.resolve[0].cooldown_until, '2026-10-08T00:00:00.000Z');
+});
+
+// ── ad copy ──────────────────────────────────────────────────────────
+test('ad copy: Google limits are enforced by dropping, never by trimming', () => {
+  const out = validateAdCopy({
+    headlines: [
+      { text: 'Dried Flowers Kuala Lumpur', rationale: 'keyword utama' },
+      { text: 'Dried Flower Bouquets Delivered Same Day KL', rationale: 'terlalu panjang' },
+      { text: 'Order Dried Flowers Now!', rationale: 'tanda seru' },
+      { text: 'Florist KL Same Day', rationale: 'sudah ada' },
+      { text: '  dried flowers kuala lumpur ', rationale: 'duplikat beda kapital' },
+      { text: 'Preserved Blooms That Last', rationale: '' },
+    ],
+    descriptions: [
+      { text: 'Handcrafted dried flower bouquets, delivered across Klang Valley.', rationale: 'pengiriman' },
+      { text: 'Order now! Same day! Free card!', rationale: 'tiga tanda seru' },
+      { text: 'x'.repeat(91), rationale: 'panjang' },
+    ],
+    notes: ['Ganti headline berlabel Low'],
+  }, { existing: ['Florist KL Same Day'], keywords: ['dried flowers', 'florist kl'] });
+  assert.deepEqual(out.headlines.map((h) => h.text), ['Dried Flowers Kuala Lumpur', 'Preserved Blooms That Last']);
+  assert.deepEqual(out.headlines.map((h) => h.has_keyword), [true, false]);
+  assert.equal(out.headlines[0].length, 26);
+  assert.equal(out.headlines[1].rationale, null);
+  assert.deepEqual(out.descriptions.map((d) => d.text), ['Handcrafted dried flower bouquets, delivered across Klang Valley.']);
+  assert.deepEqual(out.dropped.map((d) => d.reason), ['lebih dari 30 karakter', 'headline tidak boleh memakai tanda seru', 'duplikat', 'duplikat', 'lebih dari satu tanda seru', 'lebih dari 90 karakter']);
+  assert.deepEqual(out.notes, ['Ganti headline berlabel Low']);
 });

@@ -45,6 +45,11 @@ export const recommendationTaskValidation = [idParam, brandId(body), body('pic')
 export const experimentBodyValidation = [brandId(body)];
 export const experimentIdBodyValidation = [idParam, brandId(body)];
 export const experimentIdQueryValidation = [idParam, brandId(query)];
+export const adCopyValidation = [
+  brandId(body), body('adGroupId').isString().trim().notEmpty().withMessage('adGroupId wajib diisi'),
+  body('customerId').optional({ nullable: true }).isString(),
+  date(body, 'oldStart'), date(body, 'oldEnd'), date(body, 'curStart'), date(body, 'curEnd'),
+];
 export const alertUpdateValidation = [idParam, brandId(body), body('status').isIn(['open', 'acknowledged', 'resolved']).withMessage('status tidak dikenal')];
 
 export const reportValidation = [

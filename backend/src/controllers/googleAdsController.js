@@ -134,6 +134,13 @@ export const evaluateExperiment = asyncHandler(async (req, res) => {
   res.json(await optimization.evaluateExperiment({ brandId: brandOf(req), id: idOf(req), userId: req.user.userId }));
 });
 
+// POST /api/google-ads/ad-copy  { brandId, customerId?, adGroupId, oldStart, oldEnd, curStart, curEnd }
+export const suggestAdCopy = asyncHandler(async (req, res) => {
+  validate(req);
+  const { customerId, adGroupId, oldStart, oldEnd, curStart, curEnd } = req.body;
+  res.json(await optimization.suggestAdCopy({ brandId: brandOf(req), customerId, adGroupId, oldStart, oldEnd, curStart, curEnd }));
+});
+
 // GET /api/google-ads/alerts?brandId=&all=1
 export const listAlerts = asyncHandler(async (req, res) => {
   validate(req);

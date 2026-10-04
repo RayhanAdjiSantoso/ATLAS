@@ -35,21 +35,11 @@ export function sanitizeFilename(name: string): string {
 // whose cards are direct children, with the same logic. (A data attribute
 // is used here instead of the original's `#r-body` id — with every tab now
 // mounted simultaneously, that id would no longer be unique per the DOM spec.)
-// `only` (a selector) narrows the export to the cards inside matching
-// elements, anywhere under the report root — the Google Ads Executive PDF
-// marks its cards with [data-exec]. Without it, every card of the body.
-function getReportBlocks(rootEl: HTMLElement, only?: string): HTMLElement[] {
+function getReportBlocks(rootEl: HTMLElement): HTMLElement[] {
   const body = rootEl.querySelector<HTMLElement>('[data-role="r-body"]') || rootEl;
   const blocks: HTMLElement[] = [];
   const top = rootEl.querySelector(':scope > .report-top');
   if (top) blocks.push(top as HTMLElement);
-  if (only) {
-    rootEl.querySelectorAll<HTMLElement>('.sec-block').forEach((el) => {
-      if (el.parentElement?.closest('.sec-block') || !el.closest(only)) return;
-      blocks.push(el);
-    });
-    return blocks;
-  }
   // .sec-block / .period-warning cards, whether they sit directly under the
   // report body (Meta / TikTok) or inside a .report-tab-panel wrapper (the
   // Shopee report is paged — every page is force-shown during pdf-export-mode).
@@ -66,9 +56,9 @@ function getReportBlocks(rootEl: HTMLElement, only?: string): HTMLElement[] {
   return blocks;
 }
 
-export async function exportElementToPDF(rootEl: HTMLElement | null, filename: string, { only }: { only?: string } = {}): Promise<void> {
+export async function exportElementToPDF(rootEl: HTMLElement | null, filename: string): Promise<void> {
   if (!rootEl) return;
-  const blocks = getReportBlocks(rootEl, only);
+  const blocks = getReportBlocks(rootEl);
   if (!blocks.length) {
     alert('Tidak ada konten laporan untuk diunduh.');
     return;

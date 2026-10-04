@@ -6,7 +6,7 @@ import {
   brandQueryValidation, addAccountValidation, updateAccountValidation, removeAccountValidation,
   resyncValidation, reportValidation, conversionGoalValidation,
   recommendationListValidation, recommendationGenerateValidation, recommendationUpdateValidation, recommendationTaskValidation,
-  experimentBodyValidation, experimentIdBodyValidation, experimentIdQueryValidation, alertUpdateValidation,
+  experimentBodyValidation, experimentIdBodyValidation, experimentIdQueryValidation, alertUpdateValidation, adCopyValidation,
 } from '../validators/googleAdsValidators.js';
 
 // Google Ads: which accounts feed a brand (Pengaturan Brand › Google Ads)
@@ -43,6 +43,7 @@ router.post('/experiments', reports, brandB, experimentBodyValidation, ctrl.crea
 router.patch('/experiments/:id', reports, brandB, experimentIdBodyValidation, ctrl.updateExperiment);
 router.delete('/experiments/:id', reports, brandQ, experimentIdQueryValidation, ctrl.deleteExperiment);
 router.post('/experiments/:id/evaluate', reports, brandB, experimentIdBodyValidation, ctrl.evaluateExperiment);
+router.post('/ad-copy', reports, brandB, adCopyValidation, ctrl.suggestAdCopy);
 router.get('/alerts', requireModule('brand_settings', 'report_generator'), brandQ, brandQueryValidation, ctrl.listAlerts);
 router.patch('/alerts/:id', reports, brandB, alertUpdateValidation, ctrl.setAlertStatus);
 
