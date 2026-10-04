@@ -54,6 +54,24 @@ export const requestResync = asyncHandler(async (req, res) => {
   }));
 });
 
+// GET /api/google-ads/conversion-goals?brandId=
+export const getConversionGoals = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getConversionGoals(Number(req.query.brandId)));
+});
+
+// PUT /api/google-ads/conversion-goals  { brandId, customerId, conversionActionId, goal | null }
+export const setConversionGoal = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.setConversionGoal({
+    brandId: Number(req.body.brandId),
+    customerId: req.body.customerId,
+    conversionActionId: req.body.conversionActionId,
+    goal: req.body.goal ?? null,
+    userId: req.user.userId,
+  }));
+});
+
 // GET /api/google-ads/report?brandId=&oldStart=&oldEnd=&curStart=&curEnd=
 export const getReport = asyncHandler(async (req, res) => {
   validate(req);
@@ -62,16 +80,16 @@ export const getReport = asyncHandler(async (req, res) => {
 });
 
 // ── ingest (no req.user — see dailyTrackingIngestAuth.js) ─────────────
-// GET /api/google-ads/ingest/jobs
+// GET /api/google-ads/ingest/jobs[?datasets=core,ads,...]
 export const getJobs = asyncHandler(async (req, res) => {
-  res.json(await service.getJobs());
+  res.json(await service.getJobs({ datasets: req.query.datasets }));
 });
 
 // POST /api/google-ads/ingest/start
 export const startRun = asyncHandler(async (req, res) => {
   validate(req);
-  const { customerId, startDate, endDate, source, account } = req.body;
-  res.json({ ok: true, ...(await service.startRun({ customerId, startDate, endDate, source, account })) });
+  const { customerId, startDate, endDate, source, account, datasets } = req.body;
+  res.json({ ok: true, ...(await service.startRun({ customerId, startDate, endDate, source, account, datasets })) });
 });
 
 // POST /api/google-ads/ingest/rows
@@ -86,9 +104,16 @@ export const ingestChanges = asyncHandler(async (req, res) => {
   res.json({ ok: true, ...(await service.ingestChanges({ runId: req.body.runId, rows: req.body.rows })) });
 });
 
-// POST /api/google-ads/ingest/finish
+// POST /api/google-ads/ingest/dataset  { runId, dataset, rows }
+export const ingestDataset = asyncHandler(async (req, res) => {
+  validate(req);
+  const { runId, dataset, rows } = req.body;
+  res.json({ ok: true, ...(await service.ingestDataset({ runId, dataset, rows })) });
+});
+
+// POST /api/google-ads/ingest/finish  { runId, status, rowCount, note?, datasets? }
 export const finishRun = asyncHandler(async (req, res) => {
   validate(req);
-  const { runId, status, rowCount, note } = req.body;
-  res.json({ ok: true, ...(await service.finishRun({ runId, status, rowCount: Number(rowCount), note })) });
+  const { runId, status, rowCount, note, datasets } = req.body;
+  res.json({ ok: true, ...(await service.finishRun({ runId, status, rowCount: Number(rowCount), note, datasets })) });
 });
