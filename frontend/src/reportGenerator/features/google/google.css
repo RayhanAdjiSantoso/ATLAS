@@ -19,7 +19,8 @@
 .mil-ui .gads-kpi-value { font-size: 1.35rem; font-weight: 800; color: var(--text); line-height: 1.15; }
 .mil-ui .gads-kpi-old { font-size: .75rem; color: var(--muted); }
 
-.mil-ui .gads-overall-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1rem; }
+.mil-ui .gads-overall-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .85fr); gap: 1rem; }
+@media (max-width: 1180px) { .mil-ui .gads-overall-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 .mil-ui .gads-card { border: 1px solid var(--border); border-radius: 12px; padding: .9rem 1rem; background: var(--surface); min-width: 0; }
 .mil-ui .gads-card h4 { margin: 0 0 .6rem; font-size: .78rem; font-weight: 700; color: var(--text); }
 .mil-ui .gads-line-wrap { position: relative; height: 300px; }
@@ -45,3 +46,148 @@
 }
 
 .mil-ui .gads-change-text { display: block; min-width: 260px; max-width: 520px; }
+
+/* ── Insights (GoogleAdsInsights.tsx) ─────────────────────────────── */
+.mil-ui .gads-kpi-note { font-size: .7rem; color: var(--muted); line-height: 1.35; }
+.mil-ui .gads-footnote.is-inline { padding: .6rem 0 0; border-top: 0; }
+.mil-ui .gads-freshness { margin: .35rem 0 0; font-size: .75rem; color: var(--muted); }
+
+.mil-ui .gads-tag { display: inline-flex; align-items: center; padding: .12rem .5rem; border-radius: 999px; font-size: .7rem; font-weight: 700; white-space: nowrap; border: 1px solid transparent; }
+.mil-ui .gads-tag.is-good { background: var(--good-100); color: var(--good); border-color: color-mix(in srgb, var(--good) 22%, transparent); }
+.mil-ui .gads-tag.is-bad { background: var(--bad-100); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 22%, transparent); }
+.mil-ui .gads-tag.is-warn { background: #fff7e6; color: #9a5b00; border-color: #f3d39a; }
+.mil-ui .gads-tag.is-info { background: var(--google-100); color: var(--google-700); border-color: color-mix(in srgb, var(--google) 22%, transparent); }
+.mil-ui .gads-tag.is-neutral { background: var(--s2); color: var(--muted); border-color: var(--border); }
+
+.mil-ui .gads-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.mil-ui .gads-chip { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .7rem; border-radius: 999px; border: 1.5px solid var(--border); background: var(--surface); color: var(--muted); font-size: .75rem; font-weight: 600; cursor: pointer; }
+.mil-ui .gads-chip:hover { border-color: var(--google); color: var(--google-700); }
+.mil-ui .gads-chip.is-active { border-color: var(--google); background: var(--google-100); color: var(--google-700); }
+.mil-ui .gads-chip-count { min-width: 1.3rem; padding: 0 .3rem; border-radius: 999px; background: var(--s2); color: var(--muted); font-size: .68rem; text-align: center; }
+.mil-ui .gads-chip.is-active .gads-chip-count { background: var(--surface); color: var(--google-700); }
+.mil-ui .gads-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .9rem; }
+.mil-ui .gads-select { padding: .4rem .7rem; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: .78rem; max-width: 100%; }
+
+.mil-ui .gads-stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: .7rem; }
+.mil-ui .gads-stat { display: flex; flex-direction: column; gap: .2rem; padding: .8rem 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.mil-ui .gads-stat span { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.mil-ui .gads-stat strong { font-size: 1.15rem; font-weight: 800; color: var(--text); }
+.mil-ui .gads-stat small { font-size: .72rem; color: var(--muted); }
+
+.mil-ui .gads-alerts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.4rem; }
+.mil-ui .gads-alerts h4 { margin: 0 0 .5rem; font-size: .8rem; font-weight: 700; }
+.mil-ui .gads-alert-list { margin: 0; padding-left: 1.1rem; display: grid; gap: .45rem; font-size: .8rem; line-height: 1.45; color: var(--text); }
+
+.mil-ui .gads-findings { display: grid; gap: .8rem; margin-top: 1rem; }
+.mil-ui .gads-finding { border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 12px; background: var(--surface); padding: .85rem 1rem; }
+.mil-ui .gads-finding.is-critical { border-left-color: var(--bad); }
+.mil-ui .gads-finding.is-high { border-left-color: #e08a00; }
+.mil-ui .gads-finding.is-medium { border-left-color: var(--google); }
+.mil-ui .gads-finding header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .85rem; }
+.mil-ui .gads-finding-entity { color: var(--muted); font-size: .78rem; }
+.mil-ui .gads-finding-conf { margin-left: auto; color: var(--muted); font-size: .72rem; }
+.mil-ui .gads-finding-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: .6rem; }
+.mil-ui .gads-finding-body h5 { margin: 0 0 .3rem; font-size: .7rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.mil-ui .gads-finding-body ul { margin: 0; padding-left: 1rem; font-size: .78rem; line-height: 1.45; display: grid; gap: .25rem; }
+
+.mil-ui .gads-why { display: block; min-width: 220px; max-width: 360px; white-space: normal; text-align: left; }
+.mil-ui .gads-link { padding: 0; border: 0; background: none; color: var(--google-700); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.mil-ui .gads-link:hover { text-decoration: underline; }
+.mil-ui .gads-url { display: block; max-width: 420px; word-break: break-all; }
+.mil-ui .gads-unverified { margin-left: .3rem; color: #9a5b00; font-size: .68rem; }
+.mil-ui .gads-sub { margin: 0 0 .5rem; font-size: .78rem; }
+
+.mil-ui .gads-neg-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; max-height: 360px; overflow: auto; }
+.mil-ui .gads-neg-list label { display: flex; align-items: center; gap: .55rem; padding: .35rem .5rem; border-radius: 8px; font-size: .8rem; cursor: pointer; }
+.mil-ui .gads-neg-list label:hover { background: var(--s2); }
+.mil-ui .gads-neg-text { font-weight: 600; }
+.mil-ui .gads-neg-meta { margin-left: auto; color: var(--muted); font-size: .72rem; }
+
+.mil-ui .gads-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--muted); cursor: pointer; flex: none; }
+.mil-ui .gads-icon-btn:hover { color: var(--google-700); border-color: var(--google); }
+
+.mil-ui .gads-ad-detail { border-top: 1px solid var(--border); }
+.mil-ui .gads-ad-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem; margin-top: .6rem; }
+.mil-ui .gads-ad-grid h5 { margin: 0 0 .4rem; font-size: .75rem; }
+.mil-ui .gads-assets { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; }
+.mil-ui .gads-assets li { display: flex; align-items: center; gap: .5rem; padding: .35rem .55rem; border: 1px solid var(--border); border-radius: 8px; font-size: .8rem; }
+.mil-ui .gads-assets li > span:first-child { flex: 1; min-width: 0; }
+.mil-ui .gads-asset-meta { color: var(--muted); font-size: .68rem; white-space: nowrap; }
+
+.mil-ui .gads-heat-scroll { overflow-x: auto; margin-top: .9rem; }
+.mil-ui .gads-heat { border-collapse: separate; border-spacing: 2px; font-size: .66rem; min-width: 760px; }
+.mil-ui .gads-heat th { color: var(--muted); font-weight: 600; padding: .15rem .25rem; text-align: center; }
+.mil-ui .gads-heat tbody th { text-align: left; padding-right: .5rem; }
+.mil-ui .gads-heat td { width: 30px; height: 26px; text-align: center; border-radius: 4px; background: var(--s2); color: var(--text); font-variant-numeric: tabular-nums; }
+
+.mil-ui .gads-timeline { display: flex; align-items: flex-end; gap: 3px; height: 64px; margin-top: .9rem; overflow-x: auto; }
+.mil-ui .gads-timeline span { position: relative; flex: 0 0 14px; border-radius: 3px 3px 0 0; background: var(--google); opacity: .75; }
+.mil-ui .gads-timeline i { position: absolute; bottom: -1.05rem; left: 50%; transform: translateX(-50%); font-style: normal; font-size: .6rem; color: var(--muted); }
+
+.mil-ui .gads-drawer-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(15, 26, 58, .32); display: flex; justify-content: flex-end; }
+.mil-ui .gads-drawer { width: min(640px, 100%); height: 100%; overflow-y: auto; background: var(--bg); box-shadow: -12px 0 40px rgba(15, 26, 58, .18); padding: 1.2rem 1.3rem 2rem; display: grid; gap: 1.1rem; align-content: start; }
+.mil-ui .gads-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.mil-ui .gads-drawer-head h3 { margin: .2rem 0 0; font-size: 1.05rem; }
+.mil-ui .gads-drawer section h4 { margin: 0 0 .5rem; font-size: .8rem; }
+.mil-ui .gads-mini-table { width: 100%; font-size: .78rem; }
+.mil-ui .gads-mini-table td, .mil-ui .gads-mini-table th { text-align: right; padding: .35rem .5rem; }
+.mil-ui .gads-mini-table .is-left { text-align: left; }
+.mil-ui .gads-dl { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: .35rem .8rem; margin: 0; font-size: .8rem; }
+.mil-ui .gads-dl dt { color: var(--muted); }
+.mil-ui .gads-dl dd { margin: 0; }
+
+/* Screen-only controls stay out of the PDF. */
+.mil-ui.pdf-export-mode .gads-chips, .mil-ui.pdf-export-mode .gads-select, .mil-ui.pdf-export-mode .gads-neg-list input,
+.mil-ui.pdf-export-mode .gads-icon-btn, .mil-ui.pdf-export-mode .gads-drawer-overlay { display: none; }
+
+@media (max-width: 860px) {
+  .mil-ui .gads-alerts, .mil-ui .gads-finding-body, .mil-ui .gads-ad-grid { grid-template-columns: 1fr; }
+  .mil-ui .gads-drawer { padding: 1rem; }
+  .mil-ui .gads-dl { grid-template-columns: 1fr; }
+}
+
+/* ── Optimisation (GoogleAdsOptimization.tsx) ──────────────────────── */
+.mil-ui .gads-error { margin: .6rem 0 0; color: var(--bad); font-size: .8rem; }
+.mil-ui .gads-opt-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .8rem; margin-bottom: .9rem; }
+.mil-ui .gads-recs { display: grid; gap: .8rem; }
+.mil-ui .gads-finding-body p { margin: 0 0 .5rem; font-size: .8rem; line-height: 1.5; }
+.mil-ui .gads-rec-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .8rem; padding-top: .7rem; border-top: 1px dashed var(--border); }
+.mil-ui .gads-rec-status { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; color: var(--muted); }
+.mil-ui .gads-rec-status-print { display: none; font-size: .78rem; font-weight: 600; }
+.mil-ui .gads-inline-form { display: inline-flex; gap: .4rem; }
+.mil-ui .gads-rec-notes { flex: 1 1 220px; min-width: 0; padding: .4rem .6rem; border: 1.5px solid var(--border); border-radius: 8px; font: inherit; font-size: .78rem; resize: vertical; background: var(--surface); color: var(--text); }
+
+.mil-ui .gads-alert-panel ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.mil-ui .gads-alert-panel li { display: flex; align-items: flex-start; gap: .7rem; padding: .65rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.mil-ui .gads-alert-panel li.is-ack { opacity: .75; }
+.mil-ui .gads-alert-text { display: flex; flex-direction: column; gap: .15rem; flex: 1; min-width: 0; font-size: .8rem; }
+.mil-ui .gads-alert-text small { color: var(--muted); font-size: .7rem; }
+.mil-ui .gads-alert-actions { display: flex; gap: .35rem; flex-wrap: wrap; justify-content: flex-end; }
+.mil-ui .gads-alert-panel.is-compact { margin-bottom: 1rem; padding: .8rem 1rem; border: 1px solid var(--border); border-left: 4px solid var(--bad); border-radius: 12px; background: var(--bad-100); }
+.mil-ui .gads-alert-panel.is-compact h4 { display: flex; align-items: center; gap: .4rem; margin: 0 0 .6rem; font-size: .82rem; }
+
+.mil-ui .gads-exp-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem 1rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--s2); }
+.mil-ui .gads-exp-form label { display: flex; flex-direction: column; gap: .3rem; font-size: .72rem; font-weight: 700; color: var(--muted); min-width: 0; }
+.mil-ui .gads-exp-form .is-wide { grid-column: 1 / -1; }
+.mil-ui .gads-date-pair { display: flex; align-items: center; gap: .3rem; }
+.mil-ui .gads-date-pair input { min-width: 0; flex: 1; }
+.mil-ui .gads-row-actions { display: flex; gap: .35rem; align-items: center; }
+.mil-ui .gads-exp-detail td { background: var(--s2); white-space: normal !important; }
+.mil-ui .gads-exp-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; padding: .4rem 0; font-size: .78rem; }
+.mil-ui .gads-exp-grid h5 { margin: 0 0 .25rem; font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.mil-ui .gads-exp-grid p, .mil-ui .gads-exp-grid ul { margin: 0 0 .6rem; }
+
+/* PDF: the plan prints as a document — controls out, status as text. */
+.mil-ui.pdf-export-mode .gads-rec-foot select, .mil-ui.pdf-export-mode .gads-rec-foot button, .mil-ui.pdf-export-mode .gads-rec-foot form,
+.mil-ui.pdf-export-mode .gads-rec-status, .mil-ui.pdf-export-mode .gads-opt-bar, .mil-ui.pdf-export-mode .gads-alert-actions,
+.mil-ui.pdf-export-mode .gads-exp-form, .mil-ui.pdf-export-mode .gads-row-actions { display: none; }
+.mil-ui.pdf-export-mode .gads-rec-status-print { display: inline; }
+.mil-ui.pdf-export-mode .gads-rec-notes { border: 0; resize: none; padding: 0; }
+
+@media (max-width: 860px) {
+  .mil-ui .gads-exp-form, .mil-ui .gads-exp-grid { grid-template-columns: 1fr; }
+  .mil-ui .gads-alert-panel li { flex-wrap: wrap; }
+}
+
+.mil-ui .gads-exp-hypo { min-width: 280px; }
+.mil-ui .gads-finding-body ul + h5, .mil-ui .gads-finding-body p + h5 { margin-top: .7rem; }

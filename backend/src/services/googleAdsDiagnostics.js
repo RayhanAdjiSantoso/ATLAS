@@ -67,7 +67,16 @@ const SMART_BIDDING = new Set(['MAXIMIZE_CONVERSIONS', 'TARGET_CPA', 'MAXIMIZE_C
 const CONVERSION_BIDDING = SMART_BIDDING;
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const ckey = (r) => `${r.customer_id}|${r.campaign_id}`;
-const pct = (v) => (v == null ? 'N/A' : `${(v * 100).toFixed(1)}%`);
+// Small rates keep two decimals so 0.47% → 0.33% does not read as 0.5% → 0.3%.
+const pct = (v) => (v == null ? 'N/A' : `${(v * 100).toFixed(Math.abs(v) < 0.1 ? 2 : 1)}%`);
+
+// Money in a finding's text, in the report's own currency (the same prefix
+// and locale the report UI uses). Without a single currency, a bare number.
+const CURRENCY = { MYR: ['RM', 'en-MY', 2], IDR: ['Rp', 'id-ID', 0], SGD: ['S$', 'en-SG', 2], USD: ['$', 'en-US', 2] };
+export function moneyFormatter(currency) {
+  const [prefix, locale, digits] = CURRENCY[currency] ?? [currency ? `${currency} ` : '', 'id-ID', 2];
+  return (v) => (v == null ? 'N/A' : `${prefix}${Number(v).toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`);
+}
 const fmt = (v, d = 2) => (v == null ? 'N/A' : Number(v).toLocaleString('id-ID', { maximumFractionDigits: d }));
 
 // ── baselines ───────────────────────────────────────────────────────
@@ -321,6 +330,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
     changesBy.get(k).push(`${new Date(ch.valid_from).toISOString().slice(0, 10)} (setting: ${(ch.changed_fields ?? []).map((f) => f.field).join(', ')})`);
   }
   const accountCpa = safeDiv(cur.totals.cost, cur.totals.conversions);
+  const money = moneyFormatter(input.currency);
   const findings = [];
 
   const evaluate = (entity, o, c, s, share) => {
@@ -345,7 +355,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
     const strategy = s?.bidding_strategy_type;
     if (c.cost > 0 && c.conversions === 0 && c.all_conversions > 0 && (!s || CONVERSION_BIDDING.has(strategy))) {
       add('tracking_no_primary_conversion', 'critical',
-        [`Conversions 0 sementara All conv. ${fmt(c.all_conversions)} dengan biaya ${fmt(c.cost, 0)}`, ...(strategy ? [`Strategi bidding: ${strategy}`] : [])],
+        [`Conversions 0 sementara All conv. ${fmt(c.all_conversions)} dengan biaya ${money(c.cost)}`, ...(strategy ? [`Strategi bidding: ${strategy}`] : [])],
         ['Conversion action penjualan/lead berstatus secondary atau dihapus', 'Campaign goal tidak memuat action yang dihitung'],
         ['Periksa Goals › Conversions: jadikan action utama (mis. Purchase) primary bila itu event bisnisnya', 'Pastikan campaign memakai goal yang memuat action tersebut'],
         m('conversions', o?.conversions, c.conversions));
@@ -364,7 +374,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
       const ch = pctChange(o.cost_per_conv, c.cost_per_conv).value;
       if (ch != null && ch >= rules.changeThreshold) {
         add('cpa_increase', ch >= 0.5 ? 'high' : 'medium',
-          [`CPA naik ${pct(ch)} (${fmt(o.cost_per_conv)} → ${fmt(c.cost_per_conv)})`],
+          [`CPA naik ${pct(ch)} (${money(o.cost_per_conv)} → ${money(c.cost_per_conv)})`],
           ['CPC naik', 'CVR turun', 'Pergeseran search term ke intent yang lebih rendah'],
           ['Bandingkan CPC dan CVR untuk melihat pendorongnya', 'Tinjau search term baru periode ini'],
           { ...m('cost_per_conv', o.cost_per_conv, c.cost_per_conv), ...m('avg_cpc', o.avg_cpc, c.avg_cpc), ...m('cvr', o.cvr, c.cvr) });
@@ -391,7 +401,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
       const cpc = pctChange(o.avg_cpc, c.avg_cpc).value;
       if (cpc != null && cpc >= rules.changeThreshold) {
         add('cpc_increase', cpc >= 0.5 ? 'high' : 'medium',
-          [`Avg. CPC naik ${pct(cpc)} (${fmt(o.avg_cpc)} → ${fmt(c.avg_cpc)})`],
+          [`Avg. CPC naik ${pct(cpc)} (${money(o.avg_cpc)} → ${money(c.avg_cpc)})`],
           ['Persaingan lelang meningkat', 'Target bidding berubah', 'Quality Score turun'],
           ['Periksa Auction Insights dan Change History', 'Cek Quality Score keyword utama'], m('avg_cpc', o.avg_cpc, c.avg_cpc));
       }
@@ -440,7 +450,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
       if (util != null && util < rules.underuseRatio) {
         const restrictive = (s.target_cpa || s.target_roas) && (share?.search_rank_lost_is ?? 0) >= rules.lostRankIsHigh;
         add(restrictive ? 'restrictive_target' : 'budget_underused', restrictive ? 'medium' : 'low',
-          [`Rata-rata belanja ${fmt(c.cost / c.active_days, 0)}/hari dari budget ${fmt(budget, 0)} (${pct(util)})`, ...(restrictive ? [`Target ${s.target_cpa ? `CPA ${fmt(s.target_cpa)}` : `ROAS ${fmt(s.target_roas)}`} dengan Lost IS (rank) ${pct(share.search_rank_lost_is)}`] : [])],
+          [`Rata-rata belanja ${money(c.cost / c.active_days)}/hari dari budget ${money(budget)} (${pct(util)})`, ...(restrictive ? [`Target ${s.target_cpa ? `CPA ${money(s.target_cpa)}` : `ROAS ${fmt(s.target_roas)}`} dengan Lost IS (rank) ${pct(share.search_rank_lost_is)}`] : [])],
           restrictive ? ['Target bidding terlalu ketat sehingga lelang banyak dilewati'] : ['Volume pencarian terbatas', 'Ad Rank rendah', 'Target lokasi/jadwal sempit'],
           [restrictive ? 'Uji pelonggaran target bertahap dan pantau CPA' : 'Tinjau keyword/target lokasi untuk menambah jangkauan, atau alokasikan budget ke campaign lain'],
           { budget_utilization: { old: null, cur: util, change: null } });

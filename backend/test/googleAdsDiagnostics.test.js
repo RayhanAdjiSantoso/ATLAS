@@ -125,6 +125,8 @@ test('CPA increase needs volume in both periods; changes in the period are conte
   assert.ok(cpa);
   assert.equal(cpa.severity, 'high');
   assert.equal(cpa.metrics.cost_per_conv.change, 0.6);
+  const myr = diagnoseCampaigns({ old: period([old]), cur: period([cur]), currency: 'MYR' }).find((x) => x.type === 'cpa_increase');
+  assert.match(myr.facts[0], /RM50\.00 → RM80\.00/);
   assert.match(cpa.possible_causes.at(-1), /2026-09-12.*bukan bukti/);
   const small = diagnoseCampaigns({ old: period([camp({ conversions: 2, cost: 100 })]), cur: period([camp({ conversions: 2, cost: 300 })]) });
   assert.ok(!small.some((x) => x.type === 'cpa_increase'), 'two conversions are not enough');

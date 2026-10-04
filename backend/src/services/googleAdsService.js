@@ -133,6 +133,7 @@ export async function removeAccount({ brandId, accountId }) {
     await repo.deleteCustomerRows(account.customer_id, db);
     await repo.deleteCustomerChangeEvents(account.customer_id, db);
     await datasetsRepo.deleteCustomerDatasets(account.customer_id, db);
+    await db.query('DELETE FROM google_ads_alerts WHERE customer_id = $1', [account.customer_id]);
     await repo.deleteAccount(accountId, db);
   });
   return getOverview(brandId);
@@ -382,6 +383,16 @@ export async function finishRun({ runId, status, rowCount, note, datasets }) {
   const run = await requireOpenRun(runId);
   const datasetResults = run.datasets ? normalizeDatasetResults(datasets, run.datasets) : {};
   const result = await finishRunRows({ run, runId, status, rowCount, note, datasetResults });
+  // Alerts follow every sync, good or bad. Loaded lazily: the optimisation
+  // module reads reports through this one. A failure here never fails the run.
+  if (status === 'failed' || carriesCore(run)) {
+    try {
+      const { evaluateAlerts } = await import('./googleAdsOptimization.js');
+      result.alerts = await evaluateAlerts(run.brand_id).then((c) => ({ opened: c.open.length, resolved: c.resolve.length }));
+    } catch (err) {
+      console.warn('[google-ads] gagal mengevaluasi alert', { brandId: run.brand_id, reason: err.message });
+    }
+  }
   if (!carriesCore(run)) return result;
   // Daily Tracking is daily data, filled on every run (the script runs at
   // 01:00, so yesterday lands then). Data & file is monthly data: a month is
@@ -513,7 +524,7 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
   Object.assign(old, intelOld);
   Object.assign(cur, intelCur);
   const insights = await reportInsights({
-    brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur,
+    brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur, currency: currencies.length === 1 ? currencies[0] : null,
     auction: auctionCur, changes: changes.rows, settingChanges: shared.campaignSettingChanges,
   });
   return {
@@ -656,7 +667,7 @@ const COUNTRIES = new Set(['malaysia', 'indonesia', 'singapore', 'thailand', 'ph
 const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 864e5) + 1;
 const tokensOf = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
 
-async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur, auction, changes, settingChanges }) {
+async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur, currency, auction, changes, settingChanges }) {
   const brandId = brand.brand_id;
   const [kwRows, termRows, devCur, devOld, grid, pages, series] = await Promise.all([
     datasetsRepo.keywordDetail(brandId, curStart, curEnd),
@@ -727,7 +738,7 @@ async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, 
   const campaignFindings = diagnostics.diagnoseCampaigns({
       old: { campaigns: old.campaigns, totals: old.totals, days: oldDays },
       cur: { campaigns: cur.campaigns, totals: cur.totals, days: curDays },
-      settings, competitive: cur.competitive.campaigns, changes, settingChanges,
+      settings, competitive: cur.competitive.campaigns, changes, settingChanges, currency,
       oldLabel: `${oldStart}..${oldEnd}`, curLabel: `${curStart}..${curEnd}`,
   });
   const severity = ['critical', 'high', 'medium', 'low'];

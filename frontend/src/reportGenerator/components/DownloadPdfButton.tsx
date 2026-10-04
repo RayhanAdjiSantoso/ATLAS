@@ -6,18 +6,20 @@ interface DownloadPdfButtonProps {
   targetId: string;
   filename: string;
   label?: string;
+  // Selector of the cards to keep (see exportElementToPDF); all when omitted.
+  only?: string;
 }
 
 // Ported from the original downloadReportPDF/downloadSummaryPDF/downloadBusinessPDF
 // — one full-report PDF export button, rendering every .sec-block card in
 // the target container onto A4 pages.
-export function DownloadPdfButton({ targetId, filename, label }: DownloadPdfButtonProps) {
+export function DownloadPdfButton({ targetId, filename, label, only }: DownloadPdfButtonProps) {
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
     setBusy(true);
     try {
-      await exportElementToPDF(document.getElementById(targetId), filename);
+      await exportElementToPDF(document.getElementById(targetId), filename, { only });
     } finally {
       setBusy(false);
     }
