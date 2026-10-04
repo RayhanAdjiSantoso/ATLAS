@@ -11,6 +11,7 @@ import {
   deleteStaleDatasets, describeResults,
 } from './googleAdsDatasets.js';
 import * as analytics from './googleAdsAnalytics.js';
+import * as diagnostics from './googleAdsDiagnostics.js';
 import {
   parseAuctionInsights, parseSearchTerms, parseChangeHistory, buildSearchTermsWorkbook, buildChangeHistoryWorkbook, AUCTION_METRICS,
 } from './googleAdsFiles.js';
@@ -469,7 +470,7 @@ async function periodReport(brandId, start, end) {
 }
 
 export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd }) {
-  await assertBrand(brandId);
+  const brand = await assertBrand(brandId);
   for (const d of [oldStart, oldEnd, curStart, curEnd]) {
     if (!ISO_DATE.test(d)) throw new AppError('Tanggal periode tidak valid', 400);
   }
@@ -487,9 +488,11 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
   // An uploaded Search terms report wins over the script's numbers for the
   // months it covers (user decision 2026-10-02), and fills months the
   // script never fetched.
+  const uploadedCur = { rows: [], months: null };
   for (const [period, start, end] of [[old, oldStart, oldEnd], [cur, curStart, curEnd]]) {
     period.searchTermsSource = 'atlas';
     const uploaded = await uploadedSearchTerms(brandId, files, start, end);
+    if (period === cur) Object.assign(uploadedCur, uploaded);
     if (!uploaded.rows.length) continue;
     const kept = uploaded.months.size
       ? (await repo.reportSearchTerms(brandId, start, end, [...uploaded.months])).map(withRatios)
@@ -509,8 +512,13 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
   ]);
   Object.assign(old, intelOld);
   Object.assign(cur, intelCur);
+  const insights = await reportInsights({
+    brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur,
+    auction: auctionCur, changes: changes.rows, settingChanges: shared.campaignSettingChanges,
+  });
   return {
     ...shared,
+    ...insights,
     auctionInsights: { old: auctionOld, cur: auctionCur },
     changeHistory: changes,
     accounts: accounts.map((a) => ({ customerId: a.customer_id, label: a.label, name: a.account_name, currency: a.currency_code })),
@@ -639,6 +647,89 @@ function changedSettingFields(prev, cur) {
   return SETTING_COMPARE
     .filter((f) => JSON.stringify(norm(prev[f])) !== JSON.stringify(norm(cur[f])))
     .map((f) => ({ field: f, from: prev[f] ?? null, to: cur[f] ?? null }));
+}
+
+// ---------------------------------------------------------------------
+// Report: rule-based insights (googleAdsDiagnostics.js)
+// ---------------------------------------------------------------------
+const COUNTRIES = new Set(['malaysia', 'indonesia', 'singapore', 'thailand', 'philippines', 'vietnam', 'brunei', 'australia']);
+const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 864e5) + 1;
+const tokensOf = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+
+async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur, auction, changes, settingChanges }) {
+  const brandId = brand.brand_id;
+  const [kwRows, termRows, devCur, devOld, grid, pages, series] = await Promise.all([
+    datasetsRepo.keywordDetail(brandId, curStart, curEnd),
+    datasetsRepo.searchTermDetail(brandId, curStart, curEnd, uploadedCur.rows.length ? [...uploadedCur.months] : null),
+    datasetsRepo.devicesByCampaign(brandId, curStart, curEnd),
+    datasetsRepo.devicesByCampaign(brandId, oldStart, oldEnd),
+    datasetsRepo.hourlyGrid(brandId, curStart, curEnd),
+    datasetsRepo.landingPages(brandId, curStart, curEnd),
+    repo.reportDaily(brandId, addDays(curStart, -35), curEnd),
+  ]);
+  const baselines = diagnostics.campaignBaselines(cur.campaigns, settings);
+
+  // Keywords: Google's impression share for the period when it holds one.
+  const kwShare = new Map(cur.competitive.keywords.map((k) => [`${k.customer_id}|${k.ad_group_id}|${String(k.keyword).toLowerCase()}|${k.match_type}`, k]));
+  const keywordDetail = kwRows.map((k) => {
+    const share = kwShare.get(`${k.customer_id}|${k.ad_group_id}|${String(k.keyword).toLowerCase()}|${k.match_type}`);
+    return diagnostics.classifyKeyword({ ...k, search_impression_share: share?.search_impression_share ?? null }, baselines.of(k));
+  });
+
+  // Search terms: an uploaded report wins for its months (same rule as the
+  // legacy table); uploaded rows carry campaign names, not ids.
+  const ownTokens = [...new Set([...tokensOf(brand.brand_name), ...auction.rows.filter((r) => r.isYou).flatMap((r) => tokensOf(String(r.domain).split('.')[0]))])];
+  const locationsByCampaign = new Map(settings.map((s) => [
+    String(s.campaign_name).toLowerCase(),
+    (s.locations_included ?? []).filter((l) => !/^radius/i.test(l)).map((l) => l.toLowerCase()),
+  ]).filter(([, locs]) => !locs.some((l) => COUNTRIES.has(l))));
+  const ctx = {
+    baselines,
+    keywords: new Set(kwRows.map((k) => String(k.keyword).toLowerCase())),
+    competitors: diagnostics.competitorTokens(auction.rows.filter((r) => !r.isYou).map((r) => r.domain), ownTokens),
+    ownTokens,
+    locationsByCampaign,
+    knownLocations: [...new Set([...cur.cities.map((c) => String(c.city).toLowerCase()), ...[...locationsByCampaign.values()].flat()])],
+  };
+  // Terms with no cost and no conversion change no class or total; leaving
+  // them out keeps the response well under Vercel's 4.5MB cap.
+  const searchTermDetail = [...termRows, ...uploadedCur.rows]
+    .filter((t) => Number(t.cost) > 0 || Number(t.conversions) > 0 || Number(t.all_conversions) > 0)
+    .map((t) => diagnostics.classifySearchTerm(t, ctx));
+  const searchCost = cur.campaigns.filter((c) => ['SEARCH', 'SHOPPING'].includes(c.channel_type)).reduce((a, c) => a + c.cost, 0);
+
+  const adFlags = new Map(diagnostics.adInsights(cur.ads).map((a) => [`${a.customer_id}|${a.ad_group_id}|${a.ad_id}`, a]));
+  for (const a of cur.ads) {
+    const f = adFlags.get(`${a.customer_id}|${a.ad_group_id}|${a.ad_id}`);
+    a.flags = f?.flags ?? [];
+    a.cost_share_in_group = f?.cost_share_in_group ?? null;
+  }
+
+  const oldDays = daysBetween(oldStart, oldEnd);
+  const curDays = daysBetween(curStart, curEnd);
+  Object.assign(cur, {
+    keywordDetail,
+    keywordSummary: Object.fromEntries(diagnostics.KEYWORD_CLASSES.map((c) => [c, keywordDetail.filter((k) => k.classification === c).length])),
+    searchTermDetail,
+    searchTermSummary: diagnostics.searchTermSummary(searchTermDetail, searchCost),
+    devices: diagnostics.deviceInsights(devCur, settings),
+    schedule: diagnostics.scheduleInsights(grid, curDays),
+    landingPages: diagnostics.landingPageInsights(pages),
+    messageMatch: diagnostics.messageMatch(kwRows, cur.ads),
+  });
+  old.devices = diagnostics.deviceInsights(devOld, settings);
+
+  return {
+    diagnostics: diagnostics.diagnoseCampaigns({
+      old: { campaigns: old.campaigns, totals: old.totals, days: oldDays },
+      cur: { campaigns: cur.campaigns, totals: cur.totals, days: curDays },
+      settings, competitive: cur.competitive.campaigns, changes, settingChanges,
+      oldLabel: `${oldStart}..${oldEnd}`, curLabel: `${curStart}..${curEnd}`,
+    }),
+    anomalies: diagnostics.detectAnomalies(series, curStart, curEnd),
+    baselineLabels: diagnostics.BASELINE_LABEL,
+    rules: diagnostics.RULES,
+  };
 }
 
 // ---------------------------------------------------------------------

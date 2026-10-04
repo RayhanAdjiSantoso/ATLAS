@@ -33,10 +33,14 @@
  *          conversions  konversi per conversion action per campaign
  *          competitive  impression share (campaign harian + campaign, ad group,
  *                       keyword untuk seluruh rentang job)
+ *          devices      performa per device per campaign (migration 041)
+ *          hourly       performa per jam per campaign, zona waktu akun
+ *          landing_pages traffic per landing page (+ konversi bila Google izinkan)
  *        snapshot (konfigurasi saat ini, sekali per akun per eksekusi):
  *          campaign_settings   budget, bidding, target, jaringan, lokasi, jadwal
  *          conversion_actions  metadata conversion action
  *          ad_assets           headline, description, final URL, ad strength
+ *          keyword_quality     Quality Score + komponennya, satu snapshot per hari
  *      Field yang tidak bisa dibaca dikirim sebagai null + dicatat di
  *      `unavailable`, tidak pernah ditebak.
  *
@@ -75,7 +79,7 @@ var CONFIG = {
   CHUNK_SIZE: 500,
   // Dataset per bulan yang bisa dikirim script ini. ATLAS hanya menjadwalkan
   // yang belum lengkap; hapus nama di sini untuk mematikan satu dataset.
-  DATASETS: ['core', 'ads', 'conversions', 'competitive'],
+  DATASETS: ['core', 'ads', 'conversions', 'competitive', 'devices', 'hourly', 'landing_pages'],
   // executeInParallel memproses maksimal 50 akun per eksekusi.
   MAX_ACCOUNTS: 50,
   // Batas aman sebelum batas 30 menit Google Ads Scripts: job yang belum
@@ -475,12 +479,16 @@ var DAILY_FETCHERS = {
   ads: adRows_,
   conversions: conversionRows_,
   competitive: competitiveRows_,
+  devices: deviceRows_,
+  hourly: hourRows_,
+  landing_pages: landingPageRows_,
 };
 
 var SNAPSHOT_FETCHERS = {
   campaign_settings: campaignSettingRows_,
   conversion_actions: conversionActionRows_,
   ad_assets: adAssetRows_,
+  keyword_quality: keywordQualityRows_,
 };
 
 // The first query Google accepts, and which one it was.
@@ -674,6 +682,79 @@ function competitiveRows_(job) {
   return { rows: rows, levels: levels, note: notes.length ? notes.join('; ') : null };
 }
 
+function deviceRows_(job) {
+  var rows = search_('SELECT segments.date, segments.device, campaign.id, campaign.name, campaign.advertising_channel_type, ' +
+    METRICS + ' FROM campaign' + during_(job) + ' AND metrics.impressions > 0');
+  return {
+    rows: rows.map(function (row) {
+      var r = metrics_(row.metrics);
+      r.date = row.segments.date;
+      r.device = row.segments.device;
+      r.campaignId = String(row.campaign.id);
+      r.campaignName = row.campaign.name || '';
+      r.channelType = row.campaign.advertisingChannelType || '';
+      return r;
+    }),
+  };
+}
+
+// Dates and hours in the account's own time zone, as Google reports them.
+function hourRows_(job) {
+  var rows = search_('SELECT segments.date, segments.hour, campaign.id, campaign.name, metrics.cost_micros, ' +
+    'metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value FROM campaign' + during_(job) +
+    ' AND metrics.impressions > 0');
+  return {
+    rows: rows.map(function (row) {
+      var r = metrics_(row.metrics);
+      r.date = row.segments.date;
+      r.hour = Number(row.segments.hour);
+      r.campaignId = String(row.campaign.id);
+      r.campaignName = row.campaign.name || '';
+      return r;
+    }),
+  };
+}
+
+// Landing pages: which metrics Google allows here varies, so the richest
+// query that works wins and the metrics it lacks travel as `unavailable`
+// (null in ATLAS, never an estimate).
+function landingPageRows_(job) {
+  var base = 'SELECT segments.date, landing_page_view.unexpanded_final_url, metrics.clicks, metrics.impressions, metrics.cost_micros';
+  var variants = [
+    { q: base + ', campaign.id, campaign.name, metrics.conversions, metrics.conversions_value, metrics.speed_score, metrics.mobile_friendly_clicks_percentage', missing: [] },
+    { q: base + ', campaign.id, campaign.name, metrics.conversions, metrics.conversions_value', missing: ['speed_score', 'mobile_friendly_clicks_pct'] },
+    { q: base + ', campaign.id, campaign.name', missing: ['conversions', 'conversions_value', 'speed_score', 'mobile_friendly_clicks_pct'] },
+    { q: base, missing: ['campaign', 'conversions', 'conversions_value', 'speed_score', 'mobile_friendly_clicks_pct'] },
+  ];
+  var got = tryQueries_(variants.map(function (v) { return v.q + ' FROM landing_page_view' + during_(job); }));
+  var missing = variants[got.index].missing;
+  var has = function (f) { return missing.indexOf(f) < 0; };
+  var byKey = {};
+  got.rows.forEach(function (row) {
+    var m = row.metrics || {};
+    var url = row.landingPageView && row.landingPageView.unexpandedFinalUrl;
+    if (!url) return;
+    var campaignId = has('campaign') && row.campaign ? String(row.campaign.id) : '';
+    var key = row.segments.date + '|' + campaignId + '|' + url;
+    var r = byKey[key] || (byKey[key] = {
+      date: row.segments.date, url: url, campaignId: campaignId,
+      campaignName: has('campaign') && row.campaign ? row.campaign.name || '' : '',
+      clicks: 0, impressions: 0, cost: 0,
+      conversions: has('conversions') ? 0 : null, conversionsValue: has('conversions_value') ? 0 : null,
+      speedScore: null, mobileFriendlyClicksPct: null, unavailable: missing,
+    });
+    r.clicks += Number(m.clicks || 0);
+    r.impressions += Number(m.impressions || 0);
+    r.cost += Number(m.costMicros || 0) / 1e6;
+    if (r.conversions != null) r.conversions += Number(m.conversions || 0);
+    if (r.conversionsValue != null) r.conversionsValue += Number(m.conversionsValue || 0);
+    if (has('speed_score') && m.speedScore != null) r.speedScore = Number(m.speedScore);
+    if (has('mobile_friendly_clicks_pct') && m.mobileFriendlyClicksPercentage != null) r.mobileFriendlyClicksPct = Number(m.mobileFriendlyClicksPercentage);
+  });
+  var rows = Object.keys(byKey).map(function (k) { return byKey[k]; });
+  return { rows: rows, note: missing.length ? 'tidak tersedia: ' + missing.join(', ') : null };
+}
+
 // ── Snapshots ───────────────────────────────────────────────────────
 function campaignSettingRows_() {
   var byId = {};
@@ -827,6 +908,36 @@ function campaignSettingRows_() {
   }
 
   return { rows: order.map(function (id) { var r = byId[id]; delete r.portfolio; return r; }) };
+}
+
+// Quality Score is today's rating, kept as one snapshot per day. Keywords
+// with too little traffic have no score: sent as null, never 0.
+function keywordQualityRows_() {
+  var today = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), 'yyyy-MM-dd');
+  var rows = search_('SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_criterion.criterion_id, ' +
+    'ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.status, ' +
+    'ad_group_criterion.quality_info.quality_score, ad_group_criterion.quality_info.search_predicted_ctr, ' +
+    'ad_group_criterion.quality_info.creative_quality_score, ad_group_criterion.quality_info.post_click_quality_score ' +
+    "FROM ad_group_criterion WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.negative = FALSE " +
+    "AND ad_group_criterion.status != 'REMOVED' AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'");
+  return {
+    rows: rows.map(function (row) {
+      var c = row.adGroupCriterion || {};
+      var q = c.qualityInfo || {};
+      var kw = c.keyword || {};
+      return {
+        snapshotDate: today,
+        campaignId: String(row.campaign.id), campaignName: row.campaign.name || '',
+        adGroupId: String(row.adGroup.id), adGroupName: row.adGroup.name || '',
+        criterionId: String(c.criterionId || ''), keyword: kw.text || '', matchType: kw.matchType || '',
+        status: c.status || null,
+        qualityScore: q.qualityScore == null ? null : Number(q.qualityScore),
+        expectedCtr: q.searchPredictedCtr || null,
+        adRelevance: q.creativeQualityScore || null,
+        landingPageExperience: q.postClickQualityScore || null,
+      };
+    }),
+  };
 }
 
 function conversionActionRows_() {
