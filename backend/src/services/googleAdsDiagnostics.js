@@ -56,14 +56,27 @@ export const RULES = {
     minCostShare: 0.03,
   },
   device: { minClicks: 30, minCostShare: 0.1, poorCpaRatio: 1.5 },
-  landingPage: { minClicks: 50, lowSpeedScore: 4 },
+  landingPage: { minClicks: 50, lowSpeedScore: 4, maxPages: 100 },
+  quality: { minScoredKeywords: 10, belowShare: 0.4 },   // cost share of scored keywords
+  // Rows a report lists in full; totals and summaries always use every row.
+  // Shopping / Performance Max accounts have a landing page per product.
+  report: { maxSearchTerms: 500, maxNegativeCandidates: 200 },
 };
 
 const SMART_BIDDING = new Set(['MAXIMIZE_CONVERSIONS', 'TARGET_CPA', 'MAXIMIZE_CONVERSION_VALUE', 'TARGET_ROAS']);
 const CONVERSION_BIDDING = SMART_BIDDING;
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const ckey = (r) => `${r.customer_id}|${r.campaign_id}`;
-const pct = (v) => (v == null ? 'N/A' : `${(v * 100).toFixed(1)}%`);
+// Small rates keep two decimals so 0.47% → 0.33% does not read as 0.5% → 0.3%.
+const pct = (v) => (v == null ? 'N/A' : `${(v * 100).toFixed(Math.abs(v) < 0.1 ? 2 : 1)}%`);
+
+// Money in a finding's text, in the report's own currency (the same prefix
+// and locale the report UI uses). Without a single currency, a bare number.
+const CURRENCY = { MYR: ['RM', 'en-MY', 2], IDR: ['Rp', 'id-ID', 0], SGD: ['S$', 'en-SG', 2], USD: ['$', 'en-US', 2] };
+export function moneyFormatter(currency) {
+  const [prefix, locale, digits] = CURRENCY[currency] ?? [currency ? `${currency} ` : '', 'id-ID', 2];
+  return (v) => (v == null ? 'N/A' : `${prefix}${Number(v).toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`);
+}
 const fmt = (v, d = 2) => (v == null ? 'N/A' : Number(v).toLocaleString('id-ID', { maximumFractionDigits: d }));
 
 // ── baselines ───────────────────────────────────────────────────────
@@ -280,6 +293,7 @@ export function searchTermSummary(classified, searchCampaignCost, rules = RULES.
     negative_candidates: classified
       .filter((t) => t.conversions === 0 && flagged.has(t.classification))
       .sort((a, b) => b.cost - a.cost)
+      .slice(0, RULES.report.maxNegativeCandidates)
       .map((t) => ({ text: t.search_term, classification: t.classification, cost: t.cost, campaign_name: t.campaign_name ?? '' })),
   };
 }
@@ -316,6 +330,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
     changesBy.get(k).push(`${new Date(ch.valid_from).toISOString().slice(0, 10)} (setting: ${(ch.changed_fields ?? []).map((f) => f.field).join(', ')})`);
   }
   const accountCpa = safeDiv(cur.totals.cost, cur.totals.conversions);
+  const money = moneyFormatter(input.currency);
   const findings = [];
 
   const evaluate = (entity, o, c, s, share) => {
@@ -340,7 +355,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
     const strategy = s?.bidding_strategy_type;
     if (c.cost > 0 && c.conversions === 0 && c.all_conversions > 0 && (!s || CONVERSION_BIDDING.has(strategy))) {
       add('tracking_no_primary_conversion', 'critical',
-        [`Conversions 0 sementara All conv. ${fmt(c.all_conversions)} dengan biaya ${fmt(c.cost, 0)}`, ...(strategy ? [`Strategi bidding: ${strategy}`] : [])],
+        [`Conversions 0 sementara All conv. ${fmt(c.all_conversions)} dengan biaya ${money(c.cost)}`, ...(strategy ? [`Strategi bidding: ${strategy}`] : [])],
         ['Conversion action penjualan/lead berstatus secondary atau dihapus', 'Campaign goal tidak memuat action yang dihitung'],
         ['Periksa Goals › Conversions: jadikan action utama (mis. Purchase) primary bila itu event bisnisnya', 'Pastikan campaign memakai goal yang memuat action tersebut'],
         m('conversions', o?.conversions, c.conversions));
@@ -359,7 +374,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
       const ch = pctChange(o.cost_per_conv, c.cost_per_conv).value;
       if (ch != null && ch >= rules.changeThreshold) {
         add('cpa_increase', ch >= 0.5 ? 'high' : 'medium',
-          [`CPA naik ${pct(ch)} (${fmt(o.cost_per_conv)} → ${fmt(c.cost_per_conv)})`],
+          [`CPA naik ${pct(ch)} (${money(o.cost_per_conv)} → ${money(c.cost_per_conv)})`],
           ['CPC naik', 'CVR turun', 'Pergeseran search term ke intent yang lebih rendah'],
           ['Bandingkan CPC dan CVR untuk melihat pendorongnya', 'Tinjau search term baru periode ini'],
           { ...m('cost_per_conv', o.cost_per_conv, c.cost_per_conv), ...m('avg_cpc', o.avg_cpc, c.avg_cpc), ...m('cvr', o.cvr, c.cvr) });
@@ -386,7 +401,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
       const cpc = pctChange(o.avg_cpc, c.avg_cpc).value;
       if (cpc != null && cpc >= rules.changeThreshold) {
         add('cpc_increase', cpc >= 0.5 ? 'high' : 'medium',
-          [`Avg. CPC naik ${pct(cpc)} (${fmt(o.avg_cpc)} → ${fmt(c.avg_cpc)})`],
+          [`Avg. CPC naik ${pct(cpc)} (${money(o.avg_cpc)} → ${money(c.avg_cpc)})`],
           ['Persaingan lelang meningkat', 'Target bidding berubah', 'Quality Score turun'],
           ['Periksa Auction Insights dan Change History', 'Cek Quality Score keyword utama'], m('avg_cpc', o.avg_cpc, c.avg_cpc));
       }
@@ -435,7 +450,7 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
       if (util != null && util < rules.underuseRatio) {
         const restrictive = (s.target_cpa || s.target_roas) && (share?.search_rank_lost_is ?? 0) >= rules.lostRankIsHigh;
         add(restrictive ? 'restrictive_target' : 'budget_underused', restrictive ? 'medium' : 'low',
-          [`Rata-rata belanja ${fmt(c.cost / c.active_days, 0)}/hari dari budget ${fmt(budget, 0)} (${pct(util)})`, ...(restrictive ? [`Target ${s.target_cpa ? `CPA ${fmt(s.target_cpa)}` : `ROAS ${fmt(s.target_roas)}`} dengan Lost IS (rank) ${pct(share.search_rank_lost_is)}`] : [])],
+          [`Rata-rata belanja ${money(c.cost / c.active_days)}/hari dari budget ${money(budget)} (${pct(util)})`, ...(restrictive ? [`Target ${s.target_cpa ? `CPA ${money(s.target_cpa)}` : `ROAS ${fmt(s.target_roas)}`} dengan Lost IS (rank) ${pct(share.search_rank_lost_is)}`] : [])],
           restrictive ? ['Target bidding terlalu ketat sehingga lelang banyak dilewati'] : ['Volume pencarian terbatas', 'Ad Rank rendah', 'Target lokasi/jadwal sempit'],
           [restrictive ? 'Uji pelonggaran target bertahap dan pantau CPA' : 'Tinjau keyword/target lokasi untuk menambah jangkauan, atau alokasikan budget ke campaign lain'],
           { budget_utilization: { old: null, cur: util, change: null } });
@@ -453,6 +468,41 @@ export function diagnoseCampaigns(input, rules = RULES.campaign) {
       oldBy.get(ckey(c)), c, settings.get(ckey(c)), shares.get(ckey(c)));
   }
   return findings.sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity));
+}
+
+// A Quality Score component that is below average across most of the
+// keyword spend points at something shared (the site, the ad copy) rather
+// than at single keywords. Weighted by cost; keywords without a score are
+// left out and counted.
+const COMPONENTS = [
+  ['landing_page_experience', 'Landing page experience', ['Kecepatan atau tampilan mobile situs', 'Isi halaman tujuan kurang sesuai dengan keyword', 'Navigasi/checkout menyulitkan'], 'Uji kecepatan halaman berbiaya terbesar di PageSpeed Insights (Google tidak lagi mengirim speed score ke ATLAS) dan periksa kecocokan isinya dengan keyword'],
+  ['ad_relevance', 'Ad relevance', ['Headline tidak memuat keyword', 'Ad group terlalu luas sehingga satu iklan melayani banyak tema'], 'Pecah ad group per tema dan masukkan keyword utama ke headline'],
+  ['expected_ctr', 'Expected CTR', ['Iklan kurang menonjol dibanding kompetitor', 'Penawaran/pesan kurang spesifik'], 'Uji headline dengan penawaran dan pembeda yang jelas'],
+];
+
+export function qualityPatterns(keywords, rules = RULES.quality) {
+  const scored = keywords.filter((k) => k.quality_score != null);
+  if (scored.length < rules.minScoredKeywords) return [];
+  const cost = scored.reduce((a, k) => a + (k.cost || 0), 0);
+  const out = [];
+  for (const [field, label, causes, step] of COMPONENTS) {
+    const below = scored.filter((k) => k[field] === 'BELOW_AVERAGE');
+    const share = cost ? safeDiv(below.reduce((a, k) => a + (k.cost || 0), 0), cost) : safeDiv(below.length, scored.length);
+    if (share == null || share < rules.belowShare) continue;
+    out.push({
+      id: `quality_${field}:account`, entity_type: 'account', entity_id: null, entity_name: 'Akun', customer_id: null,
+      type: `quality_${field}`, severity: share >= 0.6 ? 'high' : 'medium', confidence: scored.length >= 25 ? 'high' : 'medium',
+      period: null, metrics: { below_average_cost_share: { old: null, cur: share, change: null } }, baseline: null,
+      facts: [
+        `${label} di bawah rata-rata pada ${below.length} dari ${scored.length} keyword ber-Quality Score (${pct(share)} biayanya)`,
+        `${keywords.length - scored.length} keyword belum punya Quality Score (traffic kecil)`,
+        `Quality Score adalah penilaian Google per ${scored[0]?.quality_date ?? 'snapshot terbaru'}, bukan rata-rata periode`,
+      ],
+      possible_causes: causes,
+      next_steps: [step, 'Quality Score adalah diagnosis, bukan dasar tunggal untuk menjeda atau menaikkan keyword'],
+    });
+  }
+  return out;
 }
 
 // ── anomalies ───────────────────────────────────────────────────────
@@ -568,12 +618,24 @@ export function scheduleInsights(grid, periodDays, rules = RULES.schedule) {
 }
 
 // ── landing pages ───────────────────────────────────────────────────
+// The most-clicked pages in full; the long tail (one page per product in
+// Shopping / Performance Max) is summed into `others`, so totals still add up.
 export function landingPageInsights(rows, rules = RULES.landingPage) {
   const conversionsKnown = rows.some((r) => r.conversions != null);
+  const sorted = [...rows].sort((a, b) => (b.clicks ?? 0) - (a.clicks ?? 0));
+  const sum = (list, k) => (list.some((r) => r[k] != null) ? list.reduce((a, r) => a + (r[k] ?? 0), 0) : null);
+  const rest = sorted.slice(rules.maxPages);
+  const totalsOf = (list) => ({
+    pages: list.length, clicks: sum(list, 'clicks'), impressions: sum(list, 'impressions'), cost: sum(list, 'cost'),
+    conversions: sum(list, 'conversions'), conversions_value: sum(list, 'conversions_value'),
+  });
   return {
     conversions_available: conversionsKnown,
+    speed_available: rows.some((r) => r.speed_score != null),
     note: conversionsKnown ? null : 'Google tidak mengizinkan metrik konversi pada laporan landing page untuk akun ini — hanya traffic yang ditampilkan.',
-    pages: rows.map((r) => {
+    totals: totalsOf(sorted),
+    others: rest.length ? totalsOf(rest) : null,
+    pages: sorted.slice(0, rules.maxPages).map((r) => {
       const flags = [];
       if (conversionsKnown && (r.clicks ?? 0) >= rules.minClicks && r.conversions === 0) flags.push('Traffic tinggi tanpa konversi');
       if (r.speed_score != null && r.speed_score <= rules.lowSpeedScore) flags.push(`Speed score mobile ${r.speed_score}/10`);
@@ -585,7 +647,7 @@ export function landingPageInsights(rows, rules = RULES.landingPage) {
         cost_per_conv: r.conversions == null || r.cost == null ? null : safeDiv(r.cost, r.conversions),
         flags,
       };
-    }).sort((a, b) => (b.clicks ?? 0) - (a.clicks ?? 0)),
+    }),
   };
 }
 

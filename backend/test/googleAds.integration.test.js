@@ -227,6 +227,52 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
       assert.ok(report.dataAvailability.keyword_quality.last_date);
     });
 
+    await t.test('042: experiments, alerts, and a recommendation that becomes a MOM task', async () => {
+      const opt = await import('../src/services/googleAdsOptimization.js');
+      const optRepo = await import('../src/repositories/googleAdsOptimizationRepository.js');
+
+      const created = await opt.createExperiment({ brandId, userId: null, input: {
+        campaign_id: 'c1', campaign_name: 'Search Brand', customer_id: CUSTOMER, hypothesis: 'Phrase match menurunkan CPA',
+        start_date: day(2), baseline_start: day(1), baseline_end: day(1), eval_start: day(2), eval_end: day(2), success_metric: 'cpa', expected_direction: 'decrease',
+      } });
+      assert.equal(created.baseline_snapshot.cost, 100, 'baseline captured when recorded');
+      const ev = await opt.evaluateExperiment({ brandId, id: created.id, userId: null });
+      assert.equal(ev.experiment.result, 'inconclusive', 'two and three conversions are not enough volume');
+      assert.ok(ev.experiment.last_result.limitations.some((l) => /Volume belum cukup/.test(l)));
+      await assert.rejects(opt.createExperiment({ brandId, userId: null, input: { hypothesis: 'x', success_metric: 'happiness' } }), /Success metric|wajib/);
+
+      const { alerts } = await opt.listAlerts({ brandId });
+      const types = alerts.map((a) => a.type);
+      assert.ok(types.includes('data_stale'), 'last month\'s data only');
+      assert.ok(types.includes('unverified_conversion_actions'));
+      const again = await opt.evaluateAlerts(brandId);
+      assert.equal(again.open.length, 0, 'second evaluation dedupes');
+      const stale = alerts.find((a) => a.type === 'data_stale');
+      await opt.setAlertStatus({ brandId, id: stale.id, status: 'resolved', userId: null });
+      await opt.evaluateAlerts(brandId);
+      assert.ok(!(await opt.listAlerts({ brandId, evaluate: false })).alerts.some((a) => a.type === 'data_stale'), 'resolved alert stays quiet during cooldown');
+
+      const [recIn] = opt.validateRecommendations({ recommendations: [{
+        entity_type: 'campaign', entity_id: 'c1', category: 'tracking', title: 'Periksa konversi primer', finding: 'Purchase hanya 2', evidence: ['2 purchase'],
+        recommended_action: 'Cek tag purchase', priority: 'high', confidence: 'low',
+      }] }, { campaigns: [{ customer_id: CUSTOMER, campaign_id: 'c1', campaign_name: 'Search Brand' }] }).recommendations;
+      const recId = await optRepo.insertRecommendation(brandId, { ...recIn, fingerprint: opt.fingerprintOf(recIn), source: 'ai' }, null);
+      await assert.rejects(opt.recommendationToTask({ brandId, id: recId, pic: 'Rayhan', userId: null }), /belum punya catatan MOM/);
+      const { rows: [minute] } = await pool.query(
+        `INSERT INTO brand_minutes (brand_id, meeting_date, meeting_type, todo_mil) VALUES ($1, $2, 'regular', 'Rayhan:\n- Kirim report') RETURNING id`, [brandId, day(1)]);
+      const tasked = await opt.recommendationToTask({ brandId, id: recId, pic: 'Rayhan', userId: null });
+      assert.equal(tasked.status, 'planned');
+      assert.equal(tasked.task_done, false);
+      const { rows: [m] } = await pool.query('SELECT todo_mil FROM brand_minutes WHERE id = $1', [minute.id]);
+      assert.match(m.todo_mil, /^Rayhan:\n- Kirim report\n- \[Google Ads\] Periksa konversi primer \(Search Brand\) — Cek tag purchase$/);
+      await pool.query(`UPDATE brand_minutes SET completed_task_keys = $2 WHERE id = $1`, [minute.id, JSON.stringify([tasked.task_key])]);
+      assert.equal((await optRepo.getRecommendation(recId, brandId)).task_done, true, 'ticked in MOM, visible here');
+      await assert.rejects(opt.recommendationToTask({ brandId, id: recId, pic: 'Rayhan', userId: null }), /sudah menjadi tugas/);
+      const updated = await opt.updateRecommendation({ brandId, id: recId, status: 'monitoring', notes: 'Tag sudah dicek', userId: null });
+      assert.deepEqual([updated.status, updated.notes], ['monitoring', 'Tag sudah dicek']);
+      await pool.query('DELETE FROM brand_minutes WHERE id = $1', [minute.id]);
+    });
+
     await t.test('removing the account removes every dataset', async () => {
       const { rows: [acc] } = await pool.query(`SELECT google_ads_account_id AS id FROM google_ads_accounts WHERE customer_id = $1`, [CUSTOMER]);
       await service.removeAccount({ brandId, accountId: acc.id });

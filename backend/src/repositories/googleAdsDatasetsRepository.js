@@ -530,15 +530,20 @@ export async function hourlyGrid(brandId, start, end, db = pool) {
 }
 
 // A metric Google refused is NULL in every row: its sum stays NULL.
+// Pages are grouped without query string, fragment or trailing slash:
+// Shopping sends one URL per product variant and UTM set, and
+// "site.com" / "site.com/" are the same page. `variants` counts the raw URLs.
+const PAGE_URL = `rtrim(split_part(split_part(url, '#', 1), '?', 1), '/')`;
+
 export async function landingPages(brandId, start, end, db = pool) {
   const { rows } = await db.query(
-    `SELECT url, ${PERF_SUMS},
+    `SELECT ${PAGE_URL} AS url, count(DISTINCT url)::int AS variants, ${PERF_SUMS},
             array_remove(array_agg(DISTINCT NULLIF(campaign_name, '')), NULL) AS campaigns,
             (array_agg(speed_score ORDER BY entry_date DESC) FILTER (WHERE speed_score IS NOT NULL))[1]::float AS speed_score,
             (sum(mobile_friendly_clicks_pct * clicks) / NULLIF(sum(clicks) FILTER (WHERE mobile_friendly_clicks_pct IS NOT NULL), 0))::float AS mobile_friendly_clicks_pct,
             array_agg(DISTINCT unavailable::text) AS unavailable_sets
      FROM google_ads_landing_pages_daily WHERE ${SCOPE}
-     GROUP BY url`,
+     GROUP BY 1`,
     [brandId, start, end],
   );
   return rows.map(({ unavailable_sets: sets, ...r }) => ({

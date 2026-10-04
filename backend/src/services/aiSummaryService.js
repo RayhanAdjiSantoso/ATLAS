@@ -70,7 +70,7 @@ function section(title, body) {
   return `## ${title}\n${Array.isArray(body) ? body.join('\n') : body}`;
 }
 
-function brandContextBlock(profile) {
+export function brandContextBlock(profile) {
   if (!profile) return null;
   const fields = [
     ['Brand, Produk & Customer', profile.brand_products_customer],
@@ -82,7 +82,7 @@ function brandContextBlock(profile) {
   return fields.length ? fields.map(([k, v]) => `- ${k}: ${v.trim()}`) : null;
 }
 
-function currentDirectionBlock(profile) {
+export function currentDirectionBlock(profile) {
   if (!profile) return null;
   const fields = [
     ['Objective & Target', profile.objective_target],
@@ -166,7 +166,14 @@ export class AiSummaryError extends Error {
 // "Coba lagi" di UI adalah percobaan ketiga yang dia kendalikan sendiri.
 const BUSY_BACKOFF_MS = [2000, 5000];
 
-export async function callGemini(prompt, { attempt = 0 } = {}) {
+export async function callGemini(prompt) {
+  return normaliseSummary(await requestGeminiJson(prompt, RESPONSE_SCHEMA));
+}
+
+// One JSON answer locked to `schema`, with the retry and error handling
+// every Gemini call here shares. Shape is guaranteed by the schema; content
+// is the caller's to validate.
+export async function requestGeminiJson(prompt, schema, { attempt = 0, maxOutputTokens = 8192 } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new AiSummaryError('GEMINI_API_KEY belum diset di server.', 503);
 
@@ -181,9 +188,9 @@ export async function callGemini(prompt, { attempt = 0 } = {}) {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 8192,
+          maxOutputTokens,
           responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
+          responseSchema: schema,
         },
       }),
       signal: controller.signal,
@@ -200,7 +207,7 @@ export async function callGemini(prompt, { attempt = 0 } = {}) {
 
   if (response.status === 503 && attempt < BUSY_BACKOFF_MS.length) {
     await new Promise((resolve) => setTimeout(resolve, BUSY_BACKOFF_MS[attempt]));
-    return callGemini(prompt, { attempt: attempt + 1 });
+    return requestGeminiJson(prompt, schema, { attempt: attempt + 1, maxOutputTokens });
   }
 
   if (!response.ok) {
@@ -231,7 +238,7 @@ export async function callGemini(prompt, { attempt = 0 } = {}) {
     const reason = data?.candidates?.[0]?.finishReason;
     throw new AiSummaryError(`Jawaban Gemini bukan JSON yang valid${reason ? ` (${reason})` : ''}.`);
   }
-  return normaliseSummary(parsed);
+  return parsed;
 }
 
 // Bentuknya dijamin schema, isinya tidak: array bisa datang kosong atau

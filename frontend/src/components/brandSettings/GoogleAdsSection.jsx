@@ -24,6 +24,88 @@ function runState(run) {
   }[run.status];
 }
 
+const GOALS = [
+  ['purchase', 'Purchase'], ['lead', 'Lead'], ['micro', 'Micro conversion'], ['other', 'Lainnya'], ['ignore', 'Abaikan'],
+];
+const GOAL_LABEL = Object.fromEntries(GOALS);
+const human = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
+
+// Which business goal each conversion action counts toward in the report
+// (Purchase and Lead are analysed apart). Without a choice here the report
+// derives one from Google's category and marks it as unverified.
+function ConversionGoals({ brandId, isViewOnly }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState('');
+
+  useEffect(() => {
+    setData(null);
+    api.get('/google-ads/conversion-goals', { params: { brandId } })
+      .then((res) => setData(res.data))
+      .catch((err) => setError(err.response?.data?.message || 'Gagal memuat conversion action'));
+  }, [brandId]);
+
+  async function save(action, value) {
+    const key = `${action.customer_id}|${action.conversion_action_id}`;
+    setSaving(key); setError('');
+    try {
+      const res = await api.put('/google-ads/conversion-goals', {
+        brandId, customerId: action.customer_id, conversionActionId: action.conversion_action_id, goal: value || null,
+      });
+      setData(res.data);
+    } catch (err) {
+      setError(err.response?.data?.details?.[0]?.msg || err.response?.data?.message || 'Gagal menyimpan');
+    } finally {
+      setSaving('');
+    }
+  }
+
+  if (!data && !error) return <p className="maf-loading"><Loader2 size={14} className="maf-spin" /> Memuat conversion action…</p>;
+  const actions = (data?.actions ?? []).filter((a) => a.status !== 'REMOVED' || a.goal_source === 'manual');
+  const unverified = actions.filter((a) => a.goal_source !== 'manual').length;
+  return (
+    <div className="maf-block">
+      <h4>Conversion goals</h4>
+      {error && <div className="alert alert-error">{error}</div>}
+      {actions.length === 0 ? (
+        <p className="maf-hint">Belum ada conversion action — muncul setelah Google Ads Script terbaru berjalan di akun klien.</p>
+      ) : (
+        <>
+          <p className="maf-hint">
+            Tentukan tujuan bisnis setiap conversion action. Report memisahkan Purchase dan Lead berdasarkan pilihan ini.
+            {unverified > 0 && ` ${unverified} action masih memakai tebakan dari kategori Google.`}
+          </p>
+          <div className="maf-table-wrap">
+            <table className="maf-table">
+              <thead><tr><th>Conversion action</th><th>Kategori Google</th><th>Dihitung di Conversions</th><th>Tujuan</th></tr></thead>
+              <tbody>
+                {actions.map((a) => {
+                  const key = `${a.customer_id}|${a.conversion_action_id}`;
+                  return (
+                    <tr key={key}>
+                      <td>{a.name || `#${a.conversion_action_id}`}{a.status === 'REMOVED' && <small className="maf-run-meta"> · dihapus</small>}{a.source === 'conversions_only' && <small className="maf-run-meta"> · bawaan Google</small>}</td>
+                      <td>{human(a.category)}</td>
+                      <td>{a.include_in_conversions == null ? '—' : a.include_in_conversions ? 'Ya (primer di akun)' : 'Tidak (sekunder)'}</td>
+                      <td>
+                        <select className="form-input" value={a.goal_source === 'manual' ? a.goal : ''} disabled={isViewOnly || saving === key}
+                          onChange={(e) => save(a, e.target.value)} aria-label={`Tujuan ${a.name}`}>
+                          <option value="">Bawaan: {GOAL_LABEL[a.goal]} (belum diverifikasi)</option>
+                          {GOALS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                        {saving === key && <Loader2 size={12} className="maf-spin" />}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function firstOfMonth(offset) {
   const d = new Date();
   d.setDate(1);
@@ -118,7 +200,8 @@ export default function GoogleAdsSection({ brand }) {
           <h2>Google Ads</h2>
           <p>
             Hubungkan akun Google Ads brand ini dengan Customer ID-nya. Setiap hari jam 01.00 ATLAS menarik data harian per campaign,
-            ad group, keyword, search term, dan kota — cost kemarin masuk ke Daily Tracking, dan semuanya tersusun di Report Generator › Google Ads.
+            ad group, keyword, search term, kota, iklan, konversi per action, device, jam, dan landing page, plus setting campaign dan Quality Score —
+            cost kemarin masuk ke Daily Tracking, dan semuanya tersusun di Report Generator › Google Ads.
           </p>
         </div>
         <span className="brand-section-meta">{accounts.length ? `${accounts.length} akun terhubung` : 'Belum terhubung'}</span>
@@ -218,6 +301,8 @@ export default function GoogleAdsSection({ brand }) {
                 </p>
               </form>
             )}
+
+            {accounts.length > 0 && <ConversionGoals brandId={brandId} isViewOnly={isViewOnly} />}
 
             <div className="maf-block">
               <h4>Riwayat penarikan</h4>

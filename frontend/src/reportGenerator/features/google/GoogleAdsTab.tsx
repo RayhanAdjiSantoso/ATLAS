@@ -21,6 +21,11 @@ import type { Sentiment } from '../../lib/types';
 import { GoogleAdsTable, type GadsColumn } from './GoogleAdsTable';
 import { GoogleDailyChart } from './GoogleDailyChart';
 import { AuctionInsightsSection, ChangeHistorySection, aiKpis, aiNotes } from './GoogleAdsContext';
+import {
+  AdPerformanceSection, AlertsSection, CampaignIntelSection, ConversionSection, CostConversionChart, DeviceTimeSection, DiagnosticsSection,
+  FreshnessLine, GoalOverviewSection, KeywordIntelSection, SearchTermIntelSection,
+} from './GoogleAdsInsights';
+import { AlertsPanel, ExperimentTracker, OptimizationCenter, type ExperimentDraft } from './GoogleAdsOptimization';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import {
   PRESETS, channelLabel, fetchOverview, fetchReport, formatter, matchTypeLabel, rangeLabel,
@@ -224,6 +229,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
         </InlineNotice>
       ) : (
         <>
+          {clientId && <AlertsPanel clientId={clientId} compact />}
           <SetupBoard title="Periode" note={<>Data ditarik otomatis dari akun Google Ads yang terhubung — {coverageText ?? 'menunggu sinkron pertama'}.</>}>
             <SetupGrid>
               <SetupRow
@@ -283,6 +289,7 @@ interface ReportViewProps { report: GadsReport; clientId: number | null; range: 
 
 function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onReset }: ReportViewProps) {
   const f = formatter(report.currency);
+  const [draft, setDraft] = useState<ExperimentDraft | null>(null);
   const { old, cur } = report;
   const empty = cur.totals.impressions === 0 && cur.totals.cost === 0;
 
@@ -295,6 +302,9 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
 
   const spend = [...cur.campaigns].filter((c) => c.cost > 0).sort((a, b) => b.cost - a.cost);
   const searchCities = cur.cities;
+  const oldCities = new Map(old.cities.map((c) => [c.city, c]));
+  const coverageEnd = report.coverage.map((c) => c.last_date).sort().at(-1) ?? null;
+  const urgent = (report.diagnostics ?? []).filter((x) => x.severity === 'critical' || x.severity === 'high').length;
   const wasted = cur.searchTerms.filter((t) => t.conversions === 0 && t.cost > 0);
 
   const campaignCols: GadsColumn<GadsCampaign>[] = [
@@ -324,6 +334,10 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
   const cityCols: GadsColumn<GadsCity>[] = [
     { key: 'city', label: 'City', align: 'left', value: (r) => r.city },
     ...metricColumns<GadsCity>(f, ['cost', 'impressions', 'avg_cpm', 'clicks', 'avg_cpc', 'conversions', 'cost_per_conv']),
+    {
+      key: 'conv_change', label: `Konversi vs ${p1}`, value: (r) => oldCities.get(r.city)?.conversions ?? null,
+      render: (r) => { const d = computeDelta(oldCities.get(r.city)?.conversions ?? null, r.conversions); return <DeltaPill cls={deltaClassForSentiment(d.deltaNum, 'higher-better')} size="sm">{d.deltaStr}</DeltaPill>; },
+    },
   ];
 
   const heading = (title: string, badge?: string, excel = true) => (
@@ -342,6 +356,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
         <div className="report-meta num">
           Generated {generatedAt} · {report.accounts.map((a) => a.name || a.label || a.customerId).join(', ')}
         </div>
+        <FreshnessLine report={report} coverageEnd={coverageEnd} />
       </div>
       <div data-role="r-body">
         {report.mixedCurrency && (
@@ -363,7 +378,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Overall',
               content: (
                 <SectionAccordion>
-                  <div className="sec-block">
+                  <div className="sec-block" data-exec>
                     {heading('Overall Campaign Performance', `${p1} → ${p2}`, false)}
                     <div className="sec-inner">
                       <div className="gads-kpis">
@@ -387,6 +402,10 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
                           {cur.daily.length ? <GoogleDailyChart days={cur.daily} /> : <div className="empty-note">Tidak ada data harian.</div>}
                         </div>
                         <div className="gads-card">
+                          <h4>Cost &amp; Conversions harian · {p2}</h4>
+                          {cur.daily.length ? <CostConversionChart days={cur.daily} /> : <div className="empty-note">Tidak ada data harian.</div>}
+                        </div>
+                        <div className="gads-card">
                           <h4>Total Budget Terpakai</h4>
                           {spend.length ? (
                             <PieChartCanvas labels={spend.map((c) => c.campaign_name)} values={spend.map((c) => c.cost)} format={(v) => f.money(v)} centerTitle="Cost" legend />
@@ -395,10 +414,22 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
                       </div>
                     </div>
                   </div>
+                  <div data-exec><GoalOverviewSection report={report} f={f} p1={p1} p2={p2} /></div>
+                  <div data-exec><AlertsSection report={report} f={f} p2={p2} /></div>
                   <div className="sec-block">
                     {heading('Ringkasan Periode', 'semua metrik')}
                     <KpiTable rows={summaryRows} p1={p1} p2={p2} padded />
                   </div>
+                </SectionAccordion>
+              ),
+            },
+            {
+              id: 'diagnostics',
+              label: urgent ? `Diagnostics (${urgent})` : 'Diagnostics',
+              hidden: !report.diagnostics,
+              content: (
+                <SectionAccordion>
+                  <div data-exec><DiagnosticsSection report={report} p1={p1} p2={p2} /></div>
                 </SectionAccordion>
               ),
             },
@@ -416,7 +447,9 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
                     {heading('Search Term Wasted Spend', `cost tanpa konversi · ${p2}`)}
                     <GoogleAdsTable columns={wastedCols} rows={wasted} sortKey="cost" limit={TABLE_ROWS}
                       emptyMessage="Tidak ada search term yang mengeluarkan biaya tanpa konversi pada periode ini." />
+                    <p className="gads-footnote">Biaya tanpa konversi yang teramati — belum tentu pemborosan. Klasifikasi per search term ada di Search Term Intelligence.</p>
                   </div>
+                  <SearchTermIntelSection report={report} f={f} p2={p2} />
                 </SectionAccordion>
               ),
             },
@@ -426,6 +459,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               hidden: !cur.campaigns.length,
               content: (
                 <SectionAccordion>
+                  <CampaignIntelSection report={report} f={f} p1={p1} p2={p2} />
                   <div className="sec-block">
                     {heading('Campaign Performance', `urut cost · ${p2}`)}
                     <GoogleAdsTable columns={campaignCols} rows={cur.campaigns} sortKey="cost" limit={TABLE_ROWS} />
@@ -447,13 +481,47 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
                     {heading('Best Performing Keyword', `berdasarkan konversi · ${p2}`)}
                     <GoogleAdsTable columns={keywordCols} rows={cur.keywords} sortKey="conversions" limit={TABLE_ROWS} />
                   </div>
-                  <div className="sec-block">
-                    {heading('Low Performing Keyword', `berdasarkan Avg. CPC · ${p2}`)}
-                    <GoogleAdsTable columns={keywordCols} rows={cur.keywords.filter((k) => k.clicks > 0)} sortKey="avg_cpc" sortDir="asc" limit={TABLE_ROWS} />
-                    <p className="gads-footnote">
-                      Impr. (Abs. Top) % dan Search Lost Top IS dihitung dari data harian, dibobot dengan impressions — bisa sedikit berbeda dari angka satu periode di Google Ads.
-                    </p>
-                  </div>
+                  {cur.keywordDetail ? (
+                    <KeywordIntelSection report={report} f={f} p2={p2} />
+                  ) : (
+                    <div className="sec-block">
+                      {heading('Low Performing Keyword', `berdasarkan Avg. CPC · ${p2}`)}
+                      <GoogleAdsTable columns={keywordCols} rows={cur.keywords.filter((k) => k.clicks > 0)} sortKey="avg_cpc" sortDir="asc" limit={TABLE_ROWS} />
+                      <p className="gads-footnote">
+                        Impr. (Abs. Top) % dan Search Lost Top IS dihitung dari data harian, dibobot dengan impressions — bisa sedikit berbeda dari angka satu periode di Google Ads.
+                      </p>
+                    </div>
+                  )}
+                </SectionAccordion>
+              ),
+            },
+            {
+              id: 'ads',
+              label: 'Ad Performance',
+              hidden: !cur.ads,
+              content: (
+                <SectionAccordion>
+                  <AdPerformanceSection report={report} f={f} p2={p2} />
+                </SectionAccordion>
+              ),
+            },
+            {
+              id: 'conversions',
+              label: 'Konversi',
+              hidden: !cur.conversionActions,
+              content: (
+                <SectionAccordion>
+                  <ConversionSection report={report} f={f} p1={p1} p2={p2} />
+                </SectionAccordion>
+              ),
+            },
+            {
+              id: 'device-time',
+              label: 'Device & Waktu',
+              hidden: !cur.devices && !cur.schedule,
+              content: (
+                <SectionAccordion>
+                  <DeviceTimeSection report={report} f={f} p2={p2} />
                 </SectionAccordion>
               ),
             },
@@ -484,23 +552,47 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Change History',
               content: (
                 <SectionAccordion>
-                  <ChangeHistorySection data={report.changeHistory} p2={p2} />
+                  <ChangeHistorySection data={report.changeHistory} settingChanges={report.campaignSettingChanges ?? []} p2={p2} />
                 </SectionAccordion>
               ),
+            },
+            {
+              id: 'optimization',
+              label: 'Optimasi',
+              hidden: !clientId,
+              content: clientId ? (
+                <SectionAccordion>
+                  <OptimizationCenter clientId={clientId} range={range}
+                    onExperiment={(r) => {
+                      const c = r.entity_type === 'campaign' ? report.cur.campaigns.find((x) => x.campaign_id === r.entity_id) : undefined;
+                      setDraft({ hypothesis: r.title, planned_action: r.recommended_action, recommendation_id: r.id, campaign: c ? `${c.customer_id}|${c.campaign_id}` : '' });
+                    }} />
+                  <ExperimentTracker clientId={clientId} report={report} f={f} draft={draft} onDraftUsed={() => setDraft(null)} />
+                  <div className="sec-block">
+                    <div className="sec-heading google-heading">Alert Aktif <span className="sec-badge">rule-based</span></div>
+                    <div className="sec-inner"><AlertsPanel clientId={clientId} /></div>
+                  </div>
+                </SectionAccordion>
+              ) : null,
             },
           ]}
         />
       </div>
-      <AiSummarySection
-        clientId={clientId}
-        platform="google"
-        period={{ old: p1, cur: p2 }}
-        periodDates={range}
-        kpis={aiKpis(report, f)}
-        notes={aiNotes(report, f)}
-      />
+      <div data-exec>
+        <AiSummarySection
+          clientId={clientId}
+          platform="google"
+          period={{ old: p1, cur: p2 }}
+          periodDates={range}
+          kpis={aiKpis(report, f)}
+          notes={aiNotes(report, f)}
+        />
+      </div>
       <div className="action-row" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
-        <DownloadPdfButton targetId="report-google" filename="Performance Report - Google Ads.pdf" />
+        {/* Executive: KPI, business goals, alerts, diagnostics, AI brief and
+            the optimisation plan. Full: every page and supporting table. */}
+        <DownloadPdfButton targetId="report-google" filename="Executive Report - Google Ads.pdf" label="Download PDF Executive" only="[data-exec]" />
+        <DownloadPdfButton targetId="report-google" filename="Performance Report - Google Ads.pdf" label="Download PDF Full" />
         <button className="btn btn-ghost" onClick={onReset}>
           <RotateCcw size={15} aria-hidden /> Ganti Periode
         </button>
