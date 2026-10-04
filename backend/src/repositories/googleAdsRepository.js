@@ -258,6 +258,7 @@ export async function reportCampaigns(brandId, start, end, db = pool) {
   const { rows } = await db.query(
     `SELECT customer_id, campaign_id, max(campaign_name) AS campaign_name, max(channel_type) AS channel_type,
             (array_agg(budget_amount ORDER BY entry_date DESC) FILTER (WHERE budget_amount IS NOT NULL))[1]::float AS budget,
+            count(DISTINCT entry_date) FILTER (WHERE cost > 0)::int AS active_days,
             ${SUMS}
      FROM google_ads_daily WHERE ${SCOPE} AND level = 'campaign'
      GROUP BY customer_id, campaign_id`,

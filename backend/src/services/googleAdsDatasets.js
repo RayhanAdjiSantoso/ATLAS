@@ -15,8 +15,8 @@ import { contentHash } from './googleAdsAnalytics.js';
 //             a run (removed campaigns and ads keep their last state).
 
 export const CORE = 'core';
-export const DAILY_DATASETS = ['ads', 'conversions', 'competitive'];
-export const SNAPSHOT_DATASETS = ['campaign_settings', 'conversion_actions', 'ad_assets'];
+export const DAILY_DATASETS = ['ads', 'conversions', 'competitive', 'devices', 'hourly', 'landing_pages'];
+export const SNAPSHOT_DATASETS = ['campaign_settings', 'conversion_actions', 'ad_assets', 'keyword_quality'];
 export const KNOWN_DATASETS = [CORE, ...DAILY_DATASETS, ...SNAPSHOT_DATASETS];
 export const PLANNED_DATASETS = [CORE, ...DAILY_DATASETS];
 
@@ -129,7 +129,90 @@ export function normalizeCompetitiveRow(raw) {
   return row;
 }
 
+const DEVICES = new Set(['MOBILE', 'DESKTOP', 'TABLET', 'CONNECTED_TV', 'OTHER', 'UNKNOWN']);
+
+export function normalizeDeviceRow(raw) {
+  const device = text(raw?.device).toUpperCase();
+  if (!raw || !ISO_DATE.test(raw.date) || !text(raw.campaignId) || !DEVICES.has(device)) return null;
+  return {
+    entry_date: raw.date,
+    campaign_id: text(raw.campaignId),
+    campaign_name: text(raw.campaignName),
+    channel_type: text(raw.channelType),
+    device,
+    cost: num(raw.cost),
+    impressions: num(raw.impressions),
+    clicks: num(raw.clicks),
+    conversions: num(raw.conversions),
+    conversions_value: num(raw.conversionsValue),
+    all_conversions: num(raw.allConversions),
+  };
+}
+
+export function normalizeHourRow(raw) {
+  const hour = Number(raw?.hour);
+  if (!raw || !ISO_DATE.test(raw.date) || !text(raw.campaignId) || !Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  return {
+    entry_date: raw.date,
+    hour,
+    campaign_id: text(raw.campaignId),
+    campaign_name: text(raw.campaignName),
+    cost: num(raw.cost),
+    impressions: num(raw.impressions),
+    clicks: num(raw.clicks),
+    conversions: num(raw.conversions),
+    conversions_value: num(raw.conversionsValue),
+  };
+}
+
+// Every metric may be missing (Google refused it for landing pages): null,
+// and the row says which in `unavailable`.
+export function normalizeLandingPageRow(raw) {
+  const url = text(raw?.url).slice(0, 2000);
+  if (!raw || !ISO_DATE.test(raw.date) || !url) return null;
+  const pct = numOrNull(raw.mobileFriendlyClicksPct);
+  return {
+    entry_date: raw.date,
+    campaign_id: text(raw.campaignId),
+    campaign_name: text(raw.campaignName),
+    url,
+    clicks: numOrNull(raw.clicks),
+    impressions: numOrNull(raw.impressions),
+    cost: numOrNull(raw.cost),
+    conversions: numOrNull(raw.conversions),
+    conversions_value: numOrNull(raw.conversionsValue),
+    speed_score: numOrNull(raw.speedScore),
+    mobile_friendly_clicks_pct: pct == null || pct < 0 || pct > 1 ? null : pct,
+    unavailable: strings(raw.unavailable).sort(),
+  };
+}
+
 // ── snapshots ───────────────────────────────────────────────────────
+const QUALITY_BUCKETS = new Set(['BELOW_AVERAGE', 'AVERAGE', 'ABOVE_AVERAGE']);
+const bucket = (v) => (QUALITY_BUCKETS.has(text(v).toUpperCase()) ? text(v).toUpperCase() : null);
+
+// `today` is the snapshot day when the fetcher sends none (ISO date).
+export function normalizeKeywordQuality(raw, today) {
+  if (!raw || !text(raw.adGroupId) || !text(raw.criterionId)) return null;
+  const qs = numOrNull(raw.qualityScore);
+  return {
+    snapshot_date: dateOrNull(raw.snapshotDate) ?? today,
+    campaign_id: text(raw.campaignId),
+    campaign_name: text(raw.campaignName),
+    ad_group_id: text(raw.adGroupId),
+    ad_group_name: text(raw.adGroupName),
+    criterion_id: text(raw.criterionId),
+    keyword: text(raw.keyword),
+    match_type: text(raw.matchType),
+    status: textOrNull(raw.status),
+    // Google has no score for keywords with too little traffic: null, never 0.
+    quality_score: qs != null && qs >= 1 && qs <= 10 ? Math.round(qs) : null,
+    expected_ctr: bucket(raw.expectedCtr),
+    ad_relevance: bucket(raw.adRelevance),
+    landing_page_experience: bucket(raw.landingPageExperience),
+  };
+}
+
 export function normalizeCampaignSetting(raw) {
   if (!raw || !text(raw.campaignId)) return null;
   const row = {
@@ -263,6 +346,27 @@ const HANDLERS = {
   conversion_actions: (run, raws) => {
     const rows = dedupe(raws.map(normalizeConversionAction).filter(Boolean), (r) => r.conversion_action_id);
     return repo.upsertConversionActions({ ...ctx(run), rows });
+  },
+  devices: (run, raws) => {
+    const rows = dedupe(raws.map(normalizeDeviceRow).filter((r) => r && inRange(run, r.entry_date)),
+      (r) => [r.entry_date, r.campaign_id, r.device].join('|'));
+    return repo.upsertDevices({ ...ctx(run), rows });
+  },
+  hourly: (run, raws) => {
+    const rows = dedupe(raws.map(normalizeHourRow).filter((r) => r && inRange(run, r.entry_date)),
+      (r) => [r.entry_date, r.campaign_id, r.hour].join('|'));
+    return repo.upsertHourly({ ...ctx(run), rows });
+  },
+  landing_pages: (run, raws) => {
+    const rows = dedupe(raws.map(normalizeLandingPageRow).filter((r) => r && inRange(run, r.entry_date)),
+      (r) => [r.entry_date, r.campaign_id, r.url].join('|'));
+    return repo.upsertLandingPages({ ...ctx(run), rows });
+  },
+  keyword_quality: (run, raws) => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+    const rows = dedupe(raws.map((r) => normalizeKeywordQuality(r, today)).filter(Boolean),
+      (r) => [r.snapshot_date, r.ad_group_id, r.criterion_id].join('|'));
+    return repo.upsertKeywordQuality({ ...ctx(run), rows });
   },
   ad_assets: (run, raws) => {
     const rows = dedupe(raws.map(normalizeAdAsset).filter(Boolean), (r) => `${r.ad_group_id}|${r.ad_id}`);
