@@ -13,7 +13,7 @@ import {
 import * as analytics from './googleAdsAnalytics.js';
 import * as diagnostics from './googleAdsDiagnostics.js';
 import {
-  parseAuctionInsights, parseSearchTerms, parseChangeHistory, buildSearchTermsWorkbook, buildChangeHistoryWorkbook, AUCTION_METRICS,
+  parseAuctionInsights, parseSearchTerms, parseChangeHistory, buildSearchTermsWorkbook, buildChangeHistoryWorkbook, buildArchiveWorkbook, AUCTION_METRICS,
 } from './googleAdsFiles.js';
 
 // Google Ads for Pengaturan Brand (which accounts feed a brand) and the
@@ -393,24 +393,27 @@ export async function finishRun({ runId, status, rowCount, note, datasets }) {
       console.warn('[google-ads] gagal mengevaluasi alert', { brandId: run.brand_id, reason: err.message });
     }
   }
-  if (!carriesCore(run)) return result;
   // Daily Tracking is daily data, filled on every run (the script runs at
   // 01:00, so yesterday lands then). Data & file is monthly data: a month is
   // filed only once a run has covered it to its last day — the run on the
   // 1st — and re-filed if last month is fetched again while conversions
   // settle. A failure in either must not turn a successful fetch into a
   // failed one, so it is only logged.
+  // Runs without the core reports (a backfill of the newer datasets) still
+  // file their months: the archive slots of Data & file come from them.
   if (status === 'success') {
     // Daily Tracking › Google Ads: the brand's cost per day over the run's
     // range, written at the time the script runs (the Meta auto-fill rule).
-    try {
-      const daily = await repo.reportDaily(run.brand_id, run.start_date, run.end_date);
-      const byDate = new Map(daily.map((d) => [d.date, Number(d.cost) || 0]));
-      const days = [];
-      for (let d = run.start_date; d <= run.end_date; d = addDays(d, 1)) days.push({ date: d, cost: byDate.get(d) ?? 0 });
-      result.dailyTracking = await applyGoogleAdsSpend({ brandId: run.brand_id, days });
-    } catch (err) {
-      console.warn('[google-ads] gagal mengisi Daily Tracking', { brandId: run.brand_id, reason: err.message });
+    if (carriesCore(run)) {
+      try {
+        const daily = await repo.reportDaily(run.brand_id, run.start_date, run.end_date);
+        const byDate = new Map(daily.map((d) => [d.date, Number(d.cost) || 0]));
+        const days = [];
+        for (let d = run.start_date; d <= run.end_date; d = addDays(d, 1)) days.push({ date: d, cost: byDate.get(d) ?? 0 });
+        result.dailyTracking = await applyGoogleAdsSpend({ brandId: run.brand_id, days });
+      } catch (err) {
+        console.warn('[google-ads] gagal mengisi Daily Tracking', { brandId: run.brand_id, reason: err.message });
+      }
     }
     for (const month of monthsBetween(run.start_date, run.end_date)) {
       try {
@@ -816,7 +819,7 @@ async function fileAutoMonth(brand, channel, month, rowCount, buffer) {
 // does not show a half month as filed; uploads are left alone.
 async function dropPartialAutoFiles(brandId, month) {
   const removed = [];
-  for (const channel of ['search_terms', 'change_history']) {
+  for (const channel of ['search_terms', 'change_history', ...Object.keys(ARCHIVES)]) {
     const parts = await library.listSlotParts(brandId, 'google', channel, `${month}-01`);
     for (const p of parts.filter((x) => x.original_filename.startsWith(AUTO_FILE_PREFIX))) {
       await library.deleteLibraryFile(brandId, p.id);
@@ -825,6 +828,25 @@ async function dropPartialAutoFiles(brandId, month) {
   }
   return { month, inProgress: true, removed };
 }
+
+// Archive slots (auto-only, see brandLibraryService.AUTO_ONLY_CHANNELS):
+// what each month's file holds. A dataset with no rows for the month files
+// nothing — an account whose script predates it simply has no archive yet.
+const ARCHIVES = {
+  ads: (b, s, e) => datasetsRepo.adsReport(b, s, e),
+  conversions: async (b, s, e) => {
+    const [rows, meta] = await Promise.all([datasetsRepo.conversionsByCampaignAction(b, s, e), datasetsRepo.listConversionActions(b)]);
+    const primary = new Map(meta.map((m) => [`${m.customer_id}|${m.conversion_action_id}`, m.include_in_conversions]));
+    return rows.map((r) => ({ ...r, include_in_conversions: primary.get(`${r.customer_id}|${r.conversion_action_id}`) ?? null }))
+      .sort((a, b) => String(a.campaign_name).localeCompare(String(b.campaign_name)) || b.all_conversions - a.all_conversions);
+  },
+  impression_share: (b, s, e) => datasetsRepo.archiveCompetitive(b, s, e),
+  campaign_settings: (b, s, e) => datasetsRepo.archiveCampaignSettings(b, s, e),
+  keyword_quality: (b, s, e) => datasetsRepo.archiveKeywordQuality(b, s, e),
+  devices: async (b, s, e) => (await datasetsRepo.devicesByCampaign(b, s, e)).sort((x, y) => String(x.campaign_name).localeCompare(String(y.campaign_name)) || y.cost - x.cost),
+  hourly: (b, s, e) => datasetsRepo.archiveHourly(b, s, e),
+  landing_pages: (b, s, e) => datasetsRepo.archiveLandingPages(b, s, e),
+};
 
 export async function syncLibraryMonth(brandId, month) {
   const brand = await assertBrand(brandId);
@@ -835,7 +857,29 @@ export async function syncLibraryMonth(brandId, month) {
   if (terms.length) out.push(await fileAutoMonth(brand, 'search_terms', month, terms.length, buildSearchTermsWorkbook(month, terms)));
   const changes = await repo.listChangeEvents(brandId, start, end);
   if (changes.length) out.push(await fileAutoMonth(brand, 'change_history', month, changes.length, buildChangeHistoryWorkbook(month, changes)));
+  for (const [channel, read] of Object.entries(ARCHIVES)) {
+    const rows = await read(brandId, start, end);
+    if (rows.length) out.push(await fileAutoMonth(brand, channel, month, rows.length, buildArchiveWorkbook(channel, month, rows)));
+  }
   return out;
+}
+
+// Files every finished month the brand holds data for — the archive slots
+// for months synced before they existed, or after a re-fetch. Months are
+// filed one by one; the current month is never filed (it is not complete).
+export async function rebuildLibrary(brandId) {
+  await assertBrand(brandId);
+  const coverage = await repo.coverage(brandId);
+  if (!coverage.length) return { months: [] };
+  const first = coverage.map((c) => c.first_date).sort()[0];
+  const lastFinished = addDays(monthStart(todayJakarta()), -1);
+  const months = monthsBetween(first, lastFinished);
+  const filed = [];
+  for (const month of months) {
+    const res = await syncLibraryMonth(brandId, month);
+    filed.push({ month, files: res.filter((r) => r.filed).map((r) => r.channel) });
+  }
+  return { months: filed };
 }
 
 // ---------------------------------------------------------------------

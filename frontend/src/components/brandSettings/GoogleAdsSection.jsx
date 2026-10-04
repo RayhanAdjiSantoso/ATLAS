@@ -184,6 +184,19 @@ export default function GoogleAdsSection({ brand }) {
     act(`del:${account.id}`, () => api.delete(`/google-ads/accounts/${account.id}`, { params: { brandId } }), 'Akun dan datanya dihapus.');
   };
 
+  const rebuildArchive = async () => {
+    setBusy('archive'); setError(''); setNotice('');
+    try {
+      const res = await api.post('/google-ads/library/rebuild', { brandId });
+      const filed = res.data.months.reduce((n, m) => n + m.files.length, 0);
+      setNotice(`Arsip Data & file diperbarui: ${filed} file untuk ${res.data.months.length} bulan.`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal mengisi arsip');
+    } finally {
+      setBusy('');
+    }
+  };
+
   const requestResync = (account) => act(
     `resync:${account.id}`,
     () => api.post(`/google-ads/accounts/${account.id}/resync`, { brandId, from: resync.from, to: resync.to }),
@@ -275,6 +288,14 @@ export default function GoogleAdsSection({ brand }) {
                     <input type="date" className="form-input" value={resync.to} min={resync.from} onChange={(e) => setResync((r) => ({ ...r, to: e.target.value }))} />
                   </label>
                   <small className="maf-hint">Pilih rentang, lalu tekan <RefreshCw size={11} /> pada akunnya. Bulan berjalan dan bulan lalu sudah diperbarui otomatis setiap hari.</small>
+                </div>
+              )}
+              {accounts.length > 0 && !isViewOnly && (
+                <div className="maf-actions">
+                  <button type="button" className="btn btn-ghost dt-btn-sm" onClick={rebuildArchive} disabled={busy === 'archive'}>
+                    {busy === 'archive' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Isi arsip Data &amp; file
+                  </button>
+                  <small className="maf-hint">Membuat ulang file bulanan Google Ads di Data &amp; file untuk setiap bulan yang sudah selesai dan tersinkron. Bulan baru terisi otomatis tiap tanggal 1.</small>
                 </div>
               )}
             </div>

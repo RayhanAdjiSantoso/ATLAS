@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { body } from 'express-validator';
 import { authenticate, requireModule } from '../middlewares/auth.js';
 import { requireBrandAccess, blockWriteIfViewOnly } from '../middlewares/brandAccess.js';
 import * as ctrl from '../controllers/googleAdsController.js';
@@ -22,6 +23,8 @@ router.get('/overview', requireModule('brand_settings', 'report_generator'), req
 router.post('/accounts', settings, requireBrandAccess((req) => req.body.brandId), addAccountValidation, ctrl.addAccount);
 router.patch('/accounts/:accountId', settings, requireBrandAccess((req) => req.body.brandId), updateAccountValidation, ctrl.updateAccount);
 router.delete('/accounts/:accountId', settings, requireBrandAccess((req) => req.query.brandId), removeAccountValidation, ctrl.removeAccount);
+// Files Data & file archive copies for every finished month already synced.
+router.post('/library/rebuild', settings, requireBrandAccess((req) => req.body.brandId), [body('brandId').isInt({ min: 1 })], ctrl.rebuildLibrary);
 router.post('/accounts/:accountId/resync', settings, requireBrandAccess((req) => req.body.brandId), resyncValidation, ctrl.requestResync);
 
 // Which goal (purchase / lead / micro / other / ignore) each conversion
