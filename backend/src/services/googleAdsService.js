@@ -710,8 +710,13 @@ async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, 
   Object.assign(cur, {
     keywordDetail,
     keywordSummary: Object.fromEntries(diagnostics.KEYWORD_CLASSES.map((c) => [c, keywordDetail.filter((k) => k.classification === c).length])),
-    searchTermDetail,
-    searchTermSummary: diagnostics.searchTermSummary(searchTermDetail, searchCost),
+    // Summary over every term; the list itself keeps the costliest ones.
+    searchTermSummary: {
+      ...diagnostics.searchTermSummary(searchTermDetail, searchCost),
+      listed: Math.min(searchTermDetail.length, diagnostics.RULES.report.maxSearchTerms),
+      total_terms: searchTermDetail.length,
+    },
+    searchTermDetail: [...searchTermDetail].sort((a, b) => b.cost - a.cost).slice(0, diagnostics.RULES.report.maxSearchTerms),
     devices: diagnostics.deviceInsights(devCur, settings),
     schedule: diagnostics.scheduleInsights(grid, curDays),
     landingPages: diagnostics.landingPageInsights(pages),
@@ -719,13 +724,16 @@ async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, 
   });
   old.devices = diagnostics.deviceInsights(devOld, settings);
 
-  return {
-    diagnostics: diagnostics.diagnoseCampaigns({
+  const campaignFindings = diagnostics.diagnoseCampaigns({
       old: { campaigns: old.campaigns, totals: old.totals, days: oldDays },
       cur: { campaigns: cur.campaigns, totals: cur.totals, days: curDays },
       settings, competitive: cur.competitive.campaigns, changes, settingChanges,
       oldLabel: `${oldStart}..${oldEnd}`, curLabel: `${curStart}..${curEnd}`,
-    }),
+  });
+  const severity = ['critical', 'high', 'medium', 'low'];
+  return {
+    diagnostics: [...campaignFindings, ...diagnostics.qualityPatterns(keywordDetail)]
+      .sort((a, b) => severity.indexOf(a.severity) - severity.indexOf(b.severity)),
     anomalies: diagnostics.detectAnomalies(series, curStart, curEnd),
     baselineLabels: diagnostics.BASELINE_LABEL,
     rules: diagnostics.RULES,
