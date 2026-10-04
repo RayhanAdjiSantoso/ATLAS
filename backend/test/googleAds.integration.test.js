@@ -99,6 +99,8 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
         { date: day(1), campaignId: 'c1', campaignName: 'Search Brand', conversionActionId: 'customers/1/conversionActions/11', conversionActionName: 'Purchase', conversionCategory: 'PURCHASE', conversions: 2, conversionsValue: 200, allConversions: 2, allConversionsValue: 200 },
         { date: day(2), campaignId: 'c1', conversionActionId: '22', conversionActionName: 'WhatsApp click', conversionCategory: 'CONTACT', conversions: 3, allConversions: 3 },
         { date: day(2), campaignId: 'c1', conversionActionId: '33', conversionActionName: 'Add to cart', conversionCategory: 'ADD_TO_CART', conversions: 0, allConversions: 9 },
+        // Like KL's WhatsApp leads: UNKNOWN category, absent from the conversion_actions listing below.
+        { date: day(2), campaignId: 'c1', conversionActionId: '44', conversionActionName: 'Conversation started', conversionCategory: 'UNKNOWN', conversions: 1, allConversions: 1, conversionsValue: 1 },
       ]);
       await send('competitive', [
         { level: 'campaign', granularity: 'range', startDate: mStart, endDate: mEnd, campaignId: 'c1', impressions: 2000, searchImpressionShare: 0.4, searchBudgetLostIs: 0.35, searchRankLostIs: 0.25 },
@@ -149,12 +151,17 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
       assert.equal(report.cur.totals.cost, 300, 'account total from campaign level only');
       assert.ok(Array.isArray(report.cur.searchTerms) && Array.isArray(report.cur.keywords), 'old keys still present');
       assert.equal(report.cur.goals.purchase.conversions, 2);
-      assert.equal(report.cur.goals.lead.conversions, 3);
+      assert.equal(report.cur.goals.lead.conversions, 4, 'WhatsApp click + Conversation started');
       assert.equal(report.cur.goals.micro.conversions, 0);
       assert.equal(report.cur.goals.micro.all_conversions, 9);
       assert.equal(report.cur.goals.purchase.focus_cost_per_result, 150, 'campaign bids to purchase: 300 / 2');
       assert.equal(report.cur.goals.lead.focus_campaigns, 0, 'no campaign works for leads');
-      assert.equal(report.cur.goals.lead.blended_cost_per_result, 100);
+      assert.equal(report.cur.goals.lead.blended_cost_per_result, 75);
+      const msg = report.conversionActionMeta.find((a) => a.conversion_action_id === '44');
+      assert.equal(msg.source, 'conversions_only', 'unlisted action still offered for mapping');
+      assert.equal(msg.goal, 'lead');
+      assert.equal(report.cur.conversionActions.find((a) => a.conversion_action_id === '44').primary, true);
+      assert.equal(report.cur.conversionActions.find((a) => a.conversion_action_id === '33').primary, false);
       assert.equal(report.cur.competitive.campaigns[0].granularity, 'range');
       assert.equal(report.cur.competitive.campaigns[0].search_budget_lost_is, 0.35);
       assert.equal(report.cur.competitive.keywords.length, 1);
@@ -174,8 +181,10 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
       const res = await service.setConversionGoal({ brandId, customerId: CUSTOMER, conversionActionId: '22', goal: 'other', userId: null });
       assert.equal(res.actions.find((a) => a.conversion_action_id === '22').goal_source, 'manual');
       const report = await service.getReport({ brandId, oldStart: mStart, oldEnd: mStart, curStart: mStart, curEnd: mEnd });
-      assert.equal(report.cur.goals.lead.conversions, 0);
+      assert.equal(report.cur.goals.lead.conversions, 1);
       assert.equal(report.cur.goals.other.conversions, 3);
+      const mapped = await service.setConversionGoal({ brandId, customerId: CUSTOMER, conversionActionId: '44', goal: 'lead', userId: null });
+      assert.equal(mapped.actions.find((a) => a.conversion_action_id === '44').goal_source, 'manual', 'an unlisted action can be mapped');
       await assert.rejects(service.setConversionGoal({ brandId, customerId: '1234567890', conversionActionId: '22', goal: 'lead', userId: null }), /tidak ditemukan/);
     });
 

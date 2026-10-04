@@ -267,6 +267,17 @@ export async function listConversionActions(brandId, db = pool) {
   return rows;
 }
 
+// Every action that has conversion rows, listed in Google's metadata or not.
+export async function listSeenConversionActions(brandId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT customer_id, conversion_action_id, max(conversion_action_name) AS name, max(conversion_category) AS category
+     FROM google_ads_conversion_daily WHERE brand_id = $1
+     GROUP BY customer_id, conversion_action_id`,
+    [brandId],
+  );
+  return rows;
+}
+
 // Campaign × action: the grain campaignGoals and costPerGoal need.
 export async function conversionsByCampaignAction(brandId, start, end, db = pool) {
   const { rows } = await db.query(

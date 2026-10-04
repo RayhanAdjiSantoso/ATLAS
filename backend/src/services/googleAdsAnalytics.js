@@ -61,16 +61,36 @@ const CATEGORY_GOAL = {
   OUTBOUND_CLICK: 'micro', STORE_VISIT: 'micro', SUBSCRIBE_PAID: 'purchase',
 };
 
-export function defaultGoal(category) {
-  return CATEGORY_GOAL[String(category ?? '').toUpperCase()] ?? 'other';
+// Google reports some built-in actions without a usable category — message
+// leads ("Conversation started") arrive as UNKNOWN. For those only, the name
+// decides; it is still a default the brand is asked to verify.
+const UNCATEGORISED = new Set(['', 'UNKNOWN', 'UNSPECIFIED', 'DEFAULT']);
+const MESSAGE_LEAD = /conversation|message|messaging|chat|whatsapp|pesan|percakapan/i;
+
+export function defaultGoal(category, name = '') {
+  const c = String(category ?? '').toUpperCase();
+  if (CATEGORY_GOAL[c]) return CATEGORY_GOAL[c];
+  if (UNCATEGORISED.has(c) && MESSAGE_LEAD.test(String(name ?? ''))) return 'lead';
+  return 'other';
+}
+
+// Whether an action counted in the Conversions column, read from the numbers
+// rather than the account setting: an action primary for the account still
+// counts 0 in a campaign whose goals leave it out. Only without any numbers
+// does the account setting answer.
+export function countedAsPrimary(conversions, allConversions, accountPrimary = null) {
+  if (Number(conversions) > 0) return true;
+  if (Number(allConversions) > 0) return false;
+  return accountPrimary ?? null;
 }
 
 const actionKey = (customerId, actionId) => `${customerId}|${actionId}`;
 
 // Per conversion action over a period, with its goal and whether that goal
 // is the brand's own (manual) or derived from Google's category (default).
-// `primary` comes from the action's metadata; without it a row with
-// Conversions > 0 must be primary, otherwise it is unknown (null).
+// `primary` = counted in Conversions in this period (countedAsPrimary);
+// `account_primary` is the account-level setting, null when Google did not
+// list the action's metadata (some built-in actions are not listed).
 export function classifyActions(actionRows, metaRows = [], mapRows = []) {
   const meta = new Map(metaRows.map((m) => [actionKey(m.customer_id, m.conversion_action_id), m]));
   const map = new Map(mapRows.map((m) => [actionKey(m.customer_id, m.conversion_action_id), m.goal]));
@@ -78,16 +98,16 @@ export function classifyActions(actionRows, metaRows = [], mapRows = []) {
     const key = actionKey(r.customer_id, r.conversion_action_id);
     const m = meta.get(key);
     const category = m?.category ?? r.conversion_category ?? null;
+    const name = m?.name || r.conversion_action_name;
     const manual = map.get(key);
-    let primary = m?.include_in_conversions ?? null;
-    if (primary == null && Number(r.conversions) > 0) primary = true;
     return {
       ...r,
-      name: m?.name || r.conversion_action_name,
+      name,
       category,
       status: m?.status ?? null,
-      primary,
-      goal: manual ?? defaultGoal(category),
+      account_primary: m?.include_in_conversions ?? null,
+      primary: countedAsPrimary(r.conversions, r.all_conversions, m?.include_in_conversions),
+      goal: manual ?? defaultGoal(category, name),
       goal_source: manual ? 'manual' : 'default',
     };
   });
