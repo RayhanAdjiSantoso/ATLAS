@@ -172,17 +172,18 @@ export async function coverage(brandId, db = pool) {
 // ---------------------------------------------------------------------
 // google_ads_fetch_log
 // ---------------------------------------------------------------------
-export async function insertRun({ brandId, customerId, startDate, endDate, source, runId }, db = pool) {
+// `datasets` NULL = a fetcher from before migration 040: core rows only.
+export async function insertRun({ brandId, customerId, startDate, endDate, source, runId, datasets = null }, db = pool) {
   await db.query(
-    `INSERT INTO google_ads_fetch_log (brand_id, customer_id, start_date, end_date, source, fetch_run_id)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [brandId, customerId, startDate, endDate, source, runId],
+    `INSERT INTO google_ads_fetch_log (brand_id, customer_id, start_date, end_date, source, fetch_run_id, datasets)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [brandId, customerId, startDate, endDate, source, runId, datasets],
   );
 }
 
 export async function getRun(runId, db = pool) {
   const { rows } = await db.query(
-    `SELECT brand_id, customer_id, status, source,
+    `SELECT fetch_run_id, brand_id, customer_id, status, source, datasets,
             to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date
      FROM google_ads_fetch_log WHERE fetch_run_id = $1`,
     [runId],
@@ -190,11 +191,11 @@ export async function getRun(runId, db = pool) {
   return rows[0] ?? null;
 }
 
-export async function finishRun({ runId, status, rowCount, note }, db = pool) {
+export async function finishRun({ runId, status, rowCount, note, datasetResults = {} }, db = pool) {
   await db.query(
-    `UPDATE google_ads_fetch_log SET status = $2, row_count = $3, note = $4, finished_at = now()
+    `UPDATE google_ads_fetch_log SET status = $2, row_count = $3, note = $4, dataset_results = $5, finished_at = now()
      WHERE fetch_run_id = $1`,
-    [runId, status, rowCount, note],
+    [runId, status, rowCount, note, JSON.stringify(datasetResults)],
   );
 }
 
@@ -202,7 +203,7 @@ export async function listRecentRuns(brandId, limit = 20, db = pool) {
   const { rows } = await db.query(
     `SELECT fetch_run_id AS "runId", customer_id AS "customerId", source, status, row_count AS "rowCount", note,
             to_char(start_date, 'YYYY-MM-DD') AS "startDate", to_char(end_date, 'YYYY-MM-DD') AS "endDate",
-            started_at AS "startedAt", finished_at AS "finishedAt"
+            started_at AS "startedAt", finished_at AS "finishedAt", datasets, dataset_results AS "datasetResults"
      FROM google_ads_fetch_log WHERE brand_id = $1
      ORDER BY started_at DESC LIMIT $2`,
     [brandId, limit],
@@ -216,7 +217,7 @@ export async function listSuccessfulRuns(customerIds, db = pool) {
   if (!customerIds.length) return [];
   const { rows } = await db.query(
     `SELECT customer_id, to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date,
-            started_at
+            started_at, datasets, dataset_results
      FROM google_ads_fetch_log
      WHERE customer_id = ANY($1) AND status = 'success'`,
     [customerIds],
@@ -255,7 +256,7 @@ export async function reportDaily(brandId, start, end, db = pool) {
 // what the Looker table shows (it reads the campaign's current setting).
 export async function reportCampaigns(brandId, start, end, db = pool) {
   const { rows } = await db.query(
-    `SELECT campaign_id, max(campaign_name) AS campaign_name, max(channel_type) AS channel_type,
+    `SELECT customer_id, campaign_id, max(campaign_name) AS campaign_name, max(channel_type) AS channel_type,
             (array_agg(budget_amount ORDER BY entry_date DESC) FILTER (WHERE budget_amount IS NOT NULL))[1]::float AS budget,
             ${SUMS}
      FROM google_ads_daily WHERE ${SCOPE} AND level = 'campaign'
