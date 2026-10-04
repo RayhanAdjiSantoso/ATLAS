@@ -37,3 +37,28 @@ export const updateBrandStatus = asyncHandler(async (req, res) => {
   if (!brand) throw new AppError('Brand tidak ditemukan', 404);
   res.json({ brand });
 });
+
+const parseBrandId = (raw) => {
+  const brandId = Number(raw);
+  if (!Number.isSafeInteger(brandId) || brandId <= 0) throw new AppError('Brand ID tidak valid', 400);
+  return brandId;
+};
+
+// What deleting this brand would meet: data that blocks it, settings that go with it.
+export const getBrandDeleteCheck = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req.params.brandId);
+  const brand = await brandService.getBrandById(brandId);
+  if (!brand) throw new AppError('Brand tidak ditemukan', 404);
+  const refs = await brandService.getBrandReferences(brandId);
+  res.json({ brand, canDelete: refs.blocking.length === 0, ...refs });
+});
+
+export const deleteBrand = asyncHandler(async (req, res) => {
+  const brandId = parseBrandId(req.params.brandId);
+  const result = await brandService.deleteBrand(brandId);
+  if (result.notFound) throw new AppError('Brand tidak ditemukan', 404);
+  if (!result.deleted) {
+    throw new AppError('Brand ini masih punya data, jadi tidak bisa dihapus. Ubah statusnya menjadi Nonaktif.', 409, { blocking: result.blocking });
+  }
+  res.json({ deleted: true, brand: result.brand, cleared: result.cleared });
+});

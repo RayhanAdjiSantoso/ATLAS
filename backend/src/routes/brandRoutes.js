@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, requireModule } from '../middlewares/auth.js';
+import { authenticate, authorize, requireModule } from '../middlewares/auth.js';
 import { uploadDataFile } from '../middlewares/upload.js';
 import { requireBrandAccess, blockWriteIfViewOnly } from '../middlewares/brandAccess.js';
 import * as brandController from '../controllers/brandController.js';
@@ -16,6 +16,9 @@ router.use(requireBrandAccess((req) => req.params.brandId));
 router.get('/', brandController.listBrands);
 router.post('/', brandController.createBrand);
 router.patch('/:brandId/status', brandController.updateBrandStatus);
+// Deleting is admin-only and only for a brand with no data (see brandService).
+router.get('/:brandId/delete-check', authorize('admin'), brandController.getBrandDeleteCheck);
+router.delete('/:brandId', authorize('admin'), brandController.deleteBrand);
 
 // Pengaturan Brand: the brand's narrative profile, and the file library the
 // other modules read instead of asking for their own upload.

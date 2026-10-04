@@ -19,7 +19,7 @@ import {
   type MetaIndustry,
   type MetaObjectiveKey,
 } from '../../lib/meta';
-import { findCol } from '../../lib/columns';
+import { alignRowKeys, findCol } from '../../lib/columns';
 import { daysBetweenInclusive, formatPeriodLabel } from '../../lib/periodLabel';
 import { fromISODate, toISODate } from '../../lib/dateFmt';
 import { readSpreadsheetFile } from '../../lib/xlsxUtils';
@@ -155,9 +155,12 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const [metaSides, setMetaSides] = useState<Record<PeriodRole, MetaFileState | null>>(EMPTY_META_SIDES);
   const [cpasSides, setCpasSides] = useState<Record<PeriodRole, MetaFileState | null>>(EMPTY_META_SIDES);
 
-  const metaRows = useMemo(() => (metaSides.old || metaSides.cur ? [...(metaSides.old?.rows ?? []), ...(metaSides.cur?.rows ?? [])] : null), [metaSides]);
+  // alignRowKeys: the two periods' exports may not carry the same columns
+  // (see lib/columns.ts) — without it a breakdown only one side has is
+  // invisible to every parser, and its subtotal rows get counted as data.
+  const metaRows = useMemo(() => (metaSides.old || metaSides.cur ? alignRowKeys([...(metaSides.old?.rows ?? []), ...(metaSides.cur?.rows ?? [])]) : null), [metaSides]);
   const metaHeaders = useMemo(() => (metaRows?.length ? Object.keys(metaRows[0]) : []), [metaRows]);
-  const cpasRows = useMemo(() => (cpasSides.old || cpasSides.cur ? [...(cpasSides.old?.rows ?? []), ...(cpasSides.cur?.rows ?? [])] : null), [cpasSides]);
+  const cpasRows = useMemo(() => (cpasSides.old || cpasSides.cur ? alignRowKeys([...(cpasSides.old?.rows ?? []), ...(cpasSides.cur?.rows ?? [])]) : null), [cpasSides]);
   const cpasHeaders = useMemo(() => (cpasRows?.length ? Object.keys(cpasRows[0]) : []), [cpasRows]);
 
   // B2B / Retail — manual, not in the export. Objective — Meta's ODAX
@@ -293,7 +296,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
       async function downloadAndParse(list: LibraryFileMeta[]): Promise<SheetRow[]> {
         const parts = await Promise.all(list.map((f) => downloadLibraryFile(clientId!, f)));
-        return (await Promise.all(parts.map(readSpreadsheetFile))).flat();
+        return alignRowKeys((await Promise.all(parts.map(readSpreadsheetFile))).flat());
       }
 
       if (metaList.length) {
@@ -455,7 +458,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       throw new Error(basics.message || 'File tidak valid.');
     }
     try {
-      const rows = (await Promise.all(input.map(readSpreadsheetFile))).flat();
+      const rows = alignRowKeys((await Promise.all(input.map(readSpreadsheetFile))).flat());
       if (!rows.length) {
         throw new Error('File kosong.');
       }

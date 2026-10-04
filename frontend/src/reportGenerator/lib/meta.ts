@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { deltaClassForSentiment, computeDelta, formatDeltaID } from './delta';
 import { buildParsedPeriod, daysBetweenInclusive, emptyParsedPeriod, type ParsedPeriod } from './periodLabel';
 import type { DeltaClassName, Sentiment, SheetRow } from './types';
+import { alignRowKeys } from './columns';
 
 // ══════════════════════════════════════════════════════
 // META ADS — ported 1:1 from the original vanilla-JS logic.
@@ -301,7 +302,10 @@ export function findLeafCampaignCol(rows: SheetRow[]): string | null {
 // reach classification and aggregation. Same root cause surfaced separately
 // in the Boost Post and CPAS modules; keeping the rule in one shared helper
 // means a module that forgets to call it is the only way to reintroduce it.
-export function stripCampaignSubtotals(rows: SheetRow[]): SheetRow[] {
+export function stripCampaignSubtotals(input: SheetRow[]): SheetRow[] {
+  // Rows from two exports may not share columns; read the subtotal markers
+  // from all of them, not just the first row's file (see alignRowKeys).
+  const rows = alignRowKeys(input);
   const leafCol = findLeafCampaignCol(rows);
   const leaves = leafCol ? rows.filter((r) => !isAllValue(r[leafCol])) : rows;
   return stripNestedSubtotals(leaves);

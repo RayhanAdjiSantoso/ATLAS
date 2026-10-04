@@ -140,6 +140,8 @@
 
 /* ── Detail drawer: context and direction beside the list ───────────────── */
 .bp-scrim { position: fixed; inset: 0; z-index: 80; background: rgba(15, 26, 58, .28); }
+/* Never block the page while sliding away. */
+.bp-scrim.is-leaving { pointer-events: none; }
 .bp-drawer {
   position: absolute; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column;
   width: min(760px, 100vw); background: #fff; outline: none;
@@ -242,3 +244,143 @@
 @media (prefers-reduced-motion: reduce) {
   .bp-primary, .bp-ghost, .bp-row-btn, .bp-icon-btn, .bp-help-chev { transition: none; }
 }
+
+/* ── Brand cards: status is read here, set in Brand Setting ─────────────── */
+.bp-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px;
+  margin: 0; padding: 0; list-style: none;
+}
+.bp-card {
+  display: grid; gap: 12px; padding: 14px; border: 1px solid var(--bp-line); border-radius: 16px; background: #fff;
+  transition: border-color 180ms ease, box-shadow 220ms ease, transform 220ms var(--bp-ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .bp-card:hover { border-color: #c9d4f2; box-shadow: 0 12px 26px -20px rgba(15, 26, 58, .45); transform: translateY(-2px); }
+}
+.bp-card.is-open { border-color: var(--soft-accent); box-shadow: 0 0 0 3px rgba(30, 62, 184, .12); }
+.bp-card-main { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.bp-avatar {
+  display: grid; flex: 0 0 auto; place-items: center; width: 42px; height: 42px; border-radius: 12px;
+  background: #eef1f7; color: #52617c; font-size: 1rem; font-weight: 800;
+}
+.bp-card.is-active .bp-avatar { background: #e7f7ee; color: #166534; }
+.bp-card.is-freeze .bp-avatar { background: #fef3c7; color: #92400e; }
+.bp-card-text { display: grid; gap: 5px; min-width: 0; }
+.bp-card-text strong { overflow: hidden; color: var(--soft-ink); font-size: .95rem; font-weight: 750; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.bp-card-main:hover strong { color: var(--soft-accent); }
+.bp-card-text .bp-status-chip { justify-self: start; padding: 2px 9px; font-size: .75rem; }
+.bp-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bp-card-actions .bp-row-btn { min-height: 34px; }
+.bp-status-chip.is-off { color: #52617c; }
+.bp-status-chip.is-off i { background: #8693ab; }
+.bp-status-chip.is-unknown i { background: #fff; box-shadow: inset 0 0 0 1.5px #9aa5b8; }
+
+/* ── Brand Setting: status control ──────────────────────────────────────── */
+.bp-status-block {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px;
+  margin: 0 28px 14px; padding: 14px 16px; border: 1px solid var(--bp-line); border-radius: 14px; background: #fbfcfe;
+}
+.bp-status-copy { display: grid; gap: 3px; min-width: 220px; flex: 1; }
+.bp-status-copy strong { color: var(--soft-ink); font-size: .9rem; }
+.bp-status-copy small { color: var(--soft-muted); font-size: .76rem; line-height: 1.45; }
+.bp-status-seg { display: flex; align-items: center; gap: 6px; }
+.bp-status-seg button {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 13px;
+  border: 1px solid var(--bp-line); border-radius: 99px; background: #fff; color: var(--soft-muted);
+  font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 160ms var(--bp-ease);
+}
+.bp-status-seg button:active:not(:disabled) { transform: scale(0.97); }
+.bp-status-seg button:disabled { cursor: not-allowed; opacity: .6; }
+.bp-status-seg button i { width: 8px; height: 8px; border-radius: 50%; background: #8693ab; }
+.bp-status-seg button.is-active i { background: #22a06b; }
+.bp-status-seg button.is-freeze i { background: #d97706; }
+.bp-status-seg button:hover:not(:disabled):not(.is-on) { border-color: #b8c5f5; color: var(--soft-ink); }
+.bp-status-seg button.is-on.is-active { border-color: #a7e3c4; background: #e7f7ee; color: #166534; }
+.bp-status-seg button.is-on.is-off { border-color: #cfd6e4; background: #eef1f7; color: #3b4a66; }
+.bp-status-seg button.is-on.is-freeze { border-color: #f5d48a; background: #fef3c7; color: #92400e; }
+.bp-status-seg button.is-on:disabled { opacity: 1; }
+
+/* ── Brand Setting: delete ──────────────────────────────────────────────── */
+.bp-danger { margin-top: 26px; padding: 14px 16px; border: 1px solid #f3d0cc; border-radius: 14px; background: #fffafa; }
+.bp-danger-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.bp-danger-head > div { display: grid; gap: 3px; }
+.bp-danger-head strong { color: #9b1c1c; font-size: .88rem; }
+.bp-danger-head small { color: var(--soft-muted); font-size: .76rem; }
+.bp-danger-body { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f3d0cc; }
+.bp-danger-body p { margin: 0; color: var(--soft-ink); font-size: .84rem; line-height: 1.55; }
+.bp-danger-body ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.bp-danger-body li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 9px; background: #fff; color: var(--soft-muted); font-size: .8rem; }
+.bp-danger-body li b { color: var(--soft-ink); font-variant-numeric: tabular-nums; }
+.bp-danger-body > .bp-ghost { justify-self: start; }
+.bp-danger-body input {
+  min-height: 40px; padding: 0 12px; border: 1px solid #f0b8b1; border-radius: 10px; color: var(--soft-ink); font: inherit; font-size: .86rem;
+}
+.bp-danger-body input:focus { outline: 0; border-color: #c81e1e; box-shadow: 0 0 0 3px rgba(200, 30, 30, .12); }
+.bp-danger-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.bp-danger-btn {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 14px; border: 0; border-radius: 11px;
+  background: #c81e1e; color: #fff; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
+  transition: background-color 180ms ease, transform 160ms var(--bp-ease);
+}
+.bp-danger-btn:hover:not(:disabled) { background: #9b1c1c; }
+.bp-danger-btn:active:not(:disabled) { transform: scale(0.97); }
+.bp-danger-btn:disabled { opacity: .45; cursor: not-allowed; }
+.bp-danger-btn.is-ghost { border: 1px solid #f0b8b1; background: #fff; color: #c81e1e; }
+.bp-danger-btn.is-ghost:hover:not(:disabled) { background: #fef1f0; }
+
+/* ── Master/detail: brand list left, Brand Setting right ────────────────── */
+.bp-stats.is-start { justify-content: flex-start; }
+.bp-master { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.bp-list {
+  position: sticky; top: 14px; display: flex; flex-direction: column;
+  max-height: calc(100vh - 28px); border: 1px solid var(--bp-line);
+  /* clip, not hidden: a hidden box can still be scrolled by focus, which
+     pushed the search and filter out of the card. */
+  overflow: clip;
+}
+.bp-list-head { display: grid; gap: 10px; padding: 14px 14px 10px; border-bottom: 1px solid var(--bp-rule); }
+.bp-list-head .bp-search { min-width: 0; min-height: 42px; }
+.bp-list-head .brand-status-filter { flex-wrap: wrap; gap: 4px; }
+.bp-list-head small { color: var(--soft-muted); font-size: .75rem; }
+.bp-list-items { flex: 1; margin: 0; padding: 6px; overflow-y: auto; list-style: none; scrollbar-width: thin; }
+.bp-list-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 0 12px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--soft-ink);
+  font: inherit; font-size: .88rem; font-weight: 600; text-align: left; cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.bp-list-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-list-item small { flex: 0 0 auto; color: var(--soft-muted); font-size: .72rem; font-weight: 600; }
+.bp-list-item:hover { background: #f3f6fc; }
+.bp-list-item.is-on { background: #eef1fc; color: var(--soft-accent); font-weight: 750; box-shadow: inset 3px 0 0 var(--soft-accent); }
+.bp-list-item:focus-visible { outline: 2px solid var(--soft-accent); outline-offset: -2px; }
+
+.bp-setting { display: grid; gap: 0; border: 1px solid var(--bp-line); overflow: hidden; }
+.bp-setting-empty { place-items: center; min-height: 320px; color: var(--soft-muted); font-size: .9rem; }
+.bp-setting-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px 16px;
+  background: radial-gradient(ellipse at 8% 0%, rgba(111, 154, 245, .16), transparent 65%), linear-gradient(180deg, #f2f6ff, #fff);
+}
+.bp-setting-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--soft-accent); font-size: .76rem; font-weight: 700; }
+.bp-setting-head h2 { margin: 6px 0 0; color: var(--soft-ink); font-size: 1.55rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.15; }
+.bp-setting-head p { margin: 4px 0 0; color: var(--soft-muted); font-size: .84rem; }
+.bp-setting .bp-status-block { margin: 0 24px 14px; }
+.bp-setting .bp-segment { margin: 0 24px; }
+.bp-setting-body { padding: 16px 24px 8px; }
+.bp-setting-foot {
+  position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 24px; border-top: 1px solid var(--bp-rule); background: rgba(251, 252, 254, .96);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--soft-muted); font-size: .78rem;
+}
+.bp-setting > .bp-danger { margin: 16px 24px 22px; }
+
+@media (max-width: 1000px) {
+  .bp-master { grid-template-columns: minmax(0, 1fr); }
+  .bp-list { position: static; max-height: 360px; }
+}
+/* The app's main column is overflow:auto but never scrolls (the window
+   does), which silently disables position:sticky inside it. clip keeps the
+   same edge clipping without being a scroll container, so the brand list
+   can stay in view beside a long Brand Setting. */
+main.main-content:has(.bp-master) { overflow: clip; }

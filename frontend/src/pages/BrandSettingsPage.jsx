@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
-  Archive, ArrowUpRight, Check, CircleAlert, Compass, Loader2, NotebookPen, Plus, Save, Search, X,
+  Archive, ArrowUpRight, Check, CircleAlert, Compass, Loader2, NotebookPen, Plus, Save, Search, Settings2, Trash2, X,
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -15,12 +15,13 @@ import '../components/dashboard/console.css';
 import '../components/dashboard/softShell.css';
 import './brandPages.css';
 
-// Pengaturan Brand — the first stop in ATLAS: every client MIL runs, its
-// status (shared by every module), and for each brand the two narrative
-// records analysis reads — brand context and current direction. Those open
-// from the brand's own row in a side drawer, so the list stays in view and
-// moving from one brand to the next is one click. The brand's files, meeting
-// notes and ad accounts live in Data Brand; each row links straight there.
+// Pengaturan Brand — the first stop in ATLAS. A quiet list of every client
+// MIL runs on the left (a status dot and a name, nothing repeated per row),
+// and on the right the selected brand's Brand Setting: status (shared by
+// every module), brand context, current direction, and for admins deleting
+// an empty brand. Moving between brands is one click and the page never
+// covers itself with a popup. The brand's files, meeting notes and ad
+// accounts live in Data Brand; the setting links straight there.
 
 const CONTEXT_FIELDS = [
   ['brand_products_customer', 'Brand, Produk & Customer', 'Apa yang dijual brand dan siapa customer utamanya?'],
@@ -61,9 +62,83 @@ function Field({ label, guidance, value, onChange, disabled }) {
   );
 }
 
-// One brand's context and direction, edited beside the list. Loads its own
-// profile, keeps an unsaved draft, and asks before throwing that draft away.
-function BrandDetail({ brand, isViewOnly, onClose, onOpenData }) {
+const STATUS_CHOICES = ['active', 'off', 'freeze'];
+
+// Deleting a brand, at the foot of Brand Setting. The server decides what is
+// safe: a brand that still holds data (files, reports, daily tracking…) is
+// never deleted — the panel lists that data and points at "Nonaktif"
+// instead. Only an empty brand (a duplicate, a typo) gets the final confirm,
+// and that asks for its name typed back.
+function DeleteBrand({ brand, onDeleted }) {
+  const [state, setState] = useState({ phase: 'idle' });
+  const [typed, setTyped] = useState('');
+
+  const check = async () => {
+    setState({ phase: 'checking' });
+    try {
+      const { data } = await api.get(`/brands/${brand.brand_id}/delete-check`);
+      setState({ phase: data.canDelete ? 'confirm' : 'blocked', ...data });
+    } catch (err) {
+      setState({ phase: 'error', text: describeError(err, 'Gagal memeriksa brand') });
+    }
+  };
+
+  const remove = async () => {
+    setState((s) => ({ ...s, phase: 'deleting' }));
+    try {
+      await api.delete(`/brands/${brand.brand_id}`);
+      onDeleted(brand);
+    } catch (err) {
+      const blocking = err.response?.data?.details?.blocking;
+      setState(blocking ? { phase: 'blocked', blocking } : { phase: 'error', text: describeError(err, 'Gagal menghapus brand') });
+    }
+  };
+
+  return (
+    <section className="bp-danger" aria-label="Hapus brand">
+      <div className="bp-danger-head">
+        <div>
+          <strong>Hapus brand</strong>
+          <small>Hanya untuk brand tanpa data — misalnya brand ganda atau salah ketik.</small>
+        </div>
+        {(state.phase === 'idle' || state.phase === 'error') && (
+          <button type="button" className="bp-danger-btn is-ghost" onClick={check}><Trash2 size={15} aria-hidden="true" /> Hapus brand</button>
+        )}
+        {state.phase === 'checking' && <span className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memeriksa data…</span>}
+      </div>
+      {state.phase === 'error' && <p className="bp-drawer-msg is-error" role="alert"><CircleAlert size={15} /> {state.text}</p>}
+      {state.phase === 'blocked' && (
+        <div className="bp-danger-body">
+          <p>{brand.brand_name} masih punya data, jadi tidak bisa dihapus. Ubah statusnya menjadi <b>Nonaktif</b> — data dan laporannya tetap aman.</p>
+          <ul>{state.blocking.map((b) => <li key={b.label}><span>{b.label}</span><b>{b.count.toLocaleString('id-ID')}</b></li>)}</ul>
+          <button type="button" className="bp-ghost" onClick={() => setState({ phase: 'idle' })}>Tutup</button>
+        </div>
+      )}
+      {(state.phase === 'confirm' || state.phase === 'deleting') && (
+        <div className="bp-danger-body">
+          <p>
+            {brand.brand_name} belum punya data. Menghapusnya permanen
+            {state.cleared?.length ? <> dan ikut menghapus: {state.cleared.map((c) => c.label).join(', ')}</> : null}.
+            Ketik <b>{brand.brand_name}</b> untuk konfirmasi.
+          </p>
+          <input value={typed} onChange={(event) => setTyped(event.target.value)} placeholder={brand.brand_name} aria-label="Ketik nama brand untuk konfirmasi" autoFocus />
+          <div className="bp-danger-actions">
+            <button type="button" className="bp-ghost" onClick={() => { setTyped(''); setState({ phase: 'idle' }); }} disabled={state.phase === 'deleting'}>Batal</button>
+            <button type="button" className="bp-danger-btn" onClick={remove} disabled={typed.trim() !== brand.brand_name.trim() || state.phase === 'deleting'}>
+              {state.phase === 'deleting' ? <Loader2 size={15} className="brand-spin" /> : <Trash2 size={15} aria-hidden="true" />} Hapus permanen
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Brand Setting: the selected brand's status, context and direction, shown
+// beside the list in the page itself. Status saves on the spot (it is shared
+// by every module); the narrative fields keep an unsaved draft, which the
+// page asks about before switching to another brand (see onDirtyChange).
+function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDeleted, onOpenData, onDirtyChange }) {
   const reduced = useReducedMotion();
   const [profile, setProfile] = useState(null);
   const [draft, setDraft] = useState({});
@@ -71,7 +146,6 @@ function BrandDetail({ brand, isViewOnly, onClose, onOpenData }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
-  const panelRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -89,18 +163,7 @@ function BrandDetail({ brand, isViewOnly, onClose, onOpenData }) {
   }, [brand.brand_id]);
 
   const dirty = useMemo(() => ALL_FIELDS.some(([key]) => (draft[key] ?? '') !== (profile?.[key] ?? '')), [draft, profile]);
-
-  const close = useCallback(() => {
-    if (dirty && !window.confirm('Perubahan belum disimpan. Tutup tanpa menyimpan?')) return;
-    onClose();
-  }, [dirty, onClose]);
-
-  useEffect(() => {
-    panelRef.current?.focus();
-    const onKey = (event) => { if (event.key === 'Escape') close(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [close]);
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   const save = async () => {
     if (isViewOnly || !dirty) return;
@@ -121,93 +184,98 @@ function BrandDetail({ brand, isViewOnly, onClose, onOpenData }) {
   const spring = reduced ? { duration: 0 } : { type: 'spring', stiffness: 480, damping: 40, mass: .6 };
 
   return (
-    <motion.div
-      className="bp-scrim" onMouseDown={(event) => event.target === event.currentTarget && close()}
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .18 }}
+    <motion.section
+      key={brand.brand_id} className="soft-card bp-setting" aria-labelledby="bp-setting-title"
+      initial={reduced ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .22, ease: EASE }}
     >
-      <motion.aside
-        ref={panelRef} tabIndex={-1} className="bp-drawer" role="dialog" aria-modal="true" aria-labelledby="bp-drawer-title"
-        initial={reduced ? { opacity: 0 } : { x: '100%' }} animate={reduced ? { opacity: 1 } : { x: 0 }} exit={reduced ? { opacity: 0 } : { x: '100%' }}
-        transition={{ duration: .32, ease: [0.32, 0.72, 0, 1] }}
-      >
-        <header className="bp-drawer-head">
-          <div>
-            <span className={`bp-status-chip is-${brand.status || 'unknown'}`}>
-              <i aria-hidden="true" />{BRAND_STATUS_LABELS[brand.status || 'unknown']}
-            </span>
-            <h2 id="bp-drawer-title">{brand.brand_name}</h2>
-            <p>{profile?.sector || 'Detail brand'}</p>
-          </div>
-          <div className="bp-drawer-head-actions">
-            <button type="button" className="bp-ghost" onClick={() => { if (!dirty || window.confirm('Perubahan belum disimpan. Pindah ke Data Brand tanpa menyimpan?')) onOpenData(brand); }}>
-              <Archive size={15} aria-hidden="true" /> Data &amp; file <ArrowUpRight size={14} aria-hidden="true" />
-            </button>
-            <button type="button" className="bp-icon-btn" onClick={close} aria-label="Tutup">
-              <X size={18} />
-            </button>
-          </div>
-        </header>
+      <header className="bp-setting-head">
+        <div>
+          <span className="bp-setting-kicker"><Settings2 size={14} aria-hidden="true" /> Brand Setting</span>
+          <h2 id="bp-setting-title">{brand.brand_name}</h2>
+          {profile?.sector && <p>{profile.sector}</p>}
+        </div>
+        <button type="button" className="bp-ghost" onClick={() => { if (!dirty || window.confirm('Perubahan belum disimpan. Pindah ke Data Brand tanpa menyimpan?')) onOpenData(brand); }}>
+          <Archive size={15} aria-hidden="true" /> Data &amp; file <ArrowUpRight size={14} aria-hidden="true" />
+        </button>
+      </header>
 
-        <nav className="bp-segment" role="tablist" aria-label="Bagian detail brand">
-          {SECTIONS.map(({ id, label, Icon, fields }) => {
-            const on = id === section;
+      <section className="bp-status-block" aria-label="Status klien">
+        <div className="bp-status-copy">
+          <strong>Status klien</strong>
+          <small>Dipakai bersama oleh seluruh modul. Menonaktifkan tidak menghapus data dan laporan.</small>
+        </div>
+        <div className="bp-status-seg" role="radiogroup" aria-label="Status klien">
+          {STATUS_CHOICES.map((status) => {
+            const on = brand.status === status;
             return (
-              <button key={id} type="button" role="tab" aria-selected={on} className={on ? 'is-on' : ''} onClick={() => setSection(id)}>
-                {on && <motion.span layoutId="bp-segment-pill" className="bp-segment-pill" transition={spring} aria-hidden="true" />}
-                <Icon size={15} aria-hidden="true" />
-                <span>{label}</span>
-                <small>{loading ? '…' : `${filled(draft, fields)}/${fields.length}`}</small>
+              <button
+                key={status} type="button" role="radio" aria-checked={on}
+                className={`is-${status}${on ? ' is-on' : ''}`}
+                disabled={isViewOnly || statusBusy}
+                onClick={() => !on && onStatus(brand, status)}
+              >
+                <i aria-hidden="true" />{BRAND_STATUS_LABELS[status]}
               </button>
             );
           })}
-        </nav>
-
-        <div className="bp-drawer-body">
-          {message && (
-            <p className={`bp-drawer-msg is-${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>
-              {message.tone === 'ok' ? <Check size={15} /> : <CircleAlert size={15} />} {message.text}
-            </p>
-          )}
-          <p className="bp-drawer-note">{active.note}</p>
-          {loading ? (
-            <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat detail brand…</p>
-          ) : (
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={section} className="bp-fields"
-                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                transition={{ duration: .18, ease: EASE }}
-              >
-                {active.fields.map(([key, label, guidance]) => (
-                  <Field key={key} label={label} guidance={guidance} value={draft[key]} disabled={isViewOnly} onChange={(value) => setDraft((current) => ({ ...current, [key]: value }))} />
-                ))}
-                {section === 'context' && (
-                  <p className="bp-drawer-hint"><CircleAlert size={14} /> Jangan menulis ulang metrics dashboard di sini — berikan konteks yang menjelaskan <em>mengapa</em> angka dapat berubah.</p>
-                )}
-              </motion.div>
-            </AnimatePresence>
-          )}
+          {statusBusy && <Loader2 size={15} className="brand-spin" aria-label="Menyimpan status" />}
         </div>
+      </section>
 
-        <footer className="bp-drawer-foot">
-          <span>
-            {profile?.updated_at
-              ? `Terakhir diperbarui ${new Date(profile.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}${profile.updated_by_name ? ` oleh ${profile.updated_by_name}` : ''}`
-              : 'Belum pernah disimpan untuk brand ini'}
-          </span>
-          <button type="button" className="bp-primary" onClick={save} disabled={isViewOnly || saving || !dirty || loading}>
-            {saving ? <Loader2 size={16} className="brand-spin" /> : <Save size={16} />}
-            {isViewOnly ? 'Lihat saja' : saving ? 'Menyimpan…' : dirty ? 'Simpan perubahan' : 'Tersimpan'}
-          </button>
-        </footer>
-      </motion.aside>
-    </motion.div>
+      <nav className="bp-segment" role="tablist" aria-label="Bagian Brand Setting">
+        {SECTIONS.map(({ id, label, Icon, fields }) => {
+          const on = id === section;
+          return (
+            <button key={id} type="button" role="tab" aria-selected={on} className={on ? 'is-on' : ''} onClick={() => setSection(id)}>
+              {on && <motion.span layoutId="bp-segment-pill" className="bp-segment-pill" transition={spring} aria-hidden="true" />}
+              <Icon size={15} aria-hidden="true" />
+              <span>{label}</span>
+              <small>{loading ? '…' : `${filled(draft, fields)}/${fields.length}`}</small>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="bp-setting-body">
+        {message && (
+          <p className={`bp-drawer-msg is-${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>
+            {message.tone === 'ok' ? <Check size={15} /> : <CircleAlert size={15} />} {message.text}
+          </p>
+        )}
+        <p className="bp-drawer-note">{active.note}</p>
+        {loading ? (
+          <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat brand…</p>
+        ) : (
+          <div className="bp-fields" key={section}>
+            {active.fields.map(([key, label, guidance]) => (
+              <Field key={key} label={label} guidance={guidance} value={draft[key]} disabled={isViewOnly} onChange={(value) => setDraft((current) => ({ ...current, [key]: value }))} />
+            ))}
+            {section === 'context' && (
+              <p className="bp-drawer-hint"><CircleAlert size={14} /><span>Jangan menulis ulang metrics dashboard di sini — berikan konteks yang menjelaskan <em>mengapa</em> angka dapat berubah.</span></p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <footer className="bp-setting-foot">
+        <span>
+          {profile?.updated_at
+            ? `Terakhir diperbarui ${new Date(profile.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}${profile.updated_by_name ? ` oleh ${profile.updated_by_name}` : ''}`
+            : 'Belum pernah disimpan untuk brand ini'}
+        </span>
+        <button type="button" className="bp-primary" onClick={save} disabled={isViewOnly || saving || !dirty || loading}>
+          {saving ? <Loader2 size={16} className="brand-spin" /> : <Save size={16} />}
+          {isViewOnly ? 'Lihat saja' : saving ? 'Menyimpan…' : dirty ? 'Simpan perubahan' : 'Tersimpan'}
+        </button>
+      </footer>
+
+      {canDelete && !loading && <DeleteBrand brand={brand} onDeleted={onDeleted} />}
+    </motion.section>
   );
 }
 
 export default function BrandSettingsPage() {
-  const { isViewOnly } = useAuth();
-  const reduced = useReducedMotion();
+  const { isViewOnly, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [brands, setBrands] = useState([]);
@@ -230,12 +298,19 @@ export default function BrandSettingsPage() {
     return () => { alive = false; };
   }, []);
 
-  // The open drawer lives in the URL (?detail=<id>), so Data Brand's
-  // "Context & direction" link opens the right brand directly.
+  // The selected brand lives in the URL (?detail=<id>), so Data Brand's
+  // "Context & direction" link opens the right brand directly. With none
+  // chosen, the first brand in the list is shown.
   const detailId = Number(params.get('detail')) || null;
-  const detailBrand = detailId ? brands.find((b) => b.brand_id === detailId) ?? null : null;
-  const openDetail = (b) => setParams((p) => { const next = new URLSearchParams(p); next.set('detail', String(b.brand_id)); return next; });
-  const closeDetail = () => setParams((p) => { const next = new URLSearchParams(p); next.delete('detail'); return next; });
+  const setDetail = (id) => setParams((p) => {
+    const next = new URLSearchParams(p);
+    if (id) next.set('detail', String(id)); else next.delete('detail');
+    return next;
+  }, { replace: true });
+  // The open Brand Setting reports an unsaved draft here, so switching brand
+  // can ask first instead of dropping it.
+  const dirtyRef = useRef(false);
+  const onDirtyChange = useCallback((d) => { dirtyRef.current = d; }, []);
 
   const navigateToData = (b) => {
     presetBrandSettings({ brandId: b.brand_id, view: 'data' });
@@ -246,6 +321,14 @@ export default function BrandSettingsPage() {
     const q = listQuery.trim().toLowerCase();
     return brands.filter((b) => matchesBrandStatus(b, listStatus) && b.brand_name.toLowerCase().includes(q));
   }, [brands, listQuery, listStatus]);
+
+  const selected = (detailId && brands.find((b) => b.brand_id === detailId)) || shown[0] || null;
+  const select = (b) => {
+    if (b.brand_id === selected?.brand_id) return;
+    if (dirtyRef.current && !window.confirm('Perubahan brand context/direction belum disimpan. Pindah brand tanpa menyimpan?')) return;
+    dirtyRef.current = false;
+    setDetail(b.brand_id);
+  };
 
   const counts = useMemo(() => ({
     active: brands.filter((b) => b.status === 'active').length,
@@ -267,6 +350,13 @@ export default function BrandSettingsPage() {
     }
   }
 
+  const brandDeleted = (b) => {
+    setBrands((list) => list.filter((x) => x.brand_id !== b.brand_id));
+    dirtyRef.current = false;
+    setDetail(null);
+    setNotice(`Brand "${b.brand_name}" dihapus.`);
+  };
+
   const createBrand = async (event) => {
     event.preventDefault();
     const name = newName.trim();
@@ -277,7 +367,8 @@ export default function BrandSettingsPage() {
       setBrands((current) => [...current, data.brand].sort((a, b) => a.brand_name.localeCompare(b.brand_name)));
       setCreating(false);
       setNotice(`Brand "${data.brand.brand_name}" dibuat. Lengkapi brand context dan current direction-nya.`);
-      openDetail(data.brand);
+      dirtyRef.current = false;
+      setDetail(data.brand.brand_id);
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Gagal membuat brand baru.');
     } finally {
@@ -300,11 +391,7 @@ export default function BrandSettingsPage() {
         </header>
 
         <section className="soft-card bp-command" aria-label="Cari dan saring brand">
-          <label className="bp-search">
-            <Search size={16} aria-hidden="true" />
-            <input value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
-          </label>
-          <div className="bp-stats">
+          <div className="bp-stats is-start">
             <div className="bp-stat"><span>Brand aktif</span><strong>{loaded ? counts.active : '…'}</strong></div>
             <div className="bp-stat"><span>Total brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
             <div className="bp-stat"><span>Status belum diatur</span><strong>{loaded ? counts.unset : '…'}</strong></div>
@@ -342,65 +429,49 @@ export default function BrandSettingsPage() {
           </div>
         )}
 
-        <section className="soft-card bp-panel" aria-label="Daftar brand">
-          <div className="bp-panel-head">
-            <div>
-              <h2>Daftar brand</h2>
-              <p>Status dipakai bersama oleh seluruh modul. Menonaktifkan brand tidak menghapus data dan laporannya.</p>
+        <div className="bp-master">
+          <aside className="soft-card bp-list" aria-label="Daftar brand">
+            <div className="bp-list-head">
+              <label className="bp-search">
+                <Search size={16} aria-hidden="true" />
+                <input value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
+              </label>
+              <BrandStatusFilter value={listStatus} onChange={setListStatus} />
+              <small>{loaded ? `${shown.length} dari ${brands.length} brand` : 'Memuat…'}</small>
             </div>
-            <BrandStatusFilter value={listStatus} onChange={setListStatus} />
-          </div>
-
-          <div className="bp-table" role="table" aria-label="Brand">
-            <div className="bp-row bp-row-head" role="row">
-              <span role="columnheader">Brand</span>
-              <span role="columnheader">Status klien</span>
-              <span role="columnheader" className="bp-col-actions">Aksi</span>
-            </div>
-            {shown.map((b, index) => (
-              <motion.div
-                key={b.brand_id} role="row" className={`bp-row${detailId === b.brand_id ? ' is-open' : ''}`}
-                initial={reduced ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(index, 12) * .018, duration: .2, ease: EASE }}
-              >
-                <span role="cell" className="bp-brand">
-                  <i className={`brand-status-dot is-${b.status || 'unknown'}`} aria-hidden="true" />
-                  <button type="button" onClick={() => openDetail(b)}>{b.brand_name}</button>
-                </span>
-                <span role="cell">
-                  <select
-                    className={`brand-status-value is-${b.status || 'unknown'}`} aria-label={`Status ${b.brand_name}`}
-                    value={b.status ?? ''} disabled={isViewOnly || statusBusy === b.brand_id} onChange={(event) => changeStatus(b, event.target.value)}
-                  >
-                    {!b.status && <option value="" disabled>Belum diatur</option>}
-                    {['active', 'off', 'freeze'].map((status) => <option key={status} value={status}>{BRAND_STATUS_LABELS[status]}</option>)}
-                  </select>
-                  {statusBusy === b.brand_id && <span className="bp-saving" role="status"><Loader2 size={13} className="brand-spin" /> Menyimpan…</span>}
-                </span>
-                <span role="cell" className="bp-col-actions">
-                  <button type="button" className="bp-row-btn is-primary" onClick={() => openDetail(b)}>
-                    <NotebookPen size={14} aria-hidden="true" /> Detail
-                  </button>
-                  <button type="button" className="bp-row-btn" onClick={() => navigateToData(b)}>
-                    <Archive size={14} aria-hidden="true" /> Data &amp; file
-                  </button>
-                </span>
-              </motion.div>
-            ))}
+            <ul className="bp-list-items">
+              {shown.map((b) => {
+                const status = b.status || 'unknown';
+                const on = b.brand_id === selected?.brand_id;
+                return (
+                  <li key={b.brand_id}>
+                    <button type="button" className={`bp-list-item${on ? ' is-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => select(b)}>
+                      <i className={`brand-status-dot is-${status}`} aria-hidden="true" />
+                      <span>{b.brand_name}</span>
+                      {status !== 'active' && <small>{BRAND_STATUS_LABELS[status]}</small>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
             {loaded && !shown.length && <p className="brand-picker-empty">Tidak ada brand yang cocok. Ubah pencarian atau filter status.</p>}
             {!loaded && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat daftar brand…</p>}
-          </div>
-          <p className="bp-foot-note">
-            File bulanan, Minutes of Meeting, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Brand</Link>.
-          </p>
-        </section>
-      </div>
+          </aside>
 
-      <AnimatePresence>
-        {detailBrand && (
-          <BrandDetail key={detailBrand.brand_id} brand={detailBrand} isViewOnly={isViewOnly} onClose={closeDetail} onOpenData={navigateToData} />
-        )}
-      </AnimatePresence>
+          {selected ? (
+            <BrandSetting
+              key={selected.brand_id} brand={selected} isViewOnly={isViewOnly}
+              canDelete={isAdmin && !isViewOnly} statusBusy={statusBusy === selected.brand_id}
+              onStatus={changeStatus} onDeleted={brandDeleted} onOpenData={navigateToData} onDirtyChange={onDirtyChange}
+            />
+          ) : (
+            <div className="soft-card bp-setting bp-setting-empty">{loaded ? 'Pilih brand di daftar untuk membuka Brand Setting.' : 'Memuat…'}</div>
+          )}
+        </div>
+        <p className="bp-foot-note">
+          File bulanan, Minutes of Meeting, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Brand</Link>.
+        </p>
+      </div>
     </div>
   );
 }
