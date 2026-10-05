@@ -103,16 +103,20 @@ export async function recordSyncResult(customerId, { status, error }, db = pool)
 // ---------------------------------------------------------------------
 // Bulk upsert through jsonb_to_recordset: one bound parameter however many
 // rows, so a 500-row chunk never hits the driver's parameter cap.
-export async function upsertRows({ brandId, customerId, runId, rows }, db = pool) {
+// `runStartedAt` stamps fetched_at with the run's start, not the write time:
+// a run that started earlier never overwrites a row a later run already
+// wrote (the WHERE on the conflict update), and stale-row cleanup below
+// only touches rows older than the run doing the cleanup.
+export async function upsertRows({ brandId, customerId, runId, runStartedAt, rows }, db = pool) {
   if (!rows.length) return 0;
   const { rowCount } = await db.query(
     `INSERT INTO google_ads_daily
        (brand_id, customer_id, entry_date, level, campaign_id, campaign_name, channel_type,
         ad_group_id, ad_group_name, item, match_type, budget_amount, cost, impressions, clicks,
-        conversions, conversions_value, all_conversions, abs_top_impression_pct, search_lost_top_is_rank, fetch_run_id)
+        conversions, conversions_value, all_conversions, abs_top_impression_pct, search_lost_top_is_rank, fetch_run_id, fetched_at)
      SELECT $1, $2, r.entry_date, r.level, r.campaign_id, r.campaign_name, r.channel_type,
             r.ad_group_id, r.ad_group_name, r.item, r.match_type, r.budget_amount, r.cost, r.impressions, r.clicks,
-            r.conversions, r.conversions_value, r.all_conversions, r.abs_top_impression_pct, r.search_lost_top_is_rank, $4
+            r.conversions, r.conversions_value, r.all_conversions, r.abs_top_impression_pct, r.search_lost_top_is_rank, $4, $5
      FROM jsonb_to_recordset($3::jsonb) AS r(
        entry_date date, level text, campaign_id text, campaign_name text, channel_type text,
        ad_group_id text, ad_group_name text, item text, match_type text, budget_amount numeric,
@@ -133,19 +137,20 @@ export async function upsertRows({ brandId, customerId, runId, rows }, db = pool
        abs_top_impression_pct  = EXCLUDED.abs_top_impression_pct,
        search_lost_top_is_rank = EXCLUDED.search_lost_top_is_rank,
        fetch_run_id      = EXCLUDED.fetch_run_id,
-       fetched_at        = now()`,
-    [brandId, customerId, JSON.stringify(rows), runId],
+       fetched_at        = EXCLUDED.fetched_at
+     WHERE google_ads_daily.fetched_at <= EXCLUDED.fetched_at`,
+    [brandId, customerId, JSON.stringify(rows), runId, runStartedAt ?? new Date()],
   );
   return rowCount;
 }
 
 // End of a successful run: what it did not write inside its own range is no
 // longer in Google's numbers (a paused keyword's day that got corrected away).
-export async function deleteStaleRows({ customerId, startDate, endDate, runId }, db = pool) {
+export async function deleteStaleRows({ customerId, startDate, endDate, runId, runStartedAt }, db = pool) {
   const { rowCount } = await db.query(
     `DELETE FROM google_ads_daily
-     WHERE customer_id = $1 AND entry_date BETWEEN $2 AND $3 AND fetch_run_id <> $4`,
-    [customerId, startDate, endDate, runId],
+     WHERE customer_id = $1 AND entry_date BETWEEN $2 AND $3 AND fetch_run_id <> $4 AND fetched_at < $5`,
+    [customerId, startDate, endDate, runId, runStartedAt ?? new Date()],
   );
   return rowCount;
 }
@@ -183,7 +188,7 @@ export async function insertRun({ brandId, customerId, startDate, endDate, sourc
 
 export async function getRun(runId, db = pool) {
   const { rows } = await db.query(
-    `SELECT fetch_run_id, brand_id, customer_id, status, source, datasets,
+    `SELECT fetch_run_id, brand_id, customer_id, status, source, datasets, started_at,
             to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date
      FROM google_ads_fetch_log WHERE fetch_run_id = $1`,
     [runId],

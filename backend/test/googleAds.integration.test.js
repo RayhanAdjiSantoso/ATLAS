@@ -298,12 +298,50 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
       await pool.query('DELETE FROM brand_minutes WHERE id = $1', [minute.id]);
     });
 
+    await t.test('043: an older run finishing late neither deletes nor overwrites a newer run', async () => {
+      const older = await call('POST', '/start', { customerId: CUSTOMER, startDate: mStart, endDate: mEnd });
+      await new Promise((r) => setTimeout(r, 30));
+      const newer = await call('POST', '/start', { customerId: CUSTOMER, startDate: mStart, endDate: mEnd });
+      await call('POST', '/rows', { runId: newer.body.runId, rows: [coreRow(day(1), 111, 2), coreRow(day(2), 222, 3)] });
+      await call('POST', '/finish', { runId: newer.body.runId, status: 'success', rowCount: 2 });
+      // The older run only knows day 1, with an older value.
+      await call('POST', '/rows', { runId: older.body.runId, rows: [coreRow(day(1), 99, 1)] });
+      await call('POST', '/finish', { runId: older.body.runId, status: 'success', rowCount: 1 });
+      const { rows } = await pool.query(`SELECT to_char(entry_date, 'YYYY-MM-DD') d, cost::float FROM google_ads_daily WHERE customer_id = $1 AND level = 'campaign' ORDER BY 1`, [CUSTOMER]);
+      assert.deepEqual(rows.map((r) => [r.d, r.cost]), [[day(1), 111], [day(2), 222]], 'newer values kept, nothing deleted');
+    });
+
+    await t.test('043: data quality, tracking and account health in the report; feedback, calibration and ops', async () => {
+      const report = await service.getReport({ brandId, oldStart: mStart, oldEnd: mStart, curStart: mStart, curEnd: mEnd });
+      assert.ok(report.rulesetVersion.startsWith('google_ads_v'));
+      assert.ok(report.dataQuality.checks.some((c) => c.check_key === 'cost:devices'));
+      assert.ok(['VALID', 'UNVERIFIED', 'INCONSISTENT', 'PARTIAL'].includes(report.dataQuality.datasets.devices));
+      assert.equal(report.freshness.campaign.kind, 'daily');
+      assert.equal(typeof report.trackingHealth.account.score, 'number');
+      assert.equal(typeof report.accountHealth.score, 'number');
+      assert.ok(report.diagnostics.every((f) => f.confidence_score != null && f.ruleset_version && f.status));
+      assert.ok(report.cur.landingPageQuality.summary);
+      const { rows: stored } = await pool.query('SELECT count(*)::int n FROM google_ads_data_quality WHERE brand_id = $1', [brandId]);
+      assert.ok(stored[0].n > 0, 'stored after the core runs');
+      const { rows: logged } = await pool.query('SELECT count(*)::int n FROM google_ads_finding_log WHERE brand_id = $1', [brandId]);
+      assert.equal(logged[0].n >= 0, true);
+
+      const cal = await import('../src/services/googleAdsCalibration.js');
+      await cal.saveFeedback({ brandId, userId: null, input: { target_type: 'finding', target_key: 'cpa_increase:account', rule_type: 'cpa_increase', verdict: 'false_positive' } });
+      await assert.rejects(cal.saveFeedback({ brandId, userId: null, input: { target_type: 'finding', target_key: 'x', rule_type: 'x', verdict: 'meh' } }), /verdict/);
+      const perf = await cal.rulePerformance({ brandId, from: '2000-01-01', to: '2100-01-01' });
+      assert.equal(perf.rules.find((r) => r.rule === 'cpa_increase').false_positive, 1);
+      const ops = await cal.operations(brandId);
+      assert.ok(ops.runs.length > 0 && ops.runs.every((r) => !JSON.stringify(r).includes(KEY)), 'no ingest key in the ops view');
+      assert.ok(ops.runs.some((r) => r.duration_ms != null));
+    });
+
     await t.test('removing the account removes every dataset', async () => {
       const { rows: [acc] } = await pool.query(`SELECT google_ads_account_id AS id FROM google_ads_accounts WHERE customer_id = $1`, [CUSTOMER]);
       await service.removeAccount({ brandId, accountId: acc.id });
       for (const table of ['google_ads_daily', 'google_ads_ads_daily', 'google_ads_conversion_daily', 'google_ads_competitive_metrics',
         'google_ads_campaign_settings', 'google_ads_conversion_actions', 'google_ads_ad_assets', 'google_ads_conversion_goal_map',
-        'google_ads_device_daily', 'google_ads_hourly', 'google_ads_landing_pages_daily', 'google_ads_keyword_quality']) {
+        'google_ads_device_daily', 'google_ads_hourly', 'google_ads_landing_pages_daily', 'google_ads_keyword_quality', 'google_ads_alerts']) {
         assert.equal(await count(table), 0, table);
       }
     });

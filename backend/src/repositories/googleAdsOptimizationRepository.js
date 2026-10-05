@@ -11,6 +11,7 @@ const REC_COLUMNS = `
   r.confidence, r.risk, r.success_metric, r.monitoring_period, r.status, r.notes, r.source, r.model,
   to_char(r.period_start, 'YYYY-MM-DD') AS period_start, to_char(r.period_end, 'YYYY-MM-DD') AS period_end,
   r.times_seen, r.first_seen_at, r.last_seen_at, r.status_updated_at, r.task_minute_id, r.task_key,
+  r.ruleset_version, r.action_type, r.validation_notes, r.missed_generations,
   u.full_name AS status_updated_by_name,
   (r.task_key IS NOT NULL AND m.completed_task_keys ? r.task_key) AS task_done,
   to_char(m.meeting_date, 'YYYY-MM-DD') AS task_meeting_date`;
@@ -22,7 +23,7 @@ const REC_FROM = `
 export async function listRecommendations(brandId, db = pool) {
   const { rows } = await db.query(
     `SELECT ${REC_COLUMNS} ${REC_FROM} WHERE r.brand_id = $1
-     ORDER BY (r.status IN ('completed', 'dismissed')), array_position(ARRAY['critical','high','medium','low'], r.priority), r.last_seen_at DESC
+     ORDER BY (r.status IN ('completed', 'dismissed', 'resolved_by_data')), array_position(ARRAY['critical','high','medium','low'], r.priority), r.last_seen_at DESC
      LIMIT 200`,
     [brandId],
   );
@@ -48,11 +49,12 @@ export async function latestByFingerprint(brandId, fingerprints, db = pool) {
 
 const REC_FIELDS = ['customer_id', 'entity_type', 'entity_id', 'entity_name', 'category', 'title', 'finding', 'evidence', 'possible_cause',
   'recommended_action', 'expected_direction', 'priority', 'confidence', 'risk', 'success_metric', 'monitoring_period', 'source', 'model',
-  'period_start', 'period_end'];
+  'period_start', 'period_end', 'ruleset_version', 'action_type', 'validation_notes'];
 
 export async function insertRecommendation(brandId, rec, userId, db = pool) {
   const cols = ['brand_id', 'fingerprint', ...REC_FIELDS, 'created_by'];
-  const vals = [brandId, rec.fingerprint, ...REC_FIELDS.map((f) => (f === 'evidence' ? JSON.stringify(rec[f] ?? []) : rec[f] ?? null)), userId ?? null];
+  const json = (f) => ['evidence', 'validation_notes'].includes(f);
+  const vals = [brandId, rec.fingerprint, ...REC_FIELDS.map((f) => (json(f) ? JSON.stringify(rec[f] ?? []) : rec[f] ?? null)), userId ?? null];
   const { rows } = await db.query(
     `INSERT INTO google_ads_recommendations (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})
      RETURNING google_ads_recommendation_id AS id`,
@@ -63,13 +65,29 @@ export async function insertRecommendation(brandId, rec, userId, db = pool) {
 
 // A repeat refreshes the content and keeps the status the team gave it.
 export async function refreshRecommendation(id, rec, db = pool) {
-  const fields = REC_FIELDS.filter((f) => !['source', 'entity_type', 'entity_id', 'category'].includes(f));
+  const fields = REC_FIELDS.filter((f) => !['source', 'entity_type', 'entity_id', 'category', 'action_type'].includes(f));
   await db.query(
     `UPDATE google_ads_recommendations SET ${fields.map((f, i) => `${f} = $${i + 2}`).join(', ')},
-       times_seen = times_seen + 1, last_seen_at = now()
+       times_seen = times_seen + 1, last_seen_at = now(), missed_generations = 0
      WHERE google_ads_recommendation_id = $1`,
-    [id, ...fields.map((f) => (f === 'evidence' ? JSON.stringify(rec[f] ?? []) : rec[f] ?? null))],
+    [id, ...fields.map((f) => (['evidence', 'validation_notes'].includes(f) ? JSON.stringify(rec[f] ?? []) : rec[f] ?? null))],
   );
+}
+
+// Open, untouched AI recommendations not produced again: count the miss;
+// on the second consecutive miss they become resolved_by_data. Ones the
+// team already planned or started are left alone.
+export async function markMissed(brandId, producedFingerprints, db = pool) {
+  const { rows } = await db.query(
+    `UPDATE google_ads_recommendations SET
+       missed_generations = missed_generations + 1,
+       status = CASE WHEN missed_generations + 1 >= 2 THEN 'resolved_by_data' ELSE status END,
+       status_updated_at = CASE WHEN missed_generations + 1 >= 2 THEN now() ELSE status_updated_at END
+     WHERE brand_id = $1 AND source = 'ai' AND status IN ('new', 'reviewed') AND NOT (fingerprint = ANY($2))
+     RETURNING status`,
+    [brandId, producedFingerprints],
+  );
+  return rows.filter((r) => r.status === 'resolved_by_data').length;
 }
 
 export async function updateRecommendation(id, brandId, { status, notes, userId }, db = pool) {
@@ -125,7 +143,7 @@ const EXP_COLUMNS = `
   to_char(e.eval_end, 'YYYY-MM-DD') AS eval_end, e.success_metric, e.expected_direction, e.baseline_snapshot, e.status, e.result,
   e.notes, e.created_at, e.updated_at, u.full_name AS created_by_name,
   (SELECT row_to_json(x) FROM (
-     SELECT evaluated_at, metric, baseline, evaluation, change::float AS change, verdict, limitations
+     SELECT evaluated_at, metric, baseline, evaluation, change::float AS change, verdict, limitations, quality, ruleset_version
      FROM google_ads_experiment_results WHERE experiment_id = e.google_ads_experiment_id
      ORDER BY evaluated_at DESC LIMIT 1) x) AS last_result`;
 
@@ -180,9 +198,9 @@ export async function deleteExperiment(id, brandId, db = pool) {
 
 export async function insertExperimentResult(experimentId, r, userId, db = pool) {
   await db.query(
-    `INSERT INTO google_ads_experiment_results (experiment_id, evaluated_by, metric, baseline, evaluation, change, verdict, limitations)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [experimentId, userId ?? null, r.metric, JSON.stringify(r.baseline), JSON.stringify(r.evaluation), r.change, r.verdict, JSON.stringify(r.limitations)],
+    `INSERT INTO google_ads_experiment_results (experiment_id, evaluated_by, metric, baseline, evaluation, change, verdict, limitations, quality, ruleset_version)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [experimentId, userId ?? null, r.metric, JSON.stringify(r.baseline), JSON.stringify(r.evaluation), r.change, r.verdict, JSON.stringify(r.limitations), r.quality ?? null, r.ruleset_version ?? null],
   );
 }
 
@@ -218,7 +236,7 @@ export async function changesBetween(brandId, campaignName, start, end, db = poo
 // alerts
 // ---------------------------------------------------------------------
 const ALERT_COLUMNS = `google_ads_alert_id AS id, brand_id, customer_id, alert_key, type, severity, title, message, data, status,
-  first_seen_at, last_seen_at, resolved_at, cooldown_until, acknowledged_at`;
+  first_seen_at, last_seen_at, resolved_at, cooldown_until, acknowledged_at, occurrence_count, last_notified_at, ruleset_version`;
 
 export async function listAlerts(brandId, { includeResolved = false } = {}, db = pool) {
   const { rows } = await db.query(
@@ -234,13 +252,14 @@ export async function listAlerts(brandId, { includeResolved = false } = {}, db =
 export async function applyAlertChanges(brandId, { open, refresh, resolve }, db = pool) {
   for (const a of open) {
     await db.query(
-      `INSERT INTO google_ads_alerts (brand_id, customer_id, alert_key, type, severity, title, message, data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO google_ads_alerts (brand_id, customer_id, alert_key, type, severity, title, message, data, ruleset_version, last_notified_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
        ON CONFLICT (brand_id, alert_key) DO UPDATE SET
          customer_id = EXCLUDED.customer_id, type = EXCLUDED.type, severity = EXCLUDED.severity, title = EXCLUDED.title,
          message = EXCLUDED.message, data = EXCLUDED.data, status = 'open', first_seen_at = now(), last_seen_at = now(),
-         resolved_at = NULL, cooldown_until = NULL, acknowledged_by = NULL, acknowledged_at = NULL`,
-      [brandId, a.customer_id ?? null, a.alert_key, a.type, a.severity, a.title, a.message, JSON.stringify(a.data ?? {})],
+         resolved_at = NULL, cooldown_until = NULL, acknowledged_by = NULL, acknowledged_at = NULL,
+         occurrence_count = google_ads_alerts.occurrence_count + 1, last_notified_at = now(), ruleset_version = EXCLUDED.ruleset_version`,
+      [brandId, a.customer_id ?? null, a.alert_key, a.type, a.severity, a.title, a.message, JSON.stringify(a.data ?? {}), a.data?.ruleset_version ?? null],
     );
   }
   for (const a of refresh) {
@@ -273,7 +292,7 @@ export async function setAlertStatus(id, brandId, status, userId, cooldownUntil,
 }
 
 export async function alertRows(brandId, db = pool) {
-  const { rows } = await db.query(`SELECT alert_key, status, cooldown_until FROM google_ads_alerts WHERE brand_id = $1`, [brandId]);
+  const { rows } = await db.query(`SELECT alert_key, type, status, cooldown_until FROM google_ads_alerts WHERE brand_id = $1`, [brandId]);
   return rows;
 }
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { authenticate, requireModule } from '../middlewares/auth.js';
+import { authenticate, authorize, requireModule } from '../middlewares/auth.js';
 import { requireBrandAccess, blockWriteIfViewOnly } from '../middlewares/brandAccess.js';
 import * as ctrl from '../controllers/googleAdsController.js';
 import {
@@ -8,6 +8,7 @@ import {
   resyncValidation, reportValidation, conversionGoalValidation,
   recommendationListValidation, recommendationGenerateValidation, recommendationUpdateValidation, recommendationTaskValidation,
   experimentBodyValidation, experimentIdBodyValidation, experimentIdQueryValidation, alertUpdateValidation, adCopyValidation,
+  feedbackValidation, calibrationValidation,
 } from '../validators/googleAdsValidators.js';
 
 // Google Ads: which accounts feed a brand (Pengaturan Brand › Google Ads)
@@ -40,13 +41,20 @@ const brandB = requireBrandAccess((req) => req.body.brandId);
 router.get('/recommendations', reports, brandQ, recommendationListValidation, ctrl.listRecommendations);
 router.post('/recommendations/generate', reports, brandB, recommendationGenerateValidation, ctrl.generateRecommendations);
 router.patch('/recommendations/:id', reports, brandB, recommendationUpdateValidation, ctrl.updateRecommendation);
-router.post('/recommendations/:id/task', reports, brandB, recommendationTaskValidation, ctrl.recommendationToTask);
+// Writes into the brand's MOM, which belongs to Pengaturan Brand: needs that access too.
+router.post('/recommendations/:id/task', reports, settings, brandB, recommendationTaskValidation, ctrl.recommendationToTask);
 router.get('/experiments', reports, brandQ, brandQueryValidation, ctrl.listExperiments);
 router.post('/experiments', reports, brandB, experimentBodyValidation, ctrl.createExperiment);
 router.patch('/experiments/:id', reports, brandB, experimentIdBodyValidation, ctrl.updateExperiment);
 router.delete('/experiments/:id', reports, brandQ, experimentIdQueryValidation, ctrl.deleteExperiment);
 router.post('/experiments/:id/evaluate', reports, brandB, experimentIdBodyValidation, ctrl.evaluateExperiment);
 router.post('/ad-copy', reports, brandB, adCopyValidation, ctrl.suggestAdCopy);
+// Internal calibration and operations tools (no secrets in any response).
+router.post('/feedback', reports, brandB, feedbackValidation, ctrl.saveFeedback);
+router.get('/feedback', reports, brandQ, brandQueryValidation, ctrl.listFeedback);
+router.get('/ops', requireModule('brand_settings', 'report_generator'), brandQ, brandQueryValidation, ctrl.operations);
+// Across brands when brandId is omitted: admin only.
+router.get('/calibration', reports, calibrationValidation, (req, res, next) => (req.query.brandId ? requireBrandAccess((r) => r.query.brandId)(req, res, next) : authorize('admin')(req, res, next)), ctrl.rulePerformance);
 router.get('/alerts', requireModule('brand_settings', 'report_generator'), brandQ, brandQueryValidation, ctrl.listAlerts);
 router.patch('/alerts/:id', reports, brandB, alertUpdateValidation, ctrl.setAlertStatus);
 

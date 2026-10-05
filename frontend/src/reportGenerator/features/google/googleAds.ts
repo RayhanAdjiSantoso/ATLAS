@@ -136,6 +136,7 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export interface GadsFinding {
   id: string; entity_type: 'account' | 'campaign'; entity_id: string | null; entity_name: string; customer_id: string | null;
   type: string; severity: Severity; confidence: 'high' | 'medium' | 'low';
+  status?: 'diagnosis' | 'monitoring'; confidence_score?: number; confidence_reasons?: string[]; volume_tier?: 'low' | 'medium' | 'high' | null; ruleset_version?: string;
   metrics: Record<string, { old: number | null; cur: number | null; change: number | null }>;
   facts: string[]; possible_causes: string[]; next_steps: string[];
 }
@@ -167,7 +168,17 @@ export interface GadsPeriod {
   schedule?: GadsSchedule;
   landingPages?: { conversions_available: boolean; speed_available: boolean; note: string | null; totals: GadsPageTotals; others: GadsPageTotals | null; pages: GadsLandingPage[] };
   messageMatch?: GadsMessageMatch[];
+  landingPageQuality?: {
+    summary: { scored: number; unscored: number; below: number; average: number; above: number };
+    pages: { url: string; keywords: number; below: number; average: number; above: number; cost: number; opportunity: boolean; examples: string[] }[];
+  };
+  listTotals?: { searchTerms: number; keywords: number; keywordDetail?: number };
 }
+
+export type DqStatus = 'VALID' | 'PARTIAL' | 'STALE' | 'INCONSISTENT' | 'MISSING' | 'UNVERIFIED';
+export interface GadsDqCheck { check_key: string; dataset: string; expected: number | null; observed: number | null; abs_diff: number | null; rel_diff: number | null; status: DqStatus; note: string | null }
+export interface GadsFreshness { dataset: string; kind: 'daily' | 'snapshot' | 'event' | 'manual'; last_date: string | null; fetched_at: string | null; status: DqStatus }
+export interface GadsHealthDeduction { points: number; reason: string }
 
 // Auction insights shares, 0..1. `text` is set when the export gave words
 // instead of a number ("< 10%").
@@ -209,7 +220,15 @@ export interface GadsReport {
   campaignSettingChanges?: GadsSettingChange[];
   dataAvailability?: Record<string, { dataset: string; first_date: string | null; last_date: string | null; fetched_at: string | null }>;
   diagnostics?: GadsFinding[];
-  anomalies?: { anomalies: GadsAnomaly[]; status: 'normal' | 'monitoring' | 'anomaly' };
+  anomalies?: { anomalies: GadsAnomaly[]; status: 'normal' | 'monitoring' | 'anomaly'; monitoring_metrics?: string[] };
+  rulesetVersion?: string;
+  dataQuality?: { checks: GadsDqCheck[]; datasets: Record<string, DqStatus>; summary: { conversionIssue: string | null; partial: string[] }; mixedCurrency: boolean };
+  freshness?: Record<string, GadsFreshness>;
+  trackingHealth?: {
+    account: { score: number; healthy: boolean; deductions: GadsHealthDeduction[] };
+    campaigns: { campaign_id: string; campaign_name: string; bidding: string | null; score: number; healthy: boolean; deductions: GadsHealthDeduction[] }[];
+  };
+  accountHealth?: { score: number; label: string; parts: Record<string, number>; weights: Record<string, number> };
 }
 
 export interface GadsGoalActions {
@@ -349,13 +368,14 @@ export const PRESETS: { id: string; label: string; build: (today: Date) => Perio
 ];
 
 // ── optimisation (migration 042) ────────────────────────────────────
-export type RecStatus = 'new' | 'reviewed' | 'planned' | 'in_progress' | 'monitoring' | 'completed' | 'dismissed';
+export type RecStatus = 'new' | 'reviewed' | 'planned' | 'in_progress' | 'monitoring' | 'completed' | 'dismissed' | 'resolved_by_data';
 export interface GadsRecommendation {
   id: number; entity_type: string; entity_id: string | null; entity_name: string | null; category: string; title: string; finding: string;
   evidence: string[]; possible_cause: string | null; recommended_action: string; expected_direction: string | null;
   priority: Severity; confidence: 'high' | 'medium' | 'low'; risk: string | null; success_metric: string | null; monitoring_period: string | null;
   status: RecStatus; notes: string | null; times_seen: number; first_seen_at: string; last_seen_at: string; period_start: string | null; period_end: string | null;
   status_updated_by_name: string | null; task_key: string | null; task_done: boolean | null; task_meeting_date: string | null;
+  action_type?: string | null; validation_notes?: string[]; ruleset_version?: string | null;
 }
 
 export type ExpMetric = 'cpa' | 'conversions' | 'cvr' | 'ctr' | 'cpc' | 'roas' | 'cost' | 'conversions_value' | 'impressions' | 'clicks';
@@ -365,18 +385,32 @@ export interface GadsExperiment {
   baseline_start: string; baseline_end: string; eval_start: string; eval_end: string; success_metric: ExpMetric; expected_direction: 'increase' | 'decrease';
   status: 'planned' | 'running' | 'evaluating' | 'completed' | 'cancelled'; result: 'improved' | 'declined' | 'inconclusive' | null; notes: string | null;
   baseline_snapshot: (GadsMetrics & { captured_at: string }) | null; created_by_name: string | null;
-  last_result: { evaluated_at: string; metric: ExpMetric; baseline: GadsMetrics; evaluation: GadsMetrics; change: number | null; verdict: 'improved' | 'declined' | 'inconclusive'; limitations: string[] } | null;
+  last_result: { evaluated_at: string; metric: ExpMetric; baseline: GadsMetrics; evaluation: GadsMetrics; change: number | null; verdict: 'improved' | 'declined' | 'inconclusive'; limitations: string[]; quality?: string | null } | null;
 }
 
 export interface GadsAlert {
   id: number; customer_id: string | null; alert_key: string; type: string; severity: Severity; title: string; message: string;
-  status: 'open' | 'acknowledged' | 'resolved'; first_seen_at: string; last_seen_at: string;
+  status: 'open' | 'acknowledged' | 'resolved'; first_seen_at: string; last_seen_at: string; occurrence_count?: number;
+}
+
+export type FeedbackVerdict = 'useful' | 'not_useful' | 'false_positive' | 'needs_more_data';
+export interface GadsOps {
+  ruleset_version: string; success_rate: number | null; open_alerts: number;
+  runs: { runId: string; customerId: string; status: string; startDate: string; endDate: string; startedAt: string; finishedAt: string | null; rowCount: number; note: string | null;
+    duration_ms: number | null; attempts_same_day: number; stuck: boolean; datasetResults?: Record<string, { status: string; rowCount: number; note: string | null }> }[];
+  data_quality: (GadsDqCheck & { period_start: string; period_end: string; checked_at: string })[];
+  freshness: Record<string, GadsFreshness>;
+}
+export interface GadsCalibration {
+  from: string; to: string; ruleset_version: string;
+  rules: { rule: string; triggers: number; monitoring: number; low_confidence: number; alert_openings: number; useful: number; not_useful: number; false_positive: number; needs_more_data: number; reviewed: number; false_positive_rate: number | null; flag: string | null; versions: string[] }[];
+  calibration_log: { version: string; date: string; rule: string; change: string; reason: string }[];
 }
 
 const brandParam = (brandId: number) => ({ params: { brandId } });
 export const optimizationApi = {
   recommendations: async (brandId: number): Promise<GadsRecommendation[]> => (await api.get('/google-ads/recommendations', brandParam(brandId))).data.recommendations,
-  generate: async (brandId: number, p: PeriodPair): Promise<{ inserted: number; refreshed: number; skipped: number; data_limitations: string[]; recommendations: GadsRecommendation[] }> =>
+  generate: async (brandId: number, p: PeriodPair): Promise<{ inserted: number; refreshed: number; skipped: number; resolved_by_data?: number; rejected?: { title: string; action_type: string | null; reason: string }[]; data_limitations: string[]; recommendations: GadsRecommendation[] }> =>
     (await api.post('/google-ads/recommendations/generate', { brandId, ...p })).data,
   updateRecommendation: async (brandId: number, id: number, patch: { status?: RecStatus; notes?: string | null }): Promise<GadsRecommendation> =>
     (await api.patch(`/google-ads/recommendations/${id}`, { brandId, ...patch })).data,
@@ -387,6 +421,10 @@ export const optimizationApi = {
   deleteExperiment: async (brandId: number, id: number) => (await api.delete(`/google-ads/experiments/${id}`, brandParam(brandId))).data,
   evaluate: async (brandId: number, id: number): Promise<{ experiment: GadsExperiment; related_changes: { changed_at: string; campaign_name: string | null; changes: string | null; user_email: string | null }[] }> =>
     (await api.post(`/google-ads/experiments/${id}/evaluate`, { brandId })).data,
+  feedback: async (brandId: number, body: { target_type: 'finding' | 'recommendation' | 'alert'; target_key: string; rule_type: string; verdict: FeedbackVerdict; note?: string; period_start?: string; period_end?: string }) =>
+    (await api.post('/google-ads/feedback', { brandId, ...body })).data,
+  ops: async (brandId: number) => (await api.get('/google-ads/ops', brandParam(brandId))).data as GadsOps,
+  calibration: async (brandId: number, from: string, to: string) => (await api.get('/google-ads/calibration', { params: { brandId, from, to } })).data as GadsCalibration,
   alerts: async (brandId: number): Promise<GadsAlert[]> => (await api.get('/google-ads/alerts', brandParam(brandId))).data.alerts,
   setAlert: async (brandId: number, id: number, status: GadsAlert['status']): Promise<GadsAlert[]> => (await api.patch(`/google-ads/alerts/${id}`, { brandId, status })).data.alerts,
 };
