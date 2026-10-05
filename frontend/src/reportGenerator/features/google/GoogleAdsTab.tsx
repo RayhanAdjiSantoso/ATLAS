@@ -27,6 +27,8 @@ import {
 } from './GoogleAdsInsights';
 import { AlertsPanel, ExperimentTracker, OptimizationCenter, type ExperimentDraft } from './GoogleAdsOptimization';
 import { downloadGoogleAdsWorkbook } from './googleAdsExcel';
+import { HealthSection, LandingPageOpportunity, ReportCtx, type ReportView } from './GoogleAdsHealth';
+import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import {
   PRESETS, channelLabel, fetchOverview, fetchReport, formatter, matchTypeLabel, rangeLabel,
@@ -292,6 +294,9 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
   const f = formatter(report.currency);
   const [draft, setDraft] = useState<ExperimentDraft | null>(null);
   const [excelBusy, setExcelBusy] = useState(false);
+  // Internal by default; switch to Client before downloading a PDF for a client.
+  const [view, setView] = useState<ReportView>('internal');
+  const ctx = useMemo(() => ({ view, clientId, period: { start: range.curStart, end: range.curEnd }, rulesetVersion: report.rulesetVersion }), [view, clientId, range, report.rulesetVersion]);
   const { old, cur } = report;
   const empty = cur.totals.impressions === 0 && cur.totals.cost === 0;
 
@@ -351,6 +356,12 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
   );
 
   return (
+    <ReportCtx.Provider value={ctx}>
+    <div className="gads-view-bar">
+      <SegmentedToggle label="Tampilan" value={view} onChange={setView} accent="var(--google)"
+        options={[{ value: 'internal', label: 'Internal' }, { value: 'client', label: 'Klien' }]} />
+      <small>{view === 'internal' ? 'Confidence, aturan, rekonsiliasi data, dan tombol review terlihat.' : 'Temuan, dampak, tindakan, dan pemantauan — bahasa untuk klien. Pilih ini sebelum download PDF untuk klien.'}</small>
+    </div>
     <div id="report-google" style={{ '--band-a': '#1a73e8', '--band-b': '#1557b0', '--band-c': '#34a853' } as CSSProperties}>
       <div className="report-top">
         <div className="report-title">Google Ads Performance Report</div>
@@ -418,6 +429,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
                   </div>
                   <GoalOverviewSection report={report} f={f} p1={p1} p2={p2} />
                   <AlertsSection report={report} f={f} p2={p2} />
+                  <HealthSection report={report} f={f} />
                   <div className="sec-block">
                     {heading('Ringkasan Periode', 'semua metrik')}
                     <KpiTable rows={summaryRows} p1={p1} p2={p2} padded />
@@ -484,7 +496,10 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
                     <GoogleAdsTable columns={keywordCols} rows={cur.keywords} sortKey="conversions" limit={TABLE_ROWS} />
                   </div>
                   {cur.keywordDetail ? (
-                    <KeywordIntelSection report={report} f={f} p2={p2} />
+                    <>
+                      <KeywordIntelSection report={report} f={f} p2={p2} />
+                      <LandingPageOpportunity report={report} f={f} />
+                    </>
                   ) : (
                     <div className="sec-block">
                       {heading('Low Performing Keyword', `berdasarkan Avg. CPC · ${p2}`)}
@@ -601,5 +616,6 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
         </button>
       </div>
     </div>
+    </ReportCtx.Provider>
   );
 }

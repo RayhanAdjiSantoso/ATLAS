@@ -6,6 +6,8 @@ import * as gaRepo from '../repositories/googleAdsRepository.js';
 import * as datasetsRepo from '../repositories/googleAdsDatasetsRepository.js';
 import { withRatios, safeDiv, pctChange, classifyActions } from './googleAdsAnalytics.js';
 import { diagnoseCampaigns, moneyFormatter } from './googleAdsDiagnostics.js';
+import { RULES, RULESET_VERSION, STICKY_ALERTS, cooldownDays } from './googleAdsRules.js';
+import * as quality from './googleAdsQuality.js';
 import { requestGeminiJson, brandContextBlock, currentDirectionBlock, MODEL } from './aiSummaryService.js';
 import { getReport } from './googleAdsService.js';
 
@@ -35,7 +37,15 @@ async function assertBrand(brandId) {
 // =====================================================================
 export const PRIORITIES = ['critical', 'high', 'medium', 'low'];
 export const CONFIDENCES = ['high', 'medium', 'low'];
-export const REC_STATUSES = ['new', 'reviewed', 'planned', 'in_progress', 'monitoring', 'completed', 'dismissed'];
+export const REC_STATUSES = ['new', 'reviewed', 'planned', 'in_progress', 'monitoring', 'completed', 'dismissed', 'resolved_by_data'];
+const CLOSED_STATUSES = ['completed', 'dismissed', 'resolved_by_data'];
+// What the recommendation asks the team to do — the backend checks the
+// evidence each kind needs before it is stored.
+export const ACTION_TYPES = [
+  'fix_tracking', 'increase_budget', 'reallocate_budget', 'decrease_budget', 'change_bidding', 'adjust_target',
+  'add_negative_keyword', 'pause_keyword', 'add_keyword', 'change_match_type', 'improve_ad_copy', 'improve_landing_page',
+  'adjust_targeting', 'adjust_schedule', 'adjust_device', 'monitor', 'other',
+];
 export const ENTITY_TYPES = ['account', 'campaign', 'ad_group', 'keyword', 'search_term', 'ad', 'landing_page'];
 export const CATEGORIES = ['tracking', 'budget', 'bidding', 'keywords', 'search_terms', 'ads', 'landing_page', 'targeting', 'schedule', 'device', 'structure', 'other'];
 const DISMISS_QUIET_DAYS = 30;
@@ -49,6 +59,7 @@ const REC_SCHEMA = {
         type: 'OBJECT',
         properties: {
           entity_type: { type: 'STRING' },
+          action_type: { type: 'STRING' },
           entity_id: { type: 'STRING' },
           entity_name: { type: 'STRING' },
           category: { type: 'STRING' },
@@ -64,7 +75,7 @@ const REC_SCHEMA = {
           success_metric: { type: 'STRING' },
           monitoring_period: { type: 'STRING' },
         },
-        required: ['entity_type', 'category', 'title', 'finding', 'evidence', 'possible_cause', 'recommended_action', 'priority', 'confidence', 'risk', 'success_metric', 'monitoring_period'],
+        required: ['entity_type', 'action_type', 'category', 'title', 'finding', 'evidence', 'possible_cause', 'recommended_action', 'priority', 'confidence', 'risk', 'success_metric', 'monitoring_period'],
       },
     },
     data_limitations: { type: 'ARRAY', items: { type: 'STRING' } },
@@ -84,11 +95,18 @@ Aturan yang mengikat:
 7. Utamakan masalah tracking (konversi primer tidak ada/berhenti) di atas optimasi lain: optimasi tanpa tracking yang benar tidak bisa dievaluasi.
 8. Jangan mengulang rekomendasi yang sudah ada di "Rekomendasi aktif" kecuali ada bukti baru; jika mengulang, pakai entity dan category yang sama.
 9. ATLAS tidak mengubah akun: tulis tindakan sebagai langkah manual.
+10. Jangan menyebut profit, margin, atau "menguntungkan" kecuali konteks brand memuat datanya; CPA rendah bukan berarti profitable.
+11. Jangan menyarankan pause keyword atau negative keyword untuk data kecil; gunakan action_type "monitor" bila data belum cukup.
+12. Lokasi pengguna di laporan kota bukan alamat pengiriman.
+13. Hindari kata mutlak ("pasti", "wajib", "harus pause", "disebabkan oleh"): gunakan "indikasi", "berpotensi", "perlu dievaluasi", "disarankan untuk diuji".
+14. Jika tracking konversi bermasalah (lihat diagnostics/tracking_health), rekomendasi pertama adalah memperbaikinya; jangan sarankan budget atau bidding sebelum itu.
+Backend menolak rekomendasi yang tidak didukung data (mis. kenaikan budget tanpa Lost IS budget/budget habis, pause keyword dengan klik sedikit).
 
 Isi setiap rekomendasi:
 - entity_type: salah satu dari account, campaign, ad_group, keyword, search_term, ad, landing_page.
 - entity_id: untuk campaign gunakan campaign_id dari data; selain itu kosongkan.
-- entity_name: nama campaign/ad group/keyword/search term/URL.
+- entity_name: nama campaign/ad group/keyword/search term/URL — persis seperti di data.
+- action_type: salah satu dari fix_tracking, increase_budget, reallocate_budget, decrease_budget, change_bidding, adjust_target, add_negative_keyword, pause_keyword, add_keyword, change_match_type, improve_ad_copy, improve_landing_page, adjust_targeting, adjust_schedule, adjust_device, monitor, other.
 - category: salah satu dari tracking, budget, bidding, keywords, search_terms, ads, landing_page, targeting, schedule, device, structure, other.
 - title: maksimal 90 karakter.
 - finding: fakta yang dibuktikan data.
@@ -171,20 +189,151 @@ export function buildRecommendationPrompt(input) {
   return `# Data Google Ads (dihitung backend ATLAS)\n${JSON.stringify(input)}\n\n${REC_RULES}`;
 }
 
+// What the validator needs to know about the report the recommendation
+// was written from.
+export function validationContext(report, profileText = '') {
+  const settings = new Map((report.campaignSettings ?? []).map((x) => [`${x.customer_id}|${x.campaign_id}`, x]));
+  const shares = new Map((report.cur.competitive?.campaigns ?? []).map((x) => [`${x.customer_id}|${x.campaign_id}`, x]));
+  const tracking = new Map((report.trackingHealth?.campaigns ?? []).map((t) => [String(t.campaign_id), t.healthy]));
+  const campaigns = report.cur.campaigns.map((c) => {
+    const key = `${c.customer_id}|${c.campaign_id}`;
+    const st = settings.get(key);
+    const budget = st?.budget_amount ?? c.budget ?? null;
+    return {
+      ...c, key, bidding: st?.bidding_strategy_type ?? null, target_cpa: st?.target_cpa ?? null, target_roas: st?.target_roas ?? null,
+      lost_budget: shares.get(key)?.search_budget_lost_is ?? null,
+      utilization: budget && c.active_days ? c.cost / c.active_days / budget : null,
+      tracking_ok: tracking.get(String(c.campaign_id)) ?? true,
+    };
+  });
+  const keywords = new Map();
+  for (const k of report.cur.keywordDetail ?? []) {
+    const name = String(k.keyword).toLowerCase();
+    if (!keywords.has(name)) keywords.set(name, []);
+    keywords.get(name).push(k);
+  }
+  return {
+    campaigns,
+    keywords,
+    terms: new Map((report.cur.searchTermDetail ?? []).map((t) => [String(t.search_term).toLowerCase(), t])),
+    accountTrackingOk: report.trackingHealth?.account?.healthy ?? true,
+    conversionIssue: report.dataQuality?.summary?.conversionIssue ?? null,
+    anyTarget: campaigns.some((c) => c.target_cpa || c.target_roas),
+    smartOnly: campaigns.length > 0 && campaigns.every((c) => SMART.has(c.bidding)),
+    profileHasMargin: /margin|profit|laba|hpp|cogs/i.test(profileText),
+  };
+}
+const SMART = new Set(['MAXIMIZE_CONVERSIONS', 'TARGET_CPA', 'MAXIMIZE_CONVERSION_VALUE', 'TARGET_ROAS']);
+
+// Absolute wording → hedged wording, for anything a client may read.
+const SOFTEN = [
+  [/\bharus\s+(di-?)?(pause|jeda|dijeda|dihentikan)\b/gi, 'disarankan dievaluasi untuk dijeda'],
+  [/\bdisebabkan oleh\b/gi, 'kemungkinan berkaitan dengan'],
+  [/\bmenyebabkan\b/gi, 'berpotensi memengaruhi'],
+  [/\bpasti\b/gi, 'kemungkinan besar'],
+  [/\bwajib\b/gi, 'disarankan'],
+  [/\bharus\b/gi, 'perlu'],
+];
+export function softenWording(value) {
+  let out = value;
+  for (const [re, to] of SOFTEN) out = out.replace(re, to);
+  return out;
+}
+
+// One recommendation against the data. Returns the (possibly hedged)
+// recommendation, or a rejection reason. Evidence each action needs:
+//   increase_budget  a campaign losing impressions to budget or spending its
+//                    whole budget, with enough conversions and healthy tracking
+//   pause_keyword    the keyword classified underperforming / no conversion
+//                    on enough clicks
+//   add_negative     a search term in the data, without conversions, past
+//                    the "too little data" class
+//   change_bidding / adjust_target  enough conversions and healthy tracking
+//   device / schedule bid adjustments  not under Smart Bidding
+// And for every text: no invented targets, no profit/margin claims without
+// margin data, no shipping-address reading of user location.
+export function checkRecommendation(r, ctx, cfg = RULES) {
+  const all = [r.finding, r.possible_cause, r.recommended_action, r.expected_direction, r.risk, r.title].filter(Boolean).join(' ').toLowerCase();
+  const camp = r.entity_type === 'campaign' ? ctx.campaigns.find((c) => String(c.campaign_id) === String(r.entity_id)) : null;
+  const rc = cfg.recommendation;
+  const reject = (reason) => ({ ok: false, reason });
+
+  if (/target\s*(cpa|roas)[^.]{0,30}?(rp|rm|\d)/i.test(all) && !ctx.anyTarget) return reject('Menyebut angka target CPA/ROAS padahal akun tidak punya target — target tidak boleh dikarang');
+  if (/\b(profit|margin|laba|untung|menguntungkan|profitable)\b/i.test(all) && !ctx.profileHasMargin) return reject('Menyimpulkan profit/margin tanpa data margin');
+  if (/alamat (pengiriman|kirim)/i.test(all)) return reject('Menyamakan lokasi pengguna dengan alamat pengiriman');
+
+  switch (r.action_type) {
+    case 'increase_budget': {
+      if (!camp) return reject('Kenaikan budget harus menyebut campaign yang ada di data');
+      const capped = (camp.lost_budget ?? 0) >= rc.budgetIncreaseMinLostIsBudget || (camp.utilization ?? 0) >= rc.budgetLimitedRatio;
+      if (!capped) return reject(`Kenaikan budget ${camp.campaign_name} tanpa bukti budget membatasi (Lost IS budget ${camp.lost_budget == null ? 'tidak ada' : `${(camp.lost_budget * 100).toFixed(0)}%`}, pemakaian budget ${camp.utilization == null ? 'tidak diketahui' : `${(camp.utilization * 100).toFixed(0)}%`})`);
+      if (camp.conversions < rc.budgetIncreaseMinConversions) return reject(`Kenaikan budget ${camp.campaign_name} dengan ${camp.conversions} konversi — volume belum cukup`);
+      if (!camp.tracking_ok || !ctx.accountTrackingOk) return reject('Kenaikan budget saat tracking konversi bermasalah');
+      break;
+    }
+    case 'pause_keyword': {
+      const rows = ctx.keywords.get(String(r.entity_name ?? '').toLowerCase()) ?? [];
+      const strong = rows.some((k) => ['underperforming', 'no_conversion'].includes(k.classification) && k.clicks >= cfg.keyword.minClicks);
+      if (!strong) return reject(`Pause keyword "${r.entity_name}" tanpa bukti cukup (bukan underperforming/no conversion dengan ≥ ${cfg.keyword.minClicks} klik)`);
+      break;
+    }
+    case 'add_negative_keyword': {
+      const t = ctx.terms.get(String(r.entity_name ?? '').toLowerCase());
+      if (!t) return reject(`Search term "${r.entity_name}" tidak ada di data periode ini`);
+      if (t.conversions > 0) return reject(`Search term "${r.entity_name}" masih menghasilkan konversi`);
+      if (t.classification === 'monitoring') return reject(`Search term "${r.entity_name}" datanya belum cukup untuk dinegatifkan`);
+      break;
+    }
+    case 'change_bidding':
+    case 'adjust_target': {
+      const conv = camp ? camp.conversions : ctx.campaigns.reduce((a, c) => a + c.conversions, 0);
+      if ((camp && !camp.tracking_ok) || !ctx.accountTrackingOk) return reject('Perubahan bidding saat tracking konversi bermasalah');
+      if (/(target cpa|target roas|maximi[sz]e conv|tcpa|troas)/i.test(all) && conv < rc.bidStrategyChangeMinConversions) {
+        return reject(`Strategi bidding berbasis konversi dengan ${conv} konversi — di bawah ${rc.bidStrategyChangeMinConversions}`);
+      }
+      break;
+    }
+    case 'adjust_device':
+    case 'adjust_schedule': {
+      const smart = camp ? SMART.has(camp.bidding) : ctx.smartOnly;
+      if (smart && /(bid adjustment|penyesuaian bid|bid modifier|adjustment bid|\+\s*\d+\s*%|-\s*\d+\s*%)/i.test(all)) return reject('Bid adjustment device/jadwal tidak berlaku di Smart Bidding (kecuali -100%)');
+      break;
+    }
+    default:
+  }
+
+  const notes = [];
+  const out = { ...r };
+  for (const f of ['title', 'finding', 'possible_cause', 'recommended_action', 'expected_direction', 'risk']) {
+    if (!out[f]) continue;
+    const soft = softenWording(out[f]);
+    if (soft !== out[f]) { out[f] = soft; if (!notes.includes('Kata mutlak diganti dengan kata yang tidak memastikan')) notes.push('Kata mutlak diganti dengan kata yang tidak memastikan'); }
+  }
+  // Confidence follows the data underneath, not what the model claims.
+  if (!ctx.accountTrackingOk && r.action_type !== 'fix_tracking' && out.confidence !== 'low') { out.confidence = 'low'; notes.push('Keyakinan diturunkan: tracking konversi bermasalah'); }
+  if (ctx.conversionIssue && ['budget', 'bidding'].includes(r.category) && out.confidence === 'high') { out.confidence = 'medium'; notes.push(`Keyakinan diturunkan: ${ctx.conversionIssue}`); }
+  return { ok: true, rec: out, notes };
+}
+
 // Shape is locked by the schema, content is not: anything outside the
 // enums is coerced to the safe value or dropped, campaigns must exist in
-// the report, and a recommendation without evidence is not kept.
-export function validateRecommendations(raw, { campaigns = [] } = {}) {
+// the report, a recommendation without evidence is not kept, and — with a
+// validation context — each one must pass checkRecommendation.
+export function validateRecommendations(raw, { campaigns = [], ctx = null } = {}) {
   const byId = new Map(campaigns.map((c) => [String(c.campaign_id), c]));
   const byName = new Map(campaigns.map((c) => [String(c.campaign_name).toLowerCase(), c]));
   const list = Array.isArray(raw?.recommendations) ? raw.recommendations : [];
   const out = [];
+  const rejected = [];
   for (const r of list.slice(0, 12)) {
     const evidence = (Array.isArray(r?.evidence) ? r.evidence : []).map((e) => text(e, 240)).filter(Boolean).slice(0, 4);
     const title = text(r?.title, 120);
     const finding = text(r?.finding, 800);
     const action = text(r?.recommended_action, 800);
-    if (!title || !finding || !action || !evidence.length) continue;
+    if (!title || !finding || !action || !evidence.length) {
+      if (title) rejected.push({ title, action_type: r?.action_type ?? null, reason: 'Tanpa temuan, tindakan, atau bukti angka' });
+      continue;
+    }
     let entityType = ENTITY_TYPES.includes(r.entity_type) ? r.entity_type : 'account';
     let entityId = null;
     let entityName = text(r.entity_name, 200) || null;
@@ -194,8 +343,9 @@ export function validateRecommendations(raw, { campaigns = [] } = {}) {
       if (c) { entityId = String(c.campaign_id); entityName = c.campaign_name; customerId = c.customer_id ?? null; } else { entityType = 'account'; entityName = null; }
     }
     if (entityType === 'account') entityName = null;
-    out.push({
+    const rec = {
       entity_type: entityType, entity_id: entityId, entity_name: entityName, customer_id: customerId,
+      action_type: ACTION_TYPES.includes(r.action_type) ? r.action_type : 'other',
       category: CATEGORIES.includes(r.category) ? r.category : 'other',
       title, finding, evidence,
       possible_cause: text(r.possible_cause, 800) || null,
@@ -206,19 +356,29 @@ export function validateRecommendations(raw, { campaigns = [] } = {}) {
       risk: text(r.risk, 500) || null,
       success_metric: text(r.success_metric, 300) || null,
       monitoring_period: text(r.monitoring_period, 120) || null,
-    });
+      validation_notes: [],
+    };
+    if (ctx) {
+      const check = checkRecommendation(rec, ctx);
+      if (!check.ok) { rejected.push({ title, action_type: rec.action_type, reason: check.reason }); continue; }
+      out.push({ ...check.rec, validation_notes: check.notes });
+    } else out.push(rec);
   }
-  return { recommendations: out, data_limitations: (Array.isArray(raw?.data_limitations) ? raw.data_limitations : []).map((x) => text(x, 300)).filter(Boolean).slice(0, 4) };
+  return { recommendations: out, rejected, data_limitations: (Array.isArray(raw?.data_limitations) ? raw.data_limitations : []).map((x) => text(x, 300)).filter(Boolean).slice(0, 4) };
 }
 
-// The same recommendation, again: one per entity and category.
-export const fingerprintOf = (r) => [r.entity_type, r.entity_type === 'account' ? 'account' : (r.entity_id ?? String(r.entity_name ?? '').toLowerCase()), r.category].join('|');
+// The same recommendation, again: one per account, entity, category and
+// kind of action.
+export const fingerprintOf = (r) => [
+  r.customer_id ?? '', r.entity_type, r.entity_type === 'account' ? 'account' : (r.entity_id ?? String(r.entity_name ?? '').toLowerCase()), r.category, r.action_type ?? 'other',
+].join('|');
 
 // insert | refresh (an open one exists) | skip (dismissed recently).
-// A completed or long-dismissed one gets a fresh row: it is a new episode.
+// A completed, resolved-by-data or long-dismissed one gets a fresh row: the
+// issue is back, which is a new episode.
 export function dedupeDecision(latest, now = new Date()) {
   if (!latest) return { action: 'insert' };
-  if (!['completed', 'dismissed'].includes(latest.status)) return { action: 'refresh', id: latest.id };
+  if (!CLOSED_STATUSES.includes(latest.status)) return { action: 'refresh', id: latest.id };
   if (latest.status === 'dismissed') {
     const since = new Date(latest.status_updated_at ?? latest.last_seen_at);
     if (now - since < DISMISS_QUIET_DAYS * 864e5) return { action: 'skip' };
@@ -240,12 +400,19 @@ export async function generateRecommendations({ brandId, oldStart, oldEnd, curSt
     repo.listExperiments(brandId),
   ]);
   if (!report.cur.totals.cost && !report.cur.totals.impressions) throw new AppError('Tidak ada data Google Ads pada periode ini untuk dianalisis', 400);
-  const active = existing.filter((r) => !['completed', 'dismissed'].includes(r.status));
+  const active = existing.filter((r) => !CLOSED_STATUSES.includes(r.status));
   const input = buildRecommendationInput({ report, profile, brandName: brand.brand_name, active, experiments, oldStart, oldEnd, curStart, curEnd });
-  const raw = await requestGeminiJson(buildRecommendationPrompt(input), REC_SCHEMA);
-  const { recommendations, data_limitations: limitations } = validateRecommendations(raw, { campaigns: report.cur.campaigns });
+  const ctx = validationContext(report, profile ? JSON.stringify(profile) : '');
+  const prompt = buildRecommendationPrompt(input);
+  let result = validateRecommendations(await requestGeminiJson(prompt, REC_SCHEMA), { campaigns: report.cur.campaigns, ctx });
+  // Everything rejected: one more attempt, told why.
+  if (!result.recommendations.length && result.rejected.length) {
+    const feedback = `\n\n# Ditolak validator ATLAS pada percobaan sebelumnya\n${result.rejected.map((x) => `- "${x.title}": ${x.reason}`).join('\n')}\nGanti dengan rekomendasi yang didukung data, atau gunakan action_type "monitor" bila data belum cukup.`;
+    const retry = validateRecommendations(await requestGeminiJson(prompt + feedback, REC_SCHEMA), { campaigns: report.cur.campaigns, ctx });
+    result = { ...retry, rejected: [...result.rejected, ...retry.rejected] };
+  }
 
-  const recs = recommendations.map((r) => ({ ...r, fingerprint: fingerprintOf(r), source: 'ai', model: MODEL, period_start: curStart, period_end: curEnd }));
+  const recs = result.recommendations.map((r) => ({ ...r, fingerprint: fingerprintOf(r), source: 'ai', model: MODEL, period_start: curStart, period_end: curEnd, ruleset_version: RULESET_VERSION }));
   const latest = new Map((await repo.latestByFingerprint(brandId, recs.map((r) => r.fingerprint))).map((l) => [l.fingerprint, l]));
   const tally = { inserted: 0, refreshed: 0, skipped: 0 };
   for (const r of recs) {
@@ -254,7 +421,11 @@ export async function generateRecommendations({ brandId, oldStart, oldEnd, curSt
     else if (d.action === 'refresh') { await repo.refreshRecommendation(d.id, r); tally.refreshed += 1; }
     else tally.skipped += 1;
   }
-  return { ...tally, data_limitations: limitations, recommendations: await repo.listRecommendations(brandId) };
+  // Untouched open recommendations the data no longer produces: after two
+  // generations without them they become "resolved by data" — the issue
+  // disappeared, which is not the same as the team completing it.
+  const resolved = await repo.markMissed(brandId, recs.map((r) => r.fingerprint));
+  return { ...tally, resolved_by_data: resolved, rejected: result.rejected, data_limitations: result.data_limitations, recommendations: await repo.listRecommendations(brandId) };
 }
 
 export async function updateRecommendation({ brandId, id, status, notes, userId }) {
@@ -311,7 +482,8 @@ export async function recommendationToTask({ brandId, id, pic, userId }) {
 export const EXPERIMENT_METRICS = ['cpa', 'conversions', 'cvr', 'ctr', 'cpc', 'roas', 'cost', 'conversions_value', 'impressions', 'clicks'];
 const VOLUME_METRICS = new Set(['conversions', 'cost', 'conversions_value', 'impressions', 'clicks']);
 const METRIC_FIELD = { cpa: 'cost_per_conv', cvr: 'cvr', ctr: 'ctr', cpc: 'avg_cpc', roas: 'roas', conversions: 'conversions', cost: 'cost', conversions_value: 'conversions_value', impressions: 'impressions', clicks: 'clicks' };
-export const EXPERIMENT_RULES = { minChange: 0.1, minConversions: 10, minClicks: 100, minImpressions: 1000 };
+export const EXPERIMENT_RULES = RULES.experiment;
+export const EXPERIMENT_QUALITY = ['clean_test', 'multiple_changes', 'short_duration', 'low_volume', 'tracking_issue', 'inconclusive'];
 
 export function metricValue(metrics, metric, days) {
   const r = withRatios(metrics ?? {});
@@ -338,12 +510,24 @@ export function experimentVerdict({ metric, direction, baseline, evaluation, bas
   if (baselineDays !== evalDays) limitations.push(`Panjang periode berbeda (${baselineDays} vs ${evalDays} hari)${VOLUME_METRICS.has(metric) ? '; dibandingkan per hari' : ''}.`);
   if (otherChanges.length) limitations.push(`${otherChanges.length} perubahan lain tercatat di Change History selama periode evaluasi — hasil tidak bisa diatribusikan ke satu perubahan saja.`);
   if (overlapping.length) limitations.push(`Eksperimen lain berjalan bersamaan pada entity yang sama: ${overlapping.map((o) => o.hypothesis).join('; ').slice(0, 200)}.`);
+  if (baselineDays % 7 !== 0 || evalDays % 7 !== 0) limitations.push('Periode bukan kelipatan 7 hari, jadi komposisi hari kerja/akhir pekan bisa berbeda.');
+  // Conversions counted only as secondary in either period: the metric
+  // itself is not trustworthy.
+  const trackingIssue = convMetric && [baseline, evaluation].some((m) => (m?.conversions ?? 0) === 0 && (m?.all_conversions ?? 0) > 0);
+  if (trackingIssue) limitations.push('Konversi primer 0 sementara ada konversi sekunder — tracking perlu diperbaiki sebelum hasil bisa dinilai.');
+  const short = evalDays < rules.minDays;
+  if (short) limitations.push(`Periode evaluasi ${evalDays} hari, di bawah ${rules.minDays} hari.`);
+  const multiple = otherChanges.length > 0 || overlapping.length > 0;
   let verdict = 'inconclusive';
-  if (enough && change != null && Math.abs(change) >= rules.minChange) {
+  if (enough && !trackingIssue && !multiple && change != null && Math.abs(change) >= rules.minChange) {
     const good = direction === 'increase' ? change > 0 : change < 0;
     verdict = good ? 'improved' : 'declined';
   }
-  return { metric, baseline_value: b, evaluation_value: e, change, verdict, limitations };
+  // The most serious reason first: what the result can be trusted for.
+  const quality = trackingIssue ? 'tracking_issue' : !enough ? 'low_volume' : multiple ? 'multiple_changes' : short ? 'short_duration'
+    : verdict === 'inconclusive' ? 'inconclusive' : 'clean_test';
+  if (multiple) limitations.push('Beberapa perubahan terjadi di periode yang sama — hasil tidak diklaim sebagai dampak satu perubahan.');
+  return { metric, baseline_value: b, evaluation_value: e, change, verdict, quality, limitations, ruleset_version: RULESET_VERSION };
 }
 
 function validateExperiment(input, { partial = false } = {}) {
@@ -446,6 +630,7 @@ export async function evaluateExperiment({ brandId, id, userId }) {
   await repo.insertExperimentResult(id, {
     metric: exp.success_metric, baseline: { ...withRatios(baseline), days_with_data: baseline.days_with_data },
     evaluation: { ...withRatios(evaluation), days_with_data: evaluation.days_with_data }, change: v.change, verdict: v.verdict, limitations: v.limitations,
+    quality: v.quality, ruleset_version: v.ruleset_version,
   }, userId);
   await repo.updateExperiment(id, brandId, {
     result: v.verdict, evaluation_date: todayJakarta(),
@@ -457,7 +642,6 @@ export async function evaluateExperiment({ brandId, id, userId }) {
 // =====================================================================
 // Alerts
 // =====================================================================
-const ALERT_COOLDOWN_DAYS = 3;
 const SYNC_STALE_HOURS = 48;
 const ALERT_FINDINGS = {
   tracking_no_primary_conversion: 'Tidak ada konversi primer yang dihitung',
@@ -469,8 +653,11 @@ const ALERT_FINDINGS = {
 
 // What to open, refresh and resolve, given what is firing now. A key that
 // was resolved stays resolved during its cooldown even if it fires again,
-// so one borderline metric does not flap the alert open and shut.
-export function computeAlertChanges(existing, active, now = new Date(), cooldownDays = ALERT_COOLDOWN_DAYS) {
+// so one borderline metric does not flap the alert open and shut. The
+// cooldown depends on the alert type (googleAdsRules.ALERT_COOLDOWN_DAYS),
+// and sticky types (tracking, sync failures) reopen whenever they fire —
+// marking them done does not hide a problem that is still there.
+export function computeAlertChanges(existing, active, now = new Date(), cooldownOf = cooldownDays) {
   const byKey = new Map(existing.map((e) => [e.alert_key, e]));
   const activeKeys = new Set(active.map((a) => a.alert_key));
   const open = [];
@@ -479,11 +666,13 @@ export function computeAlertChanges(existing, active, now = new Date(), cooldown
     const e = byKey.get(a.alert_key);
     if (!e) open.push(a);
     else if (e.status === 'resolved') {
-      if (!e.cooldown_until || new Date(e.cooldown_until) <= now) open.push(a);
+      if (STICKY_ALERTS.has(a.type) || !e.cooldown_until || new Date(e.cooldown_until) <= now) open.push(a);
     } else refresh.push(a);
   }
-  const until = new Date(now.getTime() + cooldownDays * 864e5).toISOString();
-  const resolve = existing.filter((e) => e.status !== 'resolved' && !activeKeys.has(e.alert_key)).map((e) => ({ alert_key: e.alert_key, cooldown_until: until }));
+  const resolve = existing.filter((e) => e.status !== 'resolved' && !activeKeys.has(e.alert_key)).map((e) => {
+    const days = cooldownOf(e.type ?? e.alert_key.split('|')[0]);
+    return { alert_key: e.alert_key, cooldown_until: days ? new Date(now.getTime() + days * 864e5).toISOString() : null };
+  });
   return { open, refresh, resolve };
 }
 
@@ -526,16 +715,40 @@ export async function evaluateAlerts(brandId) {
       datasetsRepo.listConversionActions(brandId), datasetsRepo.listGoalMap(brandId),
     ]);
     const currency = [...new Set(accounts.map((a) => a.currency_code).filter(Boolean))];
+    const unverifiedCount = classifyActions(convRows, meta, map).filter((a) => a.goal_source !== 'manual' && Number(a.all_conversions) > 0).length;
+    const recent = await quality.recentCampaignConversions(brandId, lastDate);
+    const curRows = cur.map(withRatios);
+    const tracking = quality.trackingHealth({ campaigns: curRows, settings, actions: meta, unverified: unverifiedCount, recent });
     const findings = diagnoseCampaigns({
       old: { campaigns: old.map(withRatios), totals: withRatios(oldTotals), days: 28 },
-      cur: { campaigns: cur.map(withRatios), totals: withRatios(curTotals), days: 7 },
-      settings, currency: currency.length === 1 ? currency[0] : null,
+      cur: { campaigns: curRows, totals: withRatios(curTotals), days: 7 },
+      settings, currency: currency.length === 1 ? currency[0] : null, trackingHealth: tracking.map, curEnd: lastDate,
     });
-    for (const f of findings.filter((x) => ALERT_FINDINGS[x.type] && x.severity !== 'low')) {
+    // Only diagnoses become alerts: a low-confidence "monitoring" finding is
+    // shown in the report, but nobody is alerted on thin data.
+    for (const f of findings.filter((x) => ALERT_FINDINGS[x.type] && x.severity !== 'low' && x.status !== 'monitoring')) {
       active.push({
         alert_key: `${f.type}|${f.entity_type}|${f.entity_id ?? 'account'}`, customer_id: f.customer_id, type: f.type, severity: f.severity,
         title: ALERT_FINDINGS[f.type], message: `${f.entity_type === 'account' ? 'Seluruh akun' : f.entity_name}: ${f.facts[0]} (7 hari terakhir vs 28 hari sebelumnya).`,
-        data: { facts: f.facts, window: `${curStart}..${lastDate}` },
+        data: { facts: f.facts, window: `${curStart}..${lastDate}`, confidence: f.confidence, confidence_score: f.confidence_score },
+      });
+    }
+    // Tracking health beyond "no primary conversion" (which has its own
+    // critical alert): inactive primary actions, stale metadata, silence.
+    if (!tracking.account.healthy && !findings.some((x) => x.type === 'tracking_no_primary_conversion')) {
+      active.push({
+        alert_key: 'tracking_health', type: 'tracking_health', severity: tracking.account.score < 50 ? 'critical' : 'high',
+        title: `Conversion Tracking Health ${tracking.account.score}/100`,
+        message: tracking.account.deductions.map((d) => d.reason).join('; '), data: { score: tracking.account.score },
+      });
+    }
+    // Data quality: a reconciliation beyond the critical tolerance.
+    const dq = await quality.computeDataQuality(brandId, curStart, lastDate);
+    for (const c of dq.checks.filter((x) => x.status === 'INCONSISTENT')) {
+      active.push({
+        alert_key: `data_quality|${c.check_key}`, type: 'data_quality', severity: c.dataset === 'conversions' ? 'high' : 'medium',
+        title: 'Data tidak konsisten', message: `${c.dataset}: total ${Number(c.observed).toFixed(2)} vs campaign ${Number(c.expected).toFixed(2)} (selisih ${(Math.abs(c.rel_diff ?? 0) * 100).toFixed(1)}%). ${c.note ?? ''}`,
+        data: { check: c.check_key, window: `${curStart}..${lastDate}` },
       });
     }
     const IMPORTANT = new Set(['status', 'budget_amount', 'bidding_strategy_type', 'target_cpa', 'target_roas', 'target_impression_share', 'conversion_goals']);
@@ -558,7 +771,7 @@ export async function evaluateAlerts(brandId) {
     }
   }
 
-  const changes = computeAlertChanges(await repo.alertRows(brandId), active);
+  const changes = computeAlertChanges(await repo.alertRows(brandId), active.map((a) => ({ ...a, data: { ...(a.data ?? {}), ruleset_version: RULESET_VERSION } })));
   await repo.applyAlertChanges(brandId, changes);
   return changes;
 }
@@ -572,7 +785,10 @@ export async function listAlerts({ brandId, includeResolved = false, evaluate = 
 export async function setAlertStatus({ brandId, id, status, userId }) {
   await assertBrand(brandId);
   if (!['acknowledged', 'resolved', 'open'].includes(status)) throw new AppError('Status tidak dikenal', 400);
-  const until = status === 'resolved' ? new Date(Date.now() + ALERT_COOLDOWN_DAYS * 864e5).toISOString() : null;
+  const alert = (await repo.listAlerts(brandId, { includeResolved: true })).find((a) => a.id === id);
+  if (!alert) throw new AppError('Alert tidak ditemukan', 404);
+  const days = cooldownDays(alert.type);
+  const until = status === 'resolved' && days ? new Date(Date.now() + days * 864e5).toISOString() : null;
   if (!(await repo.setAlertStatus(id, brandId, status, userId, until))) throw new AppError('Alert tidak ditemukan', 404);
   return { alerts: await repo.listAlerts(brandId) };
 }
@@ -611,10 +827,24 @@ Berikan 8–15 headline dan 2–4 description.`;
 
 const COPY_TOKENS = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9À-ɏ]+/).filter((t) => t.length >= 3);
 
+// Claims an ad may only make when the brand already makes them somewhere in
+// the context (its running ads, profile, keywords, search terms). Each
+// pattern lists the phrasings that count as the same claim.
+const CLAIMS = [
+  ['promo/diskon', /\b(diskon|discount|promo|sale|potongan|cashback|voucher|\d+\s?%\s?(off)?)\b/i, /diskon|discount|promo|sale|potongan|cashback|voucher|%/i],
+  ['gratis ongkir', /\b(gratis ongkir|free (delivery|shipping)|ongkir gratis)\b/i, /gratis ongkir|free (delivery|shipping)|ongkir gratis/i],
+  ['pengiriman cepat', /\b(same[- ]?day|hari yang sama|hari ini|\d+\s?jam|express|instan|instant|kilat)\b/i, /same[- ]?day|hari yang sama|hari ini|\d+\s?jam|express|instan|instant|kilat/i],
+  ['superlatif', /(terbaik|\bbest\b|#1|nomor 1|no\.?\s?1\b|termurah|cheapest|terpercaya|paling)/i, /terbaik|\bbest\b|#1|nomor 1|no\.?\s?1\b|termurah|cheapest|terpercaya|paling/i],
+  ['garansi', /\b(garansi|guarantee|jaminan|uang kembali|money back)\b/i, /garansi|guarantee|jaminan|uang kembali|money back/i],
+  ['harga', /\b(rp|rm)\s?\d/i, /\b(rp|rm)\s?\d/i],
+];
+
 // Google's limits and the rules above that can be checked mechanically.
 // Over-long or duplicate text is dropped, never trimmed into something the
-// model did not write.
-export function validateAdCopy(raw, { existing = [], keywords = [] } = {}) {
+// model did not write; so is a claim the context does not back, keyword
+// stuffing and shouting punctuation.
+export function validateAdCopy(raw, { existing = [], keywords = [], context = '' } = {}) {
+  const ctxText = String(context).toLowerCase();
   const seen = new Set(existing.map((t) => String(t).trim().toLowerCase()));
   const kwTokens = keywords.map((k) => COPY_TOKENS(k)).filter((t) => t.length);
   const take = (list, kind) => {
@@ -626,15 +856,22 @@ export function validateAdCopy(raw, { existing = [], keywords = [] } = {}) {
       if (!t) continue;
       const key = t.toLowerCase();
       const bangs = (t.match(/!/g) ?? []).length;
+      const words = COPY_TOKENS(t).filter((w) => w.length >= 4);
+      const repeated = words.find((w, i) => words.indexOf(w) !== i);
+      const claim = CLAIMS.find(([, re, ctxRe]) => re.test(t) && !ctxRe.test(ctxText));
       const reason = t.length > max ? `lebih dari ${max} karakter`
         : seen.has(key) ? 'duplikat'
         : kind === 'headline' && bangs ? 'headline tidak boleh memakai tanda seru'
         : kind === 'description' && bangs > 1 ? 'lebih dari satu tanda seru'
+        : /[!?.,]{2,}|[★☆✓✔→«»]/.test(t) ? 'tanda baca/simbol berlebihan'
+        : (t.match(/\b[A-Z]{5,}\b/g) ?? []).length > 0 ? 'huruf kapital berlebihan'
+        : repeated ? `kata "${repeated}" diulang (keyword stuffing)`
+        : claim ? `klaim ${claim[0]} tidak ada di iklan, profil, atau data brand`
         : null;
       if (reason) { dropped.push({ text: t, reason }); continue; }
       seen.add(key);
-      const words = COPY_TOKENS(t);
-      out.push({ text: t, length: t.length, rationale: text(item?.rationale, 240) || null, has_keyword: kwTokens.some((kt) => kt.every((w) => words.some((x) => x === w || (w.length >= 5 && x.startsWith(w.slice(0, -1)))))) });
+      const tokensOfT = COPY_TOKENS(t);
+      out.push({ text: t, length: t.length, rationale: text(item?.rationale, 240) || null, has_keyword: kwTokens.some((kt) => kt.every((w) => tokensOfT.some((x) => x === w || (w.length >= 5 && x.startsWith(w.slice(0, -1)))))) });
     }
     return { out: out.slice(0, AD_COPY_LIMITS[`${kind}s`]), dropped };
   };
@@ -677,5 +914,10 @@ export async function suggestAdCopy({ brandId, customerId, adGroupId, oldStart, 
     brand_context: profile ? { context: brandContextBlock(profile), direction: currentDirectionBlock(profile) } : null,
   };
   const raw = await requestGeminiJson(`# Ad group Google Ads\n${JSON.stringify(input)}\n\n${AD_COPY_RULES}`, AD_COPY_SCHEMA);
-  return { ad_group: groupName, campaign: campaignName, ...validateAdCopy(raw, { existing, keywords: keywords.slice(0, 5).map((k) => k.keyword) }) };
+  // What the brand already says: the only claims new copy may repeat.
+  const context = [
+    ...existing, ...keywords.map((k) => k.keyword), ...terms.map((t) => t.search_term), ...input.final_urls,
+    profile ? JSON.stringify(profile) : '',
+  ].join(' \n ');
+  return { ad_group: groupName, campaign: campaignName, ...validateAdCopy(raw, { existing, keywords: keywords.slice(0, 5).map((k) => k.keyword), context }) };
 }

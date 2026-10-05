@@ -8,14 +8,14 @@ import pool from '../config/db.js';
 // ---------------------------------------------------------------------
 // daily datasets
 // ---------------------------------------------------------------------
-export async function upsertAds({ brandId, customerId, runId, source, rows }, db = pool) {
+export async function upsertAds({ brandId, customerId, runId, source, runStartedAt, rows }, db = pool) {
   if (!rows.length) return 0;
   const { rowCount } = await db.query(
     `INSERT INTO google_ads_ads_daily
        (brand_id, customer_id, entry_date, campaign_id, campaign_name, channel_type, ad_group_id, ad_group_name,
-        ad_id, ad_type, ad_status, cost, impressions, clicks, conversions, conversions_value, all_conversions, source, fetch_run_id)
+        ad_id, ad_type, ad_status, cost, impressions, clicks, conversions, conversions_value, all_conversions, source, fetch_run_id, fetched_at)
      SELECT $1, $2, r.entry_date, r.campaign_id, r.campaign_name, r.channel_type, r.ad_group_id, r.ad_group_name,
-            r.ad_id, r.ad_type, r.ad_status, r.cost, r.impressions, r.clicks, r.conversions, r.conversions_value, r.all_conversions, $5, $4
+            r.ad_id, r.ad_type, r.ad_status, r.cost, r.impressions, r.clicks, r.conversions, r.conversions_value, r.all_conversions, $5, $4, $6
      FROM jsonb_to_recordset($3::jsonb) AS r(
        entry_date date, campaign_id text, campaign_name text, channel_type text, ad_group_id text, ad_group_name text,
        ad_id text, ad_type text, ad_status text, cost numeric, impressions numeric, clicks numeric,
@@ -26,20 +26,21 @@ export async function upsertAds({ brandId, customerId, runId, source, rows }, db
        ad_status = EXCLUDED.ad_status, cost = EXCLUDED.cost, impressions = EXCLUDED.impressions, clicks = EXCLUDED.clicks,
        conversions = EXCLUDED.conversions, conversions_value = EXCLUDED.conversions_value,
        all_conversions = EXCLUDED.all_conversions, source = EXCLUDED.source,
-       fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = now()`,
-    [brandId, customerId, JSON.stringify(rows), runId, source],
+       fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = EXCLUDED.fetched_at
+     WHERE google_ads_ads_daily.fetched_at <= EXCLUDED.fetched_at`,
+    [brandId, customerId, JSON.stringify(rows), runId, source, runStartedAt ?? new Date()],
   );
   return rowCount;
 }
 
-export async function upsertConversions({ brandId, customerId, runId, source, rows }, db = pool) {
+export async function upsertConversions({ brandId, customerId, runId, source, runStartedAt, rows }, db = pool) {
   if (!rows.length) return 0;
   const { rowCount } = await db.query(
     `INSERT INTO google_ads_conversion_daily
        (brand_id, customer_id, entry_date, campaign_id, campaign_name, conversion_action_id, conversion_action_name,
-        conversion_category, conversions, conversions_value, all_conversions, all_conversions_value, source, fetch_run_id)
+        conversion_category, conversions, conversions_value, all_conversions, all_conversions_value, source, fetch_run_id, fetched_at)
      SELECT $1, $2, r.entry_date, r.campaign_id, r.campaign_name, r.conversion_action_id, r.conversion_action_name,
-            r.conversion_category, r.conversions, r.conversions_value, r.all_conversions, r.all_conversions_value, $5, $4
+            r.conversion_category, r.conversions, r.conversions_value, r.all_conversions, r.all_conversions_value, $5, $4, $6
      FROM jsonb_to_recordset($3::jsonb) AS r(
        entry_date date, campaign_id text, campaign_name text, conversion_action_id text, conversion_action_name text,
        conversion_category text, conversions numeric, conversions_value numeric, all_conversions numeric, all_conversions_value numeric)
@@ -48,8 +49,9 @@ export async function upsertConversions({ brandId, customerId, runId, source, ro
        conversion_action_name = EXCLUDED.conversion_action_name, conversion_category = EXCLUDED.conversion_category,
        conversions = EXCLUDED.conversions, conversions_value = EXCLUDED.conversions_value,
        all_conversions = EXCLUDED.all_conversions, all_conversions_value = EXCLUDED.all_conversions_value,
-       source = EXCLUDED.source, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = now()`,
-    [brandId, customerId, JSON.stringify(rows), runId, source],
+       source = EXCLUDED.source, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = EXCLUDED.fetched_at
+     WHERE google_ads_conversion_daily.fetched_at <= EXCLUDED.fetched_at`,
+    [brandId, customerId, JSON.stringify(rows), runId, source, runStartedAt ?? new Date()],
   );
   return rowCount;
 }
@@ -59,16 +61,16 @@ const SHARE_COLUMNS = [
   'search_budget_lost_top_is', 'search_rank_lost_top_is', 'search_budget_lost_abs_top_is', 'search_rank_lost_abs_top_is',
 ];
 
-export async function upsertCompetitive({ brandId, customerId, runId, source, rows }, db = pool) {
+export async function upsertCompetitive({ brandId, customerId, runId, source, runStartedAt, rows }, db = pool) {
   if (!rows.length) return 0;
   const cols = SHARE_COLUMNS.join(', ');
   const { rowCount } = await db.query(
     `INSERT INTO google_ads_competitive_metrics
        (brand_id, customer_id, level, granularity, start_date, end_date, campaign_id, campaign_name, ad_group_id,
-        ad_group_name, criterion_id, keyword, match_type, impressions, ${cols}, source, fetch_run_id)
+        ad_group_name, criterion_id, keyword, match_type, impressions, ${cols}, source, fetch_run_id, fetched_at)
      SELECT $1, $2, r.level, r.granularity, r.start_date, r.end_date, r.campaign_id, r.campaign_name, r.ad_group_id,
             r.ad_group_name, r.criterion_id, r.keyword, r.match_type, r.impressions,
-            ${SHARE_COLUMNS.map((c) => `r.${c}`).join(', ')}, $5, $4
+            ${SHARE_COLUMNS.map((c) => `r.${c}`).join(', ')}, $5, $4, $6
      FROM jsonb_to_recordset($3::jsonb) AS r(
        level text, granularity text, start_date date, end_date date, campaign_id text, campaign_name text,
        ad_group_id text, ad_group_name text, criterion_id text, keyword text, match_type text, impressions numeric,
@@ -77,61 +79,64 @@ export async function upsertCompetitive({ brandId, customerId, runId, source, ro
        brand_id = EXCLUDED.brand_id, campaign_name = EXCLUDED.campaign_name, ad_group_name = EXCLUDED.ad_group_name,
        keyword = EXCLUDED.keyword, match_type = EXCLUDED.match_type, impressions = EXCLUDED.impressions,
        ${SHARE_COLUMNS.map((c) => `${c} = EXCLUDED.${c}`).join(', ')},
-       source = EXCLUDED.source, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = now()`,
-    [brandId, customerId, JSON.stringify(rows), runId, source],
+       source = EXCLUDED.source, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = EXCLUDED.fetched_at
+     WHERE google_ads_competitive_metrics.fetched_at <= EXCLUDED.fetched_at`,
+    [brandId, customerId, JSON.stringify(rows), runId, source, runStartedAt ?? new Date()],
   );
   return rowCount;
 }
 
 const METRIC_COLS = 'cost numeric, impressions numeric, clicks numeric, conversions numeric, conversions_value numeric';
 
-export async function upsertDevices({ brandId, customerId, runId, source, rows }, db = pool) {
+export async function upsertDevices({ brandId, customerId, runId, source, runStartedAt, rows }, db = pool) {
   if (!rows.length) return 0;
   const { rowCount } = await db.query(
     `INSERT INTO google_ads_device_daily
        (brand_id, customer_id, entry_date, campaign_id, campaign_name, channel_type, device, cost, impressions, clicks,
-        conversions, conversions_value, all_conversions, source, fetch_run_id)
+        conversions, conversions_value, all_conversions, source, fetch_run_id, fetched_at)
      SELECT $1, $2, r.entry_date, r.campaign_id, r.campaign_name, r.channel_type, r.device, r.cost, r.impressions, r.clicks,
-            r.conversions, r.conversions_value, r.all_conversions, $5, $4
+            r.conversions, r.conversions_value, r.all_conversions, $5, $4, $6
      FROM jsonb_to_recordset($3::jsonb) AS r(
        entry_date date, campaign_id text, campaign_name text, channel_type text, device text, ${METRIC_COLS}, all_conversions numeric)
      ON CONFLICT (customer_id, entry_date, campaign_id, device) DO UPDATE SET
        brand_id = EXCLUDED.brand_id, campaign_name = EXCLUDED.campaign_name, channel_type = EXCLUDED.channel_type,
        cost = EXCLUDED.cost, impressions = EXCLUDED.impressions, clicks = EXCLUDED.clicks, conversions = EXCLUDED.conversions,
        conversions_value = EXCLUDED.conversions_value, all_conversions = EXCLUDED.all_conversions,
-       source = EXCLUDED.source, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = now()`,
-    [brandId, customerId, JSON.stringify(rows), runId, source],
+       source = EXCLUDED.source, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = EXCLUDED.fetched_at
+     WHERE google_ads_device_daily.fetched_at <= EXCLUDED.fetched_at`,
+    [brandId, customerId, JSON.stringify(rows), runId, source, runStartedAt ?? new Date()],
   );
   return rowCount;
 }
 
-export async function upsertHourly({ brandId, customerId, runId, source, rows }, db = pool) {
+export async function upsertHourly({ brandId, customerId, runId, source, runStartedAt, rows }, db = pool) {
   if (!rows.length) return 0;
   const { rowCount } = await db.query(
     `INSERT INTO google_ads_hourly
        (brand_id, customer_id, entry_date, hour, campaign_id, campaign_name, cost, impressions, clicks, conversions,
-        conversions_value, source, fetch_run_id)
+        conversions_value, source, fetch_run_id, fetched_at)
      SELECT $1, $2, r.entry_date, r.hour, r.campaign_id, r.campaign_name, r.cost, r.impressions, r.clicks, r.conversions,
-            r.conversions_value, $5, $4
+            r.conversions_value, $5, $4, $6
      FROM jsonb_to_recordset($3::jsonb) AS r(entry_date date, hour smallint, campaign_id text, campaign_name text, ${METRIC_COLS})
      ON CONFLICT (customer_id, entry_date, campaign_id, hour) DO UPDATE SET
        brand_id = EXCLUDED.brand_id, campaign_name = EXCLUDED.campaign_name, cost = EXCLUDED.cost,
        impressions = EXCLUDED.impressions, clicks = EXCLUDED.clicks, conversions = EXCLUDED.conversions,
        conversions_value = EXCLUDED.conversions_value, source = EXCLUDED.source,
-       fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = now()`,
-    [brandId, customerId, JSON.stringify(rows), runId, source],
+       fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = EXCLUDED.fetched_at
+     WHERE google_ads_hourly.fetched_at <= EXCLUDED.fetched_at`,
+    [brandId, customerId, JSON.stringify(rows), runId, source, runStartedAt ?? new Date()],
   );
   return rowCount;
 }
 
-export async function upsertLandingPages({ brandId, customerId, runId, source, rows }, db = pool) {
+export async function upsertLandingPages({ brandId, customerId, runId, source, runStartedAt, rows }, db = pool) {
   if (!rows.length) return 0;
   const { rowCount } = await db.query(
     `INSERT INTO google_ads_landing_pages_daily
        (brand_id, customer_id, entry_date, campaign_id, campaign_name, url, clicks, impressions, cost, conversions,
-        conversions_value, speed_score, mobile_friendly_clicks_pct, unavailable, source, fetch_run_id)
+        conversions_value, speed_score, mobile_friendly_clicks_pct, unavailable, source, fetch_run_id, fetched_at)
      SELECT $1, $2, r.entry_date, r.campaign_id, r.campaign_name, r.url, r.clicks, r.impressions, r.cost, r.conversions,
-            r.conversions_value, r.speed_score, r.mobile_friendly_clicks_pct, r.unavailable, $5, $4
+            r.conversions_value, r.speed_score, r.mobile_friendly_clicks_pct, r.unavailable, $5, $4, $6
      FROM jsonb_to_recordset($3::jsonb) AS r(
        entry_date date, campaign_id text, campaign_name text, url text, clicks numeric, impressions numeric, cost numeric,
        conversions numeric, conversions_value numeric, speed_score numeric, mobile_friendly_clicks_pct numeric, unavailable jsonb)
@@ -140,8 +145,9 @@ export async function upsertLandingPages({ brandId, customerId, runId, source, r
        impressions = EXCLUDED.impressions, cost = EXCLUDED.cost, conversions = EXCLUDED.conversions,
        conversions_value = EXCLUDED.conversions_value, speed_score = EXCLUDED.speed_score,
        mobile_friendly_clicks_pct = EXCLUDED.mobile_friendly_clicks_pct, unavailable = EXCLUDED.unavailable,
-       source = EXCLUDED.source, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = now()`,
-    [brandId, customerId, JSON.stringify(rows), runId, source],
+       source = EXCLUDED.source, fetch_run_id = EXCLUDED.fetch_run_id, fetched_at = EXCLUDED.fetched_at
+     WHERE google_ads_landing_pages_daily.fetched_at <= EXCLUDED.fetched_at`,
+    [brandId, customerId, JSON.stringify(rows), runId, source, runStartedAt ?? new Date()],
   );
   return rowCount;
 }
@@ -181,17 +187,19 @@ const DAILY_TABLES = {
   landing_pages: { table: 'google_ads_landing_pages_daily', range: 'entry_date BETWEEN $2 AND $3' },
 };
 
-export async function deleteStaleDataset({ dataset, customerId, startDate, endDate, runId, levels = null }, db = pool) {
+// Only rows older than this run go: a run that started later and already
+// wrote its rows keeps them (see googleAdsRepository.upsertRows).
+export async function deleteStaleDataset({ dataset, customerId, startDate, endDate, runId, runStartedAt, levels = null }, db = pool) {
   const spec = DAILY_TABLES[dataset];
   if (!spec) return 0;
-  const params = [customerId, startDate, endDate, runId];
+  const params = [customerId, startDate, endDate, runId, runStartedAt ?? new Date()];
   let extra = '';
   if (dataset === 'competitive' && levels) {
     params.push(levels);
-    extra = ' AND level = ANY($5)';
+    extra = ' AND level = ANY($6)';
   }
   const { rowCount } = await db.query(
-    `DELETE FROM ${spec.table} WHERE customer_id = $1 AND ${spec.range} AND fetch_run_id <> $4${extra}`,
+    `DELETE FROM ${spec.table} WHERE customer_id = $1 AND ${spec.range} AND fetch_run_id <> $4 AND fetched_at < $5${extra}`,
     params,
   );
   return rowCount;

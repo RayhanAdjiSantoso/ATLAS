@@ -13,6 +13,7 @@ import {
   type Formatter, type GadsAd, type GadsCampaign, type GadsConversionAction, type GadsDay, type GadsFinding, type GadsKeywordDetail,
   type GadsLandingPage, type GadsMessageMatch, type GadsReport, type GadsTermDetail, type GoalKey, type KeywordClass, type Severity, type TermClass,
 } from './googleAds';
+import { ConfidenceBadge, FeedbackButtons, useReportCtx } from './GoogleAdsHealth';
 
 // The report sections built on the datasets of migrations 040/041 and the
 // backend's rule-based insights (googleAdsDiagnostics.js). The numbers and
@@ -220,7 +221,6 @@ export function FreshnessLine({ report, coverageEnd }: { report: GadsReport; cov
 
 export const SEVERITY_LABEL: Record<Severity, string> = { critical: 'Kritis', high: 'Tinggi', medium: 'Sedang', low: 'Rendah' };
 const SEVERITY_TONE: Record<Severity, Tone> = { critical: 'bad', high: 'warn', medium: 'info', low: 'neutral' };
-const CONFIDENCE_LABEL = { high: 'keyakinan tinggi', medium: 'keyakinan sedang', low: 'keyakinan rendah' };
 export const FINDING_LABEL: Record<string, string> = {
   tracking_no_primary_conversion: 'Tidak ada konversi primer yang dihitung',
   conversions_stopped: 'Konversi berhenti',
@@ -240,27 +240,67 @@ export const FINDING_LABEL: Record<string, string> = {
   quality_expected_ctr: 'Expected CTR lemah di banyak keyword',
 };
 
+// Internal: facts, possible causes, next steps, confidence with its
+// reasons, the rule version and review buttons. Client: findings, impact,
+// next action and a monitoring plan — no machinery, but a thin-data
+// finding still says so.
+const IMPACT: Record<Severity, string> = {
+  critical: 'Perlu ditangani segera — memengaruhi kemampuan akun mengukur atau mengoptimalkan hasil.',
+  high: 'Berdampak besar pada biaya atau hasil jika dibiarkan.',
+  medium: 'Perlu dievaluasi pada siklus optimasi berikutnya.',
+  low: 'Dampak terbatas; pantau.',
+};
+
 function FindingCard({ x }: { x: GadsFinding }) {
+  const { view } = useReportCtx();
+  const monitoring = x.status === 'monitoring';
+  const title = FINDING_LABEL[x.type] ?? humanEnum(x.type);
+  const entity = x.entity_type === 'account' ? 'Seluruh akun' : x.entity_name;
+  if (view === 'client') {
+    const facts = x.facts.filter((t) => !/Data masih terbatas/.test(t));
+    return (
+      <article className={`gads-finding is-${monitoring ? 'low' : x.severity}`}>
+        <header>
+          {monitoring ? <Tag tone="neutral">Dipantau</Tag> : <Tag tone={SEVERITY_TONE[x.severity]}>{SEVERITY_LABEL[x.severity]}</Tag>}
+          <strong>{title}</strong>
+          <span className="gads-finding-entity">{entity}</span>
+        </header>
+        <div className="gads-finding-body">
+          <div><h5>Temuan</h5><ul>{facts.map((t) => <li key={t}>{t}</li>)}</ul>{(monitoring || x.confidence === 'low') && <p className="gads-footnote is-inline">Indikasi awal — data masih terbatas.</p>}</div>
+          <div><h5>Dampak</h5><p>{monitoring ? 'Belum dapat disimpulkan; dipantau sampai data cukup.' : IMPACT[x.severity]}</p></div>
+          <div><h5>Langkah berikutnya</h5><ul>{x.next_steps.map((t) => <li key={t}>{t}</li>)}</ul><h5>Pemantauan</h5><p>{monitoring ? 'Dievaluasi ulang setelah volume data mencukupi.' : 'Metrik terkait dipantau 14 hari setelah tindakan.'}</p></div>
+        </div>
+      </article>
+    );
+  }
   return (
-    <article className={`gads-finding is-${x.severity}`}>
+    <article className={`gads-finding is-${monitoring ? 'low' : x.severity}`}>
       <header>
         <Tag tone={SEVERITY_TONE[x.severity]}>{SEVERITY_LABEL[x.severity]}</Tag>
-        <strong>{FINDING_LABEL[x.type] ?? humanEnum(x.type)}</strong>
-        <span className="gads-finding-entity">{x.entity_type === 'account' ? 'Seluruh akun' : x.entity_name}</span>
-        <span className="gads-finding-conf">{CONFIDENCE_LABEL[x.confidence]}</span>
+        <strong>{title}</strong>
+        <span className="gads-finding-entity">{entity}</span>
+        <span className="gads-finding-conf">
+          <ConfidenceBadge level={x.confidence} score={x.confidence_score} reasons={x.confidence_reasons} monitoring={monitoring} />
+        </span>
       </header>
       <div className="gads-finding-body">
         <div><h5>Fakta</h5><ul>{x.facts.map((t) => <li key={t}>{t}</li>)}</ul></div>
         <div><h5>Kemungkinan penyebab</h5><ul>{x.possible_causes.map((t) => <li key={t}>{t}</li>)}</ul></div>
         <div><h5>Langkah berikutnya</h5><ul>{x.next_steps.map((t) => <li key={t}>{t}</li>)}</ul></div>
       </div>
+      <footer className="gads-finding-foot">
+        {x.confidence_reasons?.length ? <small>Dasar confidence: {x.confidence_reasons.join(' · ')}</small> : null}
+        {x.ruleset_version && <small className="gads-rule-ver">{x.ruleset_version}</small>}
+        <FeedbackButtons targetType="finding" targetKey={x.id} ruleType={x.type} />
+      </footer>
     </article>
   );
 }
 
 export function AlertsSection({ report, f, p2 }: { report: GadsReport; f: Formatter; p2: string }) {
   const findings = report.diagnostics ?? [];
-  const urgent = findings.filter((x) => x.severity === 'critical' || x.severity === 'high');
+  // Only diagnoses: a thin-data "monitoring" finding is no warning.
+  const urgent = findings.filter((x) => x.status !== 'monitoring' && (x.severity === 'critical' || x.severity === 'high'));
   const anomalies = report.anomalies?.anomalies ?? [];
   const kw = report.cur.keywordSummary;
   const terms = report.cur.searchTermSummary;
@@ -301,17 +341,22 @@ const ANOMALY_METRIC = { cost: 'Biaya', clicks: 'Klik', conversions: 'Konversi',
 
 // ── Diagnostics page ────────────────────────────────────────────────
 export function DiagnosticsSection({ report, p1, p2 }: { report: GadsReport; p1: string; p2: string }) {
-  const [sev, setSev] = useState<'all' | Severity>('all');
+  const [sev, setSev] = useState<'all' | Severity | 'monitoring'>('all');
   const findings = report.diagnostics ?? [];
   if (!report.diagnostics) return <EmptyBlock title="Diagnostics">{NOT_YET}</EmptyBlock>;
-  const counts = { all: findings.length, ...Object.fromEntries((['critical', 'high', 'medium', 'low'] as Severity[]).map((s) => [s, findings.filter((x) => x.severity === s).length])) } as Record<'all' | Severity, number>;
-  const shown = sev === 'all' ? findings : findings.filter((x) => x.severity === sev);
+  const diagnoses = findings.filter((x) => x.status !== 'monitoring');
+  const counts = {
+    all: diagnoses.length, monitoring: findings.length - diagnoses.length,
+    ...Object.fromEntries((['critical', 'high', 'medium', 'low'] as Severity[]).map((s) => [s, diagnoses.filter((x) => x.severity === s).length])),
+  } as Record<'all' | Severity | 'monitoring', number>;
+  const shown = sev === 'monitoring' ? findings.filter((x) => x.status === 'monitoring') : sev === 'all' ? diagnoses : diagnoses.filter((x) => x.severity === sev);
   return (
     <div className="sec-block">
       <Heading title="Diagnostics Campaign" badge={`${p1} → ${p2}`} excel={false} />
       <div className="sec-inner">
         <Chips value={sev} onChange={setSev} counts={counts} options={[
-          { value: 'all', label: 'Semua' }, { value: 'critical', label: 'Kritis' }, { value: 'high', label: 'Tinggi' }, { value: 'medium', label: 'Sedang' }, { value: 'low', label: 'Rendah' },
+          { value: 'all', label: 'Semua diagnosis' }, { value: 'critical', label: 'Kritis' }, { value: 'high', label: 'Tinggi' }, { value: 'medium', label: 'Sedang' }, { value: 'low', label: 'Rendah' },
+          { value: 'monitoring', label: 'Dipantau (data terbatas)' },
         ]} />
         {shown.length ? <div className="gads-findings">{shown.map((x) => <FindingCard key={x.id} x={x} />)}</div>
           : <p className="empty-note">Tidak ada temuan pada tingkat ini.</p>}
@@ -623,6 +668,7 @@ export function KeywordIntelSection({ report, f, p2 }: { report: GadsReport; f: 
       <p className="gads-footnote">
         Klasifikasi membandingkan CPA keyword dengan target CPA campaign, atau — tanpa target — CPA rata-rata campaign periode ini (baseline historis, bukan batas profitabilitas).
         Konversi keyword adalah semua konversi primer (Purchase dan Lead belum dipisah di level keyword).
+        {report.cur.listTotals?.keywordDetail && report.cur.listTotals.keywordDetail > rows.length ? ` Menampilkan ${rows.length} dari ${report.cur.listTotals.keywordDetail} keyword (yang sudah punya klasifikasi dan biaya terbesar); hitungan per kelas di atas memakai semua keyword.` : ''}
         {qDate && ` Quality Score adalah penilaian Google per ${qDate}, bukan rata-rata periode; N/A = Google belum memberi skor.`}
       </p>
     </div>

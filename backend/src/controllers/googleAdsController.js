@@ -2,6 +2,7 @@ import { validationResult } from 'express-validator';
 import { AppError, asyncHandler } from '../utils/errors.js';
 import * as service from '../services/googleAdsService.js';
 import * as optimization from '../services/googleAdsOptimization.js';
+import * as calibration from '../services/googleAdsCalibration.js';
 
 function validate(req) {
   const errors = validationResult(req);
@@ -139,6 +140,33 @@ export const suggestAdCopy = asyncHandler(async (req, res) => {
   validate(req);
   const { customerId, adGroupId, oldStart, oldEnd, curStart, curEnd } = req.body;
   res.json(await optimization.suggestAdCopy({ brandId: brandOf(req), customerId, adGroupId, oldStart, oldEnd, curStart, curEnd }));
+});
+
+// POST /api/google-ads/feedback  { brandId, target_type, target_key, rule_type, verdict, note?, period_start?, period_end? }
+export const saveFeedback = asyncHandler(async (req, res) => {
+  validate(req);
+  const { brandId: _b, ...input } = req.body;
+  res.status(201).json(await calibration.saveFeedback({ brandId: brandOf(req), input, userId: req.user.userId }));
+});
+
+// GET /api/google-ads/feedback?brandId=
+export const listFeedback = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json({ feedback: await calibration.listFeedback(brandOf(req)) });
+});
+
+// GET /api/google-ads/calibration?brandId=&from=&to=  (brandId optional: every brand)
+export const rulePerformance = asyncHandler(async (req, res) => {
+  validate(req);
+  const today = new Date().toISOString().slice(0, 10);
+  const from = req.query.from || new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  res.json(await calibration.rulePerformance({ brandId: req.query.brandId ? Number(req.query.brandId) : null, from, to: req.query.to || today }));
+});
+
+// GET /api/google-ads/ops?brandId=
+export const operations = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await calibration.operations(brandOf(req)));
 });
 
 // GET /api/google-ads/alerts?brandId=&all=1

@@ -268,7 +268,8 @@ export function aiNotes(report: GadsReport, f: Formatter): string[] {
   if (terms.length) {
     notes.push(`Top search term (urut cost): ${terms.map((t) => `"${t.search_term}" (${matchTypeLabel(t.match_type)}) cost ${f.money(t.cost)}, klik ${f.int(t.clicks)}, konversi ${f.dec(t.conversions)}`).join(' | ')}`);
     const wasted = byCost(cur.searchTerms.filter((t) => t.conversions === 0 && t.cost > 0));
-    const wastedCost = wasted.reduce((a, t) => a + t.cost, 0);
+    // The list may be trimmed for large accounts; the backend summary covers every term.
+    const wastedCost = cur.searchTermSummary?.observed_no_conversion_spend ?? wasted.reduce((a, t) => a + t.cost, 0);
     notes.push(`Biaya search term tanpa konversi (teramati, belum tentu pemborosan): total ${f.money(wastedCost)} dari ${wasted.length} term (${cur.totals.cost ? ((wastedCost / cur.totals.cost) * 100).toFixed(1) : '0'}% cost). Terbesar: ${wasted.slice(0, 6).map((t) => `"${t.search_term}" ${f.money(t.cost)}`).join(', ') || '—'}`);
   } else {
     notes.push('Search term: tidak ada data pada periode utama.');

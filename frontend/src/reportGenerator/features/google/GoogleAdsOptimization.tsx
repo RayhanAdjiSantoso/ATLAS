@@ -6,6 +6,7 @@ import {
   type PeriodPair, type RecStatus, type Severity,
 } from './googleAds';
 import { SEVERITY_LABEL } from './GoogleAdsInsights';
+import { ConfidenceBadge, FeedbackButtons, useReportCtx } from './GoogleAdsHealth';
 
 // AI Optimization Center, experiment tracker and alerts. Everything here is
 // a record or a proposal: ATLAS never changes the Google Ads account, the
@@ -46,7 +47,7 @@ export function AlertsPanel({ clientId, compact = false }: { clientId: number; c
             <div className="gads-alert-text">
               <strong>{a.title}</strong>
               <span>{a.message}</span>
-              <small>Sejak {dateText(a.first_seen_at)}{a.status === 'acknowledged' ? ' · sudah dibaca' : ''}</small>
+              <small>Sejak {dateText(a.first_seen_at)}{(a.occurrence_count ?? 1) > 1 ? ` · muncul ${a.occurrence_count}×` : ''}{a.status === 'acknowledged' ? ' · sudah dibaca' : ''}</small>
             </div>
             <div className="gads-alert-actions">
               {a.status === 'open' && <button type="button" className="btn btn-ghost dt-btn-sm" disabled={busy === a.id} onClick={() => set(a, 'acknowledged')}>Tandai dibaca</button>}
@@ -63,12 +64,19 @@ export function AlertsPanel({ clientId, compact = false }: { clientId: number; c
 // ── AI Optimization Center ──────────────────────────────────────────
 export const REC_STATUS_LABEL: Record<RecStatus, string> = {
   new: 'Baru', reviewed: 'Ditinjau', planned: 'Direncanakan', in_progress: 'Dikerjakan', monitoring: 'Dipantau', completed: 'Selesai', dismissed: 'Diabaikan',
+  resolved_by_data: 'Selesai oleh data',
 };
+export const ACTION_LABEL: Record<string, string> = {
+  fix_tracking: 'Perbaiki tracking', increase_budget: 'Tambah budget', reallocate_budget: 'Realokasi budget', decrease_budget: 'Kurangi budget',
+  change_bidding: 'Ubah bidding', adjust_target: 'Sesuaikan target', add_negative_keyword: 'Negative keyword', pause_keyword: 'Jeda keyword',
+  add_keyword: 'Tambah keyword', change_match_type: 'Ubah match type', improve_ad_copy: 'Perbaiki iklan', improve_landing_page: 'Perbaiki landing page',
+  adjust_targeting: 'Sesuaikan targeting', adjust_schedule: 'Sesuaikan jadwal', adjust_device: 'Sesuaikan device', monitor: 'Pantau', other: 'Lainnya',
+};
+const CLOSED: RecStatus[] = ['completed', 'dismissed', 'resolved_by_data'];
 const CATEGORY_LABEL: Record<string, string> = {
   tracking: 'Tracking', budget: 'Budget', bidding: 'Bidding', keywords: 'Keyword', search_terms: 'Search term', ads: 'Iklan', landing_page: 'Landing page',
   targeting: 'Targeting', schedule: 'Jadwal', device: 'Device', structure: 'Struktur', other: 'Lainnya',
 };
-const CONFIDENCE_LABEL = { high: 'Keyakinan tinggi', medium: 'Keyakinan sedang', low: 'Keyakinan rendah' };
 type RecFilter = 'active' | 'done' | 'dismissed';
 
 export function OptimizationCenter({ clientId, range, onExperiment }: { clientId: number; range: PeriodPair; onExperiment: (r: GadsRecommendation) => void }) {
@@ -76,7 +84,8 @@ export function OptimizationCenter({ clientId, range, onExperiment }: { clientId
   const [filter, setFilter] = useState<RecFilter>('active');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
-  const [result, setResult] = useState<{ inserted: number; refreshed: number; skipped: number; data_limitations: string[] } | null>(null);
+  const { view } = useReportCtx();
+  const [result, setResult] = useState<{ inserted: number; refreshed: number; skipped: number; resolved_by_data?: number; rejected?: { title: string; reason: string }[]; data_limitations: string[] } | null>(null);
 
   useEffect(() => {
     optimizationApi.recommendations(clientId).then(setRecs).catch((err) => setError(apiError(err, 'Gagal memuat rekomendasi')));
@@ -102,8 +111,9 @@ export function OptimizationCenter({ clientId, range, onExperiment }: { clientId
     try { replace(await optimizationApi.toTask(clientId, r.id, pic)); } catch (err) { setError(apiError(err, 'Gagal membuat tugas')); } finally { setBusy(''); }
   }
 
-  const list = (recs ?? []).filter((r) => (filter === 'active' ? !['completed', 'dismissed'].includes(r.status) : filter === 'done' ? r.status === 'completed' : r.status === 'dismissed'));
-  const count = (f: RecFilter) => (recs ?? []).filter((r) => (f === 'active' ? !['completed', 'dismissed'].includes(r.status) : f === 'done' ? r.status === 'completed' : r.status === 'dismissed')).length;
+  const match = (r: GadsRecommendation, f: RecFilter) => (f === 'active' ? !CLOSED.includes(r.status) : f === 'done' ? ['completed', 'resolved_by_data'].includes(r.status) : r.status === 'dismissed');
+  const list = (recs ?? []).filter((r) => match(r, filter));
+  const count = (f: RecFilter) => (recs ?? []).filter((r) => match(r, f)).length;
   return (
     <div className="sec-block">
       <div className="sec-heading google-heading">AI Optimization Center <span className="sec-badge">rencana optimasi</span><SectionDownloadButton /></div>
@@ -123,10 +133,17 @@ export function OptimizationCenter({ clientId, range, onExperiment }: { clientId
         {error && <p className="gads-error">{error}</p>}
         {result && (
           <p className="gads-footnote is-inline">
-            {result.inserted} rekomendasi baru, {result.refreshed} diperbarui (sudah ada sebelumnya){result.skipped ? `, ${result.skipped} dilewati karena baru diabaikan` : ''}.
+            {result.inserted} rekomendasi baru, {result.refreshed} diperbarui (sudah ada sebelumnya){result.skipped ? `, ${result.skipped} dilewati karena baru diabaikan` : ''}
+            {result.resolved_by_data ? `, ${result.resolved_by_data} ditutup karena isunya tidak muncul lagi di data` : ''}.
             {result.data_limitations.length > 0 && ` Keterbatasan data: ${result.data_limitations.join(' · ')}`}
           </p>
         )}
+        {result?.rejected?.length && view === 'internal' ? (
+          <details className="gads-rejected">
+            <summary>{result.rejected.length} usulan AI ditolak validator</summary>
+            <ul className="gads-alert-list">{result.rejected.map((x) => <li key={x.title + x.reason}><strong>{x.title}</strong> — {x.reason}</li>)}</ul>
+          </details>
+        ) : null}
         {!recs ? <p className="empty-note"><Loader2 size={13} className="rg-spin" /> Memuat…</p> : list.length === 0 ? (
           <p className="empty-note">{filter === 'active' ? 'Belum ada rekomendasi aktif. Tekan "Buat rekomendasi AI" — AI membaca diagnostics dan data yang sudah dihitung ATLAS, bukan data mentah.' : 'Tidak ada.'}</p>
         ) : (
@@ -150,13 +167,17 @@ function RecCard({ r, busy, onPatch, onTask, onExperiment }: {
   const [notes, setNotes] = useState(r.notes ?? '');
   const [pic, setPic] = useState('');
   const [asking, setAsking] = useState(false);
+  const { view } = useReportCtx();
   return (
     <article className={`gads-finding is-${r.priority}`}>
       <header>
         <Tag tone={SEVERITY_TONE[r.priority]}>{SEVERITY_LABEL[r.priority]}</Tag>
         <strong>{r.title}</strong>
-        <span className="gads-finding-entity">{r.entity_name ?? 'Seluruh akun'} · {CATEGORY_LABEL[r.category] ?? r.category}</span>
-        <span className="gads-finding-conf">{CONFIDENCE_LABEL[r.confidence]}{r.times_seen > 1 ? ` · muncul ${r.times_seen}×` : ''}</span>
+        <span className="gads-finding-entity">{r.entity_name ?? 'Seluruh akun'} · {CATEGORY_LABEL[r.category] ?? r.category}{r.action_type ? ` · ${ACTION_LABEL[r.action_type] ?? r.action_type}` : ''}</span>
+        <span className="gads-finding-conf">
+          {view === 'internal' ? <ConfidenceBadge level={r.confidence} /> : r.confidence === 'low' ? <Tag tone="neutral">Indikasi awal</Tag> : null}
+          {r.times_seen > 1 ? ` · muncul ${r.times_seen}×` : ''}
+        </span>
       </header>
       <div className="gads-finding-body">
         <div>
@@ -196,6 +217,13 @@ function RecCard({ r, busy, onPatch, onTask, onExperiment }: {
         <textarea className="gads-rec-notes" placeholder="Catatan tim…" value={notes} rows={1}
           onChange={(e) => setNotes(e.target.value)} onBlur={() => { if ((r.notes ?? '') !== notes) onPatch(r, { notes: notes || null }); }} />
       </footer>
+      {view === 'internal' && (
+        <footer className="gads-finding-foot">
+          {r.validation_notes?.length ? <small>Validator: {r.validation_notes.join(' · ')}</small> : null}
+          {r.ruleset_version && <small className="gads-rule-ver">{r.ruleset_version}</small>}
+          <FeedbackButtons targetType="recommendation" targetKey={String(r.id)} ruleType={`${r.category}:${r.action_type ?? 'other'}`} />
+        </footer>
+      )}
     </article>
   );
 }
@@ -207,6 +235,10 @@ export const METRIC_LABEL: Record<ExpMetric, string> = {
 };
 const RESULT_TONE = { improved: 'good', declined: 'bad', inconclusive: 'neutral' } as const;
 const RESULT_LABEL = { improved: 'Membaik', declined: 'Memburuk', inconclusive: 'Belum konklusif' };
+const QUALITY_LABEL: Record<string, [string, Tone]> = {
+  clean_test: ['Clean test', 'good'], multiple_changes: ['Multiple changes', 'warn'], short_duration: ['Short duration', 'warn'],
+  low_volume: ['Low volume', 'neutral'], tracking_issue: ['Tracking issue', 'bad'], inconclusive: ['Inconclusive', 'neutral'],
+};
 const EXP_STATUS = { planned: 'Direncanakan', running: 'Berjalan', evaluating: 'Dievaluasi', completed: 'Selesai', cancelled: 'Dibatalkan' };
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const shift = (s: string, n: number) => { const d = new Date(`${s}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
@@ -284,7 +316,10 @@ export function ExperimentTracker({ clientId, report, f, draft, onDraftUsed }: {
                           {Object.entries(EXP_STATUS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </select>
                       </td>
-                      <td className="is-left">{e.result ? <Tag tone={RESULT_TONE[e.result]}>{RESULT_LABEL[e.result]}</Tag> : '—'}</td>
+                      <td className="is-left">
+                        {e.result ? <Tag tone={RESULT_TONE[e.result]}>{RESULT_LABEL[e.result]}</Tag> : '—'}
+                        {e.last_result?.quality && QUALITY_LABEL[e.last_result.quality] && <> <Tag tone={QUALITY_LABEL[e.last_result.quality][1]}>{QUALITY_LABEL[e.last_result.quality][0]}</Tag></>}
+                      </td>
                       <td className="is-left gads-row-actions">
                         <button type="button" className="btn btn-ghost dt-btn-sm" disabled={busy === `e${e.id}`} onClick={() => evaluate(e)}>{busy === `e${e.id}` ? <Loader2 size={13} className="rg-spin" /> : 'Evaluasi'}</button>
                         <button type="button" className="gads-icon-btn" aria-label="Hapus" onClick={() => remove(e)}><Trash2 size={13} /></button>

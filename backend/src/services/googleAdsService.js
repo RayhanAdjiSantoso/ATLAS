@@ -12,6 +12,8 @@ import {
 } from './googleAdsDatasets.js';
 import * as analytics from './googleAdsAnalytics.js';
 import * as diagnostics from './googleAdsDiagnostics.js';
+import * as quality from './googleAdsQuality.js';
+import { RULESET_VERSION } from './googleAdsRules.js';
 import {
   parseAuctionInsights, parseSearchTerms, parseChangeHistory, buildSearchTermsWorkbook, buildChangeHistoryWorkbook, buildArchiveWorkbook, AUCTION_METRICS,
 } from './googleAdsFiles.js';
@@ -342,7 +344,7 @@ export async function ingestRows({ runId, rows }) {
     // One INSERT ... ON CONFLICT cannot touch the same key twice; keep the last.
     byKey.set([r.entry_date, r.level, r.campaign_id, r.ad_group_id, r.item, r.match_type].join('|'), r);
   }
-  const written = await repo.upsertRows({ brandId: run.brand_id, customerId: run.customer_id, runId, rows: [...byKey.values()] });
+  const written = await repo.upsertRows({ brandId: run.brand_id, customerId: run.customer_id, runId, runStartedAt: run.started_at, rows: [...byKey.values()] });
   return { received: rows.length, written };
 }
 
@@ -405,6 +407,14 @@ export async function finishRun({ runId, status, rowCount, note, datasets }) {
     // Daily Tracking › Google Ads: the brand's cost per day over the run's
     // range, written at the time the script runs (the Meta auto-fill rule).
     if (carriesCore(run)) {
+      // Reconciliation of what this run wrote, kept for the ops view.
+      try {
+        const dq = await quality.computeDataQuality(run.brand_id, run.start_date, run.end_date);
+        await quality.storeDataQuality(run.brand_id, run.customer_id, runId, dq);
+        result.dataQuality = dq.datasets;
+      } catch (err) {
+        console.warn('[google-ads] gagal memeriksa kualitas data', { brandId: run.brand_id, reason: err.message });
+      }
       try {
         const daily = await repo.reportDaily(run.brand_id, run.start_date, run.end_date);
         const byDate = new Map(daily.map((d) => [d.date, Number(d.cost) || 0]));
@@ -436,7 +446,7 @@ function finishRunRows({ run, runId, status, rowCount, note, datasetResults }) {
     // proof the range is empty — one hiccup must not wipe a good month.
     if (core && status === 'success' && rowCount > 0) {
       removedStale = await repo.deleteStaleRows({
-        customerId: run.customer_id, startDate: run.start_date, endDate: run.end_date, runId,
+        customerId: run.customer_id, startDate: run.start_date, endDate: run.end_date, runId, runStartedAt: run.started_at,
       }, db);
     }
     // Each extra dataset replaces its own rows only when it finished well;
@@ -527,9 +537,10 @@ export async function getReport({ brandId, oldStart, oldEnd, curStart, curEnd })
   Object.assign(old, intelOld);
   Object.assign(cur, intelCur);
   const insights = await reportInsights({
-    brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur, currency: currencies.length === 1 ? currencies[0] : null,
+    brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur, meta, currency: currencies.length === 1 ? currencies[0] : null,
     auction: auctionCur, changes: changes.rows, settingChanges: shared.campaignSettingChanges,
   });
+  trimForResponse(old, cur);
   return {
     ...shared,
     ...insights,
@@ -663,6 +674,35 @@ function changedSettingFields(prev, cur) {
     .map((f) => ({ field: f, from: prev[f] ?? null, to: cur[f] ?? null }));
 }
 
+// Long lists keep their converting rows and their costliest rows; the
+// count of every row travels along so the UI can say "N dari M". Totals,
+// summaries and classifications were computed before this, on every row.
+function keepTop(rows, { max, converting = 0 }) {
+  if (rows.length <= max + converting) return rows;
+  const byCost = [...rows].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
+  const kept = new Set(byCost.slice(0, max));
+  if (converting) byCost.filter((r) => (r.conversions ?? 0) > 0).slice(0, converting).forEach((r) => kept.add(r));
+  return byCost.filter((r) => kept.has(r));
+}
+
+function trimForResponse(old, cur) {
+  const cap = diagnostics.RULES.report;
+  cur.listTotals = { searchTerms: cur.searchTerms.length, keywords: cur.keywords.length, keywordDetail: cur.keywordDetail?.length ?? 0 };
+  cur.searchTerms = keepTop(cur.searchTerms, { max: cap.maxLegacyRows, converting: cap.maxConvertingRows });
+  cur.keywords = keepTop(cur.keywords, { max: cap.maxLegacyRows, converting: cap.maxConvertingRows });
+  if (cur.keywordDetail) {
+    // Classified keywords first (the ones with a verdict), then the
+    // costliest of those with too little data.
+    const decided = cur.keywordDetail.filter((k) => k.classification !== 'insufficient_data');
+    const rest = cur.keywordDetail.filter((k) => k.classification === 'insufficient_data');
+    cur.keywordDetail = [...keepTop(decided, { max: cap.maxKeywords }), ...keepTop(rest, { max: Math.max(0, cap.maxKeywords - decided.length) })];
+  }
+  // The comparison period's long lists are not shown anywhere.
+  old.listTotals = { searchTerms: old.searchTerms.length, keywords: old.keywords.length };
+  old.searchTerms = keepTop(old.searchTerms, { max: cap.maxComparisonRows });
+  old.keywords = keepTop(old.keywords, { max: cap.maxComparisonRows });
+}
+
 // ---------------------------------------------------------------------
 // Report: rule-based insights (googleAdsDiagnostics.js)
 // ---------------------------------------------------------------------
@@ -670,9 +710,9 @@ const COUNTRIES = new Set(['malaysia', 'indonesia', 'singapore', 'thailand', 'ph
 const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 864e5) + 1;
 const tokensOf = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
 
-async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur, currency, auction, changes, settingChanges }) {
+async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, cur, settings, uploadedCur, currency, auction, changes, settingChanges, meta }) {
   const brandId = brand.brand_id;
-  const [kwRows, termRows, devCur, devOld, grid, pages, series] = await Promise.all([
+  const [kwRows, termRows, devCur, devOld, grid, pages, series, dq, fresh, recent, runs] = await Promise.all([
     datasetsRepo.keywordDetail(brandId, curStart, curEnd),
     datasetsRepo.searchTermDetail(brandId, curStart, curEnd, uploadedCur.rows.length ? [...uploadedCur.months] : null),
     datasetsRepo.devicesByCampaign(brandId, curStart, curEnd),
@@ -680,8 +720,22 @@ async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, 
     datasetsRepo.hourlyGrid(brandId, curStart, curEnd),
     datasetsRepo.landingPages(brandId, curStart, curEnd),
     repo.reportDaily(brandId, addDays(curStart, -35), curEnd),
+    quality.computeDataQuality(brandId, curStart, curEnd),
+    quality.freshness(brandId, todayJakarta()),
+    quality.recentCampaignConversions(brandId, curEnd),
+    repo.listRecentRuns(brandId, 30),
   ]);
   const baselines = diagnostics.campaignBaselines(cur.campaigns, settings);
+  // Conversion tracking health feeds the diagnostics' confidence: findings
+  // about conversions on an account whose tracking is broken are not trusted.
+  const unverified = (cur.conversionActions ?? []).filter((a) => a.goal_source !== 'manual' && a.all_conversions > 0).length;
+  const tracking = quality.trackingHealth({ campaigns: cur.campaigns, settings, actions: meta, unverified, recent });
+  const conversionStatus = dq.datasets.conversions;
+  const dataQualitySummary = {
+    conversionIssue: conversionStatus && conversionStatus !== 'VALID'
+      ? `Konversi per action ${conversionStatus === 'MISSING' ? 'belum tersedia' : 'tidak cocok dengan total campaign'} untuk periode ini` : null,
+    partial: Object.entries(dq.datasets).filter(([, st]) => ['PARTIAL', 'MISSING', 'INCONSISTENT'].includes(st)).map(([d]) => d),
+  };
 
   // Keywords: Google's impression share for the period when it holds one.
   const kwShare = new Map(cur.competitive.keywords.map((k) => [`${k.customer_id}|${k.ad_group_id}|${String(k.keyword).toLowerCase()}|${k.match_type}`, k]));
@@ -735,6 +789,7 @@ async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, 
     schedule: diagnostics.scheduleInsights(grid, curDays),
     landingPages: diagnostics.landingPageInsights(pages),
     messageMatch: diagnostics.messageMatch(kwRows, cur.ads),
+    landingPageQuality: diagnostics.landingPageQuality(keywordDetail, cur.ads),
   });
   old.devices = diagnostics.deviceInsights(devOld, settings);
 
@@ -742,12 +797,23 @@ async function reportInsights({ brand, oldStart, oldEnd, curStart, curEnd, old, 
       old: { campaigns: old.campaigns, totals: old.totals, days: oldDays },
       cur: { campaigns: cur.campaigns, totals: cur.totals, days: curDays },
       settings, competitive: cur.competitive.campaigns, changes, settingChanges, currency,
+      trackingHealth: tracking.map, dataQuality: dataQualitySummary, curEnd,
       oldLabel: `${oldStart}..${oldEnd}`, curLabel: `${curStart}..${curEnd}`,
   });
   const severity = ['critical', 'high', 'medium', 'low'];
+  const findings = [...campaignFindings, ...diagnostics.qualityPatterns(keywordDetail)]
+    .sort((a, b) => (a.status === b.status ? 0 : a.status === 'diagnosis' ? -1 : 1) || severity.indexOf(a.severity) - severity.indexOf(b.severity));
+  // Trigger log for calibration; a logging failure never breaks the report.
+  quality.logFindings(brandId, curStart, curEnd, findings).catch((err) => console.warn('[google-ads] gagal mencatat temuan', err.message));
+  const { listAlerts } = await import('../repositories/googleAdsOptimizationRepository.js');
+  const openAlerts = await listAlerts(brandId).catch(() => []);
   return {
-    diagnostics: [...campaignFindings, ...diagnostics.qualityPatterns(keywordDetail)]
-      .sort((a, b) => severity.indexOf(a.severity) - severity.indexOf(b.severity)),
+    rulesetVersion: RULESET_VERSION,
+    dataQuality: { ...dq, summary: dataQualitySummary, mixedCurrency: !currency },
+    freshness: fresh,
+    trackingHealth: { account: tracking.account, campaigns: tracking.campaigns },
+    accountHealth: quality.accountHealth({ tracking, freshnessMap: fresh, runs, unverified, actions: (cur.conversionActions ?? []).length, findings, alerts: openAlerts }),
+    diagnostics: findings,
     anomalies: diagnostics.detectAnomalies(series, curStart, curEnd),
     baselineLabels: diagnostics.BASELINE_LABEL,
     rules: diagnostics.RULES,
