@@ -47,7 +47,25 @@ const AUCTION_COLS: { key: keyof GadsAuctionRow; label: string }[] = [
   { key: 'outranking_share', label: 'Outranking share' },
 ];
 
-type AuctionView = GadsAuctionRow & { oldShare: GadsShare | null };
+// Rank by impression share within one period's file. Equal shares share a
+// rank. A domain Google only reports as "< 10%" sits below every numbered
+// one, but its exact place among the others under 10% is unknown: "≥ n".
+export function auctionRanks(rows: GadsAuctionRow[]): Map<string, string> {
+  const numbered = rows.filter((r) => r.impression_share.value != null).sort((a, b) => (b.impression_share.value as number) - (a.impression_share.value as number));
+  const out = new Map<string, string>();
+  numbered.forEach((r, i) => {
+    const prev = numbered[i - 1];
+    const rank = prev && prev.impression_share.value === r.impression_share.value ? out.get(prev.domain.toLowerCase())! : String(i + 1);
+    out.set(r.domain.toLowerCase(), rank);
+  });
+  for (const r of rows) if (r.impression_share.value == null) out.set(r.domain.toLowerCase(), `≥ ${numbered.length + 1}`);
+  return out;
+}
+
+// Google labels the advertiser's own row "You" in the export.
+const youLabel = (domain: string) => (/^(you|anda)$/i.test(domain.trim()) ? 'Anda' : `Anda (${domain})`);
+
+type AuctionView = GadsAuctionRow & { oldShare: GadsShare | null; rankCur: string; rankOld: string | null };
 
 export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuctionPeriod; cur: GadsAuctionPeriod }; p1: string; p2: string }) {
   const { old, cur } = data;
@@ -60,17 +78,28 @@ export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuct
     );
   }
   const oldByDomain = new Map(old.rows.map((r) => [r.domain.toLowerCase(), r]));
-  const rows: AuctionView[] = cur.rows.map((r) => ({ ...r, oldShare: oldByDomain.get(r.domain.toLowerCase())?.impression_share ?? null }));
+  const ranksCur = auctionRanks(cur.rows);
+  const ranksOld = auctionRanks(old.rows);
+  const rows: AuctionView[] = cur.rows.map((r) => {
+    const key = r.domain.toLowerCase();
+    // "You" is the same advertiser in both files whatever the domain says.
+    const oldRow = oldByDomain.get(key) ?? (r.isYou ? old.rows.find((o) => o.isYou) : undefined);
+    return { ...r, oldShare: oldRow?.impression_share ?? null, rankCur: ranksCur.get(key) ?? '—', rankOld: oldRow ? ranksOld.get(oldRow.domain.toLowerCase()) ?? null : null };
+  });
+  const rankValue = (rank: string | null) => (rank == null ? null : rank.startsWith('≥') ? 900 + Number(rank.slice(2)) : Number(rank));
   const columns: GadsColumn<AuctionView>[] = [
-    { key: 'domain', label: 'Display URL domain', align: 'left', value: (r) => (r.isYou ? '\u0000' : r.domain), render: (r) => (r.isYou ? <strong>Anda ({r.domain})</strong> : r.domain) },
+    { key: 'domain', label: 'Display URL domain', align: 'left', value: (r) => (r.isYou ? '\u0000' : r.domain), render: (r) => (r.isYou ? <strong>{youLabel(r.domain)}</strong> : r.domain) },
     { key: 'impression_share', label: `Impr. share · ${p2}`, value: (r) => r.impression_share.value, render: (r) => shareText(r.impression_share) },
+    { key: 'rank_cur', label: `Peringkat ${p2}`, value: (r) => rankValue(r.rankCur), render: (r) => r.rankCur },
+    { key: 'impression_share_old', label: `Impr. share · ${p1}`, value: (r) => r.oldShare?.value ?? null, render: (r) => (r.oldShare ? shareText(r.oldShare) : '—') },
+    { key: 'rank_old', label: `Peringkat ${p1}`, value: (r) => rankValue(r.rankOld), render: (r) => r.rankOld ?? '—' },
     {
-      key: 'is_change', label: `vs ${p1}`,
+      key: 'is_change', label: 'Perubahan',
       value: (r) => (r.impression_share.value != null && r.oldShare?.value != null ? r.impression_share.value - r.oldShare.value : null),
       render: (r) => {
-        if (r.impression_share.value == null || r.oldShare?.value == null) return r.oldShare ? shareText(r.oldShare) : '—';
-        const pp = (r.impression_share.value - r.oldShare.value) * 100;
-        return `${pp >= 0 ? '+' : ''}${pp.toFixed(1)} pp`;
+        if (r.impression_share.value == null || r.oldShare?.value == null) return '—';
+        const diff = (r.impression_share.value - r.oldShare.value) * 100;
+        return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`;
       },
     },
     ...AUCTION_COLS.map(({ key, label }) => ({
@@ -85,7 +114,9 @@ export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuct
       {heading('Auction Insights', `${span} · file Data & file`)}
       <GoogleAdsTable columns={columns} rows={rows} sortKey="impression_share" limit={TABLE_ROWS} />
       <p className="gads-footnote">
-        "Anda" adalah akun brand ini. Kolom "vs {p1}" adalah selisih impression share dalam poin persentase{old.rows.length ? '' : ' — belum ada file Auction insights untuk periode pembanding'}.
+        "Anda" adalah akun brand ini. Peringkat diurutkan dari impression share tiap bulan; "≥ n" berarti impression share di bawah 10% sehingga urutan pastinya tidak diketahui.
+        "Perubahan" adalah impression share {p2} dikurangi {p1} (mis. 41,2% − 45,0% = −3,8%); "—" bila salah satu bulan tidak punya angka pasti
+        {old.rows.length ? '' : ' — belum ada file Auction insights untuk periode pembanding'}.
         {cur.months.length > 1 && ' Periode ini mencakup beberapa bulan, jadi setiap angka adalah rata-rata file bulanannya.'}
       </p>
     </div>
@@ -252,9 +283,11 @@ export function aiNotes(report: GadsReport, f: Formatter): string[] {
   const ai = report.auctionInsights;
   if (ai.cur.rows.length) {
     const old = new Map(ai.old.rows.map((r) => [r.domain.toLowerCase(), r]));
+    const rCur = auctionRanks(ai.cur.rows);
+    const rOld = auctionRanks(ai.old.rows);
     const line = (r: GadsAuctionRow) => {
-      const prev = old.get(r.domain.toLowerCase());
-      return `${r.isYou ? 'BRAND INI' : r.domain}: impr. share ${shareText(r.impression_share)}${prev ? ` (periode pembanding ${shareText(prev.impression_share)})` : ''}, overlap ${shareText(r.overlap_rate)}, position above ${shareText(r.position_above_rate)}, top of page ${shareText(r.top_of_page_rate)}, outranking ${shareText(r.outranking_share)}`;
+      const prev = old.get(r.domain.toLowerCase()) ?? (r.isYou ? ai.old.rows.find((o) => o.isYou) : undefined);
+      return `${r.isYou ? 'BRAND INI' : r.domain}: impr. share ${shareText(r.impression_share)} (peringkat ${rCur.get(r.domain.toLowerCase())})${prev ? `, periode pembanding ${shareText(prev.impression_share)} (peringkat ${rOld.get(prev.domain.toLowerCase())})` : ''}, overlap ${shareText(r.overlap_rate)}, position above ${shareText(r.position_above_rate)}, top of page ${shareText(r.top_of_page_rate)}, outranking ${shareText(r.outranking_share)}`;
     };
     const rows = [...ai.cur.rows].sort((a, b) => Number(b.isYou) - Number(a.isYou) || (b.impression_share.value ?? 0) - (a.impression_share.value ?? 0)).slice(0, 8);
     notes.push(`Auction insights (${ai.cur.months.map(monthName).join(', ')}): ${rows.map(line).join(' | ')}`);

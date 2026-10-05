@@ -2,6 +2,7 @@ import { sanitizeFilename } from '../../utils/exportImage';
 import { handleStaleChunk } from '../../utils/staleChunk';
 import { GOAL_LABELS, channelLabel, matchTypeLabel, type GadsAd, type GadsReport, type GoalKey } from './googleAds';
 import { FINDING_LABEL, KEYWORD_LABEL, SEVERITY_LABEL, TERM_LABEL } from './GoogleAdsInsights';
+import { auctionRanks } from './GoogleAdsContext';
 
 // The whole Google Ads report as one workbook, one sheet per table. Built
 // from the report data rather than the screen: every row (not the top 10 a
@@ -158,8 +159,16 @@ export async function downloadGoogleAdsWorkbook(report: GadsReport, { p1, p2, br
     ]);
 
     const share = (s: { value: number | null; text: string | null } | undefined) => (s?.value ?? s?.text ?? null);
-    add('Auction Insights', report.auctionInsights.cur.rows, [
-      { label: 'Domain', value: (r) => (r.isYou ? `Anda (${r.domain})` : r.domain) }, { label: 'Impression share', kind: 'pct', value: (r) => share(r.impression_share) },
+    const ai = report.auctionInsights;
+    const rankCur = auctionRanks(ai.cur.rows);
+    const rankOld = auctionRanks(ai.old.rows);
+    const oldOf = (r: typeof ai.cur.rows[number]) => ai.old.rows.find((o) => o.domain.toLowerCase() === r.domain.toLowerCase()) ?? (r.isYou ? ai.old.rows.find((o) => o.isYou) : undefined);
+    add('Auction Insights', ai.cur.rows, [
+      { label: 'Domain', value: (r) => (r.isYou ? `Anda (${r.domain})` : r.domain) }, { label: `Impression share ${p2}`, kind: 'pct', value: (r) => share(r.impression_share) },
+      { label: `Peringkat ${p2}`, value: (r) => rankCur.get(r.domain.toLowerCase()) ?? '' },
+      { label: `Impression share ${p1}`, kind: 'pct', value: (r) => share(oldOf(r)?.impression_share) },
+      { label: `Peringkat ${p1}`, value: (r) => { const o = oldOf(r); return o ? rankOld.get(o.domain.toLowerCase()) ?? '' : ''; } },
+      { label: 'Perubahan', kind: 'pct', value: (r) => { const o = oldOf(r); return r.impression_share.value != null && o?.impression_share.value != null ? r.impression_share.value - o.impression_share.value : null; } },
       { label: 'Overlap rate', kind: 'pct', value: (r) => share(r.overlap_rate) }, { label: 'Position above rate', kind: 'pct', value: (r) => share(r.position_above_rate) },
       { label: 'Top of page rate', kind: 'pct', value: (r) => share(r.top_of_page_rate) }, { label: 'Abs. top of page rate', kind: 'pct', value: (r) => share(r.abs_top_of_page_rate) },
       { label: 'Outranking share', kind: 'pct', value: (r) => share(r.outranking_share) },
