@@ -26,6 +26,33 @@
 
 import { handleStaleChunk } from './staleChunk';
 
+// html2canvas draws a copy of the page made in a hidden iframe. Linked
+// stylesheets in that copy load again, and html2canvas can start drawing
+// before they arrive: the image comes out with browser default styles —
+// serif text, no borders, the Excel/PNG buttons showing (a Google Ads
+// section PNG came out exactly like that).
+// Copying the page's CSS rules into the clone as one <style> makes the
+// styles present before anything is measured. Cross-origin sheets (Google
+// Fonts) cannot be read and keep their own <link>.
+function pageCss(): string {
+  const parts: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      parts.push(Array.from(sheet.cssRules).map((r) => r.cssText).join('\n'));
+    } catch {
+      // cross-origin stylesheet: unreadable, left to its <link>
+    }
+  }
+  return parts.join('\n');
+}
+
+export function inlineStylesOnClone(clonedDoc: Document): void {
+  const style = clonedDoc.createElement('style');
+  style.setAttribute('data-export-inline', '');
+  style.textContent = pageCss();
+  clonedDoc.head.appendChild(style);
+}
+
 export function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
 }
@@ -84,7 +111,7 @@ export async function exportElementToPDF(rootEl: HTMLElement | null, filename: s
     // Allow the export scale and responsive charts to settle before capture.
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     for (const block of blocks) {
-      const canvas = await html2canvas(block, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+      const canvas = await html2canvas(block, { scale: 2, backgroundColor: '#ffffff', useCORS: true, onclone: inlineStylesOnClone });
       const imgH = canvas.height * (usableW / canvas.width);
 
       if (imgH <= usableH) {
@@ -157,6 +184,7 @@ export async function downloadSectionPNG(block: HTMLElement): Promise<void> {
       backgroundColor: '#ffffff',
       useCORS: true,
       windowWidth: Math.max(document.documentElement.clientWidth, Math.ceil(block.scrollWidth)),
+      onclone: inlineStylesOnClone,
     });
     const link = document.createElement('a');
     link.download = filename;
