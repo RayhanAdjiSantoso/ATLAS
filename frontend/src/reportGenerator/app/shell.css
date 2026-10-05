@@ -859,6 +859,14 @@
   .sec-block .kpi-compact th, .sec-block .kpi-compact td, .sec-block .fg-table th, .sec-block .fg-table td{padding-left:.9rem;padding-right:.9rem}
   /* PNG capture shrink-wraps every table — release the fixed value width too. */
   &.png-fit-content .sec-block .kpi-compact th:not(:first-child), &.png-fit-content .sec-block .kpi-compact td:not(:first-child), &.png-fit-content .sec-block .fg-table th:not(:first-child), &.png-fit-content .sec-block .fg-table td:not(:first-child){width:auto!important}
+  /* Table + root cause card in a PNG. The capture shrink-wraps .sec-block to
+     max-content, but .sec-split-wrap is a size container and contributes 0 to
+     that width — the card collapsed to its heading, the split stacked, and the
+     nowrap table was cut off on the right. Drop the containment for the
+     capture and pin the split side by side: the table at its natural width,
+     the tree at a fixed width roomy enough for its full (non-compact) layout. */
+  &.png-fit-content .sec-split-wrap{container-type:normal!important}
+  &.png-fit-content .sec-split{grid-template-columns:max-content 560px!important;gap:1.5rem!important}
   /* ── "Overall Ads" — the 3 headline numbers above the editable groups ────── */
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media(max-width:920px){.gen-wrap{padding-bottom:4rem}
