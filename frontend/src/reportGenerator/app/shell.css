@@ -863,10 +863,11 @@
      max-content, but .sec-split-wrap is a size container and contributes 0 to
      that width — the card collapsed to its heading, the split stacked, and the
      nowrap table was cut off on the right. Drop the containment for the
-     capture and pin the split side by side: the table at its natural width,
-     the tree at a fixed width roomy enough for its full (non-compact) layout. */
+     capture and stack the split in one column sized to the table: the image
+     is as wide as the table, and the tree below stretches to that width (the
+     tree panel is itself a size container, so it never widens the column). */
   &.png-fit-content .sec-split-wrap{container-type:normal!important}
-  &.png-fit-content .sec-split{grid-template-columns:max-content 560px!important;gap:1.5rem!important}
+  &.png-fit-content .sec-split{grid-template-columns:max-content!important;gap:1.2rem!important}
   /* ── "Overall Ads" — the 3 headline numbers above the editable groups ────── */
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media(max-width:920px){.gen-wrap{padding-bottom:4rem}
