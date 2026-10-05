@@ -129,7 +129,9 @@ const PLATFORMS = [
     // Search terms and change history are filed here automatically after each
     // Google Ads Script run (googleAdsService.syncLibraryMonth); an upload in
     // the same month replaces that copy. Auction insights are upload-only:
-    // Google does not open those metrics to scripts or the API.
+    // Google does not open those metrics to scripts or the API. The
+    // `autoOnly` slots are monthly archive copies of the synced datasets: the
+    // report reads the synced data itself, so they take no upload.
     id: 'google',
     label: 'Google Ads',
     role: 'Search · kompetisi lelang & konteks perubahan',
@@ -140,6 +142,14 @@ const PLATFORMS = [
       { channel: 'auction_insights', name: 'Auction Insights', hint: 'Unggah manual · Google Ads › Insights & reports › Auction insights', kind: 'core' },
       { channel: 'search_terms', name: 'Search Terms', hint: 'Otomatis tiap tanggal 1 untuk bulan lalu · bisa diganti file Search terms report', kind: 'core' },
       { channel: 'change_history', name: 'Change History', hint: 'Otomatis tiap tanggal 1 untuk bulan lalu · bulan sebelum akun terhubung unggah manual', kind: 'core' },
+      { channel: 'ads', name: 'Performa Iklan', hint: 'Arsip otomatis · performa per iklan + headline & description', kind: 'extra', autoOnly: true },
+      { channel: 'conversions', name: 'Konversi per Action', hint: 'Arsip otomatis · konversi per conversion action per campaign', kind: 'extra', autoOnly: true },
+      { channel: 'impression_share', name: 'Impression Share', hint: 'Arsip otomatis · Search IS, Lost IS budget/rank per campaign, ad group, keyword', kind: 'extra', autoOnly: true },
+      { channel: 'campaign_settings', name: 'Setting Campaign', hint: 'Arsip otomatis · budget, bidding, target, lokasi yang berlaku di bulan itu', kind: 'extra', autoOnly: true },
+      { channel: 'keyword_quality', name: 'Quality Score', hint: 'Arsip otomatis · snapshot Quality Score terakhir di bulan itu', kind: 'extra', autoOnly: true },
+      { channel: 'devices', name: 'Device', hint: 'Arsip otomatis · performa per device per campaign', kind: 'extra', autoOnly: true },
+      { channel: 'hourly', name: 'Per Jam', hint: 'Arsip otomatis · performa per tanggal & jam (zona waktu akun)', kind: 'extra', autoOnly: true },
+      { channel: 'landing_pages', name: 'Landing Page', hint: 'Arsip otomatis · traffic & konversi per landing page', kind: 'extra', autoOnly: true },
     ],
   },
 ];
@@ -267,7 +277,7 @@ function datasetStatus(dataset, months, lookup, platformId) {
       : { label: 'Belum ada', tone: 'idle' };
   }
   const present = months.filter((m) => lookup.has(fileKey(platformId, dataset.channel, m.key)));
-  if (!present.length) return dataset.kind === 'extra' ? { label: 'Opsional', tone: 'idle' } : { label: 'Belum ada', tone: 'warn' };
+  if (!present.length) return dataset.autoOnly ? { label: 'Otomatis', tone: 'idle' } : dataset.kind === 'extra' ? { label: 'Opsional', tone: 'idle' } : { label: 'Belum ada', tone: 'warn' };
 
   // File ada, tapi untuk dataset Dashboard belum tentu datanya terbaca.
   // Menampilkan "Lengkap" di keadaan itu adalah kebohongan yang membuat
@@ -806,13 +816,13 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                 key={month.key} type="button"
                 className={`brand-cov is-${state} ${busyKey === key ? 'is-busy' : ''}`}
                 style={{ '--cov-accent': platform.accent, '--cov-wash': platform.wash, '--cov-fill': `${pct}%` }}
-                onClick={() => merged ? setOpen(true) : onPick(dataset, month)}
+                onClick={() => (merged || dataset.autoOnly ? setOpen(true) : onPick(dataset, month))}
                 title={merged
                   ? `${month.full} · ${merged.coveredDays > 0 ? `${merged.coveredDays} dari ${month.days} hari` : 'snapshot bulanan'} · ${merged.parts.length} file (klik untuk melihat detail)`
-                  : `${month.full} · belum ada file (klik untuk upload)`}
+                  : dataset.autoOnly ? `${month.full} · belum ada arsip (terisi otomatis setelah bulan selesai)` : `${month.full} · belum ada file (klik untuk upload)`}
               >
                 <i aria-hidden="true" />
-                <b>{busyKey === key ? '…' : state === 'empty' ? '+' : state === 'snapshot' ? '✓' : merged.coveredDays}</b>
+                <b>{busyKey === key ? '…' : state === 'empty' ? (dataset.autoOnly ? '·' : '+') : state === 'snapshot' ? '✓' : merged.coveredDays}</b>
               </button>
             );
           })}
@@ -825,7 +835,7 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                 : part.period_source === 'mismatch' ? '⚠ bulan lain' : 'snapshot'}
             </em>
           ))}
-          {!isReference && targetMonth && (
+          {!isReference && !dataset.autoOnly && targetMonth && (
             <button
               type="button" className="brand-ds-addpart"
               onClick={() => onPick(dataset, targetMonth)}
@@ -899,13 +909,20 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                           {busyKey === `import-${file.id}` ? 'Mengimpor…' : <><RefreshCw size={14} /> Impor ulang</>}
                         </button>
                       )}
-                      <button type="button" onClick={() => onPick(dataset, month, file)}><Upload size={14} /> Ganti</button>
+                      {!dataset.autoOnly && <button type="button" onClick={() => onPick(dataset, month, file)}><Upload size={14} /> Ganti</button>}
                       <button type="button" onClick={() => downloadLibraryFile(file)}><Download size={14} /> Unduh</button>
                       <button type="button" className="is-danger" onClick={() => onDelete(file)}><Trash2 size={14} /> Hapus</button>
                     </span>
                   </div>
                 ))}
-                {!isReference && (
+                {dataset.autoOnly && (
+                  <p className="brand-ds-note">
+                    <CircleAlert size={14} />
+                    Arsip bulanan yang dibuat ATLAS dari data sinkron Google Ads Script, terisi setelah bulannya selesai. Report membaca data sinkron langsung,
+                    jadi slot ini tidak menerima unggahan. Bulan yang sudah tersinkron sebelum slot ini ada bisa diisi lewat Data Brand › Google Ads › Isi arsip.
+                  </p>
+                )}
+                {!isReference && !dataset.autoOnly && (
                   <p className="brand-ds-note">
                     <CircleAlert size={14} />
                     {DASHBOARD_CHANNELS.has(dataset.channel)

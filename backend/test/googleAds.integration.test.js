@@ -227,6 +227,31 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
       assert.ok(report.dataAvailability.keyword_quality.last_date);
     });
 
+    await t.test('Data & file: archive slots are filed for finished months and take no upload', async () => {
+      const XLSX = await import('xlsx');
+      const library = await import('../src/services/brandLibraryService.js');
+      const files = async () => (await library.listLibrary(brandId)).filter((f) => f.platform === 'google');
+      const auto = (await files()).map((f) => f.channel);
+      for (const ch of ['ads', 'conversions', 'impression_share', 'devices', 'hourly', 'landing_pages']) {
+        assert.ok(auto.includes(ch), `${ch} filed by the run that covered the whole month`);
+      }
+      // Settings and Quality Score are snapshots taken from today on: last
+      // month has none, and no archive pretends otherwise.
+      assert.ok(!auto.includes('campaign_settings') && !auto.includes('keyword_quality'));
+      await pool.query(`DELETE FROM ads_reports.brand_library_files WHERE brand_id = $1 AND channel = 'devices'`, [brandId]);
+      const rebuilt = await service.rebuildLibrary(brandId);
+      assert.ok(rebuilt.months.some((m) => m.files.includes('devices')), 'rebuild files a missing archive');
+      const dev = (await files()).find((f) => f.channel === 'devices');
+      assert.equal(String(dev.period_month).slice(0, 7), mStart.slice(0, 7));
+      assert.match(dev.original_filename, /^ATLAS-auto_google_devices_/);
+      const bytes = await library.getLibraryFileBytes(brandId, dev.id);
+      const rows = XLSX.utils.sheet_to_json(XLSX.read(bytes.raw_file).Sheets.Report, { header: 1 });
+      assert.deepEqual(rows[3].slice(0, 3), ['Campaign', 'Device', 'Cost']);
+      assert.equal(rows.length - 4, 2, 'two device rows');
+      assert.equal(library.isAutoOnly('google', 'devices'), true);
+      assert.equal(library.isAutoOnly('google', 'search_terms'), false, 'search terms still take uploads');
+    });
+
     await t.test('042: experiments, alerts, and a recommendation that becomes a MOM task', async () => {
       const opt = await import('../src/services/googleAdsOptimization.js');
       const optRepo = await import('../src/repositories/googleAdsOptimizationRepository.js');

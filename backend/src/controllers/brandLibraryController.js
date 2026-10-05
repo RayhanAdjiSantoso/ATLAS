@@ -144,6 +144,9 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
   if (!library.isValidScope(platform, channel)) {
     throw reject(`Kombinasi platform "${platform}" dan channel "${channel}" tidak dikenal`);
   }
+  if (library.isAutoOnly(platform, channel)) {
+    throw reject('Slot ini terisi otomatis dari Google Ads Script setiap bulan dan tidak menerima unggahan');
+  }
 
   // multer .array: one slot can receive several files at once, which is how
   // a split export ("part 1 of 2") is filed in a single action.

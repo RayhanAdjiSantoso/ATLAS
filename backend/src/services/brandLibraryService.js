@@ -39,8 +39,24 @@ export const LIBRARY_CHANNELS = {
   // Google Ads (migration 036). Search terms and change history are also
   // filed automatically from what the Google Ads Script pushes; auction
   // insights only ever arrive as an upload (see googleAdsFiles.js).
-  google: ['auction_insights', 'search_terms', 'change_history'],
+  // The rest are monthly archive copies of the datasets the script syncs
+  // (migrations 040/041): filed automatically, never uploaded.
+  google: [
+    'auction_insights', 'search_terms', 'change_history',
+    'ads', 'conversions', 'impression_share', 'campaign_settings', 'keyword_quality', 'devices', 'hourly', 'landing_pages',
+  ],
 };
+
+// Slots ATLAS fills itself and that accept no upload: the report reads the
+// synced tables, so an uploaded file there would replace the archive copy
+// while changing nothing the report shows.
+export const AUTO_ONLY_CHANNELS = {
+  google: new Set(['ads', 'conversions', 'impression_share', 'campaign_settings', 'keyword_quality', 'devices', 'hourly', 'landing_pages']),
+};
+
+export function isAutoOnly(platform, channel) {
+  return Boolean(AUTO_ONLY_CHANNELS[platform]?.has(channel));
+}
 
 // Files that describe a mapping rather than a period. They are stored with
 // period_month = NULL and are never asked "which month is this?".

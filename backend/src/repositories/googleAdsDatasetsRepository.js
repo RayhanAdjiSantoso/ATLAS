@@ -596,3 +596,70 @@ export async function searchTermDetail(brandId, start, end, months = null, db = 
   );
   return rows;
 }
+
+// ---------------------------------------------------------------------
+// Data & file monthly archives (googleAdsService.syncLibraryMonth)
+// ---------------------------------------------------------------------
+// One calendar month each, at the grain the file shows. The report keeps
+// reading the tables themselves; these only feed the archive copies.
+export async function archiveCompetitive(brandId, start, end, db = pool) {
+  const { rows } = await db.query(
+    `SELECT level, granularity, to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date,
+            customer_id, campaign_name, ad_group_name, keyword, match_type, impressions::float AS impressions, ${SHARES_SELECT}
+     FROM google_ads_competitive_metrics
+     WHERE brand_id = $1 AND start_date >= $2 AND end_date <= $3
+     ORDER BY granularity DESC, level, start_date, campaign_name, ad_group_name, keyword`,
+    [brandId, start, end],
+  );
+  return rows;
+}
+
+export async function archiveHourly(brandId, start, end, db = pool) {
+  const { rows } = await db.query(
+    `SELECT to_char(entry_date, 'YYYY-MM-DD') AS date, hour, max(campaign_name) AS campaign_name, ${PERF_SUMS}
+     FROM google_ads_hourly WHERE ${SCOPE}
+     GROUP BY entry_date, hour, customer_id, campaign_id
+     ORDER BY entry_date, hour, campaign_name`,
+    [brandId, start, end],
+  );
+  return rows;
+}
+
+// Raw URLs (with their parameters) as Google reports them, per campaign:
+// the report groups them, the archive keeps them as they came.
+export async function archiveLandingPages(brandId, start, end, db = pool) {
+  const { rows } = await db.query(
+    `SELECT url, max(campaign_name) AS campaign_name, ${PERF_SUMS}
+     FROM google_ads_landing_pages_daily WHERE ${SCOPE}
+     GROUP BY url, customer_id, campaign_id
+     ORDER BY sum(clicks) DESC NULLS LAST`,
+    [brandId, start, end],
+  );
+  return rows;
+}
+
+// The newest snapshot of each keyword taken inside the month.
+export async function archiveKeywordQuality(brandId, start, end, db = pool) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (customer_id, ad_group_id, criterion_id)
+            to_char(snapshot_date, 'YYYY-MM-DD') AS snapshot_date, campaign_name, ad_group_name, keyword, match_type, status,
+            quality_score, expected_ctr, ad_relevance, landing_page_experience
+     FROM google_ads_keyword_quality
+     WHERE brand_id = $1 AND snapshot_date BETWEEN $2 AND $3
+     ORDER BY customer_id, ad_group_id, criterion_id, snapshot_date DESC`,
+    [brandId, start, end],
+  );
+  return rows;
+}
+
+// Every settings version that was in force at some point of the month.
+export async function archiveCampaignSettings(brandId, start, end, db = pool) {
+  const { rows } = await db.query(
+    `SELECT ${SETTINGS_SELECT}
+     FROM google_ads_campaign_settings
+     WHERE brand_id = $1 AND valid_from < ($3::date + 1) AND last_seen_at >= $2::date
+     ORDER BY campaign_name, valid_from`,
+    [brandId, start, end],
+  );
+  return rows;
+}

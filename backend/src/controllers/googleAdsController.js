@@ -153,6 +153,12 @@ export const setAlertStatus = asyncHandler(async (req, res) => {
   res.json(await optimization.setAlertStatus({ brandId: brandOf(req), id: idOf(req), status: req.body.status, userId: req.user.userId }));
 });
 
+// POST /api/google-ads/library/rebuild  { brandId }
+export const rebuildLibrary = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.rebuildLibrary(Number(req.body.brandId)));
+});
+
 // GET /api/google-ads/report?brandId=&oldStart=&oldEnd=&curStart=&curEnd=
 export const getReport = asyncHandler(async (req, res) => {
   validate(req);
