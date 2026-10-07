@@ -5,7 +5,7 @@ import { MetaTab } from '../features/meta/MetaTab';
 import { ShopeeTab } from '../features/shopee/ShopeeTab';
 import { TiktokTab } from '../features/tiktok/TiktokTab';
 import { GoogleAdsTab } from '../features/google/GoogleAdsTab';
-import { BusinessTab } from '../features/business/BusinessTab';
+import { BusinessOverviewTab } from '../features/business/BusinessOverviewTab';
 import { SummaryTab } from '../features/summary/SummaryTab';
 import { ClientPicker } from '../features/reports/ClientPicker';
 import { ReportsTab } from '../features/reports/ReportsTab';
@@ -13,7 +13,7 @@ import { GenTopNav } from './GenTopNav';
 import { ReportIcon } from '../components/ReportIcon';
 import { BRAND_KEYS, BrandLogo, type BrandKey } from '../components/BrandLogo';
 import { DISABLED_REPORTS, ENABLED_NAV, isReportKey, reportByKey, type ReportKey } from './reports';
-import type { BizChannelMetrics, BizMetricKey, BizPeriod, BizRow, BizState } from '../lib/business';
+import type { BizState } from '../lib/business';
 import type { PlatformKey, PlatformResultData, PlatformStateMap } from '../lib/summary';
 import { Archive, Layers, LayoutGrid } from 'lucide-react';
 import atlasWordmark from '../../assets/atlas-wordmark.png';
@@ -31,13 +31,6 @@ export interface GeneratorShellProps {
   omzetCur: number | null;
   setOmzetOld: (v: number | null) => void;
   setOmzetCur: (v: number | null) => void;
-  channelData: Record<string, BizChannelMetrics>;
-  offlineStores: BizRow[];
-  otherChannels: BizRow[];
-  onChannelDataChange: (chKey: string, metric: BizMetricKey, period: BizPeriod, v: number | null) => void;
-  setOfflineStores: (rows: BizRow[]) => void;
-  setOtherChannels: (rows: BizRow[]) => void;
-  nextRowId: () => number;
 }
 
 // The report-type rail, the page heading, and all six report panels. The
@@ -145,16 +138,9 @@ export function GeneratorShell(props: GeneratorShellProps) {
             onInvalidate={() => props.setGoogleDone(false)}
           />
           <ReportsTab isActive={activeTab === 'reports'} clientId={props.clientId} />
-          <BusinessTab
+          <BusinessOverviewTab key={`${props.clientId}-BusinessOverviewTab`}
             isActive={activeTab === 'business'}
-            channelData={props.channelData}
-            offlineStores={props.offlineStores}
-            otherChannels={props.otherChannels}
-            shopeeOmzet={{ old: props.omzetOld, cur: props.omzetCur }}
-            onChannelDataChange={props.onChannelDataChange}
-            onOfflineStoresChange={props.setOfflineStores}
-            onOtherChannelsChange={props.setOtherChannels}
-            nextRowId={props.nextRowId}
+            clientId={props.clientId}
           />
         <SummaryTab isActive={activeTab === 'summary'} platformState={props.platformState} bizState={props.bizState} />
       </div>

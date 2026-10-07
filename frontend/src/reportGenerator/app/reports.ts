@@ -66,8 +66,8 @@ export const REPORT_NAV: ReportNavItem[] = [
     key: 'business',
     label: 'Business Overview',
     short: 'Business',
-    tagline: 'Online + offline jadi satu',
-    desc: 'Menggabungkan seluruh channel penjualan — online, toko offline, channel lain — ke dalam satu ringkasan bisnis.',
+    tagline: 'Revenue per channel',
+    desc: 'Revenue, transaksi, dan qty terjual per channel beserta AOV, AUR, dan basket size — ditarik dari Revenue Data di Daily Tracking.',
     accent: 'var(--biz)',
     tint: 'var(--biz-100)',
     mark: 'B',
@@ -98,8 +98,8 @@ export const REPORT_KEYS = REPORT_NAV.map((r) => r.key);
 
 // Report types switched off for now. Their code, state and route handling stay
 // in place; they are only taken off the rail, and their address falls back to
-// Meta Ads. Business Overview is replaced by the ATLAS Business Overview page.
-export const DISABLED_REPORTS: readonly ReportKey[] = ['business'];
+// Meta Ads.
+export const DISABLED_REPORTS: readonly ReportKey[] = [];
 export const ENABLED_NAV = REPORT_NAV.filter((r) => !DISABLED_REPORTS.includes(r.key));
 
 export function isReportKey(v: string | undefined): v is ReportKey {
