@@ -141,7 +141,7 @@ export default function SoftShell({
         <div className="soft-content dashboard-body"><div className="con-canvas">{children}</div></div>
 
         <p className="soft-source">
-          <Database size={13} aria-hidden="true" /> Semua angka membaca file di <Link to="/data-brand">Data Brand</Link> untuk brand dan periode di atas.
+          <Database size={13} aria-hidden="true" /> Semua angka membaca file di <Link to="/data-brand">Data Collection Hub</Link> untuk brand dan periode di atas.
         </p>
       </div>
     </div>

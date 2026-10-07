@@ -14,6 +14,7 @@ import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import { DEFAULT_PARETO_RANGE, type ParetoRangeSelection, type PerfMetricVars } from '../../lib/shopeeProductAnalysis';
 import { deleteReport, getProductMaster, getReportDetail, getReports, saveProductMasterEntry } from './api';
 import { useAuth } from '../../../contexts/AuthContext.jsx';
+import SearchField from '../../../components/common/SearchField.jsx';
 import { reconstructMetaReport, reconstructShopeeDeepDive, reconstructShopeeFunnel, reconstructShopeeReport, reconstructTiktokReport } from './reconstruct';
 import type { Platform, ReportDetail, ReportListItem } from './types';
 
@@ -94,12 +95,13 @@ export function ReportsTab({ isActive, clientId }: ReportsTabProps) {
         {clientId && !loading && !listError && reports.length === 0 && <div className="empty-note">Belum ada laporan tersimpan untuk klien ini.</div>}
         {deleteError && <InlineNotice title="Laporan gagal dihapus">{deleteError}</InlineNotice>}
         {clientId && !loading && !listError && reports.length > 0 && (
-          <input
+          <SearchField
             className="saved-modal-search"
             style={{ margin: '.8rem 0 0', width: '100%' }}
             placeholder="Cari laporan — label periode / platform…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Cari laporan"
           />
         )}
         {clientId && !loading && !listError && reports.length > 0 && visibleReports.length === 0 && (

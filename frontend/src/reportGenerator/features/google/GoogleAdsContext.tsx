@@ -7,7 +7,7 @@ import type { Sentiment } from '../../lib/types';
 import { GoogleAdsTable, type GadsColumn } from './GoogleAdsTable';
 import { channelLabel, matchTypeLabel, type Formatter, type GadsAuctionPeriod, type GadsAuctionRow, type GadsChange, type GadsReport, type GadsSettingChange, type GadsShare } from './googleAds';
 
-// The two Data & file datasets the report reads besides the daily rows —
+// The two Performance Database datasets the report reads besides the daily rows —
 // Auction Insights and Change History — and the brief handed to the AI
 // Consultant. Kept apart from GoogleAdsTab so the tab stays about layout.
 
@@ -73,7 +73,7 @@ export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuct
     return (
       <EmptyCard title="Auction Insights">
         Belum ada file Auction insights untuk {p2}. Unduh dari Google Ads › Insights &amp; reports › Auction insights (rentang satu bulan), lalu unggah di
-        Data Brand › Data &amp; file › Google Ads.
+        Data Collection Hub › Performance Database › Input Performance Data › Google Ads.
       </EmptyCard>
     );
   }
@@ -111,7 +111,7 @@ export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuct
   const span = cur.months.length > 1 ? `rata-rata ${cur.months.map(monthName).join(', ')}` : monthName(cur.months[0]);
   return (
     <div className="sec-block">
-      {heading('Auction Insights', `${span} · file Data & file`)}
+      {heading('Auction Insights', `${span} · file Performance Database`)}
       <GoogleAdsTable columns={columns} rows={rows} sortKey="impression_share" limit={TABLE_ROWS} />
       <p className="gads-footnote">
         "Anda" adalah akun brand ini. Peringkat diurutkan dari impression share tiap bulan; "≥ n" berarti impression share di bawah 10% sehingga urutan pastinya tidak diketahui.
@@ -165,7 +165,7 @@ export function ChangeHistorySection({ data, settingChanges = [], p2 }: { data: 
     return (
       <EmptyCard title="Change History">
         Tidak ada perubahan tercatat untuk {p2}. Google Ads Script hanya bisa menarik 30 hari terakhir — untuk bulan yang lebih lama, unduh dari Google
-        Ads › Change history lalu unggah di Data Brand › Data &amp; file › Google Ads.
+        Ads › Change history lalu unggah di Data Collection Hub › Performance Database › Input Performance Data › Google Ads.
       </EmptyCard>
     );
   }
@@ -212,7 +212,7 @@ export function ChangeHistorySection({ data, settingChanges = [], p2 }: { data: 
           )}
         </div>
         <GoogleAdsTable columns={columns} rows={shown} sortKey="changed_at" limit={TABLE_ROWS} />
-        {fromUpload && <p className="gads-footnote">Sebagian perubahan berasal dari file yang diunggah di Data &amp; file ({data.uploadedFiles.join(', ')}).</p>}
+        {fromUpload && <p className="gads-footnote">Sebagian perubahan berasal dari file yang diunggah di Performance Database ({data.uploadedFiles.join(', ')}).</p>}
       </div>
       <SettingChanges rows={settingChanges} p2={p2} />
     </>

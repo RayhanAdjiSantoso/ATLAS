@@ -1,5 +1,4 @@
-import SearchableSelect from '../common/SearchableSelect.jsx';
-import BrandStatusFilter, { matchesBrandStatus } from '../common/BrandStatusFilter.jsx';
+import DashboardBrandPicker from '../dashboard/DashboardBrandPicker.jsx';
 import MonthPillNav from './MonthPillNav.jsx';
 
 // Sticky top:0 — brand + month are the axes every number below is read
@@ -9,25 +8,23 @@ export default function DailyTrackingClientBar({
   brandStatus, onBrandStatusChange,
   month, onMonthChange,
 }) {
-  const options = brands
-    .filter((b) => matchesBrandStatus(b, brandStatus))
-    .map((b) => ({ value: b.brand_id, label: b.brand_name }));
-
   return (
     <div className="dt-bar">
       <div className="dt-bar-row">
         <div className="dt-bar-field">
           <label htmlFor="dt-brand">Klien</label>
-          <SearchableSelect
+          <DashboardBrandPicker
             id="dt-brand"
-            options={options}
+            brands={brands}
             value={brandId}
             onChange={onBrandChange}
-            placeholder="Pilih klien..."
+            status={brandStatus}
+            onStatusChange={onBrandStatusChange}
+            placeholder="Pilih klien…"
+            resultHint="Pilih untuk membuka Daily Tracking"
             disabled={locked}
           />
         </div>
-        {!locked && <BrandStatusFilter value={brandStatus} onChange={onBrandStatusChange} />}
       </div>
       <MonthPillNav month={month} onChange={onMonthChange} />
     </div>

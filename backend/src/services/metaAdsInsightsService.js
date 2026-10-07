@@ -128,11 +128,11 @@ export async function requestFetch({ brandId, accountType, month }) {
 }
 
 // ---------------------------------------------------------------------
-// Pengaturan Brand › Data & file library
+// Pengaturan Brand › Performance Database library
 //
 // A fetched month is also filed in the brand's file library (Meta Ads for
 // the MAIN account, CPAS for the CPAS account) as an Ads Manager-style
-// .xlsx, because that library is what the Data & file grid and the Report
+// .xlsx, because that library is what the Performance Database grid and the Report
 // Generator's "Pilih dari perpustakaan" read. The DB table stays the source
 // of truth; the file is regenerated from it and can be rebuilt any time.
 // ---------------------------------------------------------------------
@@ -163,7 +163,7 @@ export async function syncLibraryFile({ brandId, accountType, month, userId }) {
   const { auto, manual } = await findSlotParts(brandId, accountType, month);
   if (manual.length) {
     throw new AppError(
-      `Bulan ${month} sudah punya file manual di Data & file (${manual.map((p) => p.original_filename).join(', ')}). `
+      `Bulan ${month} sudah punya file manual di Performance Database (${manual.map((p) => p.original_filename).join(', ')}). `
       + 'Hapus file itu dulu jika ingin memakai data hasil tarikan otomatis.', 409,
     );
   }

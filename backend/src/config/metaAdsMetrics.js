@@ -133,7 +133,7 @@ export const METRICS = [
     compute: (c) => num(c.raw.purchaseRoas) ?? ratio(value(c, 'purchase'), c.spend),
   },
 
-  // ── Optional: ticked per brand in Data & file ─────────────────────
+  // ── Optional: ticked per brand in Performance Database ─────────────────────
   { key: 'total_messages', label: 'Total messages', group: 'optional', unit: 'count', actionGroups: ['messages'], compute: (c) => count(c, 'messages') },
   { key: 'cost_per_message', label: 'Cost per Total Messages', group: 'optional', unit: 'idr', actionGroups: ['messages'], compute: (c) => costPer(c, 'messages') },
   { key: 'adds_to_cart', label: 'Adds to cart', group: 'optional', unit: 'count', actionGroups: ['add_to_cart'], compute: (c) => count(c, 'add_to_cart') },

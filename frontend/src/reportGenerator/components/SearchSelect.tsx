@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
+import SearchField from '../../components/common/SearchField.jsx';
 
 export interface SearchOption {
   id: string | number;
@@ -105,11 +106,8 @@ export function SearchSelect({
       {open && (
         <div className="ssel-pop" role="listbox">
           {searchable && (
-            <div className="ssel-search">
-              <span className="ssel-search-icon" aria-hidden>
-                <Search size={15} />
-              </span>
-              <input
+            <SearchField
+                className="ssel-search"
                 ref={inputRef}
                 value={q}
                 onChange={(e) => {
@@ -118,8 +116,8 @@ export function SearchSelect({
                 }}
                 onKeyDown={onKeyDown}
                 placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
               />
-            </div>
           )}
           {header && (
             // Clicking a header control hands focus back to the search box, so

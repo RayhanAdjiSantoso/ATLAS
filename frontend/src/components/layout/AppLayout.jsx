@@ -13,10 +13,10 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 // direction), its data comes in next, and only then is it read and reported.
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
-  { to: '/pengaturan-brand', label: 'Pengaturan Brand', Icon: SlidersHorizontal, group: 'Workspace', module: 'brand_settings' },
+  { to: '/pengaturan-brand', label: 'Brand Setting', Icon: SlidersHorizontal, group: 'Workspace', module: 'brand_settings' },
   // The brand's files, Minutes of Meeting and ad accounts — what Business
   // Overview and Report Generator read. Same permission as Pengaturan Brand.
-  { to: '/data-brand', label: 'Data Brand', Icon: FolderOpen, group: 'Workspace', module: 'brand_settings' },
+  { to: '/data-brand', label: 'Data Collection Hub', Icon: FolderOpen, group: 'Workspace', module: 'brand_settings' },
   { to: '/dashboard', label: 'Business Overview', Icon: LayoutDashboard, group: 'Workspace', module: 'dashboard' },
   // No adminOnly: both internal staff and client accounts fill this in
   // themselves, unlike everywhere else a view-only account can only read.

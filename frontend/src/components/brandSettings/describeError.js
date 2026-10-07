@@ -1,5 +1,5 @@
 // Turns an axios failure into something actionable rather than "gagal".
-// Shared by Pengaturan Brand and Data Brand.
+// Shared by Pengaturan Brand and Data Collection Hub.
 export function describeError(err, what) {
   const status = err?.response?.status;
   const body = err?.response?.data?.message || err?.response?.data?.error;

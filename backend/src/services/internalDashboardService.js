@@ -1726,7 +1726,7 @@ export async function getDataQuality(params) {
   const ad_accounts_unmapped = {
     hard: unmappedAcc.filter((r) => r.hard).map(accRow),
     soft: unmappedAcc.filter((r) => !r.hard).map(accRow),
-    note: 'HARD = punya spend Meta tapi bm_id kosong → spend tidak terikat ke Business Manager mana pun. SOFT = bm_id ada tapi belum ada ad account yang terdaftar & tertaut ke brand ini di Pengaturan Brand → Meta Ads Automation.',
+    note: 'HARD = punya spend Meta tapi bm_id kosong → spend tidak terikat ke Business Manager mana pun. SOFT = bm_id ada tapi belum ada ad account yang terdaftar & tertaut ke brand ini di Brand Setting → Meta Ads Automation.',
   };
 
   // --- 3. Campaign belum terklasifikasi -------------------------

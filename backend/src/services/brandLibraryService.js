@@ -100,9 +100,16 @@ const PROFILE_FIELDS = [
   'constraints_concerns',
 ];
 
-export async function getProfile(brandId) {
-  const result = await pool.query(
-    `SELECT b.brand_id, b.brand_name,
+export const INDUSTRY_OPTIONS = [
+  'Retail Fashion',
+  'Retail Non-Fashion',
+  'Food & Beverage',
+  'B2B Services',
+];
+
+export async function getProfile(brandId, db = pool) {
+  const result = await db.query(
+    `SELECT b.brand_id, b.brand_name, b.industry,
             ${PROFILE_FIELDS.map((f) => `p.${f}`).join(', ')},
             p.updated_at, u.full_name AS updated_by_name
      FROM public.brands b
@@ -116,17 +123,29 @@ export async function getProfile(brandId) {
 
 export async function saveProfile(brandId, patch, userId) {
   const values = PROFILE_FIELDS.map((field) => (patch[field] === undefined ? null : patch[field]));
-  const result = await pool.query(
-    `INSERT INTO public.brand_profiles (brand_id, ${PROFILE_FIELDS.join(', ')}, updated_by, updated_at)
-     VALUES ($1, ${PROFILE_FIELDS.map((_, i) => `$${i + 2}`).join(', ')}, $${PROFILE_FIELDS.length + 2}, now())
-     ON CONFLICT (brand_id) DO UPDATE SET
-       ${PROFILE_FIELDS.map((f) => `${f} = EXCLUDED.${f}`).join(', ')},
-       updated_by = EXCLUDED.updated_by,
-       updated_at = now()
-     RETURNING *`,
-    [brandId, ...values, userId ?? null],
-  );
-  return result.rows[0];
+  const industry = patch.industry || null;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('UPDATE public.brands SET industry = $2 WHERE brand_id = $1', [brandId, industry]);
+    await client.query(
+      `INSERT INTO public.brand_profiles (brand_id, ${PROFILE_FIELDS.join(', ')}, updated_by, updated_at)
+       VALUES ($1, ${PROFILE_FIELDS.map((_, i) => `$${i + 2}`).join(', ')}, $${PROFILE_FIELDS.length + 2}, now())
+       ON CONFLICT (brand_id) DO UPDATE SET
+         ${PROFILE_FIELDS.map((f) => `${f} = EXCLUDED.${f}`).join(', ')},
+         updated_by = EXCLUDED.updated_by,
+         updated_at = now()`,
+      [brandId, ...values, userId ?? null],
+    );
+    const profile = await getProfile(brandId, client);
+    await client.query('COMMIT');
+    return profile;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /* ── Minutes of Meeting ───────────────────────────────────────────── */

@@ -91,12 +91,18 @@ const EXCLUDE_BRANDS = new Set([
 // "Industry" values that are real top-level industries, with their derived
 // kategori_besar (breakdown §2.1: kategori_besar is a function of industry).
 const KATEGORI_BESAR = {
-  'Retail-Non Fashion': 'Retail',
-  'Retail-Fashion': 'Retail',
-  'B2B + Services': 'B2B/Service',
-  'Food & Beverages': 'F&B',
+  'Retail Non-Fashion': 'Retail',
+  'Retail Fashion': 'Retail',
+  'B2B Services': 'B2B/Service',
+  'Food & Beverage': 'F&B',
 };
 const KNOWN_INDUSTRY = new Set(Object.keys(KATEGORI_BESAR));
+const INDUSTRY_ALIASES = {
+  'Retail-Fashion': 'Retail Fashion',
+  'Retail-Non Fashion': 'Retail Non-Fashion',
+  'B2B + Services': 'B2B Services',
+  'Food & Beverages': 'Food & Beverage',
+};
 
 // Values seen in the "Sub Industry" column (used to detect swapped columns).
 const KNOWN_SUB_INDUSTRY = new Set([
@@ -183,7 +189,8 @@ function writeCsv(file, headers, rows) {
 
 // --- classify a single row --------------------------------------------
 function classifyIndustry(industryRaw, subRaw) {
-  const industry = clean(industryRaw);
+  const cleanedIndustry = clean(industryRaw);
+  const industry = INDUSTRY_ALIASES[cleanedIndustry] ?? cleanedIndustry;
   const sub = clean(subRaw);
   const result = { industry, sub_industry: sub, kategori_besar: null, note: null, resolvedPair: null };
 

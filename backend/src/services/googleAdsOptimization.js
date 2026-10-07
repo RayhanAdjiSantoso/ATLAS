@@ -468,7 +468,7 @@ export async function recommendationToTask({ brandId, id, pic, userId }) {
   if (!rec) throw new AppError('Rekomendasi tidak ditemukan', 404);
   if (rec.task_key) throw new AppError('Rekomendasi ini sudah menjadi tugas', 409);
   const minute = await repo.latestMinute(brandId);
-  if (!minute) throw new AppError('Brand ini belum punya catatan MOM. Buat MOM dulu di Pengaturan Brand › MOM, lalu jadikan tugas.', 409);
+  if (!minute) throw new AppError('Brand ini belum punya catatan MOM. Buat MOM dulu di Brand Setting › MOM, lalu jadikan tugas.', 409);
   const where = rec.entity_name ? ` (${rec.entity_name})` : '';
   const { todo, key } = appendMomTask(minute.todo_mil, pic, `[Google Ads] ${rec.title}${where} — ${rec.recommended_action}`);
   await repo.setMinuteTodoMil(minute.id, todo, userId);
@@ -767,7 +767,7 @@ export async function evaluateAlerts(brandId) {
       if (a.goal_source !== 'manual' && Number(a.all_conversions) > 0) unverified.set(`${a.customer_id}|${a.conversion_action_id}`, a.name);
     }
     if (unverified.size) {
-      active.push({ alert_key: 'unverified_conversion_actions', type: 'unverified_conversion_actions', severity: 'low', title: 'Conversion action belum diklasifikasikan', message: `${unverified.size} conversion action aktif memakai tujuan bawaan: ${[...unverified.values()].slice(0, 5).join(', ')}. Verifikasi di Data Brand › Google Ads.`, data: { count: unverified.size } });
+      active.push({ alert_key: 'unverified_conversion_actions', type: 'unverified_conversion_actions', severity: 'low', title: 'Conversion action belum diklasifikasikan', message: `${unverified.size} conversion action aktif memakai tujuan bawaan: ${[...unverified.values()].slice(0, 5).join(', ')}. Verifikasi di Data Collection Hub › Performance Database › Google Ads.`, data: { count: unverified.size } });
     }
   }
 

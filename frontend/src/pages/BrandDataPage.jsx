@@ -6,8 +6,8 @@ import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-m
 import {
   Archive, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
   Database, Download, FileSpreadsheet, Loader2, Plus, RefreshCw, Save,
-  Search, Trash2, Upload, UsersRound, PenLine, NotebookPen, Circle, CheckCircle2,
-  ChevronsDownUp, ChevronsUpDown, Megaphone, Target, CalendarRange, HelpCircle,
+  Trash2, Upload, UsersRound, PenLine, NotebookPen, Circle, CheckCircle2,
+  ChevronsDownUp, ChevronsUpDown, CalendarRange, HelpCircle,
 } from 'lucide-react';
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
 import GoogleAdsSection from '../components/brandSettings/GoogleAdsSection.jsx';
@@ -15,6 +15,7 @@ import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import DatePicker from '../components/dashboard/DatePicker.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
+import SearchField from '../components/common/SearchField.jsx';
 import MetaAdsAutoFetchPanel from '../components/brandSettings/MetaAdsAutoFetchPanel.jsx';
 import {
   MOM_TYPES, MOM_TYPE_LABELS, dateLabel, emptyMinute, longDateLabel, parseISO, recapPreview, taskGroups, taskStats,
@@ -45,7 +46,7 @@ async function downloadLibraryFile(file) {
   }
 }
 
-// Data Brand — where each brand's source material lives: the monthly file
+// Data Collection Hub — where each brand's source material lives: the monthly file
 // library every other module reads (Report Generator, Business Overview,
 // Meta Automation), its Minutes of Meeting, and its ad-account links. The
 // brand's identity (status, brand context, current direction) is set in
@@ -54,7 +55,7 @@ async function downloadLibraryFile(file) {
 //
 // The frame is Business Overview's soft layout — masthead, a white command
 // card holding the brand and its numbers, then a blue tab rail — so the
-// modules read as one product. Inside Data & file:
+// modules read as one product. Inside Performance Database:
 //
 //   1. One platform at a time, switched from a tab row under the card.
 //   2. The month axis is windowed, never unbounded. A brand accumulates a new
@@ -164,10 +165,11 @@ const PERIOD_SOURCE_LABEL = {
 };
 
 const VIEWS = [
-  { id: 'data', hint: 'Perpustakaan file', label: 'Data & file', Icon: Archive },
+  { id: 'data', hint: 'Input Performance Data', label: 'Performance Database', Icon: Archive },
   { id: 'mom', hint: 'Recap & to do list', label: 'Minutes of Meeting', Icon: UsersRound },
-  { id: 'meta-automation', hint: 'Ad account & laporan', label: 'Meta Automation', Icon: Megaphone },
-  { id: 'google-ads', hint: 'Customer ID & sinkron', label: 'Google Ads', Icon: Target },
+];
+const DATABASE_VIEWS = [
+  { id: 'files', label: 'Input Performance Data', Icon: Database },
 ];
 
 /* ── Month model ────────────────────────────────────────────────────────
@@ -357,13 +359,11 @@ function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
             transition={{ duration: .16, ease: EASE }}
           >
             <div className="brand-picker-menu-head">
-              <label className="brand-picker-search">
-                <Search size={16} aria-hidden="true" />
-                <input
-                  value={query} onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Cari nama brand…" autoFocus aria-label="Cari brand"
-                />
-              </label>
+              <SearchField
+                className="brand-picker-search"
+                value={query} onChange={(event) => setQuery(event.target.value)}
+                placeholder="Cari nama brand…" autoFocus aria-label="Cari brand"
+              />
               <span>{shown.length} brand ditemukan</span>
             </div>
             <div className="brand-picker-menu-body">
@@ -462,7 +462,7 @@ function MomTaskField({ label, guidance, scope, value, onChange, placeholder, le
   );
 }
 
-// One saved meeting, minimisable the same way a dataset row in Data & file is:
+// One saved meeting, minimisable the same way a dataset row in Performance Database is:
 // chevron + summary line at rest, the full record underneath when opened.
 function MinuteRow({ minute, open, onToggle, onEdit, onDelete, busy, editing, index, reduced }) {
   const stats = taskStats(minute);
@@ -750,7 +750,7 @@ function MinutesView({ brand, minutes, loading, onSave, onDelete, busy, reduced 
   );
 }
 
-/* ── Data & file ────────────────────────────────────────────────────────── */
+/* ── Performance Database ────────────────────────────────────────────────────────── */
 
 function DayStrip({ merged, month, wash }) {
   const bitmap = merged?.dayBitmap ?? '';
@@ -919,7 +919,7 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                   <p className="brand-ds-note">
                     <CircleAlert size={14} />
                     Arsip bulanan yang dibuat ATLAS dari data sinkron Google Ads Script, terisi setelah bulannya selesai. Report membaca data sinkron langsung,
-                    jadi slot ini tidak menerima unggahan. Bulan yang sudah tersinkron sebelum slot ini ada bisa diisi lewat Data Brand › Google Ads › Isi arsip.
+                    jadi slot ini tidak menerima unggahan. Bulan yang sudah tersinkron sebelum slot ini ada bisa diisi lewat Data Collection Hub › Performance Database › Input Performance Data › Google Ads › Isi arsip.
                   </p>
                 )}
                 {!isReference && !dataset.autoOnly && (
@@ -1049,7 +1049,13 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
 // core datasets are for the months on screen.
 const PLATFORM_LOGO = { meta: 'meta', shopee: 'shopee', tiktok: 'tiktok', google: 'google' };
 
-function DataView({ brand, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, onOpenAutomation, onOpenGoogleAds, busyKey, marketId, setMarketId }) {
+function DataView({ brand, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
+  const accountsRef = useRef(null);
+  const [accountsVersion, setAccountsVersion] = useState(0);
+  const openAccounts = () => {
+    accountsRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    accountsRef.current?.focus({ preventScroll: true });
+  };
   const platform = PLATFORMS.find((p) => p.id === marketId) ?? PLATFORMS[0];
   const focusMonth = focus ? months.find((m) => m.key === focus) : null;
   const target = focusMonth ?? months[months.length - 1];
@@ -1058,7 +1064,7 @@ function DataView({ brand, months, axis, windowStart, setWindowStart, focus, set
     <div className="soft-card bp-panel bp-data" style={{ '--mk-accent': platform.accent, '--mk-wash': platform.wash, '--mk-tint': platform.tint }}>
       <div className="bp-panel-head">
         <div>
-          <h2>Data &amp; file</h2>
+          <h2>Input Performance Data</h2>
           <p>Perpustakaan data {brand?.brand_name ?? 'brand ini'}. Report Generator, Business Overview, dan Meta Automation membaca dari sini — tidak ada upload ulang di halaman lain.</p>
         </div>
       </div>
@@ -1132,7 +1138,7 @@ function DataView({ brand, months, axis, windowStart, setWindowStart, focus, set
             <>
               <span>
                 <strong>Sebagian terisi otomatis</strong>
-                <small>Search Terms dan Change History diisi otomatis setiap tanggal 1 untuk bulan sebelumnya, untuk akun di tab <button type="button" className="brand-inline-link" onClick={onOpenGoogleAds}>Google Ads</button>. File yang Anda unggah untuk suatu bulan selalu menggantikan hasil otomatis.</small>
+                <small>Search Terms dan Change History diisi otomatis setiap tanggal 1 untuk bulan sebelumnya, untuk akun di <button type="button" className="brand-inline-link" onClick={openAccounts}>pengaturan Google Ads</button> pada channel ini. File yang Anda unggah untuk suatu bulan selalu menggantikan hasil otomatis.</small>
               </span>
               <span>
                 <strong>Auction Insights</strong>
@@ -1147,7 +1153,19 @@ function DataView({ brand, months, axis, windowStart, setWindowStart, focus, set
         </div>
       </details>
 
-      {platform.id === 'meta' && <MetaAdsAutoFetchPanel brand={brand} onLibraryChanged={onLibraryChanged} onOpenAutomation={onOpenAutomation} />}
+      {platform.id === 'meta' && (
+        <>
+          <section ref={accountsRef} className="bp-channel-accounts" tabIndex={-1} aria-label="Pengaturan akun Meta Ads">
+            <MetaAutomationSection key={brand?.brand_id ?? 'none'} brand={brand} onAccountAdded={() => setAccountsVersion((version) => version + 1)} />
+          </section>
+          <MetaAdsAutoFetchPanel brand={brand} accountsVersion={accountsVersion} onLibraryChanged={onLibraryChanged} onOpenAutomation={openAccounts} />
+        </>
+      )}
+      {platform.id === 'google' && (
+        <section ref={accountsRef} className="bp-channel-accounts" tabIndex={-1} aria-label="Pengaturan akun Google Ads">
+          <GoogleAdsSection key={brand?.brand_id ?? 'none'} brand={brand} />
+        </section>
+      )}
     </div>
   );
 }
@@ -1163,12 +1181,16 @@ export default function BrandDataPage() {
   // Same session keys as before the split, so links elsewhere that preset a
   // brand and tab (Pusat Kendali, Business Overview) still land on them.
   const [activeView, setActiveView] = useSessionState('brand-settings:view', 'data');
-  // A view remembered from a tab that now lives in Pengaturan Brand (brand
-  // list, context, direction) or no longer exists would render nothing.
-  useEffect(() => {
-    if (!VIEWS.some((v) => v.id === activeView)) setActiveView('data');
-  }, [activeView, setActiveView]);
+  const [databaseView, setDatabaseView] = useSessionState('brand-settings:database-view', 'files');
   const [marketId, setMarketId] = useSessionState('brand-settings:platform', 'shopee');
+  // Restore legacy account tabs inside their corresponding data channel.
+  useEffect(() => {
+    const legacyView = ['meta-automation', 'google-ads'].includes(activeView) ? activeView : databaseView;
+    if (legacyView === 'meta-automation') setMarketId('meta');
+    if (legacyView === 'google-ads') setMarketId('google');
+    if (!DATABASE_VIEWS.some((view) => view.id === databaseView)) setDatabaseView('files');
+    if (!VIEWS.some((v) => v.id === activeView)) setActiveView('data');
+  }, [activeView, databaseView, setActiveView, setDatabaseView, setMarketId]);
 
   const [profile, setProfile] = useState(null);
 
@@ -1427,7 +1449,7 @@ export default function BrandDataPage() {
       <div className="soft-frame">
         <header className="soft-masthead">
           <div className="soft-masthead-copy">
-            <h1><span>Data</span> Brand<span className="soft-title-dot" aria-hidden="true">.</span></h1>
+            <h1><span>Data</span> Collection Hub<span className="soft-title-dot" aria-hidden="true">.</span></h1>
             <p>File bulanan, catatan meeting, dan akun iklan setiap brand — sumber yang dibaca Business Overview dan Report Generator.</p>
           </div>
           <div className="soft-masthead-signature">
@@ -1456,7 +1478,7 @@ export default function BrandDataPage() {
             </div>
           </div>
           {brand && (
-            <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand context dan current direction diatur di Pengaturan Brand">
+            <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand context dan current direction diatur di Brand Setting">
               <NotebookPen size={15} aria-hidden="true" /> Context &amp; direction
             </Link>
           )}
@@ -1475,6 +1497,17 @@ export default function BrandDataPage() {
           })}
         </nav>
 
+        {activeView === 'data' && (
+          <nav className="soft-subtabs" aria-label="Bagian Performance Database" role="tablist">
+            {DATABASE_VIEWS.map(({ id, label, Icon }) => (
+              <button key={id} type="button" role="tab" aria-selected={databaseView === id}
+                className={`soft-subtab bp-platform${databaseView === id ? ' is-on' : ''}`} onClick={() => setDatabaseView(id)}>
+                <Icon size={16} aria-hidden="true" /> {label}
+              </button>
+            ))}
+          </nav>
+        )}
+
         {loading && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat data {brand?.brand_name ?? 'brand'}…</p>}
         {error && (
           <div className="brand-flash is-error">
@@ -1492,14 +1525,12 @@ export default function BrandDataPage() {
         )}
 
         <AnimatePresence mode="wait">
-          {activeView === 'data' && (
+          {activeView === 'data' && databaseView === 'files' && (
             <ViewShell viewId="data" reduced={reduced}>
               <DataView
                 brand={brand} months={months} axis={axis}
                 windowStart={windowStart} setWindowStart={(next) => { setWindowStart(next); setFocus(null); }}
                 focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
-                onOpenAutomation={() => setActiveView('meta-automation')}
-                onOpenGoogleAds={() => setActiveView('google-ads')}
                 onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}
                 onLibraryChanged={() => brand && refreshFiles(brand.brand_id)}
                 marketId={marketId} setMarketId={setMarketId}
@@ -1515,21 +1546,6 @@ export default function BrandDataPage() {
             </ViewShell>
           )}
 
-          {activeView === 'meta-automation' && (
-            <ViewShell viewId="meta-automation" reduced={reduced}>
-              <div className="soft-card bp-panel">
-                <MetaAutomationSection />
-              </div>
-            </ViewShell>
-          )}
-
-          {activeView === 'google-ads' && (
-            <ViewShell viewId="google-ads" reduced={reduced}>
-              <div className="soft-card bp-panel">
-                <GoogleAdsSection key={brand?.brand_id ?? 'none'} brand={brand} />
-              </div>
-            </ViewShell>
-          )}
         </AnimatePresence>
       </div>
     </div>

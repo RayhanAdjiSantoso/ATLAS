@@ -43,7 +43,7 @@ export const fetchNow = asyncHandler(async (req, res) => {
 });
 
 // POST /api/meta-ads-insights/library  { brandId, accountType, month }
-// Rebuilds the Data & file library copy of an already-fetched month.
+// Rebuilds the Performance Database library copy of an already-fetched month.
 export const syncLibrary = asyncHandler(async (req, res) => {
   validate(req);
   const result = await service.syncLibraryFile({

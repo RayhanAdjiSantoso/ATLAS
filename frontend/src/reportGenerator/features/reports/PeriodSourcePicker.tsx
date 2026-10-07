@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Archive, CalendarDays, CalendarRange, Check, Database, History, Library, Search, X } from 'lucide-react';
+import { Archive, CalendarDays, CalendarRange, Check, Database, History, Library, X } from 'lucide-react';
 import { getPortalContainer } from '../../utils/portalTarget';
 import { InlineNotice } from '../../components/InlineNotice';
 import api from '../../../api/client.js';
+import SearchField from '../../../components/common/SearchField.jsx';
 import { formatMonth, type LibraryFile } from './LibraryFileSlot';
 import { channelLabel, formatChannelCoverage, formatSavedAt } from './savedPeriodLabels';
 import { getSavedPeriods } from './api';
@@ -205,7 +206,7 @@ export function PeriodSourcePicker({
             <Library size={16} aria-hidden="true" />
             <span className="src-tab-text">
               <strong>Perpustakaan Brand</strong>
-              <small>File bulanan dari Data Brand</small>
+              <small>File bulanan dari Data Collection Hub</small>
             </span>
             {libCount !== null && <span className="src-tab-count">{libCount}</span>}
           </button>
@@ -241,16 +242,14 @@ export function PeriodSourcePicker({
         </div>
 
         {tab !== 'range' && <div className="lib-picker-tools">
-          <label className="lib-picker-search">
-            <Search size={15} aria-hidden="true" />
-            <input
+          <SearchField
+              className="lib-picker-search"
               placeholder={tab === 'library' ? 'Cari bulan atau tahun…' : 'Cari label, bulan, atau laporan…'}
               value={query}
               autoFocus
               onChange={(e) => setQuery(e.target.value)}
               aria-label="Cari"
             />
-          </label>
           {tab === 'library' && months && !libError && <span className="lib-picker-count">{shownMonths.length} bulan</span>}
           {tab === 'archive' && periods && !archiveError && <span className="lib-picker-count">{runs.length} laporan</span>}
         </div>}
@@ -278,7 +277,7 @@ export function PeriodSourcePicker({
                 <div className="lib-picker-empty">
                   <Database size={22} aria-hidden="true" />
                   <strong>{query.trim() ? 'Tidak ada bulan yang cocok' : 'Belum ada file untuk platform ini'}</strong>
-                  <span>{query.trim() ? 'Coba kata kunci lain, misalnya nama bulan atau tahun.' : 'Unggah file melalui Data Brand → Data & file, lalu buka lagi daftar ini.'}</span>
+                  <span>{query.trim() ? 'Coba kata kunci lain, misalnya nama bulan atau tahun.' : 'Unggah file melalui Data Collection Hub → Performance Database, lalu buka lagi daftar ini.'}</span>
                 </div>
               )}
               {years.map(([year, list]) => (
@@ -380,7 +379,7 @@ export function PeriodSourcePicker({
           {tab === 'library' ? <Database size={13} aria-hidden="true" /> : tab === 'range' ? <CalendarDays size={13} aria-hidden="true" /> : <Archive size={13} aria-hidden="true" />}
           <span>
             {tab === 'library'
-              ? 'Hanya bulan yang punya file di Data Brand yang ditampilkan.'
+              ? 'Hanya bulan yang punya file di Data Collection Hub yang ditampilkan.'
               : tab === 'range'
                 ? 'Rentang bebas, tidak harus satu bulan — dari data yang ditarik otomatis tiap hari.'
                 : 'Data diambil dari laporan yang sudah tersimpan — tidak perlu mengunggah ulang filenya.'}

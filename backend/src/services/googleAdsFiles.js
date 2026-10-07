@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 
-// The three Google Ads datasets of Pengaturan Brand › Data & file, as files:
+// The three Google Ads datasets of Pengaturan Brand › Performance Database, as files:
 //
 //   auction_insights  Auction insights export (manual only — Google does not
 //                     open these metrics to scripts or the API)
@@ -228,7 +228,7 @@ export function buildChangeHistoryWorkbook(month, rows) {
 }
 
 /* ── Archive copies of the synced datasets (migrations 040/041) ─────── */
-// Monthly files ATLAS writes into Data & file for the datasets the script
+// Monthly files ATLAS writes into Performance Database for the datasets the script
 // syncs. They are an archive — the report reads the tables, never these —
 // so these slots take no uploads (brandLibraryService.AUTO_ONLY_CHANNELS).
 const list = (v) => (Array.isArray(v) ? v : []);

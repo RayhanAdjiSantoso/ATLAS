@@ -1,5 +1,6 @@
 import useSessionState from '../../hooks/useSessionState.js';
 import { useMemo, useState } from 'react';
+import SearchField from '../common/SearchField.jsx';
 
 // Searchable + status-filterable client list (Benchmarking / Client Detail).
 // "freeze" is bucketed with "off" (and so is any null/other status); only
@@ -37,11 +38,11 @@ export default function ClientPicker({ clients, value, onChange }) {
     <div className="form-group" style={{ marginBottom: 0 }}>
       <label>Client{selected ? ` — ${selected.brand_name}` : ''}</label>
 
-      <input
-        type="search"
+      <SearchField
         placeholder="Cari nama brand / client…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        aria-label="Cari nama brand atau client"
       />
 
       <div style={{ display: 'flex', gap: '0.4rem', margin: '0.5rem 0' }}>
