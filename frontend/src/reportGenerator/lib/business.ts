@@ -107,11 +107,6 @@ export function bizCostPerRevenue(state: BizState, spendItems: { old: number | n
   return safeDiv(bizTotalAmountSpent(spendItems, period), bizTotalMetric(state, 'revenue', period));
 }
 
-export function bizBadgeLabel(state: BizState): string {
-  const filled = BIZ_ALL_CHANNELS.filter((ch) => (['revenue', 'transactions', 'qty'] as BizMetricKey[]).some((m) => bizChannelValue(state, ch.key, m, 'old') != null || bizChannelValue(state, ch.key, m, 'cur') != null));
-  return filled.length ? `${filled.length}/${BIZ_ALL_CHANNELS.length}` : '—';
-}
-
 export function parseBizInputValue(str: string | null | undefined): number | null {
   const raw = String(str == null ? '' : str).replace(/[^\d]/g, '');
   return raw === '' ? null : parseInt(raw, 10);
