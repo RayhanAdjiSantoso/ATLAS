@@ -27,6 +27,10 @@ export const getProfile = asyncHandler(async (req, res) => {
 export const saveProfile = asyncHandler(async (req, res) => {
   const brandId = parseBrandId(req);
   await requireBrand(brandId);
+  const industry = req.body?.industry;
+  if (industry != null && industry !== '' && !library.INDUSTRY_OPTIONS.includes(industry)) {
+    throw new AppError('Kategori industri tidak valid', 400);
+  }
   const profile = await library.saveProfile(brandId, req.body ?? {}, req.user?.userId);
   res.json({ profile });
 });

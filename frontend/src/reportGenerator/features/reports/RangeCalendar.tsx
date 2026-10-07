@@ -245,7 +245,7 @@ export function RangeCalendar({ clientId, role, value, other, autoOpen = false, 
               : !stored
                 ? 'Memuat data harian…'
                 : !last
-                  ? 'Belum ada data harian — aktifkan tarik otomatis di Data Brand'
+                  ? 'Belum ada data harian — aktifkan tarik otomatis di Data Collection Hub'
                   : value
                     ? `${daysInclusive(value.start, value.end)} hari · data tersedia ${formatAutoRange(first!, last)}`
                     : `Data harian tersedia ${formatAutoRange(first!, last)}`}

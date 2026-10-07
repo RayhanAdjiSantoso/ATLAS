@@ -704,7 +704,7 @@ function renderBusinessGrowth(data, { startDate, endDate } = {}) {
     );
 }
 
-const SHOP_STATS_SRC = 'file Performance Overview Shopee (shop-stats) bulan ini, yang di-upload di Data Brand';
+const SHOP_STATS_SRC = 'file Performance Overview Shopee (shop-stats) bulan ini, yang di-upload di Data Collection Hub';
 
 // Store channels in Shopee's own order and colours. Iklan Shopee is not one
 // of them; it gets its own colour because it is a separate lens.
@@ -1474,7 +1474,7 @@ function renderRfm(data, { rfmMatrixDim = 'rf', setRfmMatrixDim, startDate, endD
 // TAB 5: TRANSACTION BEHAVIOR
 // Every figure on this tab comes from the Order export, so the notes name
 // the column rather than repeating the file each time.
-const ORDER_SRC = 'Sumber: file Order (Pesanan) Shopee yang di-upload di Data Brand, pesanan berstatus Selesai yang diselesaikan pada periode ini';
+const ORDER_SRC = 'Sumber: file Order (Pesanan) Shopee yang di-upload di Data Collection Hub, pesanan berstatus Selesai yang diselesaikan pada periode ini';
 
 const DISCOUNT_PARTS = [
   { key: 'sellerDiscount', label: 'Diskon dari Penjual', color: '#1e3eb8' },
@@ -1822,7 +1822,7 @@ function renderRootCause(data, { startDate, endDate, compareStartDate, compareEn
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div className="card" style={{ padding: '1.5rem', color: 'var(--text-muted)' }}>
-          Data GMV belum tersedia untuk periode ini. Unggah data Shopee melalui Data Brand.
+          Data GMV belum tersedia untuk periode ini. Unggah data Shopee melalui Data Collection Hub.
         </div>
       </div>
     );
@@ -1844,7 +1844,7 @@ function renderRootCause(data, { startDate, endDate, compareStartDate, compareEn
 
 // TAB 7: PRODUCT PERFORMANCE
 const PP_NOTES = {
-  source: 'Sumber: file Product Performance Shopee bulanan (parentskudetail) yang di-upload di Data Brand. Laporan ini hanya tersedia per bulan, jadi rentang tanggal yang bukan 1 bulan penuh tetap memakai angka bulan yang dilaluinya.',
+  source: 'Sumber: file Product Performance Shopee bulanan (parentskudetail) yang di-upload di Data Collection Hub. Laporan ini hanya tersedia per bulan, jadi rentang tanggal yang bukan 1 bulan penuh tetap memakai angka bulan yang dilaluinya.',
   quantity: 'Kolom "Produk (Pesanan Siap Dikirim)" per produk pada laporan bulanan, diurutkan dari jumlah unit terbanyak.',
   revenue: 'Kolom "Penjualan (Pesanan Siap Dikirim) (IDR)" per produk pada laporan bulanan, diurutkan dari penjualan terbesar.',
   pareto: 'Kontribusi penjualan 10 produk teratas terhadap total penjualan, dengan garis kumulatif. Dipakai untuk melihat seberapa terpusat penjualan pada sedikit produk (prinsip 80/20).',
@@ -2041,7 +2041,7 @@ export default function DashboardTab({
         <Inbox className="con-state-ico" size={28} strokeWidth={1.5} />
         <strong>Belum ada data untuk periode ini</strong>
         <p>
-          Unggah data Shopee untuk brand dan periode terpilih melalui Data Brand,
+          Unggah data Shopee untuk brand dan periode terpilih melalui Data Collection Hub,
           lalu buka kembali halaman ini.
         </p>
       </div>

@@ -153,7 +153,7 @@ export function GoalOverviewSection({ report, f, p1, p2 }: { report: GadsReport;
         )}
         {unverified > 0 && (
           <p className="gads-footnote is-inline">
-            {unverified} conversion action masih memakai pemetaan bawaan dari kategori Google dan perlu diverifikasi di Data Brand › Google Ads › Conversion goals.
+            {unverified} conversion action masih memakai pemetaan bawaan dari kategori Google dan perlu diverifikasi di Data Collection Hub › Performance Database › Input Performance Data › Google Ads › Conversion goals.
           </p>
         )}
       </div>
@@ -879,7 +879,7 @@ export function ConversionSection({ report, f, p1, p2 }: { report: GadsReport; f
   const columns: GadsColumn<GadsConversionAction>[] = [
     { key: 'name', label: 'Conversion action', align: 'left', value: (r) => r.name, render: (r) => <button type="button" className="gads-link" onClick={() => setOpenAction(openAction === r.conversion_action_id ? null : r.conversion_action_id)}>{r.name}</button> },
     { key: 'category', label: 'Kategori', align: 'left', value: (r) => humanEnum(r.category) },
-    { key: 'goal', label: 'Tujuan', align: 'left', value: (r) => GOAL_LABELS[r.goal], render: (r) => <><Tag tone={GOAL_TONE[r.goal]}>{GOAL_LABELS[r.goal]}</Tag>{r.goal_source === 'default' && <small className="gads-unverified" title="Pemetaan bawaan dari kategori Google — verifikasi di Data Brand"> belum diverifikasi</small>}</> },
+    { key: 'goal', label: 'Tujuan', align: 'left', value: (r) => GOAL_LABELS[r.goal], render: (r) => <><Tag tone={GOAL_TONE[r.goal]}>{GOAL_LABELS[r.goal]}</Tag>{r.goal_source === 'default' && <small className="gads-unverified" title="Pemetaan bawaan dari kategori Google — verifikasi di Data Collection Hub"> belum diverifikasi</small>}</> },
     { key: 'primary', label: 'Dihitung di Conversions', align: 'left', value: (r) => (r.primary == null ? '—' : r.primary ? 'Primer' : 'Sekunder') },
     { key: 'conversions', label: 'Conversions', value: (r) => r.conversions, render: (r) => f.dec(r.conversions) },
     { key: 'old', label: `vs ${p1}`, value: (r) => oldBy.get(`${r.customer_id}|${r.conversion_action_id}`)?.all_conversions ?? null, render: (r) => { const o = oldBy.get(`${r.customer_id}|${r.conversion_action_id}`); const d = computeDelta(o?.all_conversions ?? null, r.all_conversions); return <DeltaPill cls={deltaClassForSentiment(d.deltaNum, 'higher-better')} size="sm">{d.deltaStr}</DeltaPill>; } },

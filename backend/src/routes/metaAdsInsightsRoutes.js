@@ -7,7 +7,7 @@ import {
   exportRangeValidation,
 } from '../validators/metaAdsInsightsValidators.js';
 
-// Meta Ads auto-fetch settings for Pengaturan Brand › Data & file. Admin
+// Meta Ads auto-fetch settings for Pengaturan Brand › Performance Database. Admin
 // only, like every other route that reaches Apps Script / the Meta tokens
 // (see metaAutomationRoutes.js). The two read-only routes for the Report
 // Generator's custom range come first: they only read stored rows, so they

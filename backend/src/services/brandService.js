@@ -3,20 +3,20 @@ import pool from '../config/db.js';
 export async function listBrands(allowedBrandId) {
   if (allowedBrandId) {
     const result = await pool.query(
-      'SELECT brand_id, brand_name, status::text AS status FROM public.brands WHERE brand_id = $1 ORDER BY brand_name',
+      'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands WHERE brand_id = $1 ORDER BY brand_name',
       [allowedBrandId],
     );
     return result.rows;
   }
   const result = await pool.query(
-    'SELECT brand_id, brand_name, status::text AS status FROM public.brands ORDER BY brand_name',
+    'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands ORDER BY brand_name',
   );
   return result.rows;
 }
 
 export async function findBrandByName(brandName) {
   const result = await pool.query(
-    'SELECT brand_id, brand_name, status::text AS status FROM public.brands WHERE LOWER(TRIM(brand_name)) = LOWER($1)',
+    'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands WHERE LOWER(TRIM(brand_name)) = LOWER($1)',
     [brandName.trim()],
   );
   return result.rows[0] ?? null;
@@ -36,7 +36,7 @@ export async function createBrand(brandName) {
       throw error;
     }
     const result = await client.query(
-      "INSERT INTO public.brands (brand_name, status) VALUES ($1, 'active') RETURNING brand_id, brand_name, status::text AS status",
+      "INSERT INTO public.brands (brand_name, status) VALUES ($1, 'active') RETURNING brand_id, brand_name, status::text AS status, industry",
       [brandName.trim()],
     );
     await client.query('COMMIT');
@@ -49,7 +49,7 @@ export async function createBrand(brandName) {
 
 export async function updateBrandStatus(brandId, status) {
   const result = await pool.query(
-    'UPDATE public.brands SET status = $2::public.brand_status WHERE brand_id = $1 RETURNING brand_id, brand_name, status::text AS status',
+    'UPDATE public.brands SET status = $2::public.brand_status WHERE brand_id = $1 RETURNING brand_id, brand_name, status::text AS status, industry',
     [brandId, status],
   );
   return result.rows[0] ?? null;
@@ -57,7 +57,7 @@ export async function updateBrandStatus(brandId, status) {
 
 export async function getBrandById(brandId) {
   const result = await pool.query(
-    'SELECT brand_id, brand_name, status::text AS status FROM public.brands WHERE brand_id = $1',
+    'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands WHERE brand_id = $1',
     [brandId],
   );
   return result.rows[0] ?? null;
@@ -85,7 +85,7 @@ const LIGHT_TABLES = new Set([
 ]);
 
 const REFERENCE_LABELS = [
-  [/^ads_reports\.brand_library_files$/, 'File di Data Brand'],
+  [/^ads_reports\.brand_library_files$/, 'File di Data Collection Hub'],
   [/^ads_reports\.report_runs$/, 'Laporan tersimpan (Riwayat Laporan)'],
   [/^ads_reports\.ai_summaries$/, 'AI Consultant Brief'],
   [/^ads_reports\.product_master$/, 'Referensi kategori produk'],

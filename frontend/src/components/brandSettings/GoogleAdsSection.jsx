@@ -289,7 +289,7 @@ export default function GoogleAdsSection({ brand }) {
     try {
       const res = await api.post('/google-ads/library/rebuild', { brandId });
       const filed = res.data.months.reduce((n, m) => n + m.files.length, 0);
-      setNotice(`Arsip Data & file diperbarui: ${filed} file untuk ${res.data.months.length} bulan.`);
+      setNotice(`Arsip Performance Database diperbarui: ${filed} file untuk ${res.data.months.length} bulan.`);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal mengisi arsip');
     } finally {
@@ -393,9 +393,9 @@ export default function GoogleAdsSection({ brand }) {
               {accounts.length > 0 && !isViewOnly && (
                 <div className="maf-actions">
                   <button type="button" className="btn btn-ghost dt-btn-sm" onClick={rebuildArchive} disabled={busy === 'archive'}>
-                    {busy === 'archive' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Isi arsip Data &amp; file
+                    {busy === 'archive' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Isi arsip Performance Database
                   </button>
-                  <small className="maf-hint">Membuat ulang file bulanan Google Ads di Data &amp; file untuk setiap bulan yang sudah selesai dan tersinkron. Bulan baru terisi otomatis tiap tanggal 1.</small>
+                  <small className="maf-hint">Membuat ulang file bulanan Google Ads di Performance Database untuk setiap bulan yang sudah selesai dan tersinkron. Bulan baru terisi otomatis tiap tanggal 1.</small>
                 </div>
               )}
             </div>

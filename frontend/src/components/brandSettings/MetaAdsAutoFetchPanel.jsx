@@ -56,15 +56,13 @@ function runState(run) {
   }[run.status];
 }
 
-// Auto-fetch of Meta Ads / CPAS insights into ATLAS. Lives under Data & file
+// Auto-fetch of Meta Ads / CPAS insights into ATLAS. Lives under Performance Database
 // › Meta Ads. An account is eligible exactly when it is registered in Meta
 // Brand › Meta Automation and linked to this ATLAS brand — the
 // same rule Daily Tracking's auto-fill uses. Admin only: it reaches the Meta
 // tokens held in Apps Script.
-// `onOpenAutomation` switches Pengaturan Brand to its Meta Automation
-// section — the registry this panel depends on now lives on the same page,
-// so the two pointers below are buttons rather than links.
-export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenAutomation }) {
+// `onOpenAutomation` scrolls to the account form in the same Meta Ads channel.
+export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLibraryChanged, onOpenAutomation }) {
   const { isAdmin, isViewOnly } = useAuth();
   const brandId = brand?.brand_id;
 
@@ -99,15 +97,22 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
   useEffect(() => {
     if (!isAdmin || !brandId) return undefined;
     let cancelled = false;
-    setOverview(null); setAccounts(null); setAccountsError(''); setNotice('');
+    setOverview(null); setNotice('');
     loadOverview().then((data) => {
       if (!cancelled && data) setDraft({ MAIN: data.config.MAIN.extraMetrics, CPAS: data.config.CPAS.extraMetrics });
     });
+    return () => { cancelled = true; };
+  }, [isAdmin, brandId, loadOverview]);
+
+  useEffect(() => {
+    if (!isAdmin || !brandId) return undefined;
+    let cancelled = false;
+    setAccounts(null); setAccountsError('');
     api.get('/meta-ads-insights/accounts', { params: { brandId } })
       .then((res) => { if (!cancelled) setAccounts(res.data.accounts); })
       .catch((err) => { if (!cancelled) setAccountsError(err.response?.data?.message || 'Gagal memeriksa akun di Meta Ads Automation'); });
     return () => { cancelled = true; };
-  }, [isAdmin, brandId, loadOverview]);
+  }, [isAdmin, brandId, accountsVersion]);
 
   useEffect(() => () => { clearTimeout(pollTimer.current); clearTimeout(libraryTimer.current); }, []);
 
@@ -170,16 +175,16 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
     } finally { setBusy(''); }
   };
 
-  // Rebuilds the Data & file library copy of a fetched month — for months
+  // Rebuilds the Performance Database library copy of a fetched month — for months
   // fetched before that step existed, or when it was skipped or failed.
   const syncLibrary = async (row) => {
     setBusy(`lib:${row.accountType}:${row.month}`); setNotice(''); setError('');
     try {
       await api.post('/meta-ads-insights/library', { brandId, accountType: row.accountType, month: row.month });
-      setNotice(`${monthName(row.month)} disimpan ke Data & file — sekarang bisa dipilih di Report Generator.`);
+      setNotice(`${monthName(row.month)} disimpan ke Performance Database — sekarang bisa dipilih di Report Generator.`);
       onLibraryChanged?.();
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal menyimpan ke Data & file');
+      setError(err.response?.data?.message || 'Gagal menyimpan ke Performance Database');
     } finally { setBusy(''); }
   };
 
@@ -206,7 +211,7 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
       <header className="maf-head">
         <span className="maf-head-icon" aria-hidden="true"><CalendarClock size={18} /></span>
         <div>
-          <h3>Tarik otomatis dari Meta</h3>
+          <h3>Automate Input with API</h3>
           <p>
             Tiap hari, ATLAS menarik data 7 hari terakhir sampai kemarin (tanggal 1: seluruh bulan sebelumnya) per
             campaign, umur, gender, dan hari untuk akun yang sudah terdaftar di bagian <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini.
@@ -291,7 +296,7 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
               <button type="button" className="btn btn-primary dt-btn-sm" onClick={fetchNow} disabled={!canAct || busy === 'fetch'}>
                 {busy === 'fetch' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Tarik {typeLabel}
               </button>
-              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta. Hasilnya juga disimpan ke Data & file (Meta Ads / CPAS) dan bisa dipilih di Report Generator, per bulan atau dengan rentang tanggal bebas.</small>
+              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta. Hasilnya juga disimpan ke Performance Database (Meta Ads / CPAS) dan bisa dipilih di Report Generator, per bulan atau dengan rentang tanggal bebas.</small>
             </div>
           </div>
 
@@ -317,8 +322,8 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
                         <td>{dateTime(row.fetchedAt)}</td>
                         <td className="maf-row-actions">
                           <button
-                            type="button" className="btn btn-icon" title="Simpan ke Data & file"
-                            aria-label={`Simpan ${monthName(row.month)} ke Data & file`}
+                            type="button" className="btn btn-icon" title="Simpan ke Performance Database"
+                            aria-label={`Simpan ${monthName(row.month)} ke Performance Database`}
                             onClick={() => syncLibrary(row)} disabled={readOnly || busy === `lib:${row.accountType}:${row.month}`}
                           >
                             {busy === `lib:${row.accountType}:${row.month}` ? <Loader2 size={14} className="maf-spin" /> : <FolderInput size={14} />}

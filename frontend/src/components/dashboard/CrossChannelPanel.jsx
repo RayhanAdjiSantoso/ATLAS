@@ -90,7 +90,7 @@ export default function CrossChannelPanel({ filters }) {
         {state.status === 'error' && <div className="xc-note is-bad">Rekomendasi belum bisa dihitung: {state.message}</div>}
         {state.status === 'missing' && (
           <div className="xc-note">
-            Butuh file bulan {monthLabel} di Data Brand: <strong>{state.missing.join(', ')}</strong>.
+            Butuh file bulan {monthLabel} di Data Collection Hub: <strong>{state.missing.join(', ')}</strong>.
           </div>
         )}
 

@@ -3,9 +3,13 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import BrandStatusFilter, { BRAND_STATUS_LABELS, matchesBrandStatus } from '../common/BrandStatusFilter.jsx';
 import usePopover from '../common/usePopover.js';
+import SearchField from '../common/SearchField.jsx';
 import './dashboardHeader.css';
 
-export default function DashboardBrandPicker({ brands, value, onChange, status, onStatusChange }) {
+export default function DashboardBrandPicker({
+  brands, value, onChange, status, onStatusChange,
+  id = 'brand-select', placeholder = 'Pilih brand…', resultHint = 'Pilih untuk membuka dashboard', disabled = false,
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const triggerRef = useRef(null);
@@ -35,16 +39,29 @@ export default function DashboardBrandPicker({ brands, value, onChange, status, 
     items[next].focus();
   };
   return <>
-    <button ref={triggerRef} id="brand-select" type="button" className="dashboard-brand-trigger" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? panelId : undefined} onClick={() => setOpen(v => !v)}>
-      <Search size={16} aria-hidden="true" /><span>{selected?.brand_name || 'Pilih brand…'}</span><ChevronDown size={15} aria-hidden="true" />
+    <button ref={triggerRef} id={id} type="button" className="dashboard-brand-trigger" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? panelId : undefined} onClick={() => setOpen(v => !v)}>
+      <Search size={16} aria-hidden="true" /><span>{selected?.brand_name || placeholder}</span><ChevronDown size={15} aria-hidden="true" />
     </button>
     {open && createPortal(<div ref={panelRef} id={panelId} role="dialog" aria-label="Pilih brand" className="dashboard-brand-menu" style={position} onKeyDown={navigateResults}>
-      <label className="dashboard-brand-search"><Search size={17} aria-hidden="true" /><input ref={inputRef} type="search" aria-label="Cari brand" placeholder="Cari brand…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && shown.length) { e.preventDefault(); pick(shown[0].brand_id); } }} /></label>
-      <BrandStatusFilter value={status} onChange={onStatusChange} />
-      <div className="dashboard-brand-count" aria-live="polite">{shown.length} brand</div>
-      <div className="dashboard-brand-results">
-        {shown.map(b => <button type="button" key={b.brand_id} className="dashboard-brand-result" aria-pressed={String(b.brand_id) === String(value)} onClick={() => pick(b.brand_id)}><span>{b.brand_name}<small>{BRAND_STATUS_LABELS[b.status] || BRAND_STATUS_LABELS.unknown}</small></span>{String(b.brand_id) === String(value) && <Check size={17} aria-hidden="true" />}</button>)}
-        {!shown.length && <p>Tidak ada brand yang cocok. Ubah pencarian atau status.</p>}
+      <div className="dashboard-brand-menu-head">
+        <SearchField className="dashboard-brand-search" ref={inputRef} aria-label="Cari brand" placeholder="Cari nama brand…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && shown.length) { e.preventDefault(); pick(shown[0].brand_id); } }} />
+        <span aria-live="polite">{shown.length} brand ditemukan</span>
+      </div>
+      <div className="dashboard-brand-menu-body">
+        <aside className="dashboard-brand-filters">
+          <span className="dashboard-brand-section-label">Status klien</span>
+          <BrandStatusFilter value={status} onChange={onStatusChange} />
+        </aside>
+        <section className="dashboard-brand-list" aria-label="Daftar brand">
+          <header>
+            <span className="dashboard-brand-section-label">Daftar brand</span>
+            <small>{resultHint}</small>
+          </header>
+          <div className="dashboard-brand-results" role="listbox">
+            {shown.map(b => <button type="button" role="option" aria-selected={String(b.brand_id) === String(value)} key={b.brand_id} className="dashboard-brand-result" onClick={() => pick(b.brand_id)}><i className={`brand-status-dot is-${b.status || 'unknown'}`} aria-hidden="true" /><span><strong>{b.brand_name}</strong><small>{BRAND_STATUS_LABELS[b.status] || BRAND_STATUS_LABELS.unknown}</small></span>{String(b.brand_id) === String(value) && <Check size={17} aria-hidden="true" />}</button>)}
+            {!shown.length && <p>Tidak ada brand yang cocok. Ubah pencarian atau status.</p>}
+          </div>
+        </section>
       </div>
     </div>, document.body)}
   </>;

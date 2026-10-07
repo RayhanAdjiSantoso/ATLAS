@@ -138,8 +138,8 @@ function performanceBlock(performance) {
 export function buildPrompt({ brandName, platform, period, profile, history, performance }) {
   const blocks = [
     `Brand: ${brandName}. Platform: ${PLATFORM_LABEL[platform] ?? platform}.`,
-    section('A. Brand Context', brandContextBlock(profile)) ?? '## A. Brand Context\n(belum diisi di Pengaturan Brand)',
-    section('B. Current Direction', currentDirectionBlock(profile)) ?? '## B. Current Direction\n(belum diisi di Pengaturan Brand)',
+    section('A. Brand Context', brandContextBlock(profile)) ?? '## A. Brand Context\n(belum diisi di Brand Setting)',
+    section('B. Current Direction', currentDirectionBlock(profile)) ?? '## B. Current Direction\n(belum diisi di Brand Setting)',
     section('C. Historical / Period Learning', historyBlock(history)) ?? '## C. Historical / Period Learning\n(belum ada ringkasan periode sebelumnya)',
     section('D. Scope perbandingan yang dipilih user', periodScopeBlock(period, performance)),
     section('E. Performance Data dalam scope tersebut', performanceBlock(performance)),

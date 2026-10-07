@@ -282,7 +282,7 @@ async function requireOpenRun(runId) {
 export async function startRun({ customerId, startDate, endDate, source, account, datasets }) {
   const id = normalizeCustomerId(customerId);
   const registered = id && await repo.getAccountByCustomerId(id);
-  if (!registered) throw new AppError('Customer ID belum terdaftar di Pengaturan Brand', 404);
+  if (!registered) throw new AppError('Customer ID belum terdaftar di Brand Setting', 404);
   if (!ISO_DATE.test(startDate) || !ISO_DATE.test(endDate) || startDate > endDate) throw new AppError('Rentang tanggal tidak valid', 400);
   const declared = Array.isArray(datasets) ? [...new Set(datasets.filter((d) => KNOWN_DATASETS.includes(d)))] : null;
   const runId = randomUUID();
@@ -396,13 +396,13 @@ export async function finishRun({ runId, status, rowCount, note, datasets }) {
     }
   }
   // Daily Tracking is daily data, filled on every run (the script runs at
-  // 01:00, so yesterday lands then). Data & file is monthly data: a month is
+  // 01:00, so yesterday lands then). Performance Database is monthly data: a month is
   // filed only once a run has covered it to its last day — the run on the
   // 1st — and re-filed if last month is fetched again while conversions
   // settle. A failure in either must not turn a successful fetch into a
   // failed one, so it is only logged.
   // Runs without the core reports (a backfill of the newer datasets) still
-  // file their months: the archive slots of Data & file come from them.
+  // file their months: the archive slots of Performance Database come from them.
   if (status === 'success') {
     // Daily Tracking › Google Ads: the brand's cost per day over the run's
     // range, written at the time the script runs (the Meta auto-fill rule).
@@ -431,7 +431,7 @@ export async function finishRun({ runId, status, rowCount, note, datasets }) {
           ? await syncLibraryMonth(run.brand_id, month)
           : await dropPartialAutoFiles(run.brand_id, month);
       } catch (err) {
-        console.warn('[google-ads] gagal mengisi Data & file', { brandId: run.brand_id, month, reason: err.message });
+        console.warn('[google-ads] gagal mengisi Performance Database', { brandId: run.brand_id, month, reason: err.message });
       }
     }
   }
@@ -846,7 +846,7 @@ export async function setConversionGoal({ brandId, customerId, conversionActionI
 }
 
 // ---------------------------------------------------------------------
-// Data & file (Pengaturan Brand) — the Google Ads tab
+// Performance Database (Pengaturan Brand) — the Google Ads tab
 // ---------------------------------------------------------------------
 // Auto-filed months carry this prefix; anything else in a slot was uploaded
 // by someone and is never overwritten (user decision 2026-10-02: a manual

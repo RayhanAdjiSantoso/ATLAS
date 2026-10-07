@@ -4,7 +4,7 @@ import api from '../../../api/client.js';
 import { InlineNotice } from '../../components/InlineNotice';
 
 // Third source of the Meta period picker: the daily rows the Meta auto-fetch
-// stores (Pengaturan Brand › Data & file › Meta Ads › Tarik otomatis). The
+// stores (Pengaturan Brand › Performance Database › Meta Ads › Tarik otomatis). The
 // library only holds whole months; these rows can be cut at any day, so a
 // side can be e.g. 15 Agu – 14 Sep.
 
@@ -111,7 +111,7 @@ export function AutoRangePanel({ clientId, selected, onPick }: Props) {
       <div className="lib-picker-empty">
         <CalendarDays size={22} aria-hidden="true" />
         <strong>Belum ada data harian</strong>
-        <span>Aktifkan tarik otomatis di Data Brand → Data &amp; file → Meta Ads, lalu buka lagi daftar ini.</span>
+        <span>Aktifkan tarik otomatis di Data Collection Hub → Performance Database → Input Performance Data → Meta Ads, lalu buka lagi daftar ini.</span>
       </div>
     );
   }

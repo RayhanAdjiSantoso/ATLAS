@@ -606,7 +606,7 @@ export async function searchTermDetail(brandId, start, end, months = null, db = 
 }
 
 // ---------------------------------------------------------------------
-// Data & file monthly archives (googleAdsService.syncLibraryMonth)
+// Performance Database monthly archives (googleAdsService.syncLibraryMonth)
 // ---------------------------------------------------------------------
 // One calendar month each, at the grain the file shows. The report keeps
 // reading the tables themselves; these only feed the archive copies.

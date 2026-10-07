@@ -453,7 +453,7 @@ function MinutesOverview({ filters }) {
               <div className="mom-dash-state is-empty">
                 <FileText size={18} />
                 <span>Belum ada catatan meeting untuk brand ini.</span>
-                <Link to="/data-brand" onClick={openInSettings}>Tambah di Data Brand <ArrowUpRight size={13} /></Link>
+                <Link to="/data-brand" onClick={openInSettings}>Tambah di Data Collection Hub <ArrowUpRight size={13} /></Link>
               </div>
             )}
 
@@ -650,7 +650,7 @@ export default function DashboardPage() {
         <ExecutiveSummary filters={filters} />
         {/* Cross-channel reading of the month's product performance. */}
         <CrossChannelPanel filters={filters} />
-        {/* Meeting notes are internal and live under Data Brand;
+        {/* Meeting notes are internal and live under Data Collection Hub;
             a role without that module (a client) does not see them. */}
         {can('brand_settings') && <MinutesOverview filters={filters} />}
       </>
@@ -700,14 +700,14 @@ export default function DashboardPage() {
                 </div>
               </div>
               <ol className="channel-pending-steps">
-                <li>Unggah file {channel.label} pada Data Brand</li>
+                <li>Unggah file {channel.label} pada Data Collection Hub</li>
                 <li>Importer memindahkannya ke tabel fakta</li>
                 <li>Seluruh domain {channel.label} di atas ikut terisi</li>
               </ol>
               <p className="channel-pending-note">
                 Belanja iklan {channel.label} yang sudah diisi di Daily Tracking tetap terbaca pada Executive Snapshot.
               </p>
-              <Link to="/data-brand" className="mom-head-link">Buka Data Brand <ArrowUpRight size={13} /></Link>
+              <Link to="/data-brand" className="mom-head-link">Buka Data Collection Hub <ArrowUpRight size={13} /></Link>
             </div>
           )}
         </section>
@@ -861,7 +861,7 @@ export default function DashboardPage() {
       <div className="dashboard-domain-caption">
         <span>{isSnapshot ? EXECUTIVE_VIEW.question : channel.ready ? active.question : channel.note}</span>
         <span className="brand-caption-rule" />
-        <Link to="/data-brand"><Database size={13} /> Data bersumber dari <strong>Data Brand</strong></Link>
+        <Link to="/data-brand"><Database size={13} /> Data bersumber dari <strong>Data Collection Hub</strong></Link>
       </div>
 
       <div className="con-body dashboard-body">

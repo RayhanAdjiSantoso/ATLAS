@@ -1,7 +1,6 @@
 import useSessionState from '../../../hooks/useSessionState.js';
-import BrandStatusFilter, { matchesBrandStatus } from '../../../components/common/BrandStatusFilter.jsx';
 import { useEffect, useState } from 'react';
-import { SearchSelect } from '../../components/SearchSelect';
+import DashboardBrandPicker from '../../../components/dashboard/DashboardBrandPicker.jsx';
 import { getClients } from './api';
 import type { Client } from './types';
 
@@ -29,14 +28,15 @@ export function ClientPicker({ clientId, onChange }: ClientPickerProps) {
   return (
     <div className="client-bar">
       <span className="client-bar-label">Klien</span>
-      <SearchSelect
-        options={clients.filter((c) => matchesBrandStatus(c, status) || c.id === clientId)}
+      <DashboardBrandPicker
+        id="report-brand"
+        brands={clients.map((client) => ({ brand_id: client.id, brand_name: client.name, status: client.status }))}
         value={clientId}
         onChange={(id) => onChange(Number(id))}
-        placeholder="— pilih klien —"
-        searchPlaceholder="Cari brand…"
-        emptyLabel="Brand tidak ditemukan untuk filter ini"
-        header={<BrandStatusFilter value={status} onChange={setStatus} />}
+        status={status}
+        onStatusChange={setStatus}
+        placeholder="Pilih klien…"
+        resultHint="Pilih untuk membuat laporan"
       />
       {error && <span className="client-bar-error">{error}</span>}
     </div>

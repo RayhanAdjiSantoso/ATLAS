@@ -33,7 +33,7 @@ export default function InternalDashboardPage() {
     <div>
       <div className="page-header">
         <h1>Internal Dashboard</h1>
-        <p>Capture performance seluruh client MIL Digital. Data diambil otomatis dari halaman Daily Tracking dan Data Brand.</p>
+        <p>Capture performance seluruh client MIL Digital. Data diambil otomatis dari halaman Daily Tracking dan Data Collection Hub.</p>
       </div>
 
       <div

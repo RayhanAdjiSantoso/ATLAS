@@ -1002,7 +1002,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         />
         {source === 'upload' && (
           <div className="manual-mode-note">
-            <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah langsung di setiap baris — file hanya dibaca untuk laporan ini dan tidak disimpan ke Data Brand. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis.
+            <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah langsung di setiap baris — file hanya dibaca untuk laporan ini dan tidak disimpan ke Data Collection Hub. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis.
           </div>
         )}
         {source === 'saved' &&
@@ -1052,7 +1052,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           Dari dashboard Shopee Seller Center, buka menu <strong>Iklan Saya</strong> dan download laporan <strong>Iklan Produk</strong> dan iklan lainnya (jika tersedia), untuk periode lalu dan periode ini.
         </HowToStep>
         <HowToStep num={2} numClassName="shopee-num" title="Total Omzet Toko terisi otomatis">
-          Total Omzet diambil dari file <strong>Performa Toko</strong> (Seller Centre › Performa Toko, sheet <strong>Pesanan Dibuat</strong> › Total Penjualan) yang ada di Data Brand › Performance Overview. Tanpa file itu, angkanya dijumlah dari <strong>Product Overview</strong>. File Performa Toko juga bisa diunggah langsung di kolom Total Omzet.
+          Total Omzet diambil dari file <strong>Performa Toko</strong> (Seller Centre › Performa Toko, sheet <strong>Pesanan Dibuat</strong> › Total Penjualan) yang ada di Data Collection Hub › Performance Overview. Tanpa file itu, angkanya dijumlah dari <strong>Product Overview</strong>. File Performa Toko juga bisa diunggah langsung di kolom Total Omzet.
         </HowToStep>
         <HowToStep num={3} numClassName="shopee-num" title="(Opsional) Upload data untuk analisis mendalam">
           Untuk analisis lebih dalam, tambahkan juga Iklan Produk Otomatis, Iklan Toko - Keyword (jika menggunakan iklan toko), Referensi Kategori Produk, Product Overview & Product Performance untuk insight tambahan. Semuanya opsional, laporan tetap bisa dibuat tanpanya.
@@ -1070,7 +1070,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         note={
           <>
             Iklan Produk dan Total Omzet wajib. Pilihan <strong>Perpustakaan Brand</strong> atau <strong>Arsip Laporan</strong> mengisi semua file periode itu sekaligus.
-            Total Omzet terisi otomatis dari file <strong>Performa Toko</strong> di Data Brand (Total Penjualan, Pesanan Dibuat), atau dari Product Overview bila file itu
+            Total Omzet terisi otomatis dari file <strong>Performa Toko</strong> di Data Collection Hub (Total Penjualan, Pesanan Dibuat), atau dari Product Overview bila file itu
             tidak ada — ketik manual hanya bila keduanya tidak tersedia.
           </>
         }

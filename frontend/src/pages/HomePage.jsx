@@ -25,7 +25,7 @@ const MODULES = [
   {
     key: 'brand-settings',
     to: '/pengaturan-brand',
-    label: 'Pengaturan Brand',
+    label: 'Brand Setting',
     tagline: 'Langkah pertama',
     desc: 'Daftar klien dan statusnya, lalu brand context dan current direction setiap brand yang dibaca analisis ATLAS.',
     accent: 'var(--acc)',
@@ -35,7 +35,7 @@ const MODULES = [
   {
     key: 'brand-data',
     to: '/data-brand',
-    label: 'Data Brand',
+    label: 'Data Collection Hub',
     tagline: 'Data sumber per brand',
     desc: 'File bulanan tiap marketplace, Minutes of Meeting, dan akun Meta & Google Ads — sumber yang dibaca dashboard dan laporan.',
     accent: 'var(--acc)',

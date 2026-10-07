@@ -3,6 +3,7 @@ import { Pencil, Trash2, Plus, X, ChevronDown, ChevronRight } from 'lucide-react
 import api from '../../api/client.js';
 import BrandCombo from './BrandCombo.jsx';
 import BrandTypeFilter from './BrandTypeFilter.jsx';
+import SearchField from '../common/SearchField.jsx';
 
 // Katalog field yang bisa dipantau -- BUKAN daftar metrik tetap lagi.
 // User bebas menyusun kombinasi field + arah + threshold sendiri lewat
@@ -377,7 +378,7 @@ export default function SubscriptionsSection() {
       <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label>Saring Email</label>
-          <input value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} placeholder="cari email..." style={{ width: '100%' }} />
+          <SearchField value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} placeholder="Cari email…" aria-label="Cari email" />
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label>Saring Brand</label>
