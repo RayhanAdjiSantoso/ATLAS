@@ -27,7 +27,9 @@ export function isMisfiledShopeeFile(f: { platform: string; channel: string; ori
 interface Props {
   clientId: number | null;
   platform: string;
-  channel: string;
+  // One library channel, or several read as one source (Meta Ads: Boost Post
+  // + Non Boost Post).
+  channel: string | readonly string[];
   tag: string;
   loaded?: boolean;
   fileName?: string;
@@ -47,6 +49,8 @@ export function LibraryFileSlot({ clientId, platform, channel, tag, loaded, file
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const alive = useRef(true);
+  const channels: readonly string[] = typeof channel === 'string' ? [channel] : channel;
+  const channelKey = channels.join(',');
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     let cancelled = false;
@@ -54,11 +58,12 @@ export function LibraryFileSlot({ clientId, platform, channel, tag, loaded, file
     if (!clientId) return;
     setLoading(true);
     getCatalog(clientId).then(rows => {
-      if (!cancelled) setFiles(rows.filter(f => f.platform === platform && f.channel === channel && !isMisfiledShopeeFile(f)));
+      if (!cancelled) setFiles(rows.filter(f => f.platform === platform && channels.includes(f.channel) && !isMisfiledShopeeFile(f)));
     }).catch(e => { if (!cancelled) setError(e.response?.data?.error || 'Daftar file belum bisa dimuat. Coba muat ulang.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [clientId, platform, channel, revision]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, platform, channelKey, revision]);
   const shown = files.filter(f => !month || f.period_month?.slice(0, 7) === month);
   const months = [...new Set(files.map(f => f.period_month?.slice(0, 7)).filter(Boolean))].sort().reverse();
   async function apply() {

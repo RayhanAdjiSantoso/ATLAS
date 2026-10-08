@@ -31,7 +31,7 @@ function unwrap(err: unknown): never {
 export async function getClients(): Promise<Client[]> {
   try {
     const res = await api.get('/brands');
-    return res.data.brands.map((b: { brand_id: number; brand_name: string; status: string | null }) => ({ id: b.brand_id, name: b.brand_name, status: b.status }));
+    return res.data.brands.map((b: { brand_id: number; brand_name: string; status: string | null; industry: string | null }) => ({ id: b.brand_id, name: b.brand_name, status: b.status, industry: b.industry }));
   } catch (err) {
     unwrap(err);
   }

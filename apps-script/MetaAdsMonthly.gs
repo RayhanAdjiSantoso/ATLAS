@@ -22,12 +22,23 @@
  * Dari situ ATLAS juga mengisi Profile visits (Results campaign profile
  * visit) dan Cost per Profile Visit = Amount Spent / Profile visits.
  *
- * Breakdown: campaign name x age x gender x day (level=campaign,
- * time_increment=1). Script ini SENGAJA "bodoh": meminta field tetap dan
- * meneruskan tiap baris apa adanya. Definisi metrik (default + opsional
- * per brand) dan perhitungan turunannya (cost per X, rasio) ada di ATLAS:
- * backend/src/config/metaAdsMetrics.js, jadi mengubah metrik tidak perlu
- * deploy ulang script ini.
+ * Breakdown: campaign x ad set x ad x age x gender x day (level=ad,
+ * time_increment=1); objective ikut di tiap baris. Script ini SENGAJA
+ * "bodoh": meminta field tetap dan meneruskan tiap baris apa adanya.
+ * Definisi metrik per jenis campaign (Boost Post, Non Boost Post
+ * E-commerce / B2B, CPAS) dan perhitungan turunannya (cost per X, rasio)
+ * ada di ATLAS: backend/src/config/metaAdsMetrics.js, jadi mengubah metrik
+ * tidak perlu deploy ulang script ini. Pemisahan Boost / Non Boost juga di
+ * ATLAS, dari Kata Kunci Boost Post akun.
+ *
+ * Akun CPAS juga meminta field "with shared items" (catalog_segment_*):
+ * purchases, content views, adds to cart dan conversion value untuk produk
+ * katalog yang dibagikan. Kalau Meta menolak field itu, tarikan tetap jalan
+ * tanpanya (kolom shared items kosong, dicatat di riwayat).
+ *
+ * Level ad jauh lebih banyak barisnya daripada level campaign, jadi satu
+ * rentang dipecah per MAM_ITEM_DAYS hari di antrean (satu item = satu run
+ * di ATLAS) agar satu eksekusi tidak melewati batas 6 menit.
  *
  * Alur satu akun (dikirim ke ATLAS bertahap, bukan sekali besar, karena
  * satu bulan dengan breakdown sedetail ini bisa puluhan ribu baris):
@@ -66,12 +77,13 @@ var MAM_WORKER_KEY = 'META_ADS_MONTHLY_WORKER_TS';
 var MAM_WORKER_STALE_MS = 7 * 60 * 1000;   // worker dianggap mati kalau lebih lama dari ini
 var MAM_START_BUDGET_MS = 3 * 60 * 1000;   // tidak memulai akun baru lewat batas ini
 var MAM_ROWS_PER_POST = 500;
-var MAM_WINDOW_DAYS = 7;                   // menarik per 7 hari agar Meta tidak menolak "terlalu banyak data"
+var MAM_WINDOW_DAYS = 3;                   // menarik per 3 hari (level ad) agar Meta tidak menolak "terlalu banyak data"
+var MAM_ITEM_DAYS = 7;                     // satu item antrean / satu run ATLAS paling banyak 7 hari
 var MAM_DAILY_LOOKBACK_DAYS = 7;           // tarikan harian: 7 hari terakhir s/d kemarin
 var MAM_DAY_MS = 24 * 60 * 60 * 1000;
 
 var MAM_FIELDS = [
-  'campaign_id', 'campaign_name', 'objective',
+  'campaign_id', 'campaign_name', 'adset_id', 'adset_name', 'ad_id', 'ad_name', 'objective',
   'spend', 'impressions', 'reach', 'frequency',
   'inline_link_clicks', 'inline_link_click_ctr', 'cost_per_inline_link_click', 'cpm',
   'actions', 'action_values', 'purchase_roas'
@@ -79,6 +91,8 @@ var MAM_FIELDS = [
 // Diminta terpisah supaya kalau versi API menolak field ini, tarikan tetap
 // jalan tanpa Results / Cost per result (lihat fetchMetaAdsRange_).
 var MAM_RESULT_FIELDS = ['results', 'cost_per_result'];
+// Hanya untuk akun CPAS (ATLAS memberi tahu lewat /start: catalogSegments).
+var MAM_CATALOG_FIELDS = ['catalog_segment_actions', 'catalog_segment_value', 'catalog_segment_value_omni_purchase_roas'];
 
 // ============================================================
 // ENTRY POINTS
@@ -121,7 +135,7 @@ function enqueueAllLinkedAccounts_(range) {
   var items = [];
   getAllAccounts_().forEach(function (acct) {
     if (!acct.atlasBrandId) return;
-    items.push(metaAdsQueueItem_(acct, range, 'scheduled'));
+    items = items.concat(metaAdsQueueItems_(acct, range, 'scheduled'));
   });
   if (!items.length) {
     Logger.log('Tidak ada akun yang tertaut ke brand ATLAS -- tidak ada yang ditarik.');
@@ -185,7 +199,7 @@ function uiEnqueueMetaAds_(payload) {
   getAllAccounts_().forEach(function (acct) {
     if (Number(acct.atlasBrandId) !== atlasBrandId) return;
     if ((acct.type || 'MAIN').toUpperCase() !== type) return;
-    items.push(metaAdsQueueItem_(acct, range, 'manual'));
+    items = items.concat(metaAdsQueueItems_(acct, range, 'manual'));
   });
   if (!items.length) {
     throw new Error('Tidak ada akun ' + type + ' yang tertaut ke brand ATLAS ini di Brand & Langganan.');
@@ -199,6 +213,23 @@ function uiEnqueueMetaAds_(payload) {
 // ============================================================
 // ANTREAN
 // ============================================================
+
+/**
+ * Satu rentang -> item antrean per MAM_ITEM_DAYS hari. Tiap item jadi satu
+ * run di ATLAS yang hanya membersihkan hari-harinya sendiri, jadi memecah
+ * rentang tidak mengubah hasil akhirnya.
+ */
+function metaAdsQueueItems_(acct, range, trigger) {
+  var items = [];
+  var from = metaAdsParseDate_(range.since);
+  var last = metaAdsParseDate_(range.until);
+  while (from <= last) {
+    var to = Math.min(from + (MAM_ITEM_DAYS - 1) * MAM_DAY_MS, last);
+    items.push(metaAdsQueueItem_(acct, { since: metaAdsFormatDate_(from), until: metaAdsFormatDate_(to) }, trigger));
+    from = to + MAM_DAY_MS;
+  }
+  return items;
+}
 
 /** range = { since: 'YYYY-MM-DD', until: 'YYYY-MM-DD' }, keduanya di bulan yang sama. */
 function metaAdsQueueItem_(acct, range, trigger) {
@@ -325,7 +356,7 @@ function runMetaAdsFetchItem_(item) {
       buffer = [];
     };
 
-    var fetched = fetchMetaAdsRange_(tokenFor_(acct), acct.id, range, started.actionTypes || [], function (rows) {
+    var fetched = fetchMetaAdsRange_(tokenFor_(acct), acct.id, range, started.actionTypes || [], Boolean(started.catalogSegments), function (rows) {
       buffer = buffer.concat(rows);
       while (buffer.length >= MAM_ROWS_PER_POST) {
         var chunk = buffer.slice(0, MAM_ROWS_PER_POST);
@@ -336,9 +367,12 @@ function runMetaAdsFetchItem_(item) {
     });
     flush();
 
+    var notes = [];
+    if (fetched.withoutResults) notes.push('results/cost_per_result ditolak Meta; Profile visits tidak terisi');
+    if (fetched.withoutCatalog) notes.push('field shared items (catalog_segment_*) ditolak Meta; metrik CPAS shared items tidak terisi');
     atlasIngestPost_('/finish', {
       runId: runId, status: 'success', rowCount: total,
-      note: fetched.withoutResults ? 'results/cost_per_result ditolak Meta; Results dan Profile visits tidak terisi' : null
+      note: notes.length ? notes.join(' · ') : null
     });
 
     // Langkah terpisah dari /finish: menyimpan bulan ini ke perpustakaan
@@ -379,48 +413,56 @@ function writeMetaAdsLog_(startedAt, status, detail) {
  * Tarik satu rentang (di dalam satu bulan), per jendela MAM_WINDOW_DAYS
  * hari. `onRows(rows)` dipanggil per halaman hasil dengan baris yang sudah
  * dipetakan (mapMetaInsightRow_), supaya memori tidak menampung sebulan
- * penuh. Kalau Meta menolak field results/cost_per_result, tarikan diulang
- * tanpa field itu (Results & Profile visits kosong) daripada gagal total; hasilnya
- * { withoutResults: true }.
+ * penuh. Kalau Meta menolak field results/cost_per_result atau field shared
+ * items (catalog_segment_*), tarikan diulang tanpa field itu daripada gagal
+ * total; hasilnya { withoutResults, withoutCatalog }.
  */
-function fetchMetaAdsRange_(token, accountId, range, actionTypes, onRows) {
+function fetchMetaAdsRange_(token, accountId, range, actionTypes, catalogSegments, onRows) {
   var wanted = {};
   actionTypes.forEach(function (t) { wanted[t] = true; });
-  var fields = MAM_FIELDS.concat(MAM_RESULT_FIELDS);
-  var withoutResults = false;
+  var withResults = true;
+  var withCatalog = catalogSegments;
+  var fieldsNow = function () {
+    return MAM_FIELDS.concat(withResults ? MAM_RESULT_FIELDS : []).concat(withCatalog ? MAM_CATALOG_FIELDS : []);
+  };
 
-  var from = metaAdsParseDate_(range.since);
+  var first = metaAdsParseDate_(range.since);
+  var from = first;
   var last = metaAdsParseDate_(range.until);
   while (from <= last) {
     var to = Math.min(from + (MAM_WINDOW_DAYS - 1) * MAM_DAY_MS, last);
     var since = metaAdsFormatDate_(from);
     var until = metaAdsFormatDate_(to);
-    try {
-      fetchMetaAdsWindow_(token, accountId, fields, since, until, wanted, onRows);
-    } catch (e) {
-      // Ditolak di halaman PERTAMA jendela pertama (belum ada baris terkirim)
-      // karena field-nya tidak dikenal: ulangi tanpa results/cost_per_result.
-      if (withoutResults || from !== metaAdsParseDate_(range.since) || !/results|cost_per_result/.test(e.message)) throw e;
-      withoutResults = true;
-      fields = MAM_FIELDS;
-      fetchMetaAdsWindow_(token, accountId, fields, since, until, wanted, onRows);
+    // Ditolak di halaman PERTAMA jendela pertama (belum ada baris terkirim)
+    // karena field-nya tidak dikenal: ulangi tanpa field itu. Paling banyak
+    // dua kali (results, lalu shared items).
+    for (var attempt = 0; ; attempt++) {
+      try {
+        fetchMetaAdsWindow_(token, accountId, fieldsNow(), since, until, wanted, onRows);
+        break;
+      } catch (e) {
+        if (from !== first || attempt >= 2) throw e;
+        if (withCatalog && /catalog_segment/.test(e.message)) { withCatalog = false; continue; }
+        if (withResults && /results|cost_per_result/.test(e.message)) { withResults = false; continue; }
+        throw e;
+      }
     }
     from = to + MAM_DAY_MS;
   }
-  return { withoutResults: withoutResults };
+  return { withoutResults: !withResults, withoutCatalog: catalogSegments && !withCatalog };
 }
 
 function fetchMetaAdsWindow_(token, accountId, fields, since, until, wanted, onRows) {
   var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' + accountId + '/insights' +
     '?fields=' + encodeURIComponent(fields.join(',')) +
-    '&level=campaign' +
+    '&level=ad' +
     '&breakdowns=' + encodeURIComponent('age,gender') +
     '&time_increment=1' +
     '&time_range=' + encodeURIComponent(JSON.stringify({ since: since, until: until })) +
     '&limit=500&access_token=' + encodeURIComponent(token);
 
   var guard = 0;
-  while (url && guard < 200) {
+  while (url && guard < 400) {
     guard++;
     var body = fetchJson_(url);
     var rows = [];
@@ -438,6 +480,10 @@ function mapMetaInsightRow_(d, wantedActionTypes) {
     date: d.date_start,
     campaignId: d.campaign_id,
     campaignName: d.campaign_name,
+    adsetId: d.adset_id,
+    adsetName: d.adset_name,
+    adId: d.ad_id,
+    adName: d.ad_name,
     objective: d.objective || null,
     age: d.age,
     gender: d.gender,
@@ -453,7 +499,11 @@ function mapMetaInsightRow_(d, wantedActionTypes) {
     results: firstResult_(d.results),
     costPerResult: firstResult_(d.cost_per_result),
     actions: pickActionList_(d.actions, wantedActionTypes),
-    actionValues: pickActionList_(d.action_values, wantedActionTypes)
+    actionValues: pickActionList_(d.action_values, wantedActionTypes),
+    // CPAS "with shared items"; kosong untuk akun MAIN (field tidak diminta).
+    catalogActions: pickActionList_(d.catalog_segment_actions, wantedActionTypes),
+    catalogValues: pickActionList_(d.catalog_segment_value, wantedActionTypes),
+    catalogRoas: firstActionValue_(d.catalog_segment_value_omni_purchase_roas)
   };
 }
 
@@ -637,5 +687,5 @@ function testMetaAdsDaily() {
   var atlasBrandId = 0; // <- isi id brand ATLAS
   var acct = getAllAccounts_().filter(function (a) { return Number(a.atlasBrandId) === atlasBrandId; })[0];
   if (!acct) throw new Error('Tidak ada akun tertaut ke atlasBrandId ' + atlasBrandId);
-  runMetaAdsFetchItem_(metaAdsQueueItem_(acct, metaAdsDailyRange_(), 'manual'));
+  metaAdsQueueItems_(acct, metaAdsDailyRange_(), 'manual').forEach(runMetaAdsFetchItem_);
 }

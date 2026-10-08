@@ -12,11 +12,6 @@ const isoDate = (source, field, optional = false) => {
 
 export const brandQueryValidation = [brandId(query)];
 
-export const saveConfigValidation = [
-  brandId(body), accountType(body),
-  body('extraMetrics').isArray().withMessage('extraMetrics harus array'),
-];
-
 export const fetchNowValidation = [brandId(body), accountType(body), month(body)];
 
 export const syncLibraryValidation = [brandId(body), accountType(body), month(body)];
