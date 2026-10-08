@@ -35,19 +35,23 @@ export const BREAKDOWNS = ['Campaign name', 'Ad set name', 'Ad name', 'Age', 'Ge
 
 // Named action-type groups. The first type present on a row wins (never a
 // sum — pixel and omni_* report the same event, adding them double counts).
-// Pixel types come first to match apps-script/Weekly.gs's EVENT_MAP, which
-// is what the rest of the Meta Ads Automation module already treats as
-// canonical. `lead` is Meta's own all-sources total (pixel + instant form),
-// the number Ads Manager's Leads column shows.
+// omni_* comes first: it is every surface (website, app, marketplace) and is
+// what Ads Manager's Content views / Adds to cart / Purchases columns show;
+// the pixel type alone is the website share only, and read first it came
+// out well below Ads Manager (checked on CPAS Shopee, Oct 2026). `lead` is
+// Meta's own all-sources total (pixel + instant form), the number Ads
+// Manager's Leads column shows.
 const ACTION_TYPES = {
-  content_views: ['offsite_conversion.fb_pixel_view_content', 'omni_view_content'],
-  add_to_cart: ['offsite_conversion.fb_pixel_add_to_cart', 'omni_add_to_cart'],
-  purchase: ['offsite_conversion.fb_pixel_purchase', 'omni_purchase', 'purchase'],
+  content_views: ['omni_view_content', 'offsite_conversion.fb_pixel_view_content'],
+  add_to_cart: ['omni_add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'],
+  purchase: ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'],
   leads: ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'],
   // Ads Manager's "Messaging contacts" and "Messaging conversations started".
   messaging_contacts: ['onsite_conversion.total_messaging_connection'],
   messaging_conversations: ['onsite_conversion.messaging_conversation_started_7d'],
-  post_reactions: ['post_reaction'],
+  // The four columns Post interactions adds up, as Ads Manager names them:
+  // Facebook likes (`like`), Post comments, Post saves, Post shares.
+  post_likes: ['like'],
   post_comments: ['comment'],
   post_saves: ['onsite_conversion.post_save'],
   post_shares: ['post'],
@@ -57,20 +61,9 @@ const ACTION_TYPES = {
 // Script when a run starts, and Apps Script drops everything else.
 export const REQUIRED_ACTION_TYPES = [...new Set(Object.values(ACTION_TYPES).flat())];
 
-// CPAS "with shared items" (catalog_segment_*) reads omni_* first: that is
-// every surface — website and the marketplace app — and is what Ads
-// Manager's "… with shared items" columns show. The pixel type alone is the
-// website share only (for a Shopee catalogue far below Ads Manager's
-// content views and adds to cart).
-const SHARED_ACTION_TYPES = {
-  content_views: ['omni_view_content', 'offsite_conversion.fb_pixel_view_content'],
-  add_to_cart: ['omni_add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'],
-  purchase: ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'],
-};
-
-const pickAction = (map, group, types = ACTION_TYPES) => {
+const pickAction = (map, group) => {
   if (!map) return null;
-  for (const type of types[group]) {
+  for (const type of ACTION_TYPES[group]) {
     if (map[type] != null && Number.isFinite(Number(map[type]))) return Number(map[type]);
   }
   return null;
@@ -84,8 +77,9 @@ const sumPresent = (vals) => (vals.some((v) => v != null) ? vals.reduce((t, v) =
 // ctx = { raw, spend }.
 const count = (ctx, group) => pickAction(ctx.raw.actions, group);
 const value = (ctx, group) => pickAction(ctx.raw.actionValues, group);
-const sharedCount = (ctx, group) => pickAction(ctx.raw.catalogActions, group, SHARED_ACTION_TYPES);
-const sharedValue = (ctx, group) => pickAction(ctx.raw.catalogValues, group, SHARED_ACTION_TYPES);
+// CPAS "with shared items" (catalog_segment_*), same groups and order.
+const sharedCount = (ctx, group) => pickAction(ctx.raw.catalogActions, group);
+const sharedValue = (ctx, group) => pickAction(ctx.raw.catalogValues, group);
 
 // "Instagram profile visits" is not an action type the Marketing API returns
 // (see PROXY_KEYS in Weekly.gs), but a profile-visit campaign's main result
@@ -113,9 +107,10 @@ const profileVisits = (ctx) => {
   return visits == null ? null : Math.round(visits);
 };
 
-// Post likes + comments + saves + shares. "Likes" is post_reaction: the API
-// has no likes-only count for a post (`like` is Page likes).
-const interactions = (ctx) => sumPresent(['post_reactions', 'post_comments', 'post_saves', 'post_shares'].map((g) => count(ctx, g)));
+// Facebook likes + Post comments + Post saves + Post shares — the sum of
+// Ads Manager's own four columns. (post_reaction, used before, also counts
+// every other reaction and came out near double: 50 against 27.)
+const interactions = (ctx) => sumPresent(['post_likes', 'post_comments', 'post_saves', 'post_shares'].map((g) => count(ctx, g)));
 
 // unit: 'idr' | 'count' | 'pct' | 'ratio' — drives display and the export
 // cell type. `header` is the column name in the written file — Ads
