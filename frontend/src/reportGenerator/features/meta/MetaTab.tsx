@@ -57,7 +57,8 @@ import {
 import { MetaCompareBars } from './MetaCompareBars';
 import { MetaLaneSwitch } from './MetaLaneSwitch';
 import { SymptomTreePanel } from '../shopee/AnalysisSections';
-import type { MetaFunnel } from '../../lib/metaFunnel';
+import { LEAD_RESULT, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
+import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
@@ -68,7 +69,7 @@ import { getClients, getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
-import { buildMetaReport, isBoostRow, type MetaReport, type NonBoostLaneKey } from './metaReport';
+import { buildMetaReport, isBoostRow, type MetaReport, type NonBoostLane, type NonBoostLaneKey } from './metaReport';
 
 // Meta's export uses either a "Month" breakdown or a "Day" breakdown column
 // as the period dimension — either satisfies the requirement.
@@ -185,6 +186,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const industry: MetaIndustry = brandIndustry ? BRAND_INDUSTRY_TO_META[brandIndustry] ?? null : null;
   // Which Non-Boost lane (Retail / B2B Leads) the Non-Boost page reads.
   const [nbLane, setNbLane] = useState<NonBoostLaneKey>('retail');
+  // The B2B lane's result, picked on the report (null = the automatic pick).
+  const [b2bResult, setB2bResult] = useState<LeadResultKind | null>(null);
   // Legacy — the "Custom Conversion" column picker is gone; kept so old saved
   // report configs still round-trip.
   const [customResultsCol, setCustomResultsCol] = useState<string | null>(null);
@@ -572,6 +575,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     if (!metaRows) return;
     const r = buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
     setNbLane(r.nonBoostLanes?.[0]?.key ?? 'retail');
+    setB2bResult(null);
     setReport(r);
     setGeneratedAt(formatGeneratedDate());
     onGenerated({ period: { old: r.p1, cur: r.p2 }, kpis: r.summary.kpis, cpasKpis: r.summary.cpasKpis, spend: r.summary.spend });
@@ -632,6 +636,13 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // The Audience & Creative Analysis of one channel, as the architecture
   // sheet lays them out. Selling channels (CPAS, Non-Boost Retail) read the
   // purchase funnel; B2B Leads the lead funnel; Boost Post brand actions.
+  // The B2B lane's result: the user's pick when the lane has it, else the
+  // automatic one. Null for a lane that is not B2B.
+  function laneLeadKind(lane: NonBoostLane): LeadResultKind | null {
+    if (!lane.leadResults) return null;
+    return b2bResult && lane.leadResults.kinds.includes(b2bResult) ? b2bResult : lane.leadResults.auto;
+  }
+
   function analysisSections({
     prefix,
     period,
@@ -640,6 +651,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     campCol,
     ageCol,
     genderCol,
+    leadKind,
   }: {
     prefix: string;
     period: string;
@@ -648,6 +660,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     campCol: string | null;
     ageCol: string | null;
     genderCol: string | null;
+    leadKind?: LeadResultKind;
   }) {
     const adCol = rows.length ? findAdCol(rows) : null;
     const badge = `data ${period}`;
@@ -687,7 +700,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             heading={`${prefix} · Age Breakdown`}
             badge={`NV · RM · ${period}`}
             rows={rows}
-            kind={kind}
+            kind={kind} leadKind={leadKind}
             menu={sales ? SALES_AGE_METRICS : B2B_AGE_METRICS}
             dimCol={ageCol}
             campCol={campCol}
@@ -702,13 +715,13 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               badge={`NV · RM · ${period}`}
               rows={rows}
               dimCol={genderCol}
-              kind={kind}
+              kind={kind} leadKind={leadKind}
               metrics={(sales ? SALES_AUDIENCE_METRICS : B2B_GENDER_METRICS) as typeof SALES_AUDIENCE_METRICS}
               prefer="pies"
               campCol={campCol}
             />
           ) : (
-            <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
+            <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} leadKind={leadKind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
           )}
           {funnels.map((f) => (
             <MetaCompareBars
@@ -716,7 +729,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               heading={`${prefix} · ${f.title}`}
               badge={`per campaign · NV · RM · ${period}`}
               rows={rows}
-              kind={kind}
+              kind={kind} leadKind={leadKind}
               menu={f.menu}
               dimCol={campCol}
               campCol={campCol}
@@ -733,7 +746,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             heading={`${prefix} · Creative Traffic`}
             badge={`per materi iklan · ${period}`}
             rows={rows}
-            kind={kind}
+            kind={kind} leadKind={leadKind}
             menu={sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS}
             dimCol={adCol}
             campCol={campCol}
@@ -747,7 +760,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             heading={`${prefix} · Creative Conversion`}
             badge={`per materi iklan · ${period}`}
             rows={rows}
-            kind={kind}
+            kind={kind} leadKind={leadKind}
             menu={sales ? SALES_CREATIVE_CONVERSION_METRICS : B2B_CREATIVE_CONVERSION_METRICS}
             dimCol={adCol}
             campCol={campCol}
@@ -1125,19 +1138,35 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                         )}
                         {report.nonBoostLanes?.length ? (
                           <SectionGroup label="Non-Boost Post">
-                            {report.nonBoostLanes.map((lane) => (
-                              <OverviewDetailedCard
-                                key={lane.key}
-                                heading={`Non-Boost Post · ${lane.label}`}
-                                badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
-                                overviewRows={lane.overview.overviewRows}
-                                detailedRows={lane.overview.detailedRows}
-                                allCols={lane.overview.allCols}
-                                p1={report.p1}
-                                p2={report.p2}
-                                aside={rca(lane.funnel, report.p1, report.p2, lane.key === 'b2b' ? 'Root Cause Analysis · Leads' : 'Root Cause Analysis')}
-                              />
-                            ))}
+                            {report.nonBoostLanes.map((lane) => {
+                              const kind = laneLeadKind(lane);
+                              const variant = kind ? lane.leadResults?.byKind[kind] : undefined;
+                              return (
+                                  <OverviewDetailedCard
+                                    key={`${lane.key}-${kind ?? 'auto'}`}
+                                    toolbar={lane.leadResults && lane.leadResults.kinds.length > 0 ? (
+                                      <SegmentedToggle
+                                        label="Hasil B2B"
+                                        options={lane.leadResults.kinds.map((k) => ({ value: k, label: LEAD_RESULT[k].label }))}
+                                        value={kind ?? lane.leadResults.auto}
+                                        onChange={setB2bResult}
+                                        accent="var(--acc)"
+                                      />
+                                    ) : undefined}
+                                    heading={`Non-Boost Post · ${lane.label}`}
+                                    badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
+                                    overviewRows={variant?.overviewRows ?? lane.overview.overviewRows}
+                                    detailedRows={lane.overview.detailedRows}
+                                    allCols={lane.overview.allCols}
+                                    p1={report.p1}
+                                    p2={report.p2}
+                                    aside={rca(
+                                      variant?.funnel ?? lane.funnel, report.p1, report.p2,
+                                      lane.key === 'b2b' ? `Root Cause Analysis · ${LEAD_RESULT[kind ?? 'leads'].label}` : 'Root Cause Analysis',
+                                    )}
+                                  />
+                              );
+                            })}
                           </SectionGroup>
                         ) : null}
                         {cpas && (cpas.overall || cpas.nv || cpas.rm) && (
@@ -1223,6 +1252,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           period: report.p2,
                           rows: lane.curRows,
                           kind: lane.key === 'retail' ? 'sales' : 'b2b',
+                          leadKind: laneLeadKind(lane) ?? undefined,
                           campCol: lane.campCol,
                           ageCol: lane.ageCol,
                           genderCol: lane.genderCol,

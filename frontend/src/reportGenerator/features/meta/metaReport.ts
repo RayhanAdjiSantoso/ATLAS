@@ -27,7 +27,7 @@ import {
   type MetaObjectiveSource,
 } from '../../lib/meta';
 import { findCol, matchDef } from '../../lib/columns';
-import { buildMetaBrandFunnel, buildMetaLeadFunnel, buildMetaSalesFunnel, metaLeadMetrics, type MetaFunnel } from '../../lib/metaFunnel';
+import { buildMetaBrandFunnel, buildMetaLeadFunnel, buildMetaSalesFunnel, leadResultKind, leadResultKinds, metaLeadMetrics, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
 import { toISODate } from '../../lib/dateFmt';
 import { buildParsedPeriod, comparePeriodDays, daysBetweenInclusive, type ParsedPeriod } from '../../lib/periodLabel';
 import { toSummaryKpi, type SpendEntry, type SummaryKpi } from '../../lib/summary';
@@ -95,6 +95,15 @@ export interface NonBoostLane {
   campCol: string | null;
   ageCol: string | null;
   genderCol: string | null;
+  // B2B only: the results this lane has a count for (leads / messaging
+  // conversations started / messaging contacts), the one picked
+  // automatically, and the table + root cause for each — the report lets the
+  // user switch between them without generating again.
+  leadResults?: {
+    kinds: LeadResultKind[];
+    auto: LeadResultKind;
+    byKind: Partial<Record<LeadResultKind, { overviewRows: KpiRowDisplay[]; funnel: MetaFunnel }>>;
+  };
 }
 
 export const NON_BOOST_LANE_LABEL: Record<NonBoostLaneKey, string> = { retail: 'Retail', b2b: 'B2B Leads' };
@@ -161,8 +170,13 @@ export interface MetaReport {
   };
 }
 
+// A column with no value in either period belongs to another campaign type
+// (the Boost file's profile visits read on Non-Boost rows, a CPAS-only
+// column…), so it is not offered under "+ Tambah metrik" here.
 function toDisplayRows(rows: MetaKpiRow[]): DetailedRow[] {
-  return rows.map((r) => ({ col: r.col, label: displayName(r.col), old: r.old, cur: r.val, delta: r.delta, cls: r.cls }));
+  return rows
+    .filter((r) => r.old !== '—' || r.val !== '—')
+    .map((r) => ({ col: r.col, label: displayName(r.col), old: r.old, cur: r.val, delta: r.delta, cls: r.cls }));
 }
 
 // Default Overview rows (lib/metaOverview) as Summary Overview entries.
@@ -448,9 +462,9 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     // "Amount Spent · Sales / · Leads / …" — the split the user actually asked
     // for, right under the blended total so every figure is labelled.
     const spendSplitRows = nbGroups.groups
-      .map((g) => buildLabeledAggRow(`Amount Spent · ${g.label}`, mSpentCol ?? null, g.old, g.cur))
+      .map((g) => buildLabeledAggRow(`${mSpentCol ? displayName(mSpentCol) : 'Amount spent'} · ${g.label}`, mSpentCol ?? null, g.old, g.cur))
       .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    const spentRowIdx = blendedOvRows.findIndex((r) => r.label === 'Amount Spent');
+    const spentRowIdx = (blendedOvRows as MetaOverviewRow[]).findIndex((r) => r.key === 'spend');
     if (spentRowIdx >= 0) blendedOvRows.splice(spentRowIdx + 1, 0, ...spendSplitRows);
     else blendedOvRows.unshift(...spendSplitRows);
     report.nonBoost = { overviewRows: blendedOvRows, detailedRows: toDisplayRows(buildKPI(mNonOld, mNonCur, mAllCols)), allCols: mAllCols };
@@ -462,7 +476,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       // Each objective opens with its own default set; the Amount Spent row
       // says which objective it is.
       const segOvRows = buildMetaOverviewRows(nonBoostKind(g.key, industry), g.old, g.cur, !reachWarning).map((r) =>
-        r.label === 'Amount Spent' ? { ...r, label: `Amount Spent (${g.label})` } : r,
+        r.key === 'spend' ? { ...r, label: `${r.label} (${g.label})` } : r,
       );
       metaKpis.push(...overviewSummary(segOvRows, `Non-Boost · ${g.label}`));
       return {
@@ -480,7 +494,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const objKey = soleKey ?? objective ?? null;
     const objLabel = objKey ? META_OBJECTIVE_DEFS[objKey].label : null;
     const mainOvRows = buildMetaOverviewRows(nonBoostKind(objKey, industry), mNonOld, mNonCur, !reachWarning).map((r) =>
-      objLabel && r.label === 'Amount Spent' ? { ...r, label: `Amount Spent (${objLabel})` } : r,
+      objLabel && r.key === 'spend' ? { ...r, label: `${r.label} (${objLabel})` } : r,
     );
     let mainDetailedRows = toDisplayRows(buildKPI(mNonOld, mNonCur, mAllCols));
     if (objKey) mainDetailedRows = deblend(mainDetailedRows);
@@ -518,6 +532,17 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       }
       const objectives = [...new Set(camps.map(([, v]) => (v.objective ? META_OBJECTIVE_DEFS[v.objective].label : null)).filter((x): x is string => Boolean(x)))];
       const ovRows = buildMetaOverviewRows(key === 'retail' ? 'ecommerce' : 'b2b', oldRows, curRows, !reachWarning);
+      const leadKinds = key === 'b2b' ? leadResultKinds(oldRows, curRows) : [];
+      const leadResults = key === 'b2b'
+        ? {
+          kinds: leadKinds,
+          auto: leadResultKind(oldRows, curRows),
+          byKind: Object.fromEntries(leadKinds.map((k) => [k, {
+            overviewRows: buildMetaOverviewRows('b2b', oldRows, curRows, !reachWarning, k),
+            funnel: buildMetaLeadFunnel(oldRows, curRows, k),
+          }])),
+        }
+        : undefined;
       lanes.push({
         key,
         label: NON_BOOST_LANE_LABEL[key],
@@ -530,6 +555,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
         campCol: mCampCol,
         ageCol: mAgeCol,
         genderCol: mGenderCol,
+        leadResults,
       });
     }
     if (lanes.length) report.nonBoostLanes = lanes;
