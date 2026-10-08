@@ -27,7 +27,7 @@ import {
   type MetaObjectiveSource,
 } from '../../lib/meta';
 import { findCol, matchDef } from '../../lib/columns';
-import { buildMetaBrandFunnel, buildMetaLeadFunnel, buildMetaSalesFunnel, leadResultKind, leadResultKinds, metaLeadMetrics, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
+import { buildMetaBrandFunnel, buildMetaLeadFunnel, buildMetaSalesFunnel, leadResultKind, leadResultKinds, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
 import { toISODate } from '../../lib/dateFmt';
 import { buildParsedPeriod, comparePeriodDays, daysBetweenInclusive, type ParsedPeriod } from '../../lib/periodLabel';
 import { toSummaryKpi, type SpendEntry, type SummaryKpi } from '../../lib/summary';
@@ -211,18 +211,25 @@ export function isBoostRow(campCol: string | null) {
 }
 
 // Which Non-Boost lane a campaign belongs to:
-//   1. its name says so ("… | B2B", "… Retail", "… Lead …") — MIL's own label wins;
-//   2. its objective: Sales → Retail; Leads → B2B Leads; Engagement that
-//      actually produced chats or leads (Send Message) → B2B Leads;
+//   1. its name says so ("… | B2B", "… Retail", "… Lead …", or a chat
+//      campaign — "Send Message", "WhatsApp", "WA", "Chat") — MIL's own
+//      label wins. A Send Message campaign optimised for a custom conversion
+//      reports no leads or messaging figures at all, so without the name
+//      rule it fell through to the Industry and landed in Retail;
+//   2. its objective: Sales → Retail; Leads and Engagement → B2B Leads
+//      (Engagement whether or not it produced leads or chats in the period
+//      — MIL runs it for B2B; a Send Message campaign optimised for a
+//      custom conversion reports neither);
 //   3. anything else (Traffic, Awareness, a post-engagement push) follows the
 //      Industry picked in the form, Retail when none was picked.
-export function laneOfCampaign(name: string, objective: MetaObjectiveKey | null, rows: SheetRow[], industry: MetaIndustry): { lane: NonBoostLaneKey; basis: NonBoostLane['basis'] } {
+export function laneOfCampaign(name: string, objective: MetaObjectiveKey | null, _rows: SheetRow[], industry: MetaIndustry): { lane: NonBoostLaneKey; basis: NonBoostLane['basis'] } {
   const lc = name.toLowerCase();
   if (/\bb2b\b|\blead(s|gen)?\b/.test(lc)) return { lane: 'b2b', basis: 'name' };
+  if (/\bsend message|\bmessag(e|es|ing)\b|\bwhats\s?app\b|\bwa\b|\bchat\b/.test(lc)) return { lane: 'b2b', basis: 'name' };
   if (/\bretail\b|\bb2c\b/.test(lc)) return { lane: 'retail', basis: 'name' };
   if (objective === 'sales') return { lane: 'retail', basis: 'objective' };
   if (objective === 'leads') return { lane: 'b2b', basis: 'objective' };
-  if (objective === 'engagement' && (metaLeadMetrics(rows).leads ?? 0) > 0) return { lane: 'b2b', basis: 'objective' };
+  if (objective === 'engagement') return { lane: 'b2b', basis: 'objective' };
   return { lane: industry === 'b2b' ? 'b2b' : 'retail', basis: 'industry' };
 }
 
