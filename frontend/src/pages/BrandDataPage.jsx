@@ -86,12 +86,17 @@ const PLATFORMS = [
     wash: '#4f7cff',
     tint: 'rgba(79,124,255,.13)',
     datasets: [
-      // One export, split downstream. The Report Generator already classifies
-      // every row as Boost or Non-Boost from its campaign name, so asking for
-      // two uploads made the user separate by hand what the file already
-      // answers — and let two halves of the same month arrive out of step.
-      { channel: 'meta', name: 'Meta Ads', hint: 'Export Ads Manager · Boost & Non-Boost dipisah otomatis dari isi file', kind: 'core' },
+      // Boost Post and Non Boost Post are separate slots, but a manual upload
+      // is still the one Ads Manager export: it posts as `meta` (uploadChannel)
+      // and the server splits its rows into both slots by campaign name
+      // (services/metaUploadSplit.js). The API auto-fetch splits by the
+      // account's Kata Kunci Boost Post instead.
+      { channel: 'boost', uploadChannel: 'meta', name: 'Boost Post', hint: 'Export Ads Manager · campaign Boost dipisah otomatis dari file Meta Ads', kind: 'core' },
+      { channel: 'nonboost', uploadChannel: 'meta', name: 'Non Boost Post', hint: 'Export Ads Manager · campaign E-commerce & B2B selain Boost', kind: 'core' },
       { channel: 'cpas', name: 'CPAS', hint: 'CPAS Shopee/Tokopedia · breakdown umur, gender & bulan', kind: 'core' },
+      // The combined file of before the split. Shown only for brands that
+      // still have one; an upload here is split like any other Meta export.
+      { channel: 'meta', uploadChannel: 'meta', name: 'Meta Ads (gabungan lama)', hint: 'File gabungan sebelum Boost & Non-Boost dipisah · unggahan baru masuk ke dua slot di atas', kind: 'extra', legacy: true },
     ],
   },
   {
@@ -990,6 +995,8 @@ function MonthRail({ axis, windowStart, setWindowStart, focus, setFocus, lookup,
 
 function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, onReimport, busyKey, focusMonth }) {
   const summary = useMemo(() => platformSummary(platform, months, lookup), [platform, months, lookup]);
+  const datasets = useMemo(() => platform.datasets.filter((d) => !d.legacy
+    || [...lookup.keys()].some((k) => k.startsWith(`${platform.id}:${d.channel}:`))), [platform, lookup]);
 
   return (
     <motion.div
@@ -1032,7 +1039,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
           <span className="brand-ds-head-parts">Part <small>opsional</small></span>
           <span>Status</span>
         </div>
-        {platform.datasets.map((dataset, index) => (
+        {datasets.map((dataset, index) => (
           <DatasetRow
             key={dataset.channel} platform={platform} dataset={dataset} months={months} lookup={lookup}
             index={index} reduced={reduced} onPick={onPick} onDelete={onDelete} onReimport={onReimport} busyKey={busyKey}
@@ -1366,16 +1373,24 @@ export default function BrandDataPage() {
       // One field name, several files: a split month is filed in one action.
       for (const item of picked) form.append('file', item);
       form.append('platform', marketId);
-      form.append('channel', target.dataset.channel);
+      form.append('channel', target.dataset.uploadChannel ?? target.dataset.channel);
       if (target.month) form.append('month', target.month.key);
       if (target.replaceFile?.id) form.append('replaceFileId', String(target.replaceFile.id));
       const { data } = await api.post(`/brands/${brand.brand_id}/library`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
       const saved = data.files ?? [data.file];
       const savedIds = new Set(saved.map((f) => f.id));
-      setFiles((current) => [...current.filter((f) => !savedIds.has(f.id)), ...saved]);
+      // A split Meta export also removed the month's earlier Meta files, so
+      // the whole list is reloaded rather than patched.
+      if (data.split) await refreshFiles(brand.brand_id);
+      else setFiles((current) => [...current.filter((f) => !savedIds.has(f.id)), ...saved]);
       setError(null);
-      const where = `${target.dataset.name} · ${target.month ? target.month.full : 'referensi'}`;
+      const where = data.split
+        ? `Meta Ads · ${target.month.full}`
+        : `${target.dataset.name} · ${target.month ? target.month.full : 'referensi'}`;
       const parts = [data.warnings?.length ? data.warnings.join(' ') : `${saved.length} file · ${saved.reduce((t, f) => t + (f.covered_days ?? 0), 0)} hari terdeteksi`];
+      if (data.split) {
+        parts.unshift(`dipisah: ${data.split.boost.toLocaleString('id-ID')} baris Boost Post, ${data.split.nonboost.toLocaleString('id-ID')} baris Non Boost Post`);
+      }
       // The three Dashboard datasets are also parsed into the fact tables
       // Business Overview reads; say so, because "tersimpan" alone left the
       // dashboard's zeros unexplained.

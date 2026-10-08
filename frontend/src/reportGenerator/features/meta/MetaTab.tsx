@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
@@ -63,7 +64,7 @@ import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
 import { PeriodSourcePicker, type LibraryMonth, type PeriodSourceTab } from '../reports/PeriodSourcePicker';
 import { RangeCalendar } from '../reports/RangeCalendar';
 import type { AutoRange } from '../reports/AutoRangePanel';
-import { getSavedPeriod } from '../reports/api';
+import { getClients, getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
@@ -77,13 +78,26 @@ const REQUIRED_COLS = [
   { label: 'Campaign Name', kw: ['campaign'] },
 ];
 
-const INDUSTRY_OPTIONS = [
-  { id: 'b2b', name: 'B2B / Services' },
-  { id: 'retail', name: 'Retail' },
-];
+// Brand Setting's Kategori Industri (and the older spellings it still reads)
+// mapped onto the two lanes this report knows. Food & Beverage sells to end
+// customers, so it reads as Retail.
+const BRAND_INDUSTRY_TO_META: Record<string, Exclude<MetaIndustry, 'custom' | null>> = {
+  'Retail Fashion': 'retail',
+  'Retail-Fashion': 'retail',
+  'Retail Non-Fashion': 'retail',
+  'Retail-Non Fashion': 'retail',
+  'Food & Beverage': 'retail',
+  'Food & Beverages': 'retail',
+  'B2B Services': 'b2b',
+  'B2B + Services': 'b2b',
+};
+const META_INDUSTRY_LABEL: Record<'b2b' | 'retail', string> = { b2b: 'B2B / Services', retail: 'Retail' };
 const OBJECTIVE_OPTIONS = META_OBJECTIVE_CHOICES.map((o) => ({ id: o.key, name: o.label }));
 
-const META_PERIOD_CHANNELS = ['meta', 'cpas'] as const;
+// 'boost' / 'nonboost' are the two halves of a month's Meta Ads export in
+// Data Collection Hub; 'meta' is the combined file of before that split.
+const META_MAIN_CHANNELS = ['boost', 'nonboost', 'meta'] as const;
+const META_PERIOD_CHANNELS = [...META_MAIN_CHANNELS, 'cpas'] as const;
 
 const SOURCE_HINT: Record<PeriodSourceKind, string> = {
   upload: '',
@@ -163,10 +177,12 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const cpasRows = useMemo(() => (cpasSides.old || cpasSides.cur ? alignRowKeys([...(cpasSides.old?.rows ?? []), ...(cpasSides.cur?.rows ?? [])]) : null), [cpasSides]);
   const cpasHeaders = useMemo(() => (cpasRows?.length ? Object.keys(cpasRows[0]) : []), [cpasRows]);
 
-  // B2B / Retail — manual, not in the export. Objective — Meta's ODAX
+  // B2B / Retail — not in the export; read from the brand's Kategori Industri
+  // in Brand Setting and only editable there. Objective — Meta's ODAX
   // objective; auto-prefilled from the file's "Objective" column when present,
   // still overridable.
-  const [industry, setIndustry] = useState<MetaIndustry>(null);
+  const [brandIndustry, setBrandIndustry] = useState<string | null | undefined>(undefined); // undefined = loading
+  const industry: MetaIndustry = brandIndustry ? BRAND_INDUSTRY_TO_META[brandIndustry] ?? null : null;
   // Which Non-Boost lane (Retail / B2B Leads) the Non-Boost page reads.
   const [nbLane, setNbLane] = useState<NonBoostLaneKey>('retail');
   // Legacy — the "Custom Conversion" column picker is gone; kept so old saved
@@ -291,7 +307,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     try {
       const { data } = await api.get(`/brands/${clientId}/library`);
       const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'meta' && f.period_month?.slice(0, 7) === month.month);
-      const metaList = files.filter((f) => f.channel === 'meta');
+      const metaList = files.filter((f) => (META_MAIN_CHANNELS as readonly string[]).includes(f.channel));
       const cpasList = files.filter((f) => f.channel === 'cpas');
 
       async function downloadAndParse(list: LibraryFileMeta[]): Promise<SheetRow[]> {
@@ -440,7 +456,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       <LibraryFileSlot
         clientId={clientId}
         platform="meta"
-        channel={target}
+        channel={target === 'meta' ? META_MAIN_CHANNELS : target}
         tag={tag}
         accept=".csv,.xlsx,.xls"
         onFiles={(files) => handleUpload(files, target, role)}
@@ -489,11 +505,25 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     }
   }
 
-  function pickIndustry(ind: MetaIndustry) {
-    setIndustry(ind);
-    setReport(null);
-    onInvalidate();
-  }
+  // Re-read on every visit to the tab, so a change saved in Brand Setting
+  // shows up without reloading the page.
+  useEffect(() => {
+    if (!clientId || !isActive) return;
+    let alive = true;
+    getClients()
+      .then((list) => {
+        if (!alive) return;
+        const next = list.find((c) => c.id === clientId)?.industry ?? null;
+        if (brandIndustry !== undefined && brandIndustry !== next) {
+          setReport(null);
+          onInvalidate();
+        }
+        setBrandIndustry(next);
+      })
+      .catch(() => alive && brandIndustry === undefined && setBrandIndustry(null));
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, isActive]);
   function pickObjective(obj: MetaObjectiveKey | null) {
     setObjective(obj);
     setReport(null);
@@ -557,7 +587,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setCurPickedMonth(null);
     setOldPickedRange(null);
     setCurPickedRange(null);
-    setIndustry(null);
     setCustomResultsCol(null);
     setObjective(null);
     setNbLane('retail');
@@ -994,14 +1023,14 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           <div className="setup-fields">
             <div className="setup-field">
               <span className="setup-field-label">Industri</span>
-              <SearchSelect
-                options={INDUSTRY_OPTIONS}
-                value={industry === 'b2b' || industry === 'retail' ? industry : null}
-                onChange={(id) => pickIndustry(id as MetaIndustry)}
-                placeholder="— pilih —"
-                searchable={false}
-              />
-              <span className="setup-field-hint">Manual — tidak ada di export Meta</span>
+              <div className={`setup-readonly${brandIndustry ? '' : ' is-empty'}`} aria-readonly="true">
+                {brandIndustry === undefined ? 'Memuat…' : brandIndustry || 'Belum diatur'}
+              </div>
+              <span className="setup-field-hint">
+                {brandIndustry && industry ? <>Dibaca sebagai {META_INDUSTRY_LABEL[industry]} · </> : null}
+                {brandIndustry && !industry ? <>Kategori ini tidak dikenali report Meta · </> : null}
+                {clientId ? <Link to={`/pengaturan-brand?detail=${clientId}`}>{brandIndustry ? 'Ubah' : 'Atur'} di Brand Setting</Link> : 'Diatur di Brand Setting'}
+              </span>
             </div>
             <div className="setup-field">
               <span className="setup-field-label">Objective{objectiveCol ? ' · prefill dari file' : ''}</span>

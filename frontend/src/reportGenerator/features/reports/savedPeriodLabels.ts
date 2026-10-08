@@ -11,7 +11,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   product_performance: 'Product Performance',
   meta: 'Meta Ads (gabungan)',
   boost: 'Boost Post',
-  nonboost: 'Non-Boost Post',
+  nonboost: 'Non Boost Post',
   cpas: 'CPAS',
   cpas_overall: 'CPAS',
   tiktok: 'Campaign',

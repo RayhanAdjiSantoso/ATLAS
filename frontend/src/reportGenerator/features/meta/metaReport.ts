@@ -183,8 +183,14 @@ function nonBoostKind(key: MetaObjectiveKey | null, industry: MetaIndustry): Met
 // Exported so the Fase 2 save-to-database row mapping can classify each raw
 // row into the same boost/nonboost channel this report used, without
 // duplicating the classification rule.
+//
+// Files written by ATLAS's Meta API fetch carry a "Campaign type" column
+// (Boost Post / Non Boost Post) decided from the account's Kata Kunci Boost
+// Post; where it is filled it wins over the name rule.
 export function isBoostRow(campCol: string | null) {
   return (r: SheetRow) => {
+    const type = String(r['Campaign type'] ?? '').trim().toLowerCase();
+    if (type) return type.startsWith('boost');
     const v = String((campCol ? r[campCol] : '') || '').toLowerCase();
     return v.includes('profile visit') || v.includes('instagram post') || /\bpv\b/.test(v) || /\bpost\b/.test(v);
   };

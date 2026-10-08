@@ -19,18 +19,6 @@ export const listAccounts = asyncHandler(async (req, res) => {
   res.json({ accounts: await service.listEligibleAccounts(Number(req.query.brandId)) });
 });
 
-// PUT /api/meta-ads-insights/config  { brandId, accountType, extraMetrics }
-export const saveConfig = asyncHandler(async (req, res) => {
-  validate(req);
-  const saved = await service.saveConfig({
-    brandId: Number(req.body.brandId),
-    accountType: req.body.accountType,
-    extraMetrics: req.body.extraMetrics,
-    userId: req.user.userId,
-  });
-  res.json(saved);
-});
-
 // POST /api/meta-ads-insights/fetch  { brandId, accountType, month }
 export const fetchNow = asyncHandler(async (req, res) => {
   validate(req);

@@ -594,6 +594,9 @@
 .mil-ui.report-generator-app .setup-field { display: grid; gap: 7px; min-width: 0; }
 .mil-ui.report-generator-app .setup-field-label { color: var(--rx-ink); font-size: .86rem; font-weight: 700; }
 .mil-ui.report-generator-app .setup-field-hint { color: var(--rx-quiet); font-size: .8rem; }
+.mil-ui.report-generator-app .setup-field-hint a { color: var(--pf-ink); font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
+.mil-ui.report-generator-app .setup-readonly { display: flex; align-items: center; min-height: 46px; padding-inline: 14px; border: 1px solid var(--rx-line); border-radius: 13px; background: var(--rx-soft); color: var(--rx-ink); font-size: .95rem; font-weight: 650; cursor: default; }
+.mil-ui.report-generator-app .setup-readonly.is-empty { color: var(--rx-quiet); font-weight: 500; }
 .mil-ui.report-generator-app .setup-field .ssel-trigger { min-height: 46px; padding-inline: 14px; border-radius: 13px; background: var(--rx-soft); font-size: .95rem; font-weight: 650; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
 .mil-ui.report-generator-app .setup-field .ssel-trigger:hover { border-color: var(--pf-line); background: #fff; box-shadow: 0 0 0 4px var(--pf-soft); }
 

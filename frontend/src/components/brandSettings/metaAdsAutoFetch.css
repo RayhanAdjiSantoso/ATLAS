@@ -20,6 +20,8 @@
 .maf-block h4 { font-size: .78rem; font-weight: 700; color: var(--text); margin: 0 0 .5rem; }
 .maf-block .maf-sub { margin-top: 1rem; }
 .maf-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.maf-section + .maf-section { margin-top: .85rem; }
+.maf-section h5 { margin: 0 0 .4rem; font-size: .8rem; font-weight: 700; color: var(--text-muted, #55658a); }
 .maf-chip { padding: .2rem .55rem; border-radius: 999px; font-size: .72rem; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted); }
 .maf-hint { font-size: .72rem; color: var(--text-muted); margin: .45rem 0 0; }
 .maf-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .35rem .9rem; }
