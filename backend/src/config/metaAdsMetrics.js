@@ -57,9 +57,20 @@ const ACTION_TYPES = {
 // Script when a run starts, and Apps Script drops everything else.
 export const REQUIRED_ACTION_TYPES = [...new Set(Object.values(ACTION_TYPES).flat())];
 
-const pickAction = (map, group) => {
+// CPAS "with shared items" (catalog_segment_*) reads omni_* first: that is
+// every surface — website and the marketplace app — and is what Ads
+// Manager's "… with shared items" columns show. The pixel type alone is the
+// website share only (for a Shopee catalogue far below Ads Manager's
+// content views and adds to cart).
+const SHARED_ACTION_TYPES = {
+  content_views: ['omni_view_content', 'offsite_conversion.fb_pixel_view_content'],
+  add_to_cart: ['omni_add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'],
+  purchase: ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'],
+};
+
+const pickAction = (map, group, types = ACTION_TYPES) => {
   if (!map) return null;
-  for (const type of ACTION_TYPES[group]) {
+  for (const type of types[group]) {
     if (map[type] != null && Number.isFinite(Number(map[type]))) return Number(map[type]);
   }
   return null;
@@ -73,8 +84,8 @@ const sumPresent = (vals) => (vals.some((v) => v != null) ? vals.reduce((t, v) =
 // ctx = { raw, spend }.
 const count = (ctx, group) => pickAction(ctx.raw.actions, group);
 const value = (ctx, group) => pickAction(ctx.raw.actionValues, group);
-const sharedCount = (ctx, group) => pickAction(ctx.raw.catalogActions, group);
-const sharedValue = (ctx, group) => pickAction(ctx.raw.catalogValues, group);
+const sharedCount = (ctx, group) => pickAction(ctx.raw.catalogActions, group, SHARED_ACTION_TYPES);
+const sharedValue = (ctx, group) => pickAction(ctx.raw.catalogValues, group, SHARED_ACTION_TYPES);
 
 // "Instagram profile visits" is not an action type the Marketing API returns
 // (see PROXY_KEYS in Weekly.gs), but a profile-visit campaign's main result
