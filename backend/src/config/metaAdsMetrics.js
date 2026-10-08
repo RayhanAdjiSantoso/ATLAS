@@ -128,6 +128,13 @@ export const METRICS = [
   // ── B2B: leads up front
   { key: 'leads', header: 'Leads', unit: 'count', sections: ['b2b'], compute: (c) => count(c, 'leads') },
   { key: 'cost_per_lead', header: 'Cost per lead', unit: 'idr', sections: ['b2b'], compute: (c) => ratio(c.spend, count(c, 'leads')) },
+  { key: 'messaging_contacts', header: 'Messaging contacts', unit: 'count', sections: ['b2b'], compute: (c) => count(c, 'messaging_contacts') },
+  { key: 'cost_per_messaging_contact', header: 'Cost per messaging contact', unit: 'idr', sections: ['b2b'], compute: (c) => ratio(c.spend, count(c, 'messaging_contacts')) },
+  { key: 'messaging_conversations', header: 'Messaging conversations started', unit: 'count', sections: ['b2b'], compute: (c) => count(c, 'messaging_conversations') },
+  {
+    key: 'cost_per_messaging_conversation', header: 'Cost per messaging conversation started', unit: 'idr', sections: ['b2b'],
+    compute: (c) => ratio(c.spend, count(c, 'messaging_conversations')),
+  },
 
   // ── CPAS: shared-items value up front
   { key: 'shared_purchase_value', header: 'Purchases conversion value for shared items only', unit: 'idr', sections: ['cpas'], compute: (c) => sharedValue(c, 'purchase') },
@@ -160,13 +167,6 @@ export const METRICS = [
   { key: 'average_order_value', header: 'Average order value', unit: 'idr', sections: ['ecom'], compute: (c) => ratio(value(c, 'purchase'), count(c, 'purchase')) },
 
   // ── B2B
-  { key: 'messaging_contacts', header: 'Messaging contacts', unit: 'count', sections: ['b2b'], compute: (c) => count(c, 'messaging_contacts') },
-  { key: 'cost_per_messaging_contact', header: 'Cost per messaging contact', unit: 'idr', sections: ['b2b'], compute: (c) => ratio(c.spend, count(c, 'messaging_contacts')) },
-  { key: 'messaging_conversations', header: 'Messaging conversations started', unit: 'count', sections: ['b2b'], compute: (c) => count(c, 'messaging_conversations') },
-  {
-    key: 'cost_per_messaging_conversation', header: 'Cost per messaging conversation started', unit: 'idr', sections: ['b2b'],
-    compute: (c) => ratio(c.spend, count(c, 'messaging_conversations')),
-  },
   { key: 'lead_conversion_rate', header: 'Lead conversion rate (leads ÷ link clicks)', unit: 'pct', sections: ['b2b'], compute: (c) => pct(count(c, 'leads'), num(c.raw.linkClicks)) },
 
   // ── CPAS funnel, shared items

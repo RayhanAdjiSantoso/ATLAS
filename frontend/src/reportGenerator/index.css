@@ -332,6 +332,9 @@
   .add-metric-wrap{position:relative;display:inline-block}
   .add-metric-select{position:absolute;top:100%;left:0;z-index:100;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;min-width:260px;max-height:220px;overflow-y:auto;display:none;box-shadow:0 8px 30px rgba(30,62,184,.12);margin-top:5px}
   .add-metric-select.open{display:block}
+  .add-metric-search{position:sticky;top:0;z-index:1;padding:.5rem .6rem;background:var(--surface);border-bottom:1px solid var(--border)}
+  .add-metric-search input{width:100%;padding:.42rem .65rem;border:1.5px solid var(--border);border-radius:7px;font:inherit;font-size:.78rem;color:var(--text);background:var(--surface);outline:none}
+  .add-metric-search input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(30,62,184,.12)}
   .add-metric-opt{padding:.5rem .9rem;font-size:.78rem;cursor:pointer;color:var(--text);transition:background .12s}
   .add-metric-opt:hover{background:var(--s2);color:var(--acc)}
   .add-metric-opt-check{display:flex;align-items:center;gap:8px}

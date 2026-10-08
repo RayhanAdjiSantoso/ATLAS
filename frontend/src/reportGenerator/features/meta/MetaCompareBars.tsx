@@ -4,7 +4,8 @@ import { GroupedBarChart, type BarSeries } from '../../components/GroupedBarChar
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { AGE_ORDER, isAllValue } from '../../lib/meta';
-import { AUDIENCE_TYPE_LABEL, audienceTypeOf, metricsFor, type AudienceMetricDef, type AudienceType, type MetaMetricKind } from '../../lib/metaAudience';
+import { AUDIENCE_TYPE_LABEL, audienceTypeOf, leadMenuFor, metricsFor, type AudienceMetricDef, type AudienceType, type MetaMetricKind } from '../../lib/metaAudience';
+import { leadResultKind, type LeadResultKind } from '../../lib/metaFunnel';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 import { copyText } from '../../utils/copyText';
@@ -68,10 +69,11 @@ export function MetaCompareBars({
   badge,
   rows,
   kind,
-  menu,
+  menu: rawMenu,
   dimCol,
   campCol,
   audience,
+  leadKind: leadKindProp,
   sortable,
   copyLabels = false,
   dimNoun,
@@ -93,8 +95,14 @@ export function MetaCompareBars({
   dimNoun: string;
   note?: ReactNode;
   emptyMessage?: string;
+  // Lead / B2B: which result the leads figures read (the report's pick);
+  // without it, the automatic pick over these rows.
+  leadKind?: LeadResultKind;
 }) {
   const typeOf = (r: SheetRow): TypeKey => (campCol ? audienceTypeOf(r[campCol]) : null) ?? 'other';
+  const leadKind = useMemo(() => leadKindProp ?? leadResultKind(rows), [leadKindProp, rows]);
+  const leadish = kind === 'lead' || kind === 'b2b';
+  const menu = useMemo(() => (leadish ? leadMenuFor(rawMenu, leadKind) : rawMenu), [leadish, rawMenu, leadKind]);
 
   const typesPresent = useMemo(() => {
     if (audience === 'none' || !campCol) return [] as TypeKey[];
@@ -125,13 +133,13 @@ export function MetaCompareBars({
     return [...map.entries()]
       .map(([label, rs]) => ({
         label,
-        total: metricsFor(kind, rs),
-        perType: split ? Object.fromEntries(typesPresent.map((t) => [t, metricsFor(kind, rs.filter((r) => typeOf(r) === t))])) : null,
+        total: metricsFor(kind, rs, leadKind),
+        perType: split ? Object.fromEntries(typesPresent.map((t) => [t, metricsFor(kind, rs.filter((r) => typeOf(r) === t), leadKind)])) : null,
         type: campCol ? typeOf(rs[0]) : ('other' as TypeKey),
       }))
       .sort((a, b) => (isAge ? ageRank(a.label) - ageRank(b.label) : 0) || a.label.localeCompare(b.label, 'id'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoped, dimCol, kind, aud, canSplit, typesPresent, campCol]);
+  }, [scoped, dimCol, kind, aud, canSplit, typesPresent, campCol, leadKind]);
 
   const metrics = useMemo(() => menu.filter((m) => groups.some((g) => g.total[m.key as string] !== null && g.total[m.key as string] !== undefined)), [menu, groups]);
   const missing = menu.filter((m) => !metrics.includes(m));

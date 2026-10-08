@@ -3,7 +3,8 @@ import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { PIE_COLORS, PieChartCanvas } from '../../components/PieChartCanvas';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
-import { AUDIENCE_TYPE_LABEL, audienceTypeOf, buildB2bAudience, buildBrandAudience, buildLeadAudience, buildObjectiveAudience, buildSalesAudience, type AudienceMetricDef, type AudienceType } from '../../lib/metaAudience';
+import { AUDIENCE_TYPE_LABEL, audienceTypeOf, buildB2bAudience, buildBrandAudience, buildLeadAudience, buildObjectiveAudience, buildSalesAudience, leadMenuFor, type AudienceMetricDef, type AudienceType } from '../../lib/metaAudience';
+import { leadResultKind, type LeadResultKind } from '../../lib/metaFunnel';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 import type { AudienceSlice } from '../../lib/metaAudience';
@@ -94,10 +95,11 @@ export function MetaBreakdownSection<M>({
   rows,
   dimCol,
   kind,
-  metrics: menu,
+  metrics: rawMenu,
   prefer,
   emptyMessage,
   campCol = null,
+  leadKind: leadKindProp,
 }: {
   heading: string;
   badge: string;
@@ -114,6 +116,8 @@ export function MetaBreakdownSection<M>({
   // When given, a Semua / NV / RM switch reads the breakdown for one
   // audience at a time (campaigns named "NV | …" / "RM | …").
   campCol?: string | null;
+  // Lead / B2B: which result the leads figures read (the report's pick).
+  leadKind?: LeadResultKind;
 }) {
   const typeOf = (r: SheetRow): AudienceType | 'other' => (campCol ? audienceTypeOf(r[campCol]) : null) ?? 'other';
   const types = useMemo(() => {
@@ -124,6 +128,9 @@ export function MetaBreakdownSection<M>({
   }, [rows, campCol]);
   const [aud, setAud] = useState<string>('all');
   const scoped = useMemo(() => (aud !== 'all' ? rows.filter((r) => typeOf(r) === aud) : rows), [rows, aud]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A lead channel reads one result for every audience and slice.
+  const leadKind = useMemo(() => leadKindProp ?? leadResultKind(rows), [leadKindProp, rows]);
+  const menu = useMemo(() => (kind === 'lead' || kind === 'b2b' ? leadMenuFor(rawMenu, leadKind) : rawMenu), [kind, rawMenu, leadKind]);
   const slices = useMemo(
     () =>
       (kind === 'brand'
@@ -131,11 +138,11 @@ export function MetaBreakdownSection<M>({
         : kind === 'objective'
           ? buildObjectiveAudience(scoped, dimCol)
           : kind === 'lead'
-            ? buildLeadAudience(scoped, dimCol)
+            ? buildLeadAudience(scoped, dimCol, leadKind)
             : kind === 'b2b'
-              ? buildB2bAudience(scoped, dimCol)
+              ? buildB2bAudience(scoped, dimCol, leadKind)
             : buildSalesAudience(scoped, dimCol)) as unknown as AudienceSlice<M>[],
-    [scoped, dimCol, kind],
+    [scoped, dimCol, kind, leadKind],
   );
   // NV, RM and the two together, always offered where the channel buys by
   // audience; a side the file has no campaign for is shown but disabled.

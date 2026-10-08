@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { reorderIds, useInlineMetricEditor } from '../hooks/useInlineMetricEditor';
 import type { DeltaClassName } from '../lib/types';
 import { DeltaPill } from './DeltaPill';
@@ -34,6 +34,8 @@ interface KpiTableProps {
   // div from the caller) — used by callers that render KpiTable directly as
   // a sec-block's only body content (OverviewDetailedCard, ChannelPivotSection).
   padded?: boolean;
+  // Shown beside "Hapus Semua" in the metric toolbar.
+  toolbar?: ReactNode;
 }
 
 const TOTAL_ROW_STYLE = { fontWeight: 700, borderTop: '2px solid var(--border)' };
@@ -49,7 +51,7 @@ function rowId(r: KpiRowDisplay): string {
 // engine directly: click a row's label to rename it inline, hover to reveal
 // the remove (×) affordance, drag the ☰ handle to move the row to a new
 // position. Removed rows go back into "+ Tambah metrik".
-export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded }: KpiTableProps) {
+export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded, toolbar }: KpiTableProps) {
   const metricRows = rows.filter((r) => !r.isTotal);
   const totalRow = rows.find((r) => r.isTotal);
   const rowById = new Map(metricRows.map((r) => [rowId(r), r]));
@@ -158,7 +160,7 @@ export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded
 
   return (
     <>
-      {allIds.length > 0 && <MetricPicker allCols={allIds} activeCols={visibleOrder} onChange={setOrder} labelFn={resolveLabel} dense={!padded} />}
+      {allIds.length > 0 && <MetricPicker allCols={allIds} activeCols={visibleOrder} onChange={setOrder} labelFn={resolveLabel} dense={!padded} extra={toolbar} />}
       {padded ? <div style={{ padding: '0 1.4rem 1.4rem' }}>{tableBody}</div> : tableBody}
     </>
   );

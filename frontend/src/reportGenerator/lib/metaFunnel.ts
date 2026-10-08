@@ -227,6 +227,7 @@ export interface MetaObjectiveMetrics {
   conversations: number | null;
   costPerConversation: number | null;
   conversationRate: number | null;
+  messagingContacts: number | null;
   interactions: number | null;
   interactionRate: number | null;
   profileVisits: number | null;
@@ -239,6 +240,7 @@ export function metaObjectiveMetrics(rows: SheetRow[]): MetaObjectiveMetrics {
   const linkClicks = total(rows, ['link clicks', 'outbound clicks', 'clicks (all)'], ['rate', 'ctr']);
   const leads = total(rows, ['on-facebook leads', 'leads'], ['rate', 'form']);
   const conversations = total(rows, ['messaging conversations started', 'conversations started'], ['rate']);
+  const messagingContacts = total(rows, ['messaging contacts'], ['rate']);
   const interactions = total(rows, ['post engagement', 'post interactions', 'engagement', 'interaction'], ['rate']);
   const profileVisits = total(rows, ['profile visits', 'profile visit'], ['rate']);
   return {
@@ -254,6 +256,7 @@ export function metaObjectiveMetrics(rows: SheetRow[]): MetaObjectiveMetrics {
     conversations,
     costPerConversation: ratio(spend, conversations, 1),
     conversationRate: ratio(conversations, linkClicks),
+    messagingContacts,
     interactions,
     interactionRate: ratio(interactions, impressions),
     profileVisits,
@@ -262,9 +265,46 @@ export function metaObjectiveMetrics(rows: SheetRow[]): MetaObjectiveMetrics {
 }
 
 // ── Leads: Non-Boost Post, B2B Leads lane ────────────────────────────────
-// The lead is the result. A Send Message campaign has no Leads column — its
-// conversations started are the lead there (MIL counts a chat as a lead), so
-// the count falls back to them rather than reading as missing.
+// A B2B campaign's result is not always a form lead: a Send Message
+// campaign's is the chat — Messaging conversations started, or Messaging
+// contacts. One result is picked for the whole comparison (both periods,
+// every slice), the first of leads → conversations started → contacts that
+// has any count, so a period is never measured in leads against the other
+// in chats. Every label then names that result.
+export type LeadResultKind = 'leads' | 'conversations' | 'contacts';
+
+export const LEAD_RESULT: Record<LeadResultKind, { label: string; rate: string; cost: string }> = {
+  leads: { label: 'Leads', rate: 'Leads Rate (Leads ÷ Link Clicks)', cost: 'Cost per Lead' },
+  conversations: {
+    label: 'Messaging Conversations Started',
+    rate: 'Conversation Rate (Conversations Started ÷ Link Clicks)',
+    cost: 'Cost per Messaging Conversation Started',
+  },
+  contacts: { label: 'Messaging Contacts', rate: 'Contact Rate (Messaging Contacts ÷ Link Clicks)', cost: 'Cost per Messaging Contact' },
+};
+
+const RESULT_OF: Record<LeadResultKind, (o: MetaObjectiveMetrics) => number | null> = {
+  leads: (o) => o.leads,
+  conversations: (o) => o.conversations,
+  contacts: (o) => o.messagingContacts,
+};
+const RESULT_ORDER: LeadResultKind[] = ['leads', 'conversations', 'contacts'];
+
+// The results that have a count in any of the row sets, in priority order —
+// what the report offers to pick from.
+export function leadResultKinds(...rowSets: SheetRow[][]): LeadResultKind[] {
+  const metrics = rowSets.filter((r) => r.length).map(metaObjectiveMetrics);
+  return RESULT_ORDER.filter((k) => metrics.some((m) => (RESULT_OF[k](m) ?? 0) > 0));
+}
+
+export function leadResultKind(...rowSets: SheetRow[][]): LeadResultKind {
+  const metrics = rowSets.filter((r) => r.length).map(metaObjectiveMetrics);
+  return (
+    leadResultKinds(...rowSets)[0]
+    ?? RESULT_ORDER.find((k) => metrics.some((m) => RESULT_OF[k](m) !== null))
+    ?? 'leads'
+  );
+}
 
 export interface MetaLeadMetrics {
   leads: number | null;
@@ -275,14 +315,13 @@ export interface MetaLeadMetrics {
   ctr: number | null;
   leadRate: number | null;
   costPerLead: number | null;
-  // True when `leads` is messaging conversations, so labels can say so.
-  fromConversations: boolean;
+  resultKind: LeadResultKind;
 }
 
-export function metaLeadMetrics(rows: SheetRow[]): MetaLeadMetrics {
+// `leads` / `leadRate` / `costPerLead` hold whichever result `kind` names.
+export function metaLeadMetrics(rows: SheetRow[], kind: LeadResultKind = leadResultKind(rows)): MetaLeadMetrics {
   const o = metaObjectiveMetrics(rows);
-  const fromConversations = o.leads === null && o.conversations !== null;
-  const leads = fromConversations ? o.conversations : o.leads;
+  const leads = RESULT_OF[kind](o);
   return {
     leads,
     linkClicks: o.linkClicks,
@@ -292,7 +331,7 @@ export function metaLeadMetrics(rows: SheetRow[]): MetaLeadMetrics {
     ctr: o.ctr,
     leadRate: ratio(leads, o.linkClicks),
     costPerLead: ratio(o.spend, leads, 1),
-    fromConversations,
+    resultKind: kind,
   };
 }
 
@@ -402,6 +441,8 @@ export function buildMetaBrandFunnel(oldRows: SheetRow[], curRows: SheetRow[]): 
   return assemble(BRAND_TREE, metaBrandMetrics(oldRows), metaBrandMetrics(curRows));
 }
 
-export function buildMetaLeadFunnel(oldRows: SheetRow[], curRows: SheetRow[]): MetaFunnel {
-  return assemble(LEAD_TREE, metaLeadMetrics(oldRows), metaLeadMetrics(curRows));
+export function buildMetaLeadFunnel(oldRows: SheetRow[], curRows: SheetRow[], kind: LeadResultKind = leadResultKind(oldRows, curRows)): MetaFunnel {
+  const names = LEAD_RESULT[kind];
+  const tree = LEAD_TREE.map((d) => (d.key === 'leads' ? { ...d, label: names.label } : d.key === 'leadRate' ? { ...d, label: names.rate } : d.key === 'cpl' ? { ...d, label: names.cost } : d));
+  return assemble(tree, metaLeadMetrics(oldRows, kind), metaLeadMetrics(curRows, kind));
 }
