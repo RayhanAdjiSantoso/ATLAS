@@ -588,20 +588,22 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     // it the "Overall" tab double-counts every absolute metric (the NV/RM
     // tabs happen to escape it only because groupByCamp's "NV"/"RM" regex
     // never matches a subtotal's "All" campaign name).
-    // CPAS exports come with either a Month or a Day breakdown; both compare
-    // the first and last calendar month in the file(s).
+    // A Day-breakdown CPAS file read alongside picked date ranges is cut at
+    // those same ranges — the two sides of a range comparison usually sit in
+    // one calendar month, and splitting that by month put the whole file on
+    // both sides. Otherwise (Month breakdown, or no ranges picked) CPAS
+    // compares the first and last calendar month in its file(s).
     const cpasLeaves = stripCampaignSubtotals(cpasRows);
-    const { old: cOld, cur: cCur, months: cMonths } = cDayCol
-      ? splitDayRowsByMonth(cpasLeaves, cDayCol)
-      : splitMonths(cpasLeaves, cMonthCol);
-    // CPAS has its own comparison periods — the two calendar months its file
-    // spans — not the main-account file's p1/p2 (which may be a custom
-    // Day-breakdown sub-range). Fall back to the main periods only if the
-    // CPAS Month column couldn't be parsed into labels.
-    const cOldPeriod = parseMetaMonthValue(cMonths[0]);
-    const cCurPeriod = parseMetaMonthValue(cMonths[cMonths.length - 1]);
-    const cP1 = cOldPeriod.label || p1;
-    const cP2 = cCurPeriod.label || p2;
+    const byRange = Boolean(cDayCol && dayRanges);
+    const { old: cOld, cur: cCur, months: cMonths } = byRange
+      ? { ...splitByDayRange(cpasLeaves, cDayCol!, dayRanges!.old, dayRanges!.cur), months: [] as string[] }
+      : cDayCol
+        ? splitDayRowsByMonth(cpasLeaves, cDayCol)
+        : splitMonths(cpasLeaves, cMonthCol);
+    // Month mode: CPAS's own months, not the main file's p1/p2. Fall back to
+    // the main periods if the CPAS Month column couldn't be parsed.
+    const cP1 = byRange ? p1 : parseMetaMonthValue(cMonths[0]).label || p1;
+    const cP2 = byRange ? p2 : parseMetaMonthValue(cMonths[cMonths.length - 1]).label || p2;
     // A Day-breakdown CPAS file sums reach per day — same over-count as the
     // main file's, so Reach/Frequency/Cost per Reach are not offered either.
     const cAllCols = cpasHeaders.filter((h) => isNumericCol(h, cpasRows) && !cDimCols.includes(h) && !(cDayCol && isReachDependentCol(h)));
