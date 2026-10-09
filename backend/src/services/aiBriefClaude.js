@@ -18,10 +18,10 @@ import { AiSummaryError } from './aiSummaryService.js';
 // the edit form already understand, so old and new briefs read the same way.
 
 export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-5-5';
-// Effort trades depth for time and tokens. medium keeps a brief inside the
-// serverless function's 60-second budget; raise to "high" where that limit
-// does not apply.
-const EFFORT = process.env.ANTHROPIC_EFFORT || 'medium';
+// Effort trades depth for time and tokens. Measured on a full brief: medium
+// took ~52-60 s, past what the serverless function's 60-second budget can
+// hold, so low is the default; raise it where that limit does not apply.
+const EFFORT = process.env.ANTHROPIC_EFFORT || 'low';
 // Under Vercel's 60 s function limit, so a slow answer surfaces as a clear
 // message instead of the platform cutting the request off.
 const TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS) || 55_000;
@@ -36,7 +36,8 @@ let client = null;
 const getClient = () => {
   client ??= new Anthropic({
     timeout: TIMEOUT_MS,
-    maxRetries: 1,
+    // A retry after a timeout can never finish inside the function's budget.
+    maxRetries: 0,
     defaultHeaders: WORKSPACE_ID ? { 'anthropic-workspace-id': WORKSPACE_ID } : undefined,
   });
   return client;
