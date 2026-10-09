@@ -11,7 +11,7 @@ import api from '../../api/client.js';
 
 const GROUP_OF = { shopee: 'shopee', tiktok: 'tiktok', meta: 'web' };
 const SPEND_NOTE = {
-  shopee: 'Shopee Iklanku + CPAS Shopee',
+  shopee: 'Shopee Iklanku (CPAS Shopee hanya masuk ROAS blended)',
   tiktok: 'GMV Max + TTAM',
   web: 'Meta Non-Boost + Google Ads → Website & Chat',
 };

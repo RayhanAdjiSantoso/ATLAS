@@ -74,9 +74,12 @@ export function slugifyChannelLabel(label) {
 // ATLAS uses (Business Overview, Brand Tracking's targets). Meta Non-Boost
 // and Google Ads send traffic to the website and chat; Boost Post is
 // awareness and has no sales channel of its own, so it only counts in the
-// blended ROAS. A brand's custom channels also count only in the blend.
+// blended ROAS. Shopee's ROAS is Shopee sales over Iklanku alone: CPAS
+// Shopee is bought and reported in Meta, and the team reads Shopee ROAS as
+// the marketplace's own ads — CPAS still counts in the blend. A brand's
+// custom channels also count only in the blend.
 export const ROAS_GROUPS = [
-  { key: 'shopee', label: 'Shopee', sales: ['shopee'], spend: ['shopee_iklanku', 'cpas_shopee'] },
+  { key: 'shopee', label: 'Shopee', sales: ['shopee'], spend: ['shopee_iklanku'] },
   { key: 'tiktok', label: 'TikTok', sales: ['tiktok'], spend: ['gmv_max', 'ttam'] },
   { key: 'tokopedia', label: 'Tokopedia', sales: ['tokopedia'], spend: ['cpas_tokopedia'] },
   { key: 'web', label: 'Website & Chat', sales: ['website', 'chat'], spend: ['meta_nonboost_post', 'google_ads'] },
