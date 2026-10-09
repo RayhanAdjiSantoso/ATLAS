@@ -87,9 +87,7 @@ router.post(
 router.post(
   '/import',
   authenticate, dailyTracking, clientRevenueOnly, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),
-  importFileBodyValidation,
-  deleteChannelQueryValidation,
-  moveChannelBodyValidation, ctrl.importFile,
+  importFileBodyValidation, ctrl.importFile,
 );
 router.post(
   '/meta-sync',
