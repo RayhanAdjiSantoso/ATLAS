@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
-  Archive, ArrowUpRight, Check, CircleAlert, Compass, Loader2, NotebookPen, Plus, Save, Search, Settings2, Trash2, X,
+  Archive, ArrowUpRight, Check, CircleAlert, Compass, Loader2, NotebookPen, Plus, Save, Settings2, Trash2, X,
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -10,6 +10,8 @@ import useSessionState from '../hooks/useSessionState.js';
 import { matchesBrandStatus, BRAND_STATUS_LABELS } from '../components/common/BrandStatusFilter.jsx';
 import { presetBrandSettings } from '../components/common/brandSettingsLink.js';
 import { describeError } from '../components/brandSettings/describeError.js';
+import SearchField from '../components/common/SearchField.jsx';
+import SelectMenu from '../components/common/SelectMenu.jsx';
 import atlasWordmark from '../assets/atlas-wordmark.png';
 import '../components/dashboard/console.css';
 import '../components/dashboard/softShell.css';
@@ -21,7 +23,7 @@ import './brandPages.css';
 // every module), brand context, current direction, and for admins deleting
 // an empty brand. Moving between brands is one click and the page never
 // covers itself with a popup. The brand's files, meeting notes and ad
-// accounts live in Data Brand; the setting links straight there.
+// accounts live in Data Collection Hub; the setting links straight there.
 
 const CONTEXT_FIELDS = [
   ['brand_products_customer', 'Brand, Produk & Customer', 'Apa yang dijual brand dan siapa customer utamanya?'],
@@ -49,6 +51,20 @@ const SECTIONS = [
 ];
 const ALL_FIELDS = [...CONTEXT_FIELDS, ...DIRECTION_FIELDS];
 const EASE = [0.16, 1, 0.3, 1];
+
+const INDUSTRY_CHOICES = [
+  { value: 'Retail Fashion', color: '#315fca' },
+  { value: 'Retail Non-Fashion', color: '#64a7ea' },
+  { value: 'Food & Beverage', color: '#f59e0b' },
+  { value: 'B2B Services', color: '#805ad5' },
+];
+const INDUSTRY_ALIASES = {
+  'Retail-Fashion': 'Retail Fashion',
+  'Retail-Non Fashion': 'Retail Non-Fashion',
+  'Food & Beverages': 'Food & Beverage',
+  'B2B + Services': 'B2B Services',
+};
+const canonicalIndustry = (value) => INDUSTRY_ALIASES[value] ?? value ?? '';
 
 const filled = (profile, fields) => fields.filter(([key]) => (profile?.[key] ?? '').trim()).length;
 
@@ -140,7 +156,7 @@ function DeleteBrand({ brand, onDeleted }) {
         <div className="bp-danger-body is-force">
           <p>
             <b>Ini tidak bisa dibatalkan.</b> {brand.brand_name} dan <b>semua datanya</b> akan dihapus permanen dari ATLAS:
-            file Data Brand, laporan tersimpan, data Shopee, Daily Tracking, Google &amp; Meta Ads, catatan meeting, dan lainnya.
+            file Data Collection Hub, laporan tersimpan, data Shopee, Daily Tracking, Google &amp; Meta Ads, catatan meeting, dan lainnya.
           </p>
           <ul>{state.blocking.map((b) => <li key={b.label}><span>{b.label}</span><b>{b.count.toLocaleString('id-ID')}</b></li>)}</ul>
           {state.error && <p className="bp-drawer-msg is-error" role="alert"><CircleAlert size={15} /> {state.error}</p>}
@@ -179,7 +195,7 @@ function DeleteBrand({ brand, onDeleted }) {
 // beside the list in the page itself. Status saves on the spot (it is shared
 // by every module); the narrative fields keep an unsaved draft, which the
 // page asks about before switching to another brand (see onDirtyChange).
-function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDeleted, onOpenData, onDirtyChange }) {
+function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDeleted, onOpenData, onDirtyChange, onIndustrySaved }) {
   const reduced = useReducedMotion();
   const [profile, setProfile] = useState(null);
   const [draft, setDraft] = useState({});
@@ -195,15 +211,20 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
     api.get(`/brands/${brand.brand_id}/profile`)
       .then(({ data }) => {
         if (!alive) return;
-        setProfile(data.profile);
-        setDraft(data.profile ?? {});
+        const next = { ...(data.profile ?? {}), industry: canonicalIndustry(data.profile?.industry) };
+        setProfile(next);
+        setDraft(next);
       })
       .catch((err) => alive && setMessage({ tone: 'error', text: describeError(err, 'Gagal memuat brand') }))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, [brand.brand_id]);
 
-  const dirty = useMemo(() => ALL_FIELDS.some(([key]) => (draft[key] ?? '') !== (profile?.[key] ?? '')), [draft, profile]);
+  const dirty = useMemo(
+    () => ALL_FIELDS.some(([key]) => (draft[key] ?? '') !== (profile?.[key] ?? ''))
+      || (draft.industry ?? '') !== (profile?.industry ?? ''),
+    [draft, profile],
+  );
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   const save = async () => {
@@ -213,6 +234,8 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
     try {
       const { data } = await api.put(`/brands/${brand.brand_id}/profile`, draft);
       setProfile((current) => ({ ...current, ...data.profile }));
+      setDraft((current) => ({ ...current, ...data.profile }));
+      onIndustrySaved(brand.brand_id, data.profile.industry);
       setMessage({ tone: 'ok', text: 'Perubahan tersimpan.' });
     } catch (err) {
       setMessage({ tone: 'error', text: describeError(err, 'Gagal menyimpan perubahan') });
@@ -235,8 +258,8 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
           <h2 id="bp-setting-title">{brand.brand_name}</h2>
           {profile?.sector && <p>{profile.sector}</p>}
         </div>
-        <button type="button" className="bp-ghost" onClick={() => { if (!dirty || window.confirm('Perubahan belum disimpan. Pindah ke Data Brand tanpa menyimpan?')) onOpenData(brand); }}>
-          <Archive size={15} aria-hidden="true" /> Data &amp; file <ArrowUpRight size={14} aria-hidden="true" />
+        <button type="button" className="bp-ghost" onClick={() => { if (!dirty || window.confirm('Perubahan belum disimpan. Pindah ke Data Collection Hub tanpa menyimpan?')) onOpenData(brand); }}>
+          <Archive size={15} aria-hidden="true" /> Performance Database <ArrowUpRight size={14} aria-hidden="true" />
         </button>
       </header>
 
@@ -262,6 +285,21 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
           {statusBusy && <Loader2 size={15} className="brand-spin" aria-label="Menyimpan status" />}
         </div>
       </section>
+
+      <div className="bp-industry-field">
+        <span>Kategori Industri</span>
+        <small>Dipakai juga oleh Internal Dashboard untuk mengelompokkan performa klien.</small>
+        <SelectMenu
+          value={draft.industry ?? ''}
+          onChange={(industry) => setDraft((current) => ({ ...current, industry }))}
+          options={INDUSTRY_CHOICES.map(({ value }) => ({ value, label: value }))}
+          placeholder="Pilih kategori industri"
+          label="Kategori Industri"
+          menuTitle="Kategori Industri"
+          className="bp-industry-menu"
+          disabled={isViewOnly || loading}
+        />
+      </div>
 
       <nav className="bp-segment" role="tablist" aria-label="Bagian Brand Setting">
         {SECTIONS.map(({ id, label, Icon, fields }) => {
@@ -339,7 +377,7 @@ export default function BrandSettingsPage() {
     return () => { alive = false; };
   }, []);
 
-  // The selected brand lives in the URL (?detail=<id>), so Data Brand's
+  // The selected brand lives in the URL (?detail=<id>), so Data Collection Hub's
   // "Context & direction" link opens the right brand directly. With none
   // chosen, the first brand in the list is shown.
   const detailId = Number(params.get('detail')) || null;
@@ -373,8 +411,27 @@ export default function BrandSettingsPage() {
 
   const counts = useMemo(() => ({
     active: brands.filter((b) => b.status === 'active').length,
-    unset: brands.filter((b) => !b.status).length,
+    off: brands.filter((b) => b.status === 'off').length,
+    freeze: brands.filter((b) => b.status === 'freeze').length,
   }), [brands]);
+
+  const industryComposition = useMemo(() => {
+    const active = brands.filter((brand) => brand.status === 'active');
+    const items = INDUSTRY_CHOICES.map((item) => ({
+      ...item,
+      count: active.filter((brand) => canonicalIndustry(brand.industry) === item.value).length,
+    }));
+    const total = items.reduce((sum, item) => sum + item.count, 0);
+    let cursor = 0;
+    const stops = [];
+    items.forEach((item) => {
+      if (!item.count || !total) return;
+      const end = cursor + (item.count / total) * 100;
+      stops.push(`${item.color} ${cursor}% ${end}%`);
+      cursor = end;
+    });
+    return { items, total, gradient: total ? `conic-gradient(${stops.join(', ')})` : '#e9edf6' };
+  }, [brands]);
 
   async function changeStatus(item, status) {
     if (isViewOnly) return;
@@ -390,6 +447,10 @@ export default function BrandSettingsPage() {
       setStatusBusy(null);
     }
   }
+
+  const industrySaved = (brandId, industry) => {
+    setBrands((list) => list.map((brand) => (brand.brand_id === brandId ? { ...brand, industry } : brand)));
+  };
 
   const brandDeleted = (b, removed) => {
     setBrands((list) => list.filter((x) => x.brand_id !== b.brand_id));
@@ -423,20 +484,38 @@ export default function BrandSettingsPage() {
       <div className="soft-frame">
         <header className="soft-masthead">
           <div className="soft-masthead-copy">
-            <h1><span>Pengaturan</span> Brand<span className="soft-title-dot" aria-hidden="true">.</span></h1>
+            <h1><span>Brand</span> Setting<span className="soft-title-dot" aria-hidden="true">.</span></h1>
             <p>Daftar klien MIL Digital: atur status setiap brand, lalu lengkapi brand context dan current direction yang dibaca seluruh analisis ATLAS.</p>
           </div>
           <div className="soft-masthead-signature">
             <img src={atlasWordmark} alt="ATLAS" />
-            <span>Ruang pengaturan klien</span>
+            <span>Ruang Brand Setting</span>
           </div>
         </header>
 
         <section className="soft-card bp-command" aria-label="Cari dan saring brand">
-          <div className="bp-stats is-start">
-            <div className="bp-stat"><span>Brand aktif</span><strong>{loaded ? counts.active : '…'}</strong></div>
-            <div className="bp-stat"><span>Total brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
-            <div className="bp-stat"><span>Status belum diatur</span><strong>{loaded ? counts.unset : '…'}</strong></div>
+          <div className="bp-stats bp-overview-stats">
+            <div className="bp-stat"><span>Total Brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
+            <div className="bp-stat"><span>Brand Aktif</span><strong>{loaded ? counts.active : '…'}</strong></div>
+            <div className="bp-stat"><span>Nonaktif</span><strong>{loaded ? counts.off : '…'}</strong></div>
+            <div className="bp-stat"><span>Dibekukan</span><strong>{loaded ? counts.freeze : '…'}</strong></div>
+            <div className="bp-industry-summary">
+              <div className="bp-industry-summary-copy">
+                <span>Industri Brand Aktif</span>
+                <small>{loaded ? `${industryComposition.total} brand berkategori` : 'Memuat komposisi…'}</small>
+              </div>
+              <div
+                className="bp-industry-pie"
+                style={{ background: industryComposition.gradient }}
+                role="img"
+                aria-label={`Komposisi industri brand aktif: ${industryComposition.items.map((item) => `${item.value} ${item.count}`).join(', ')}`}
+              />
+              <ul className="bp-industry-legend">
+                {industryComposition.items.map((item) => (
+                  <li key={item.value}><i style={{ background: item.color }} /><span>{item.value}</span><b>{item.count}</b></li>
+                ))}
+              </ul>
+            </div>
           </div>
           {!isViewOnly && (creating ? (
             <form className="bp-new-form" onSubmit={createBrand}>
@@ -474,21 +553,15 @@ export default function BrandSettingsPage() {
         <div className="bp-master">
           <aside className="soft-card bp-list" aria-label="Daftar brand">
             <div className="bp-list-head">
-              <label className="bp-search">
-                <Search size={16} aria-hidden="true" />
-                <input value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
-              </label>
-              {/* The status filter as a clear segmented control, each choice
-                  carrying its own count. */}
+              <SearchField className="bp-search" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
+              {/* Status filter without count badges, matching the compact list control. */}
               <div className="bp-filter" role="radiogroup" aria-label="Filter status klien">
                 {FILTERS.map((key) => {
                   const on = listStatus === key;
-                  const n = key === 'all' ? brands.length : brands.filter((b) => matchesBrandStatus(b, key)).length;
                   return (
                     <button key={key} type="button" role="radio" aria-checked={on} className={`is-${key}${on ? ' is-on' : ''}`} onClick={() => setListStatus(key)}>
                       {key !== 'all' && <i aria-hidden="true" />}
                       <span>{key === 'all' ? 'Semua' : BRAND_STATUS_LABELS[key]}</span>
-                      <b>{loaded ? n : '…'}</b>
                     </button>
                   );
                 })}
@@ -517,13 +590,14 @@ export default function BrandSettingsPage() {
               key={selected.brand_id} brand={selected} isViewOnly={isViewOnly}
               canDelete={isAdmin && !isViewOnly} statusBusy={statusBusy === selected.brand_id}
               onStatus={changeStatus} onDeleted={brandDeleted} onOpenData={navigateToData} onDirtyChange={onDirtyChange}
+              onIndustrySaved={industrySaved}
             />
           ) : (
             <div className="soft-card bp-setting bp-setting-empty">{loaded ? 'Pilih brand di daftar untuk membuka Brand Setting.' : 'Memuat…'}</div>
           )}
         </div>
         <p className="bp-foot-note">
-          File bulanan, Minutes of Meeting, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Brand</Link>.
+          File bulanan, Minutes of Meeting, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Collection Hub</Link>.
         </p>
       </div>
     </div>

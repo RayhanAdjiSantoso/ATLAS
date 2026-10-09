@@ -1,6 +1,8 @@
 import { validationResult } from 'express-validator';
 import { AppError, asyncHandler } from '../utils/errors.js';
 import * as service from '../services/googleAdsService.js';
+import * as optimization from '../services/googleAdsOptimization.js';
+import * as calibration from '../services/googleAdsCalibration.js';
 
 function validate(req) {
   const errors = validationResult(req);
@@ -70,6 +72,119 @@ export const setConversionGoal = asyncHandler(async (req, res) => {
     goal: req.body.goal ?? null,
     userId: req.user.userId,
   }));
+});
+
+// ── optimisation (googleAdsOptimization.js) ───────────────────────────
+const brandOf = (req) => Number(req.body?.brandId ?? req.query.brandId);
+const idOf = (req) => Number(req.params.id);
+
+// GET /api/google-ads/recommendations?brandId=
+export const listRecommendations = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await optimization.listRecommendations(brandOf(req)));
+});
+
+// POST /api/google-ads/recommendations/generate  { brandId, oldStart, oldEnd, curStart, curEnd }
+export const generateRecommendations = asyncHandler(async (req, res) => {
+  validate(req);
+  const { oldStart, oldEnd, curStart, curEnd } = req.body;
+  res.json(await optimization.generateRecommendations({ brandId: brandOf(req), oldStart, oldEnd, curStart, curEnd, userId: req.user.userId }));
+});
+
+// PATCH /api/google-ads/recommendations/:id  { brandId, status?, notes? }
+export const updateRecommendation = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await optimization.updateRecommendation({ brandId: brandOf(req), id: idOf(req), status: req.body.status, notes: req.body.notes, userId: req.user.userId }));
+});
+
+// POST /api/google-ads/recommendations/:id/task  { brandId, pic }
+export const recommendationToTask = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await optimization.recommendationToTask({ brandId: brandOf(req), id: idOf(req), pic: req.body.pic, userId: req.user.userId }));
+});
+
+// GET /api/google-ads/experiments?brandId=
+export const listExperiments = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await optimization.listExperiments(brandOf(req)));
+});
+
+// POST /api/google-ads/experiments  { brandId, ...experiment }
+export const createExperiment = asyncHandler(async (req, res) => {
+  validate(req);
+  const { brandId: _b, ...input } = req.body;
+  res.status(201).json(await optimization.createExperiment({ brandId: brandOf(req), input, userId: req.user.userId }));
+});
+
+// PATCH /api/google-ads/experiments/:id  { brandId, ...patch }
+export const updateExperiment = asyncHandler(async (req, res) => {
+  validate(req);
+  const { brandId: _b, ...input } = req.body;
+  res.json(await optimization.updateExperiment({ brandId: brandOf(req), id: idOf(req), input }));
+});
+
+// DELETE /api/google-ads/experiments/:id?brandId=
+export const deleteExperiment = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await optimization.deleteExperiment({ brandId: brandOf(req), id: idOf(req) }));
+});
+
+// POST /api/google-ads/experiments/:id/evaluate  { brandId }
+export const evaluateExperiment = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await optimization.evaluateExperiment({ brandId: brandOf(req), id: idOf(req), userId: req.user.userId }));
+});
+
+// POST /api/google-ads/ad-copy  { brandId, customerId?, adGroupId, oldStart, oldEnd, curStart, curEnd }
+export const suggestAdCopy = asyncHandler(async (req, res) => {
+  validate(req);
+  const { customerId, adGroupId, oldStart, oldEnd, curStart, curEnd } = req.body;
+  res.json(await optimization.suggestAdCopy({ brandId: brandOf(req), customerId, adGroupId, oldStart, oldEnd, curStart, curEnd }));
+});
+
+// POST /api/google-ads/feedback  { brandId, target_type, target_key, rule_type, verdict, note?, period_start?, period_end? }
+export const saveFeedback = asyncHandler(async (req, res) => {
+  validate(req);
+  const { brandId: _b, ...input } = req.body;
+  res.status(201).json(await calibration.saveFeedback({ brandId: brandOf(req), input, userId: req.user.userId }));
+});
+
+// GET /api/google-ads/feedback?brandId=
+export const listFeedback = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json({ feedback: await calibration.listFeedback(brandOf(req)) });
+});
+
+// GET /api/google-ads/calibration?brandId=&from=&to=  (brandId optional: every brand)
+export const rulePerformance = asyncHandler(async (req, res) => {
+  validate(req);
+  const today = new Date().toISOString().slice(0, 10);
+  const from = req.query.from || new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  res.json(await calibration.rulePerformance({ brandId: req.query.brandId ? Number(req.query.brandId) : null, from, to: req.query.to || today }));
+});
+
+// GET /api/google-ads/ops?brandId=
+export const operations = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await calibration.operations(brandOf(req)));
+});
+
+// GET /api/google-ads/alerts?brandId=&all=1
+export const listAlerts = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await optimization.listAlerts({ brandId: brandOf(req), includeResolved: req.query.all === '1' }));
+});
+
+// PATCH /api/google-ads/alerts/:id  { brandId, status }
+export const setAlertStatus = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await optimization.setAlertStatus({ brandId: brandOf(req), id: idOf(req), status: req.body.status, userId: req.user.userId }));
+});
+
+// POST /api/google-ads/library/rebuild  { brandId }
+export const rebuildLibrary = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.rebuildLibrary(Number(req.body.brandId)));
 });
 
 // GET /api/google-ads/report?brandId=&oldStart=&oldEnd=&curStart=&curEnd=

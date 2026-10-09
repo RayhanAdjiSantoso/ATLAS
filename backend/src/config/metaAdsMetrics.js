@@ -1,37 +1,65 @@
-// Catalog of the metrics the monthly Meta Ads auto-fetch can store, and the
-// pure function that turns one raw Marketing API insights row into a stored
-// row. Apps Script (apps-script/MetaAdsMonthly.gs) deliberately stays dumb —
-// it requests a fixed field set and forwards each row as-is — so every
+// Catalog of the metrics the Meta Ads auto-fetch stores, and the pure
+// function that turns one raw Marketing API insights row into a stored row.
+// Apps Script (apps-script/MetaAdsMonthly.gs) deliberately stays dumb — it
+// requests a fixed field set and forwards each row as-is — so every
 // definition below can be changed with an ATLAS deploy alone, no Apps
 // Script redeploy.
 //
-// Raw row shape sent by Apps Script:
-//   { date, campaignId, campaignName, objective, age, gender,
+// Raw row shape sent by Apps Script (level=ad, breakdowns age,gender, daily):
+//   { date, campaignId, campaignName, adsetId, adsetName, adId, adName,
+//     objective, age, gender,
 //     spend, impressions, reach, frequency,
 //     linkClicks, linkCtr, cpc, cpm, purchaseRoas,
 //     results: { indicator, value } | null, costPerResult: { indicator, value } | null,
-//     actions: { <action_type>: number }, actionValues: { <action_type>: number } }
+//     actions: { <action_type>: number }, actionValues: { <action_type>: number },
+//     // CPAS accounts only — Meta's "with shared items" figures:
+//     catalogActions: { <action_type>: number }, catalogValues: { <action_type>: number },
+//     catalogRoas: number | null }
+//
+// Every metric belongs to one or more SECTIONS. A MAIN account row is
+// stored with the Boost, Non-Boost E-commerce and Non-Boost B2B metrics all
+// computed (which of those a campaign is gets decided when the file is
+// written, from the account's Kata Kunci Boost Post); a CPAS row with the
+// CPAS metrics.
+
+export const SECTIONS = [
+  { key: 'boost', label: 'Boost Post', accountType: 'MAIN' },
+  { key: 'ecom', label: 'Non Boost Post (E-commerce)', accountType: 'MAIN' },
+  { key: 'b2b', label: 'Non Boost Post (B2B)', accountType: 'MAIN' },
+  { key: 'cpas', label: 'CPAS', accountType: 'CPAS' },
+];
+
+// The breakdown every section's file carries, in this order, before the
+// metrics.
+export const BREAKDOWNS = ['Campaign name', 'Ad set name', 'Ad name', 'Age', 'Gender', 'Objective', 'Day'];
 
 // Named action-type groups. The first type present on a row wins (never a
 // sum — pixel and omni_* report the same event, adding them double counts).
-// Pixel types come first to match apps-script/Weekly.gs's EVENT_MAP, which
-// is what the rest of the Meta Ads Automation module already treats as
-// canonical.
+// omni_* comes first: it is every surface (website, app, marketplace) and is
+// what Ads Manager's Content views / Adds to cart / Purchases columns show;
+// the pixel type alone is the website share only, and read first it came
+// out well below Ads Manager (checked on CPAS Shopee, Oct 2026). `lead` is
+// Meta's own all-sources total (pixel + instant form), the number Ads
+// Manager's Leads column shows.
 const ACTION_TYPES = {
-  content_views: ['offsite_conversion.fb_pixel_view_content', 'omni_view_content'],
-  add_to_cart: ['offsite_conversion.fb_pixel_add_to_cart', 'omni_add_to_cart'],
-  initiate_checkout: ['offsite_conversion.fb_pixel_initiate_checkout', 'omni_initiated_checkout'],
-  purchase: ['offsite_conversion.fb_pixel_purchase', 'omni_purchase', 'purchase'],
-  messages: ['onsite_conversion.messaging_conversation_started_7d'],
-  landing_page_views: ['landing_page_view'],
-  leads: ['offsite_conversion.fb_pixel_lead', 'lead'],
-  post_engagement: ['post_engagement'],
-  post_reactions: ['post_reaction'],
+  content_views: ['omni_view_content', 'offsite_conversion.fb_pixel_view_content'],
+  add_to_cart: ['omni_add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'],
+  purchase: ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'],
+  leads: ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'],
+  // Ads Manager's "Messaging contacts" and "Messaging conversations started".
+  messaging_contacts: ['onsite_conversion.total_messaging_connection'],
+  messaging_conversations: ['onsite_conversion.messaging_conversation_started_7d'],
+  // The four columns Post interactions adds up, as Ads Manager names them:
+  // Facebook likes (`like`), Post comments, Post saves, Post shares.
+  post_likes: ['like'],
   post_comments: ['comment'],
-  post_shares: ['post'],
   post_saves: ['onsite_conversion.post_save'],
-  video_plays: ['video_view'],
+  post_shares: ['post'],
 };
+
+// Every action type the fetch must forward — ATLAS hands this list to Apps
+// Script when a run starts, and Apps Script drops everything else.
+export const REQUIRED_ACTION_TYPES = [...new Set(Object.values(ACTION_TYPES).flat())];
 
 const pickAction = (map, group) => {
   if (!map) return null;
@@ -44,12 +72,14 @@ const pickAction = (map, group) => {
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 const ratio = (a, b) => (a == null || b == null || b === 0 ? null : a / b);
 const pct = (a, b) => { const r = ratio(a, b); return r == null ? null : r * 100; };
+const sumPresent = (vals) => (vals.some((v) => v != null) ? vals.reduce((t, v) => t + (v ?? 0), 0) : null);
 
-// ctx = { raw, spend }. `count(group)` / `value(group)` read the action
-// counts / conversion values with the group's first-present-type rule.
+// ctx = { raw, spend }.
 const count = (ctx, group) => pickAction(ctx.raw.actions, group);
 const value = (ctx, group) => pickAction(ctx.raw.actionValues, group);
-const costPer = (ctx, group) => ratio(ctx.spend, count(ctx, group));
+// CPAS "with shared items" (catalog_segment_*), same groups and order.
+const sharedCount = (ctx, group) => pickAction(ctx.raw.catalogActions, group);
+const sharedValue = (ctx, group) => pickAction(ctx.raw.catalogValues, group);
 
 // "Instagram profile visits" is not an action type the Marketing API returns
 // (see PROXY_KEYS in Weekly.gs), but a profile-visit campaign's main result
@@ -76,143 +106,133 @@ const profileVisits = (ctx) => {
   const visits = ratio(ctx.spend, num(ctx.raw.costPerResult?.value) || null);
   return visits == null ? null : Math.round(visits);
 };
-const costPerProfileVisit = (ctx) => {
-  const visits = profileVisits(ctx);
-  if (!visits) return isProfileVisitResult(ctx) ? (num(ctx.raw.costPerResult?.value) || null) : null;
-  return ratio(ctx.spend, visits);
-};
 
-// unit: 'idr' | 'count' | 'pct' | 'ratio' | 'text' — drives display only.
-// actionGroups: which ACTION_TYPES groups compute() reads, so the exact
-// action types to request/forward can be derived from the selected metrics.
+// Facebook likes + Post comments + Post saves + Post shares — the sum of
+// Ads Manager's own four columns. (post_reaction, used before, also counts
+// every other reaction and came out near double: 50 against 27.)
+const interactions = (ctx) => sumPresent(['post_likes', 'post_comments', 'post_saves', 'post_shares'].map((g) => count(ctx, g)));
+
+// unit: 'idr' | 'count' | 'pct' | 'ratio' — drives display and the export
+// cell type. `header` is the column name in the written file — Ads
+// Manager's own wording, so the Report Generator's header matching
+// (features/meta/metaReport.ts) reads the file like a manual export. Base
+// counts come before the ratios built on them: the generator picks the
+// first header that matches.
 export const METRICS = [
-  // ── Default: always fetched ───────────────────────────────────────
-  { key: 'objective', label: 'Objective', group: 'default', unit: 'text', compute: (c) => c.raw.objective ?? null },
-  // Each campaign's own main result, exactly like Ads Manager's Results
-  // column: what it counts depends on the campaign (profile visits,
-  // purchases, adds to cart, …), named by the result indicator — e.g.
-  // profile_visit_view, actions:offsite_conversion.fb_pixel_purchase.
-  { key: 'results', label: 'Results', group: 'default', unit: 'count', compute: (c) => num(c.raw.results?.value) },
+  // ── Every section ──────────────────────────────────────────────────
+  { key: 'amount_spent', header: 'Amount spent (IDR)', unit: 'idr', sections: ['boost', 'ecom', 'b2b', 'cpas'], compute: (c) => c.spend },
+
+  // ── Boost Post ─────────────────────────────────────────────────────
+  { key: 'profile_visits', header: 'Instagram profile visits', unit: 'count', sections: ['boost'], compute: profileVisits },
+  { key: 'cost_per_profile_visit', header: 'Cost per Instagram profile visit', unit: 'idr', sections: ['boost'], compute: (c) => ratio(c.spend, profileVisits(c) || null) },
+  { key: 'profile_visit_rate', header: 'Profile visit rate', unit: 'pct', sections: ['boost'], compute: (c) => pct(profileVisits(c), num(c.raw.impressions)) },
+
+  // ── E-commerce: purchase value up front, as Ads Manager's Sales view has it
+  { key: 'purchase_value', header: 'Purchases conversion value', unit: 'idr', sections: ['ecom'], compute: (c) => value(c, 'purchase') },
+  { key: 'purchase_roas', header: 'Purchase ROAS (return on ad spend)', unit: 'ratio', sections: ['ecom'], compute: (c) => num(c.raw.purchaseRoas) ?? ratio(value(c, 'purchase'), c.spend) },
+
+  // ── B2B: leads up front
+  { key: 'leads', header: 'Leads', unit: 'count', sections: ['b2b'], compute: (c) => count(c, 'leads') },
+  { key: 'cost_per_lead', header: 'Cost per lead', unit: 'idr', sections: ['b2b'], compute: (c) => ratio(c.spend, count(c, 'leads')) },
+  { key: 'messaging_contacts', header: 'Messaging contacts', unit: 'count', sections: ['b2b'], compute: (c) => count(c, 'messaging_contacts') },
+  { key: 'cost_per_messaging_contact', header: 'Cost per messaging contact', unit: 'idr', sections: ['b2b'], compute: (c) => ratio(c.spend, count(c, 'messaging_contacts')) },
+  { key: 'messaging_conversations', header: 'Messaging conversations started', unit: 'count', sections: ['b2b'], compute: (c) => count(c, 'messaging_conversations') },
   {
-    key: 'result_indicator', label: 'Result indicator', group: 'default', unit: 'text',
-    compute: (c) => c.raw.results?.indicator ?? c.raw.costPerResult?.indicator ?? null,
-  },
-  { key: 'cost_per_result', label: 'Cost per result', group: 'default', unit: 'idr', compute: (c) => num(c.raw.costPerResult?.value) },
-  { key: 'amount_spent', label: 'Amount Spent', group: 'default', unit: 'idr', compute: (c) => c.spend },
-  { key: 'impressions', label: 'Impressions', group: 'default', unit: 'count', compute: (c) => num(c.raw.impressions) },
-  { key: 'reach', label: 'Reach', group: 'default', unit: 'count', compute: (c) => num(c.raw.reach) },
-  { key: 'frequency', label: 'Frequency', group: 'default', unit: 'ratio', compute: (c) => num(c.raw.frequency) },
-  { key: 'ctr', label: 'CTR (link click-through rate)', group: 'default', unit: 'pct', compute: (c) => num(c.raw.linkCtr) },
-  { key: 'link_clicks', label: 'Link clicks', group: 'default', unit: 'count', compute: (c) => num(c.raw.linkClicks) },
-  { key: 'cpc', label: 'CPC (cost per link click)', group: 'default', unit: 'idr', compute: (c) => num(c.raw.cpc) },
-  { key: 'cpm', label: 'CPM (cost per 1,000 impressions)', group: 'default', unit: 'idr', compute: (c) => num(c.raw.cpm) },
-  {
-    key: 'profile_visits', label: 'Instagram profile visits', group: 'default', unit: 'count',
-    note: 'Diambil dari Results campaign profile visit (indicator profile_visit_view); Cost per Profile Visit = Amount Spent ÷ profile visits.',
-    compute: profileVisits,
-  },
-  { key: 'cost_per_profile_visit', label: 'Cost per Profile Visits', group: 'default', unit: 'idr', compute: costPerProfileVisit },
-  { key: 'content_views', label: 'Content views', group: 'default', unit: 'count', actionGroups: ['content_views'], compute: (c) => count(c, 'content_views') },
-  { key: 'cost_per_content_view', label: 'Cost per content view', group: 'default', unit: 'idr', actionGroups: ['content_views'], compute: (c) => costPer(c, 'content_views') },
-  {
-    key: 'vc_to_atc_ratio', label: 'View Content to ATC Ratio', group: 'default', unit: 'pct',
-    actionGroups: ['content_views', 'add_to_cart'], compute: (c) => pct(count(c, 'add_to_cart'), count(c, 'content_views')),
-  },
-  { key: 'cost_per_atc', label: 'Cost per ATC', group: 'default', unit: 'idr', actionGroups: ['add_to_cart'], compute: (c) => costPer(c, 'add_to_cart') },
-  {
-    key: 'atc_to_purchase_ratio', label: 'ATC to Purchase Ratio', group: 'default', unit: 'pct',
-    actionGroups: ['add_to_cart', 'purchase'], compute: (c) => pct(count(c, 'purchase'), count(c, 'add_to_cart')),
-  },
-  { key: 'purchases', label: 'Purchases', group: 'default', unit: 'count', actionGroups: ['purchase'], compute: (c) => count(c, 'purchase') },
-  { key: 'purchase_value', label: 'Purchase conversion value', group: 'default', unit: 'idr', actionGroups: ['purchase'], compute: (c) => value(c, 'purchase') },
-  { key: 'cost_per_purchase', label: 'Cost per purchase', group: 'default', unit: 'idr', actionGroups: ['purchase'], compute: (c) => costPer(c, 'purchase') },
-  {
-    key: 'results_roas', label: 'Results ROAS', group: 'default', unit: 'ratio', actionGroups: ['purchase'],
-    // purchase_roas is Meta's own figure; fall back to value ÷ spend when the
-    // API leaves it out for a row.
-    compute: (c) => num(c.raw.purchaseRoas) ?? ratio(value(c, 'purchase'), c.spend),
+    key: 'cost_per_messaging_conversation', header: 'Cost per messaging conversation started', unit: 'idr', sections: ['b2b'],
+    compute: (c) => ratio(c.spend, count(c, 'messaging_conversations')),
   },
 
-  // ── Optional: ticked per brand in Data & file ─────────────────────
-  { key: 'total_messages', label: 'Total messages', group: 'optional', unit: 'count', actionGroups: ['messages'], compute: (c) => count(c, 'messages') },
-  { key: 'cost_per_message', label: 'Cost per Total Messages', group: 'optional', unit: 'idr', actionGroups: ['messages'], compute: (c) => costPer(c, 'messages') },
-  { key: 'adds_to_cart', label: 'Adds to cart', group: 'optional', unit: 'count', actionGroups: ['add_to_cart'], compute: (c) => count(c, 'add_to_cart') },
-  { key: 'adds_to_cart_value', label: 'Adds to cart conversion value', group: 'optional', unit: 'idr', actionGroups: ['add_to_cart'], compute: (c) => value(c, 'add_to_cart') },
-  { key: 'checkouts_initiated', label: 'Checkouts initiated', group: 'optional', unit: 'count', actionGroups: ['initiate_checkout'], compute: (c) => count(c, 'initiate_checkout') },
-  { key: 'cost_per_checkout', label: 'Cost per checkout initiated', group: 'optional', unit: 'idr', actionGroups: ['initiate_checkout'], compute: (c) => costPer(c, 'initiate_checkout') },
-  { key: 'landing_page_views', label: 'Landing page views', group: 'optional', unit: 'count', actionGroups: ['landing_page_views'], compute: (c) => count(c, 'landing_page_views') },
-  { key: 'cost_per_landing_page_view', label: 'Cost per landing page view', group: 'optional', unit: 'idr', actionGroups: ['landing_page_views'], compute: (c) => costPer(c, 'landing_page_views') },
-  { key: 'leads', label: 'Leads', group: 'optional', unit: 'count', actionGroups: ['leads'], compute: (c) => count(c, 'leads') },
-  { key: 'cost_per_lead', label: 'Cost per lead', group: 'optional', unit: 'idr', actionGroups: ['leads'], compute: (c) => costPer(c, 'leads') },
-  { key: 'post_engagements', label: 'Post engagements', group: 'optional', unit: 'count', actionGroups: ['post_engagement'], compute: (c) => count(c, 'post_engagement') },
-  { key: 'post_reactions', label: 'Post reactions', group: 'optional', unit: 'count', actionGroups: ['post_reactions'], compute: (c) => count(c, 'post_reactions') },
-  { key: 'post_comments', label: 'Post comments', group: 'optional', unit: 'count', actionGroups: ['post_comments'], compute: (c) => count(c, 'post_comments') },
-  { key: 'post_shares', label: 'Post shares', group: 'optional', unit: 'count', actionGroups: ['post_shares'], compute: (c) => count(c, 'post_shares') },
-  { key: 'post_saves', label: 'Post saves', group: 'optional', unit: 'count', actionGroups: ['post_saves'], compute: (c) => count(c, 'post_saves') },
-  { key: 'video_plays', label: 'Video plays', group: 'optional', unit: 'count', actionGroups: ['video_plays'], compute: (c) => count(c, 'video_plays') },
+  // ── CPAS: shared-items value up front
+  { key: 'shared_purchase_value', header: 'Purchases conversion value for shared items only', unit: 'idr', sections: ['cpas'], compute: (c) => sharedValue(c, 'purchase') },
+  {
+    key: 'shared_purchase_roas', header: 'Purchase ROAS for shared items only', unit: 'ratio', sections: ['cpas'],
+    compute: (c) => num(c.raw.catalogRoas) ?? ratio(sharedValue(c, 'purchase'), c.spend),
+  },
+
+  // ── Delivery, every section
+  { key: 'impressions', header: 'Impressions', unit: 'count', sections: ['boost', 'ecom', 'b2b', 'cpas'], compute: (c) => num(c.raw.impressions) },
+  { key: 'cpm', header: 'CPM (cost per 1,000 impressions)', unit: 'idr', sections: ['boost', 'ecom', 'b2b', 'cpas'], compute: (c) => num(c.raw.cpm) },
+  { key: 'link_clicks', header: 'Link clicks', unit: 'count', sections: ['boost', 'ecom', 'b2b', 'cpas'], compute: (c) => num(c.raw.linkClicks) },
+  { key: 'cpc', header: 'CPC (cost per link click)', unit: 'idr', sections: ['boost', 'ecom', 'b2b', 'cpas'], compute: (c) => num(c.raw.cpc) },
+  { key: 'ctr', header: 'CTR (link click-through rate)', unit: 'pct', sections: ['boost', 'ecom', 'b2b', 'cpas'], compute: (c) => num(c.raw.linkCtr) },
+
+  // ── Boost Post: interactions
+  { key: 'interactions', header: 'Post interactions', unit: 'count', sections: ['boost'], compute: interactions },
+  { key: 'cost_per_interaction', header: 'Cost per post interaction', unit: 'idr', sections: ['boost'], compute: (c) => ratio(c.spend, interactions(c)) },
+
+  // ── E-commerce funnel
+  { key: 'content_views', header: 'Content views', unit: 'count', sections: ['ecom'], compute: (c) => count(c, 'content_views') },
+  { key: 'cost_per_content_view', header: 'Cost per content view', unit: 'idr', sections: ['ecom'], compute: (c) => ratio(c.spend, count(c, 'content_views')) },
+  { key: 'adds_to_cart', header: 'Adds to cart', unit: 'count', sections: ['ecom'], compute: (c) => count(c, 'add_to_cart') },
+  { key: 'cost_per_add_to_cart', header: 'Cost per add to cart', unit: 'idr', sections: ['ecom'], compute: (c) => ratio(c.spend, count(c, 'add_to_cart')) },
+  { key: 'add_to_cart_rate', header: 'Add to cart rate', unit: 'pct', sections: ['ecom'], compute: (c) => pct(count(c, 'add_to_cart'), count(c, 'content_views')) },
+  { key: 'purchases', header: 'Purchases', unit: 'count', sections: ['ecom'], compute: (c) => count(c, 'purchase') },
+  { key: 'cost_per_purchase', header: 'Cost per purchase', unit: 'idr', sections: ['ecom'], compute: (c) => ratio(c.spend, count(c, 'purchase')) },
+  { key: 'purchase_rate', header: 'Purchase rate', unit: 'pct', sections: ['ecom'], compute: (c) => pct(count(c, 'purchase'), count(c, 'add_to_cart')) },
+  { key: 'conversion_rate', header: 'Conversion rate (purchases ÷ content views)', unit: 'pct', sections: ['ecom'], compute: (c) => pct(count(c, 'purchase'), count(c, 'content_views')) },
+  { key: 'average_order_value', header: 'Average order value', unit: 'idr', sections: ['ecom'], compute: (c) => ratio(value(c, 'purchase'), count(c, 'purchase')) },
+
+  // ── B2B
+  { key: 'lead_conversion_rate', header: 'Lead conversion rate (leads ÷ link clicks)', unit: 'pct', sections: ['b2b'], compute: (c) => pct(count(c, 'leads'), num(c.raw.linkClicks)) },
+
+  // ── CPAS funnel, shared items
+  { key: 'shared_content_views', header: 'Content views with shared items', unit: 'count', sections: ['cpas'], compute: (c) => sharedCount(c, 'content_views') },
+  { key: 'cost_per_shared_content_view', header: 'Cost per content view with shared items', unit: 'idr', sections: ['cpas'], compute: (c) => ratio(c.spend, sharedCount(c, 'content_views')) },
+  { key: 'shared_adds_to_cart', header: 'Adds to cart with shared items', unit: 'count', sections: ['cpas'], compute: (c) => sharedCount(c, 'add_to_cart') },
+  { key: 'cost_per_shared_add_to_cart', header: 'Cost per add to cart with shared items', unit: 'idr', sections: ['cpas'], compute: (c) => ratio(c.spend, sharedCount(c, 'add_to_cart')) },
+  { key: 'shared_add_to_cart_rate', header: 'Add to cart rate with shared items', unit: 'pct', sections: ['cpas'], compute: (c) => pct(sharedCount(c, 'add_to_cart'), sharedCount(c, 'content_views')) },
+  { key: 'shared_purchases', header: 'Purchases with shared items', unit: 'count', sections: ['cpas'], compute: (c) => sharedCount(c, 'purchase') },
+  { key: 'cost_per_shared_purchase', header: 'Cost per purchase with shared items', unit: 'idr', sections: ['cpas'], compute: (c) => ratio(c.spend, sharedCount(c, 'purchase')) },
+  { key: 'shared_purchase_rate', header: 'Purchase rate with shared items', unit: 'pct', sections: ['cpas'], compute: (c) => pct(sharedCount(c, 'purchase'), sharedCount(c, 'add_to_cart')) },
+  { key: 'shared_conversion_rate', header: 'Conversion rate with shared items', unit: 'pct', sections: ['cpas'], compute: (c) => pct(sharedCount(c, 'purchase'), sharedCount(c, 'content_views')) },
+  { key: 'shared_average_order_value', header: 'Average order value with shared items', unit: 'idr', sections: ['cpas'], compute: (c) => ratio(sharedValue(c, 'purchase'), sharedCount(c, 'purchase')) },
 ];
 
 const BY_KEY = new Map(METRICS.map((m) => [m.key, m]));
-export const DEFAULT_METRIC_KEYS = METRICS.filter((m) => m.group === 'default').map((m) => m.key);
-export const OPTIONAL_METRIC_KEYS = METRICS.filter((m) => m.group === 'optional').map((m) => m.key);
+const sectionsOf = (accountType) => SECTIONS.filter((s) => s.accountType === accountType).map((s) => s.key);
 
-// What the UI needs to draw the picker (no compute functions).
+// Stored on every row whatever its account type: the Internal Dashboard's
+// Meta funnel (internalDashboardRepository.metaInsightsMonthly) sums these
+// for CPAS accounts too, as it did before the per-section catalog.
+const ALWAYS_STORED = ['purchases', 'purchase_value', 'content_views', 'adds_to_cart'];
+
+// Metric keys stored for an account type: the union of its sections.
+export function metricKeysFor(accountType) {
+  const sections = new Set(sectionsOf(accountType));
+  const keys = METRICS.filter((m) => m.sections.some((s) => sections.has(s))).map((m) => m.key);
+  return [...new Set([...keys, ...ALWAYS_STORED])];
+}
+
+// What the UI needs to show the fixed metric list per section.
 export function metricCatalog() {
-  return METRICS.map(({ key, label, group, unit, note }) => ({ key, label, group, unit, note: note ?? null }));
-}
-
-// Silently drops unknown/default keys so a stale or tampered selection can
-// never reach compute().
-export function sanitizeExtraMetrics(keys) {
-  if (!Array.isArray(keys)) return [];
-  const wanted = new Set(keys);
-  return OPTIONAL_METRIC_KEYS.filter((k) => wanted.has(k));
-}
-
-export function selectedMetricKeys(extraMetrics) {
-  return [...DEFAULT_METRIC_KEYS, ...sanitizeExtraMetrics(extraMetrics)];
-}
-
-// The exact action_type strings Apps Script should keep on each row for this
-// selection — everything else is dropped before the POST to keep the payload
-// small.
-export function requiredActionTypes(extraMetrics) {
-  const groups = new Set();
-  for (const key of selectedMetricKeys(extraMetrics)) {
-    for (const g of BY_KEY.get(key).actionGroups ?? []) groups.add(g);
-  }
-  return [...new Set([...groups].flatMap((g) => ACTION_TYPES[g]))];
-}
-
-// Column headers used when the stored data is written back out as an Ads
-// Manager-style file (services/metaAdsLibraryExport.js). Same wording as a
-// real Ads Manager export so the Report Generator's header matching
-// (features/meta/metaReport.ts) treats the file like a manual upload; only
-// the two headers that differ from the catalog label are listed.
-const EXPORT_LABELS = {
-  amount_spent: 'Amount spent (IDR)',
-  purchase_value: 'Purchases conversion value',
-};
-
-export function exportColumns(extraMetrics) {
-  return selectedMetricKeys(extraMetrics).map((key) => ({
-    key, header: EXPORT_LABELS[key] ?? BY_KEY.get(key).label, unit: BY_KEY.get(key).unit,
+  return SECTIONS.map((s) => ({
+    key: s.key, label: s.label, accountType: s.accountType,
+    metrics: METRICS.filter((m) => m.sections.includes(s.key)).map(({ key, header, unit }) => ({ key, label: header, unit })),
   }));
 }
 
-// Typed columns for the additive core metrics; every other selected metric
-// goes into the `metrics` JSONB.
-export const TYPED_KEYS = new Set(['objective', 'amount_spent', 'impressions', 'reach', 'link_clicks', 'purchases', 'purchase_value']);
+// Columns of one written file. `sections` is one section, or several whose
+// metrics are merged (the Non Boost Post file carries E-commerce and B2B),
+// in catalog order with no duplicates.
+export function exportColumns(sections) {
+  const wanted = new Set(sections);
+  return METRICS.filter((m) => m.sections.some((s) => wanted.has(s))).map(({ key, header, unit }) => ({ key, header, unit }));
+}
+
+// Typed columns for the additive core metrics (what the Internal Dashboard
+// SUMs); every other metric goes into the `metrics` JSONB. reach is kept in
+// its column for continuity but is no longer exported.
+export const TYPED_KEYS = new Set(['amount_spent', 'impressions', 'link_clicks', 'purchases', 'purchase_value']);
 
 // One raw Marketing API row -> the row stored in meta_ads_insights_daily.
 // Returns null for a row that cannot be keyed (missing date/campaign).
-export function normalizeInsightRow(raw, extraMetrics) {
+export function normalizeInsightRow(raw, accountType) {
   if (!raw?.date || !raw?.campaignId) return null;
   const ctx = { raw, spend: num(raw.spend) };
 
   const typed = {};
   const metrics = {};
-  for (const key of selectedMetricKeys(extraMetrics)) {
+  for (const key of metricKeysFor(accountType)) {
     const result = BY_KEY.get(key).compute(ctx);
     if (TYPED_KEYS.has(key)) typed[key] = result;
     else if (result != null) metrics[key] = result;
@@ -222,15 +242,41 @@ export function normalizeInsightRow(raw, extraMetrics) {
     entry_date: raw.date,
     campaign_id: String(raw.campaignId),
     campaign_name: raw.campaignName ?? '',
+    adset_id: raw.adsetId ? String(raw.adsetId) : '',
+    adset_name: raw.adsetName ?? '',
+    ad_id: raw.adId ? String(raw.adId) : '',
+    ad_name: raw.adName ?? '',
     age: raw.age || 'Unknown',
     gender: raw.gender || 'unknown',
-    objective: typed.objective ?? null,
+    objective: raw.objective ?? null,
     amount_spent: typed.amount_spent ?? null,
     impressions: typed.impressions ?? null,
-    reach: typed.reach ?? null,
+    reach: num(raw.reach),
     link_clicks: typed.link_clicks ?? null,
     purchases: typed.purchases ?? null,
     purchase_value: typed.purchase_value ?? null,
     metrics,
   };
+}
+
+// The value of one metric on a stored row (typed column or JSONB).
+export function storedValue(row, key) {
+  return TYPED_KEYS.has(key) ? row[key] : row.metrics?.[key];
+}
+
+// Boost or Non-Boost for a MAIN campaign. With a Kata Kunci Boost Post (set
+// per account in Meta Ads Automation) the keyword decides — the same rule
+// the Internal Dashboard split uses (dailyTrackingSync.metaFunnelByMonth).
+// Without one, the Report Generator's campaign-name rule
+// (features/meta/metaReport.ts isBoostRow) is used, so an account that has
+// no keyword yet still files somewhere sensible.
+export function isBoostCampaign(campaignName, keyword) {
+  const name = String(campaignName ?? '').toLowerCase();
+  if (keyword) return name.includes(String(keyword).toLowerCase());
+  return isBoostByName(name);
+}
+
+export function isBoostByName(campaignName) {
+  const v = String(campaignName ?? '').toLowerCase();
+  return v.includes('profile visit') || v.includes('instagram post') || /\bpv\b/.test(v) || /\bpost\b/.test(v);
 }

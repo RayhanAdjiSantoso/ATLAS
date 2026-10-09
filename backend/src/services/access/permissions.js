@@ -26,7 +26,7 @@ export const ROLE_LABELS = {
 export const MODULES = [
   { key: 'dashboard', label: 'Business Overview' },
   { key: 'daily_tracking', label: 'Daily Tracking' },
-  { key: 'brand_settings', label: 'Pengaturan Brand' },
+  { key: 'brand_settings', label: 'Brand Setting' },
   { key: 'report_generator', label: 'Report Generator' },
   { key: 'history', label: 'History Upload' },
   { key: 'meta_automation', label: 'Meta Ads Automation' },

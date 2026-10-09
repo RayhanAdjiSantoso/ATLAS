@@ -95,10 +95,13 @@ export const RENAME_MAP: { match: string; label: string }[] = [
   { match: 'adds to cart', label: 'Add to Cart' },
 ];
 
+// A rule applies only to a header that STARTS with its pattern: Meta names a
+// column after its metric first, and a looser "contains" turned ATLAS's
+// "Conversion rate (purchases ÷ content views)" into "Purchases".
 export function displayName(col: string): string {
-  const lc = col.toLowerCase();
+  const lc = col.toLowerCase().trim();
   for (const r of RENAME_MAP) {
-    if (lc.includes(r.match)) return r.label;
+    if (lc.startsWith(r.match)) return r.label;
   }
   return col;
 }

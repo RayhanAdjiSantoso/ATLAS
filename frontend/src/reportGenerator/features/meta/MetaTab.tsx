@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
@@ -56,18 +57,19 @@ import {
 import { MetaCompareBars } from './MetaCompareBars';
 import { MetaLaneSwitch } from './MetaLaneSwitch';
 import { SymptomTreePanel } from '../shopee/AnalysisSections';
-import type { MetaFunnel } from '../../lib/metaFunnel';
+import { LEAD_RESULT, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
+import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
 import { PeriodSourcePicker, type LibraryMonth, type PeriodSourceTab } from '../reports/PeriodSourcePicker';
 import { RangeCalendar } from '../reports/RangeCalendar';
 import type { AutoRange } from '../reports/AutoRangePanel';
-import { getSavedPeriod } from '../reports/api';
+import { getClients, getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
-import { buildMetaReport, isBoostRow, type MetaReport, type NonBoostLaneKey } from './metaReport';
+import { buildMetaReport, isBoostRow, type MetaReport, type NonBoostLane, type NonBoostLaneKey } from './metaReport';
 
 // Meta's export uses either a "Month" breakdown or a "Day" breakdown column
 // as the period dimension — either satisfies the requirement.
@@ -77,13 +79,26 @@ const REQUIRED_COLS = [
   { label: 'Campaign Name', kw: ['campaign'] },
 ];
 
-const INDUSTRY_OPTIONS = [
-  { id: 'b2b', name: 'B2B / Services' },
-  { id: 'retail', name: 'Retail' },
-];
+// Brand Setting's Kategori Industri (and the older spellings it still reads)
+// mapped onto the two lanes this report knows. Food & Beverage sells to end
+// customers, so it reads as Retail.
+const BRAND_INDUSTRY_TO_META: Record<string, Exclude<MetaIndustry, 'custom' | null>> = {
+  'Retail Fashion': 'retail',
+  'Retail-Fashion': 'retail',
+  'Retail Non-Fashion': 'retail',
+  'Retail-Non Fashion': 'retail',
+  'Food & Beverage': 'retail',
+  'Food & Beverages': 'retail',
+  'B2B Services': 'b2b',
+  'B2B + Services': 'b2b',
+};
+const META_INDUSTRY_LABEL: Record<'b2b' | 'retail', string> = { b2b: 'B2B / Services', retail: 'Retail' };
 const OBJECTIVE_OPTIONS = META_OBJECTIVE_CHOICES.map((o) => ({ id: o.key, name: o.label }));
 
-const META_PERIOD_CHANNELS = ['meta', 'cpas'] as const;
+// 'boost' / 'nonboost' are the two halves of a month's Meta Ads export in
+// Data Collection Hub; 'meta' is the combined file of before that split.
+const META_MAIN_CHANNELS = ['boost', 'nonboost', 'meta'] as const;
+const META_PERIOD_CHANNELS = [...META_MAIN_CHANNELS, 'cpas'] as const;
 
 const SOURCE_HINT: Record<PeriodSourceKind, string> = {
   upload: '',
@@ -163,12 +178,16 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const cpasRows = useMemo(() => (cpasSides.old || cpasSides.cur ? alignRowKeys([...(cpasSides.old?.rows ?? []), ...(cpasSides.cur?.rows ?? [])]) : null), [cpasSides]);
   const cpasHeaders = useMemo(() => (cpasRows?.length ? Object.keys(cpasRows[0]) : []), [cpasRows]);
 
-  // B2B / Retail — manual, not in the export. Objective — Meta's ODAX
+  // B2B / Retail — not in the export; read from the brand's Kategori Industri
+  // in Brand Setting and only editable there. Objective — Meta's ODAX
   // objective; auto-prefilled from the file's "Objective" column when present,
   // still overridable.
-  const [industry, setIndustry] = useState<MetaIndustry>(null);
+  const [brandIndustry, setBrandIndustry] = useState<string | null | undefined>(undefined); // undefined = loading
+  const industry: MetaIndustry = brandIndustry ? BRAND_INDUSTRY_TO_META[brandIndustry] ?? null : null;
   // Which Non-Boost lane (Retail / B2B Leads) the Non-Boost page reads.
   const [nbLane, setNbLane] = useState<NonBoostLaneKey>('retail');
+  // The B2B lane's result, picked on the report (null = the automatic pick).
+  const [b2bResult, setB2bResult] = useState<LeadResultKind | null>(null);
   // Legacy — the "Custom Conversion" column picker is gone; kept so old saved
   // report configs still round-trip.
   const [customResultsCol, setCustomResultsCol] = useState<string | null>(null);
@@ -291,7 +310,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     try {
       const { data } = await api.get(`/brands/${clientId}/library`);
       const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'meta' && f.period_month?.slice(0, 7) === month.month);
-      const metaList = files.filter((f) => f.channel === 'meta');
+      const metaList = files.filter((f) => (META_MAIN_CHANNELS as readonly string[]).includes(f.channel));
       const cpasList = files.filter((f) => f.channel === 'cpas');
 
       async function downloadAndParse(list: LibraryFileMeta[]): Promise<SheetRow[]> {
@@ -440,7 +459,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       <LibraryFileSlot
         clientId={clientId}
         platform="meta"
-        channel={target}
+        channel={target === 'meta' ? META_MAIN_CHANNELS : target}
         tag={tag}
         accept=".csv,.xlsx,.xls"
         onFiles={(files) => handleUpload(files, target, role)}
@@ -489,11 +508,25 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     }
   }
 
-  function pickIndustry(ind: MetaIndustry) {
-    setIndustry(ind);
-    setReport(null);
-    onInvalidate();
-  }
+  // Re-read on every visit to the tab, so a change saved in Brand Setting
+  // shows up without reloading the page.
+  useEffect(() => {
+    if (!clientId || !isActive) return;
+    let alive = true;
+    getClients()
+      .then((list) => {
+        if (!alive) return;
+        const next = list.find((c) => c.id === clientId)?.industry ?? null;
+        if (brandIndustry !== undefined && brandIndustry !== next) {
+          setReport(null);
+          onInvalidate();
+        }
+        setBrandIndustry(next);
+      })
+      .catch(() => alive && brandIndustry === undefined && setBrandIndustry(null));
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, isActive]);
   function pickObjective(obj: MetaObjectiveKey | null) {
     setObjective(obj);
     setReport(null);
@@ -542,6 +575,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     if (!metaRows) return;
     const r = buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
     setNbLane(r.nonBoostLanes?.[0]?.key ?? 'retail');
+    setB2bResult(null);
     setReport(r);
     setGeneratedAt(formatGeneratedDate());
     onGenerated({ period: { old: r.p1, cur: r.p2 }, kpis: r.summary.kpis, cpasKpis: r.summary.cpasKpis, spend: r.summary.spend });
@@ -557,7 +591,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setCurPickedMonth(null);
     setOldPickedRange(null);
     setCurPickedRange(null);
-    setIndustry(null);
     setCustomResultsCol(null);
     setObjective(null);
     setNbLane('retail');
@@ -603,6 +636,13 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // The Audience & Creative Analysis of one channel, as the architecture
   // sheet lays them out. Selling channels (CPAS, Non-Boost Retail) read the
   // purchase funnel; B2B Leads the lead funnel; Boost Post brand actions.
+  // The B2B lane's result: the user's pick when the lane has it, else the
+  // automatic one. Null for a lane that is not B2B.
+  function laneLeadKind(lane: NonBoostLane): LeadResultKind | null {
+    if (!lane.leadResults) return null;
+    return b2bResult && lane.leadResults.kinds.includes(b2bResult) ? b2bResult : lane.leadResults.auto;
+  }
+
   function analysisSections({
     prefix,
     period,
@@ -611,6 +651,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     campCol,
     ageCol,
     genderCol,
+    leadKind,
   }: {
     prefix: string;
     period: string;
@@ -619,6 +660,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     campCol: string | null;
     ageCol: string | null;
     genderCol: string | null;
+    leadKind?: LeadResultKind;
   }) {
     const adCol = rows.length ? findAdCol(rows) : null;
     const badge = `data ${period}`;
@@ -658,7 +700,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             heading={`${prefix} · Age Breakdown`}
             badge={`NV · RM · ${period}`}
             rows={rows}
-            kind={kind}
+            kind={kind} leadKind={leadKind}
             menu={sales ? SALES_AGE_METRICS : B2B_AGE_METRICS}
             dimCol={ageCol}
             campCol={campCol}
@@ -673,13 +715,13 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               badge={`NV · RM · ${period}`}
               rows={rows}
               dimCol={genderCol}
-              kind={kind}
+              kind={kind} leadKind={leadKind}
               metrics={(sales ? SALES_AUDIENCE_METRICS : B2B_GENDER_METRICS) as typeof SALES_AUDIENCE_METRICS}
               prefer="pies"
               campCol={campCol}
             />
           ) : (
-            <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
+            <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} leadKind={leadKind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
           )}
           {funnels.map((f) => (
             <MetaCompareBars
@@ -687,7 +729,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               heading={`${prefix} · ${f.title}`}
               badge={`per campaign · NV · RM · ${period}`}
               rows={rows}
-              kind={kind}
+              kind={kind} leadKind={leadKind}
               menu={f.menu}
               dimCol={campCol}
               campCol={campCol}
@@ -704,7 +746,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             heading={`${prefix} · Creative Traffic`}
             badge={`per materi iklan · ${period}`}
             rows={rows}
-            kind={kind}
+            kind={kind} leadKind={leadKind}
             menu={sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS}
             dimCol={adCol}
             campCol={campCol}
@@ -718,7 +760,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             heading={`${prefix} · Creative Conversion`}
             badge={`per materi iklan · ${period}`}
             rows={rows}
-            kind={kind}
+            kind={kind} leadKind={leadKind}
             menu={sales ? SALES_CREATIVE_CONVERSION_METRICS : B2B_CREATIVE_CONVERSION_METRICS}
             dimCol={adCol}
             campCol={campCol}
@@ -786,7 +828,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           </div>
         </HowToStep>
         <HowToStep num={2} title="Pilih sumber & buat laporan">
-          Pilih file Meta Ads untuk periode lalu dan periode ini dari Data Brand (wajib). Pilih juga file CPAS jika tersedia. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
+          Pilih file Meta Ads untuk periode lalu dan periode ini dari Data Collection Hub (wajib). Pilih juga file CPAS jika tersedia. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
         </HowToStep>
       </HowTo>
 
@@ -994,14 +1036,14 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           <div className="setup-fields">
             <div className="setup-field">
               <span className="setup-field-label">Industri</span>
-              <SearchSelect
-                options={INDUSTRY_OPTIONS}
-                value={industry === 'b2b' || industry === 'retail' ? industry : null}
-                onChange={(id) => pickIndustry(id as MetaIndustry)}
-                placeholder="— pilih —"
-                searchable={false}
-              />
-              <span className="setup-field-hint">Manual — tidak ada di export Meta</span>
+              <div className={`setup-readonly${brandIndustry ? '' : ' is-empty'}`} aria-readonly="true">
+                {brandIndustry === undefined ? 'Memuat…' : brandIndustry || 'Belum diatur'}
+              </div>
+              <span className="setup-field-hint">
+                {brandIndustry && industry ? <>Dibaca sebagai {META_INDUSTRY_LABEL[industry]} · </> : null}
+                {brandIndustry && !industry ? <>Kategori ini tidak dikenali report Meta · </> : null}
+                {clientId ? <Link to={`/pengaturan-brand?detail=${clientId}`}>{brandIndustry ? 'Ubah' : 'Atur'} di Brand Setting</Link> : 'Diatur di Brand Setting'}
+              </span>
             </div>
             <div className="setup-field">
               <span className="setup-field-label">Objective{objectiveCol ? ' · prefill dari file' : ''}</span>
@@ -1096,19 +1138,35 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                         )}
                         {report.nonBoostLanes?.length ? (
                           <SectionGroup label="Non-Boost Post">
-                            {report.nonBoostLanes.map((lane) => (
-                              <OverviewDetailedCard
-                                key={lane.key}
-                                heading={`Non-Boost Post · ${lane.label}`}
-                                badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
-                                overviewRows={lane.overview.overviewRows}
-                                detailedRows={lane.overview.detailedRows}
-                                allCols={lane.overview.allCols}
-                                p1={report.p1}
-                                p2={report.p2}
-                                aside={rca(lane.funnel, report.p1, report.p2, lane.key === 'b2b' ? 'Root Cause Analysis · Leads' : 'Root Cause Analysis')}
-                              />
-                            ))}
+                            {report.nonBoostLanes.map((lane) => {
+                              const kind = laneLeadKind(lane);
+                              const variant = kind ? lane.leadResults?.byKind[kind] : undefined;
+                              return (
+                                  <OverviewDetailedCard
+                                    key={`${lane.key}-${kind ?? 'auto'}`}
+                                    toolbar={lane.leadResults && lane.leadResults.kinds.length > 0 ? (
+                                      <SegmentedToggle
+                                        label="Hasil B2B"
+                                        options={lane.leadResults.kinds.map((k) => ({ value: k, label: LEAD_RESULT[k].label }))}
+                                        value={kind ?? lane.leadResults.auto}
+                                        onChange={setB2bResult}
+                                        accent="var(--acc)"
+                                      />
+                                    ) : undefined}
+                                    heading={`Non-Boost Post · ${lane.label}`}
+                                    badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
+                                    overviewRows={variant?.overviewRows ?? lane.overview.overviewRows}
+                                    detailedRows={lane.overview.detailedRows}
+                                    allCols={lane.overview.allCols}
+                                    p1={report.p1}
+                                    p2={report.p2}
+                                    aside={rca(
+                                      variant?.funnel ?? lane.funnel, report.p1, report.p2,
+                                      lane.key === 'b2b' ? `Root Cause Analysis · ${LEAD_RESULT[kind ?? 'leads'].label}` : 'Root Cause Analysis',
+                                    )}
+                                  />
+                              );
+                            })}
                           </SectionGroup>
                         ) : null}
                         {cpas && (cpas.overall || cpas.nv || cpas.rm) && (
@@ -1194,6 +1252,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           period: report.p2,
                           rows: lane.curRows,
                           kind: lane.key === 'retail' ? 'sales' : 'b2b',
+                          leadKind: laneLeadKind(lane) ?? undefined,
                           campCol: lane.campCol,
                           ageCol: lane.ageCol,
                           genderCol: lane.genderCol,

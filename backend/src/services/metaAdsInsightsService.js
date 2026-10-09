@@ -7,7 +7,7 @@ import { callAppsScript } from './metaAutomationService.js';
 import * as library from './brandLibraryService.js';
 import { buildInsightsWorkbook } from './metaAdsLibraryExport.js';
 import {
-  metricCatalog, sanitizeExtraMetrics, requiredActionTypes, normalizeInsightRow,
+  metricCatalog, REQUIRED_ACTION_TYPES, normalizeInsightRow, isBoostCampaign,
 } from '../config/metaAdsMetrics.js';
 import { refreshInternalDashboard } from './internalDashboardSync/dailyTrackingSync.js';
 
@@ -62,16 +62,12 @@ const dayDiff = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(
 // ---------------------------------------------------------------------
 export async function getOverview(brandId) {
   await assertBrand(brandId);
-  const [configs, months, runs] = await Promise.all([
-    repo.listConfigs(brandId),
+  const [months, runs] = await Promise.all([
     repo.summariseMonths(brandId),
     repo.listRecentRuns(brandId),
   ]);
-  const config = Object.fromEntries(ACCOUNT_TYPES.map((t) => [t, { extraMetrics: [] }]));
-  for (const c of configs) config[c.account_type] = { extraMetrics: sanitizeExtraMetrics(c.extra_metrics) };
   return {
     catalog: metricCatalog(),
-    config,
     months: months.map((m) => ({
       accountType: m.account_type, month: m.month, rowCount: m.row_count, dayCount: m.day_count,
       campaignCount: m.campaign_count, amountSpent: Number(m.amount_spent), fetchedAt: m.fetched_at,
@@ -97,15 +93,6 @@ export async function listEligibleAccounts(brandId) {
   }));
 }
 
-export async function saveConfig({ brandId, accountType, extraMetrics, userId }) {
-  await assertBrand(brandId);
-  assertAccountType(accountType);
-  const saved = await repo.upsertConfig({
-    brandId, accountType, extraMetrics: sanitizeExtraMetrics(extraMetrics), userId,
-  });
-  return { accountType: saved.account_type, extraMetrics: saved.extra_metrics };
-}
-
 // Queues a background run in Apps Script for one month (the current month is
 // fetched up to yesterday). It cannot be awaited here: a full
 // month at age × gender × day grain outlives Vercel's 60s function limit, so
@@ -128,28 +115,49 @@ export async function requestFetch({ brandId, accountType, month }) {
 }
 
 // ---------------------------------------------------------------------
-// Pengaturan Brand › Data & file library
+// Data Collection Hub › Performance Database library
 //
-// A fetched month is also filed in the brand's file library (Meta Ads for
-// the MAIN account, CPAS for the CPAS account) as an Ads Manager-style
-// .xlsx, because that library is what the Data & file grid and the Report
-// Generator's "Pilih dari perpustakaan" read. The DB table stays the source
-// of truth; the file is regenerated from it and can be rebuilt any time.
+// A fetched month is also filed in the brand's file library as Ads
+// Manager-style .xlsx files, because that library is what the Performance
+// Database grid and the Report Generator's "Pilih dari perpustakaan" read.
+// A MAIN account month becomes two files — Boost Post and Non Boost Post,
+// split by the account's Kata Kunci Boost Post — and a CPAS month one. The
+// DB table stays the source of truth; the files are regenerated from it and
+// can be rebuilt any time.
 // ---------------------------------------------------------------------
-const LIBRARY_CHANNEL = { MAIN: 'meta', CPAS: 'cpas' };
+// channel -> metric sections written into its file.
+const LIBRARY_FILES = {
+  MAIN: [
+    { channel: 'boost', label: 'Boost Post', sections: ['boost'], boost: true },
+    { channel: 'nonboost', label: 'Non Boost Post', sections: ['ecom', 'b2b'], boost: false },
+  ],
+  CPAS: [{ channel: 'cpas', label: 'CPAS', sections: ['cpas'] }],
+};
+// Channels a MAIN month may already sit in: 'meta' is the combined
+// Boost + Non-Boost file of before the split.
+const MAIN_SLOT_CHANNELS = ['boost', 'nonboost', 'meta'];
 const AUTO_FILE_PREFIX = 'ATLAS-auto_';
 
-const autoFilename = (brandName, accountType, month) => {
+const autoFilename = (brandName, channel, month) => {
   const slug = String(brandName).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'brand';
-  return `${AUTO_FILE_PREFIX}${LIBRARY_CHANNEL[accountType]}_${slug}_${month}.xlsx`;
+  return `${AUTO_FILE_PREFIX}${channel}_${slug}_${month}.xlsx`;
 };
 
-async function findSlotParts(brandId, accountType, month) {
-  const parts = await library.listSlotParts(brandId, 'meta', LIBRARY_CHANNEL[accountType], `${month}-01`);
+const slotChannels = (accountType) => (accountType === 'MAIN' ? MAIN_SLOT_CHANNELS : ['cpas']);
+
+async function findMonthParts(brandId, accountType, month) {
+  const lists = await Promise.all(slotChannels(accountType).map((ch) => library.listSlotParts(brandId, 'meta', ch, `${month}-01`)));
+  const parts = lists.flatMap((list, i) => list.map((p) => ({ ...p, channel: slotChannels(accountType)[i] })));
   return {
-    auto: parts.find((p) => p.original_filename.startsWith(AUTO_FILE_PREFIX)) ?? null,
+    auto: parts.filter((p) => p.original_filename.startsWith(AUTO_FILE_PREFIX)),
     manual: parts.filter((p) => !p.original_filename.startsWith(AUTO_FILE_PREFIX)),
   };
+}
+
+// Boost or not for a stored MAIN row, by its account's keyword.
+async function boostClassifier(brandId) {
+  const keywords = await repo.listBoostKeywords(brandId);
+  return (row) => isBoostCampaign(row.campaign_name, keywords.get(row.ad_account_id));
 }
 
 // Files the month into the library. Never touches a file someone uploaded by
@@ -160,10 +168,10 @@ export async function syncLibraryFile({ brandId, accountType, month, userId }) {
   assertAccountType(accountType);
   const { startDate, endDate } = monthBounds(month);
 
-  const { auto, manual } = await findSlotParts(brandId, accountType, month);
+  const { auto, manual } = await findMonthParts(brandId, accountType, month);
   if (manual.length) {
     throw new AppError(
-      `Bulan ${month} sudah punya file manual di Data & file (${manual.map((p) => p.original_filename).join(', ')}). `
+      `Bulan ${month} sudah punya file manual di Performance Database (${manual.map((p) => p.original_filename).join(', ')}). `
       + 'Hapus file itu dulu jika ingin memakai data hasil tarikan otomatis.', 409,
     );
   }
@@ -175,18 +183,37 @@ export async function syncLibraryFile({ brandId, accountType, month, userId }) {
   // actually stored (1st .. yesterday), not the whole calendar month.
   const firstDay = rows[0].entry_date;
   const lastDay = rows[rows.length - 1].entry_date;
-  const extraMetrics = await repo.getExtraMetrics(brandId, accountType);
-  const buffer = buildInsightsWorkbook({ start: firstDay, end: lastDay, rows, extraMetrics });
-  const coverage = library.summariseRange({ start: firstDay, end: lastDay }, month);
+  const isBoost = accountType === 'MAIN' ? await boostClassifier(brandId) : null;
+  const written = [];
 
-  const file = await library.upsertLibraryFile({
-    brandId, platform: 'meta', channel: LIBRARY_CHANNEL[accountType],
-    periodMonth: coverage.periodMonth, periodStart: coverage.periodStart, periodEnd: coverage.periodEnd,
-    coveredDays: coverage.coveredDays, dayBitmap: coverage.dayBitmap, rowCount: rows.length,
-    periodSource: 'declared', partIndex: auto?.part_index ?? 1,
-    filename: autoFilename(brand.brand_name, accountType, month), buffer, userId,
-  });
-  return { fileId: file.id, filename: file.original_filename, rowCount: rows.length };
+  for (const spec of LIBRARY_FILES[accountType]) {
+    const fileRows = isBoost ? rows.filter((r) => isBoost(r) === spec.boost) : rows;
+    const existing = auto.find((p) => p.channel === spec.channel);
+    if (!fileRows.length) {
+      // Nothing of this kind this month (e.g. no Boost campaign): an older
+      // copy would show campaigns that are no longer there.
+      if (existing) await library.deleteLibraryFile(brandId, existing.id);
+      continue;
+    }
+    const buffer = buildInsightsWorkbook({
+      start: firstDay, end: lastDay, rows: fileRows, sections: spec.sections,
+      campaignType: isBoost ? () => spec.label : null,
+    });
+    const coverage = library.summariseRange({ start: firstDay, end: lastDay }, month);
+    const file = await library.upsertLibraryFile({
+      brandId, platform: 'meta', channel: spec.channel,
+      periodMonth: coverage.periodMonth, periodStart: coverage.periodStart, periodEnd: coverage.periodEnd,
+      coveredDays: coverage.coveredDays, dayBitmap: coverage.dayBitmap, rowCount: fileRows.length,
+      periodSource: 'declared', partIndex: existing?.part_index ?? 1,
+      filename: autoFilename(brand.brand_name, spec.channel, month), buffer, userId,
+    });
+    written.push({ channel: spec.channel, fileId: file.id, filename: file.original_filename, rowCount: fileRows.length });
+  }
+
+  // The combined auto file of before the Boost / Non-Boost split.
+  for (const old of auto.filter((p) => p.channel === 'meta')) await library.deleteLibraryFile(brandId, old.id);
+
+  return { files: written, rowCount: rows.length };
 }
 
 // Called by Apps Script after a finished run. A month that already has a
@@ -227,10 +254,16 @@ export async function exportRange({ brandId, accountType, start, end }) {
   if (dayDiff(start, end) + 1 > MAX_RANGE_DAYS) throw new AppError(`Rentang maksimal ${MAX_RANGE_DAYS} hari`, 400);
   const rows = await repo.listRowsInRange({ brandId, accountType, startDate: start, endDate: end });
   if (!rows.length) throw new AppError('Belum ada data tersimpan pada rentang ini', 404);
-  const extraMetrics = await repo.getExtraMetrics(brandId, accountType);
+  // One file per account: MAIN carries Boost and Non-Boost together, each
+  // row labelled with its Campaign type.
+  const isBoost = accountType === 'MAIN' ? await boostClassifier(brandId) : null;
   return {
-    buffer: buildInsightsWorkbook({ start, end, rows, extraMetrics }),
-    filename: `ATLAS-auto_${LIBRARY_CHANNEL[accountType]}_${start}_${end}.xlsx`,
+    buffer: buildInsightsWorkbook({
+      start, end, rows,
+      sections: accountType === 'MAIN' ? ['boost', 'ecom', 'b2b'] : ['cpas'],
+      campaignType: isBoost ? (r) => (isBoost(r) ? 'Boost Post' : 'Non Boost Post') : null,
+    }),
+    filename: `ATLAS-auto_${accountType === 'MAIN' ? 'meta' : 'cpas'}_${start}_${end}.xlsx`,
     rowCount: rows.length,
   };
 }
@@ -241,10 +274,10 @@ export async function deleteMonth({ brandId, accountType, month }) {
   const { startDate, endDate } = monthBounds(month);
   const deleted = await repo.deleteMonthRows({ brandId, accountType, startDate, endDate });
   await refreshInternalDashboard(brandId);
-  // The auto-filed copy goes with it, or the library would keep offering a
+  // The auto-filed copies go with it, or the library would keep offering a
   // month that no longer exists. A manual file is never removed here.
-  const { auto } = await findSlotParts(brandId, accountType, month);
-  if (auto) await library.deleteLibraryFile(brandId, auto.id);
+  const { auto } = await findMonthParts(brandId, accountType, month);
+  for (const file of auto) await library.deleteLibraryFile(brandId, file.id);
   return { accountType, month, deleted };
 }
 
@@ -265,12 +298,13 @@ export async function startRun({ brandId, accountType, adAccountId, month, since
     throw new AppError('since/until harus berada di dalam bulan yang sama dan berurutan', 400);
   }
   const runId = randomUUID();
-  const extraMetrics = await repo.getExtraMetrics(brandId, accountType);
   await repo.insertRun({
     brandId, accountType, adAccountId, month: `${month}-01`, rangeStart, rangeEnd,
     trigger: trigger === 'scheduled' ? 'scheduled' : 'manual', runId,
   });
-  return { runId, actionTypes: requiredActionTypes(extraMetrics) };
+  // catalogSegments: CPAS accounts also ask Meta for the "with shared items"
+  // fields (catalog_segment_*), which only mean something there.
+  return { runId, actionTypes: REQUIRED_ACTION_TYPES, catalogSegments: accountType === 'CPAS' };
 }
 
 async function requireOpenRun(runId) {
@@ -282,20 +316,19 @@ async function requireOpenRun(runId) {
 
 export async function ingestRows({ runId, rows }) {
   const run = await requireOpenRun(runId);
-  const extraMetrics = await repo.getExtraMetrics(run.brand_id, run.account_type);
   const { startDate, endDate } = runRange(run);
 
   // Rows outside the run's range are dropped rather than trusted: a stray
   // date would land on days whose stale-row cleanup this run never owns.
   const normalized = rows
-    .map((raw) => normalizeInsightRow(raw, extraMetrics))
+    .map((raw) => normalizeInsightRow(raw, run.account_type))
     .filter((r) => r && r.entry_date >= startDate && r.entry_date <= endDate);
 
-  // Meta can return the same campaign/day/age/gender twice across page
+  // Meta can return the same ad/day/age/gender twice across page
   // boundaries; one INSERT ... ON CONFLICT cannot touch the same key twice,
   // so keep the last.
   const byKey = new Map();
-  for (const r of normalized) byKey.set(`${r.entry_date}|${r.campaign_id}|${r.age}|${r.gender}`, r);
+  for (const r of normalized) byKey.set(`${r.entry_date}|${r.campaign_id}|${r.adset_id}|${r.ad_id}|${r.age}|${r.gender}`, r);
 
   const written = await repo.upsertInsightRows({
     brandId: run.brand_id, accountType: run.account_type, adAccountId: run.ad_account_id,

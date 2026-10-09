@@ -163,6 +163,7 @@
 .mil-ui.report-generator-app .rgx-field-brand { flex: 1 1 520px; }
 .mil-ui.report-generator-app .rgx-command .client-bar {
   display: flex;
+  width: 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 16px;
@@ -173,6 +174,23 @@
   box-shadow: none;
 }
 .mil-ui.report-generator-app .rgx-command .client-bar-label { display: none; }
+.mil-ui.report-generator-app .rgx-command .client-bar > .dashboard-brand-trigger {
+  flex: 0 1 320px;
+  width: 320px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding-inline: 14px;
+  border-radius: 13px;
+  background: var(--rx-soft);
+  font-size: .96rem;
+  font-weight: 650;
+}
+.mil-ui.report-generator-app .rgx-command .client-bar > .dashboard-brand-trigger:hover:not(:disabled) {
+  border-color: var(--pf-line);
+  background: #fff;
+  box-shadow: 0 0 0 4px var(--pf-soft);
+}
 .mil-ui.report-generator-app .rgx-command .ssel { order: 1; width: 320px; min-width: 0; max-width: 100%; }
 .mil-ui.report-generator-app .rgx-command .ssel-trigger { min-height: 46px; padding-inline: 14px; border-radius: 13px; background: var(--rx-soft); font-size: .96rem; font-weight: 650; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
 .mil-ui.report-generator-app .rgx-command .ssel-trigger:hover { border-color: var(--pf-line); background: #fff; box-shadow: 0 0 0 4px var(--pf-soft); }
@@ -388,6 +406,49 @@
 .mil-ui.report-generator-app .setup-input:focus { outline: 0; border-color: var(--pf); background: #fff; box-shadow: 0 0 0 4px var(--pf-soft); }
 .mil-ui.report-generator-app .setup-range-inputs .setup-input { flex: 1 1 0; }
 
+/* Business Overview: month picker (year header over a 4 × 3 month grid). */
+.mil-ui.report-generator-app .mp-pop {
+  --mp-accent: #1e88e5;
+  --mp-soft: #e3f2fd;
+  --mp-ink: #0f1a3a;
+  --mp-line: #dfe4ef;
+  position: fixed;
+  z-index: 1200;
+  overflow: hidden;
+  border: 1px solid var(--mp-line);
+  border-top: 2px solid var(--mp-accent);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--mp-ink);
+  box-shadow: 0 8px 24px -8px rgba(15, 26, 58, .3);
+}
+.mil-ui.report-generator-app .mp-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
+.mil-ui.report-generator-app .mp-year { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app .mp-nav { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--mp-ink); cursor: pointer; }
+.mil-ui.report-generator-app .mp-nav:hover:not(:disabled) { background: #f2f5fa; }
+.mil-ui.report-generator-app .mp-nav:disabled { opacity: .3; cursor: default; }
+.mil-ui.report-generator-app .mp-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+.mil-ui.report-generator-app .mp-month { height: 58px; border: 0; background: transparent; color: var(--mp-ink); font: inherit; font-size: .92rem; font-weight: 500; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.mil-ui.report-generator-app .mp-month:hover:not(:disabled) { background: #f2f5fa; }
+.mil-ui.report-generator-app .mp-month:focus-visible { outline: 2px solid var(--mp-accent); outline-offset: -2px; }
+.mil-ui.report-generator-app .mp-month.is-now { font-weight: 700; }
+.mil-ui.report-generator-app .mp-month.is-selected,
+.mil-ui.report-generator-app .mp-month.is-selected:hover { background: var(--mp-soft); color: var(--mp-accent); }
+.mil-ui.report-generator-app .mp-month:disabled { color: #b8c0d0; cursor: default; }
+
+/* Business Overview table: three rows per channel (Lalu / Ini / Perubahan). */
+.mil-ui.report-generator-app .biz-overview-table th { white-space: nowrap; }
+.mil-ui.report-generator-app .biz-overview-table th:first-child { width: auto; }
+.mil-ui.report-generator-app .biz-overview-table td { white-space: nowrap; border-bottom: 0; }
+.mil-ui.report-generator-app .biz-overview-table tr.biz-ov-first td { border-top: 1px solid var(--rx-line); }
+.mil-ui.report-generator-app .biz-overview-table td.biz-ov-period { text-align: left; color: var(--rx-muted); font-weight: 600; font-variant-numeric: normal; }
+.mil-ui.report-generator-app .biz-overview-table tr.biz-ov-delta td { padding-top: .2rem; padding-bottom: .75rem; }
+/* The pill's own side padding would inset its text from the numbers above;
+   pull it out by that padding so the percentages line up with the values. */
+.mil-ui.report-generator-app .biz-overview-table tr.biz-ov-delta .delta-pill { margin-right: -.6rem; }
+.mil-ui.report-generator-app .biz-overview-table tr.biz-ov-total td { font-weight: 700; background: var(--rx-soft); }
+.mil-ui.report-generator-app .biz-overview-table tr.biz-ov-first.biz-ov-total td { border-top: 2px solid var(--rx-line); }
+
 /* Total Omzet inside its cell. */
 .mil-ui.report-generator-app .setup-cell .omzet-field { display: grid; gap: 4px; margin: 0; padding: 8px 12px; border: 1px solid var(--rx-line); border-radius: 12px; background: var(--rx-soft); box-shadow: none; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
 .mil-ui.report-generator-app .setup-cell .omzet-field:focus-within { border-color: var(--pf); background: #fff; box-shadow: 0 0 0 4px var(--pf-soft); }
@@ -533,6 +594,9 @@
 .mil-ui.report-generator-app .setup-field { display: grid; gap: 7px; min-width: 0; }
 .mil-ui.report-generator-app .setup-field-label { color: var(--rx-ink); font-size: .86rem; font-weight: 700; }
 .mil-ui.report-generator-app .setup-field-hint { color: var(--rx-quiet); font-size: .8rem; }
+.mil-ui.report-generator-app .setup-field-hint a { color: var(--pf-ink); font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
+.mil-ui.report-generator-app .setup-readonly { display: flex; align-items: center; min-height: 46px; padding-inline: 14px; border: 1px solid var(--rx-line); border-radius: 13px; background: var(--rx-soft); color: var(--rx-ink); font-size: .95rem; font-weight: 650; cursor: default; }
+.mil-ui.report-generator-app .setup-readonly.is-empty { color: var(--rx-quiet); font-weight: 500; }
 .mil-ui.report-generator-app .setup-field .ssel-trigger { min-height: 46px; padding-inline: 14px; border-radius: 13px; background: var(--rx-soft); font-size: .95rem; font-weight: 650; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
 .mil-ui.report-generator-app .setup-field .ssel-trigger:hover { border-color: var(--pf-line); background: #fff; box-shadow: 0 0 0 4px var(--pf-soft); }
 
@@ -788,3 +852,7 @@
    flex panel would size them to their content; give them the full width
    (still capped by their own max-width). */
 .mil-ui.report-generator-app .gen-main#app > .panel.active :is(#report-meta, #report-shopee, #report-tiktok, #report-google, #business-container, #summary-container) { width: 100%; }
+
+/* A table control beside "Hapus Semua" (Meta › Non-Boost B2B result picker). */
+.mil-ui.report-generator-app .metric-picker-extra { display: flex; align-items: center; margin-left: .5rem; }
+.mil-ui.report-generator-app .metric-picker-extra .seg-toggle { margin: 0; }

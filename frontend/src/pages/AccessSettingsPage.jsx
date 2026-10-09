@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Ban, Check, CheckCircle2, ClipboardCopy, History, KeyRound, Lock, Pencil, Plus, Search, ShieldCheck, UserCog, Users, X,
+  Ban, Check, CheckCircle2, ClipboardCopy, History, KeyRound, Lock, Pencil, Plus, ShieldCheck, UserCog, Users, X,
 } from 'lucide-react';
 import api from '../api/client';
+import SearchField from '../components/common/SearchField.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
@@ -258,10 +259,7 @@ function AccountsTab({ meta, me, onChanged }) {
             </button>
           ))}
         </div>
-        <label className="acc-search">
-          <Search size={15} aria-hidden />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama, email, atau brand…" aria-label="Cari akun" />
-        </label>
+        <SearchField className="acc-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama, email, atau brand…" aria-label="Cari akun" />
         <button type="button" className="acc-btn acc-btn-primary" onClick={() => setForm({ mode: 'create' })}>
           <Plus size={15} /> Buat akun
         </button>

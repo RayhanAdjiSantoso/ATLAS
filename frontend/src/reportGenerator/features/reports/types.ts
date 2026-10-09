@@ -10,6 +10,8 @@ export interface Client {
   status?: string | null;
   id: number;
   name: string;
+  // Kategori Industri from Brand Setting (e.g. "Retail Fashion"), or null.
+  industry?: string | null;
 }
 
 export interface ShopeeAdRowInput {

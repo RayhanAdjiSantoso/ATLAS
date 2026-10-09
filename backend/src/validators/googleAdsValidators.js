@@ -33,6 +33,37 @@ export const conversionGoalValidation = [
   body('goal').optional({ nullable: true }).isIn(['purchase', 'lead', 'micro', 'other', 'ignore']).withMessage('goal tidak dikenal'),
 ];
 
+const idParam = param('id').isInt({ min: 1 }).withMessage('id tidak valid');
+export const recommendationListValidation = [brandId(query)];
+export const recommendationGenerateValidation = [brandId(body), date(body, 'oldStart'), date(body, 'oldEnd'), date(body, 'curStart'), date(body, 'curEnd')];
+export const recommendationUpdateValidation = [
+  idParam, brandId(body),
+  body('status').optional({ nullable: true }).isIn(['new', 'reviewed', 'planned', 'in_progress', 'monitoring', 'completed', 'dismissed']).withMessage('status tidak dikenal'),
+  body('notes').optional({ nullable: true }).isString().isLength({ max: 2000 }),
+];
+export const recommendationTaskValidation = [idParam, brandId(body), body('pic').isString().trim().isLength({ min: 1, max: 60 }).withMessage('PIC wajib diisi')];
+export const experimentBodyValidation = [brandId(body)];
+export const experimentIdBodyValidation = [idParam, brandId(body)];
+export const experimentIdQueryValidation = [idParam, brandId(query)];
+export const adCopyValidation = [
+  brandId(body), body('adGroupId').isString().trim().notEmpty().withMessage('adGroupId wajib diisi'),
+  body('customerId').optional({ nullable: true }).isString(),
+  date(body, 'oldStart'), date(body, 'oldEnd'), date(body, 'curStart'), date(body, 'curEnd'),
+];
+export const feedbackValidation = [
+  brandId(body),
+  body('target_type').isIn(['finding', 'recommendation', 'alert']).withMessage('target_type tidak dikenal'),
+  body('target_key').isString().trim().notEmpty(),
+  body('rule_type').isString().trim().notEmpty(),
+  body('verdict').isIn(['useful', 'not_useful', 'false_positive', 'needs_more_data']).withMessage('verdict tidak dikenal'),
+  body('note').optional({ nullable: true }).isString().isLength({ max: 1000 }),
+];
+export const calibrationValidation = [
+  query('brandId').optional().isInt({ min: 1 }),
+  query('from').optional().matches(ISO_DATE), query('to').optional().matches(ISO_DATE),
+];
+export const alertUpdateValidation = [idParam, brandId(body), body('status').isIn(['open', 'acknowledged', 'resolved']).withMessage('status tidak dikenal')];
+
 export const reportValidation = [
   brandId(query), date(query, 'oldStart'), date(query, 'oldEnd'), date(query, 'curStart'), date(query, 'curEnd'),
 ];

@@ -1,12 +1,13 @@
+import { useState } from 'react';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
 import { computeDelta, deltaClassForSentiment } from '../../lib/delta';
 import type { SummaryKpi } from '../../lib/summary';
 import type { Sentiment } from '../../lib/types';
 import { GoogleAdsTable, type GadsColumn } from './GoogleAdsTable';
-import { channelLabel, matchTypeLabel, type Formatter, type GadsAuctionPeriod, type GadsAuctionRow, type GadsChange, type GadsReport, type GadsShare } from './googleAds';
+import { channelLabel, matchTypeLabel, type Formatter, type GadsAuctionPeriod, type GadsAuctionRow, type GadsChange, type GadsReport, type GadsSettingChange, type GadsShare } from './googleAds';
 
-// The two Data & file datasets the report reads besides the daily rows —
+// The two Performance Database datasets the report reads besides the daily rows —
 // Auction Insights and Change History — and the brief handed to the AI
 // Consultant. Kept apart from GoogleAdsTab so the tab stays about layout.
 
@@ -46,7 +47,25 @@ const AUCTION_COLS: { key: keyof GadsAuctionRow; label: string }[] = [
   { key: 'outranking_share', label: 'Outranking share' },
 ];
 
-type AuctionView = GadsAuctionRow & { oldShare: GadsShare | null };
+// Rank by impression share within one period's file. Equal shares share a
+// rank. A domain Google only reports as "< 10%" sits below every numbered
+// one, but its exact place among the others under 10% is unknown: "≥ n".
+export function auctionRanks(rows: GadsAuctionRow[]): Map<string, string> {
+  const numbered = rows.filter((r) => r.impression_share.value != null).sort((a, b) => (b.impression_share.value as number) - (a.impression_share.value as number));
+  const out = new Map<string, string>();
+  numbered.forEach((r, i) => {
+    const prev = numbered[i - 1];
+    const rank = prev && prev.impression_share.value === r.impression_share.value ? out.get(prev.domain.toLowerCase())! : String(i + 1);
+    out.set(r.domain.toLowerCase(), rank);
+  });
+  for (const r of rows) if (r.impression_share.value == null) out.set(r.domain.toLowerCase(), `≥ ${numbered.length + 1}`);
+  return out;
+}
+
+// Google labels the advertiser's own row "You" in the export.
+const youLabel = (domain: string) => (/^(you|anda)$/i.test(domain.trim()) ? 'Anda' : `Anda (${domain})`);
+
+type AuctionView = GadsAuctionRow & { oldShare: GadsShare | null; rankCur: string; rankOld: string | null };
 
 export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuctionPeriod; cur: GadsAuctionPeriod }; p1: string; p2: string }) {
   const { old, cur } = data;
@@ -54,22 +73,33 @@ export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuct
     return (
       <EmptyCard title="Auction Insights">
         Belum ada file Auction insights untuk {p2}. Unduh dari Google Ads › Insights &amp; reports › Auction insights (rentang satu bulan), lalu unggah di
-        Data Brand › Data &amp; file › Google Ads.
+        Data Collection Hub › Performance Database › Input Performance Data › Google Ads.
       </EmptyCard>
     );
   }
   const oldByDomain = new Map(old.rows.map((r) => [r.domain.toLowerCase(), r]));
-  const rows: AuctionView[] = cur.rows.map((r) => ({ ...r, oldShare: oldByDomain.get(r.domain.toLowerCase())?.impression_share ?? null }));
+  const ranksCur = auctionRanks(cur.rows);
+  const ranksOld = auctionRanks(old.rows);
+  const rows: AuctionView[] = cur.rows.map((r) => {
+    const key = r.domain.toLowerCase();
+    // "You" is the same advertiser in both files whatever the domain says.
+    const oldRow = oldByDomain.get(key) ?? (r.isYou ? old.rows.find((o) => o.isYou) : undefined);
+    return { ...r, oldShare: oldRow?.impression_share ?? null, rankCur: ranksCur.get(key) ?? '—', rankOld: oldRow ? ranksOld.get(oldRow.domain.toLowerCase()) ?? null : null };
+  });
+  const rankValue = (rank: string | null) => (rank == null ? null : rank.startsWith('≥') ? 900 + Number(rank.slice(2)) : Number(rank));
   const columns: GadsColumn<AuctionView>[] = [
-    { key: 'domain', label: 'Display URL domain', align: 'left', value: (r) => (r.isYou ? '\u0000' : r.domain), render: (r) => (r.isYou ? <strong>Anda ({r.domain})</strong> : r.domain) },
+    { key: 'domain', label: 'Display URL domain', align: 'left', value: (r) => (r.isYou ? '\u0000' : r.domain), render: (r) => (r.isYou ? <strong>{youLabel(r.domain)}</strong> : r.domain) },
     { key: 'impression_share', label: `Impr. share · ${p2}`, value: (r) => r.impression_share.value, render: (r) => shareText(r.impression_share) },
+    { key: 'rank_cur', label: `Peringkat ${p2}`, value: (r) => rankValue(r.rankCur), render: (r) => r.rankCur },
+    { key: 'impression_share_old', label: `Impr. share · ${p1}`, value: (r) => r.oldShare?.value ?? null, render: (r) => (r.oldShare ? shareText(r.oldShare) : '—') },
+    { key: 'rank_old', label: `Peringkat ${p1}`, value: (r) => rankValue(r.rankOld), render: (r) => r.rankOld ?? '—' },
     {
-      key: 'is_change', label: `vs ${p1}`,
+      key: 'is_change', label: 'Perubahan',
       value: (r) => (r.impression_share.value != null && r.oldShare?.value != null ? r.impression_share.value - r.oldShare.value : null),
       render: (r) => {
-        if (r.impression_share.value == null || r.oldShare?.value == null) return r.oldShare ? shareText(r.oldShare) : '—';
-        const pp = (r.impression_share.value - r.oldShare.value) * 100;
-        return `${pp >= 0 ? '+' : ''}${pp.toFixed(1)} pp`;
+        if (r.impression_share.value == null || r.oldShare?.value == null) return '—';
+        const diff = (r.impression_share.value - r.oldShare.value) * 100;
+        return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`;
       },
     },
     ...AUCTION_COLS.map(({ key, label }) => ({
@@ -81,10 +111,12 @@ export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuct
   const span = cur.months.length > 1 ? `rata-rata ${cur.months.map(monthName).join(', ')}` : monthName(cur.months[0]);
   return (
     <div className="sec-block">
-      {heading('Auction Insights', `${span} · file Data & file`)}
+      {heading('Auction Insights', `${span} · file Performance Database`)}
       <GoogleAdsTable columns={columns} rows={rows} sortKey="impression_share" limit={TABLE_ROWS} />
       <p className="gads-footnote">
-        "Anda" adalah akun brand ini. Kolom "vs {p1}" adalah selisih impression share dalam poin persentase{old.rows.length ? '' : ' — belum ada file Auction insights untuk periode pembanding'}.
+        "Anda" adalah akun brand ini. Peringkat diurutkan dari impression share tiap bulan; "≥ n" berarti impression share di bawah 10% sehingga urutan pastinya tidak diketahui.
+        "Perubahan" adalah impression share {p2} dikurangi {p1} (mis. 41,2% − 45,0% = −3,8%); "—" bila salah satu bulan tidak punya angka pasti
+        {old.rows.length ? '' : ' — belum ada file Auction insights untuk periode pembanding'}.
         {cur.months.length > 1 && ' Periode ini mencakup beberapa bulan, jadi setiap angka adalah rata-rata file bulanannya.'}
       </p>
     </div>
@@ -101,12 +133,39 @@ const OPERATION_LABELS: Record<string, string> = { CREATE: 'dibuat', UPDATE: 'di
 const itemLabel = (c: GadsChange) => [c.resource_type ? RESOURCE_LABELS[c.resource_type] ?? channelLabel(c.resource_type) : '', c.operation ? OPERATION_LABELS[c.operation] ?? c.operation.toLowerCase() : '']
   .filter(Boolean).join(' ');
 
-export function ChangeHistorySection({ data, p2 }: { data: GadsReport['changeHistory']; p2: string }) {
+const fieldLabel = (f: string) => f.replace(/_/g, ' ');
+const valueText = (v: unknown) => (v == null ? '—' : Array.isArray(v) ? (v.map((x) => (typeof x === 'object' ? (x as { category?: string }).category ?? JSON.stringify(x) : String(x))).join(', ') || '—') : String(v));
+
+// Setting snapshots that changed inside the period (budget, bidding,
+// targets, locations...), read from ATLAS's own daily snapshots.
+function SettingChanges({ rows, p2 }: { rows: GadsSettingChange[]; p2: string }) {
+  if (!rows.length) return null;
+  const flat = rows.flatMap((r) => r.changed_fields.map((cf) => ({ when: new Date(r.valid_from).toLocaleDateString('id-ID'), campaign: r.campaign_name, ...cf })));
+  const columns: GadsColumn<(typeof flat)[number]>[] = [
+    { key: 'when', label: 'Terlihat', align: 'left', value: (r) => r.when },
+    { key: 'campaign', label: 'Campaign', align: 'left', value: (r) => r.campaign },
+    { key: 'field', label: 'Setting', align: 'left', value: (r) => fieldLabel(r.field) },
+    { key: 'from', label: 'Sebelum', align: 'left', value: (r) => valueText(r.from) },
+    { key: 'to', label: 'Sesudah', align: 'left', value: (r) => valueText(r.to) },
+  ];
+  return (
+    <div className="sec-block">
+      {heading('Perubahan Setting Campaign', `${flat.length} perubahan · ${p2}`)}
+      <GoogleAdsTable columns={columns} rows={flat} sortKey="when" limit={TABLE_ROWS} />
+      <p className="gads-footnote">Dibandingkan dari snapshot setting harian ATLAS: tanggal adalah saat perubahan pertama terlihat oleh sinkron, bukan waktu persis perubahan di Google Ads.</p>
+    </div>
+  );
+}
+
+export function ChangeHistorySection({ data, settingChanges = [], p2 }: { data: GadsReport['changeHistory']; settingChanges?: GadsSettingChange[]; p2: string }) {
+  const [campaign, setCampaign] = useState('');
+  const [kind, setKind] = useState('');
   if (!data.rows.length) {
+    if (settingChanges.length) return <SettingChanges rows={settingChanges} p2={p2} />;
     return (
       <EmptyCard title="Change History">
         Tidak ada perubahan tercatat untuk {p2}. Google Ads Script hanya bisa menarik 30 hari terakhir — untuk bulan yang lebih lama, unduh dari Google
-        Ads › Change history lalu unggah di Data Brand › Data &amp; file › Google Ads.
+        Ads › Change history lalu unggah di Data Collection Hub › Performance Database › Input Performance Data › Google Ads.
       </EmptyCard>
     );
   }
@@ -119,12 +178,44 @@ export function ChangeHistorySection({ data, p2 }: { data: GadsReport['changeHis
     { key: 'changes', label: 'Perubahan', align: 'left', value: (r) => r.changes || '—', render: (r) => <span className="gads-change-text">{r.changes || '—'}</span> },
   ];
   const fromUpload = data.rows.some((r) => r.source === 'upload');
+  const campaigns = [...new Set(data.rows.map((r) => r.campaign_name).filter(Boolean) as string[])].sort();
+  const kinds = [...new Set(data.rows.map((r) => r.resource_type).filter(Boolean) as string[])].sort();
+  const shown = data.rows.filter((r) => (!campaign || r.campaign_name === campaign) && (!kind || r.resource_type === kind));
+  // Changes per day, for a quick read of when the account was worked on.
+  const perDay = new Map<string, number>();
+  for (const r of shown) perDay.set(r.changed_at.slice(0, 10), (perDay.get(r.changed_at.slice(0, 10)) ?? 0) + 1);
+  const days = [...perDay.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const peak = Math.max(1, ...days.map(([, n]) => n));
   return (
-    <div className="sec-block">
-      {heading('Change History', `${data.rows.length} perubahan · ${p2}`)}
-      <GoogleAdsTable columns={columns} rows={data.rows} sortKey="changed_at" limit={TABLE_ROWS} />
-      {fromUpload && <p className="gads-footnote">Sebagian perubahan berasal dari file yang diunggah di Data &amp; file ({data.uploadedFiles.join(', ')}).</p>}
-    </div>
+    <>
+      <div className="sec-block">
+        {heading('Change History', `${shown.length} perubahan · ${p2}`)}
+        <div className="sec-inner">
+          <div className="gads-filter-row">
+            {campaigns.length > 1 && (
+              <select className="gads-select" value={campaign} onChange={(e) => setCampaign(e.target.value)} aria-label="Filter campaign">
+                <option value="">Semua campaign</option>
+                {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+            {kinds.length > 1 && (
+              <select className="gads-select" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Filter jenis perubahan">
+                <option value="">Semua jenis</option>
+                {kinds.map((k) => <option key={k} value={k}>{RESOURCE_LABELS[k] ?? channelLabel(k)}</option>)}
+              </select>
+            )}
+          </div>
+          {days.length > 1 && (
+            <div className="gads-timeline" aria-label="Jumlah perubahan per hari">
+              {days.map(([d, n]) => <span key={d} title={`${d}: ${n} perubahan`} style={{ height: `${12 + (n / peak) * 44}px` }}><i>{Number(d.slice(8, 10))}</i></span>)}
+            </div>
+          )}
+        </div>
+        <GoogleAdsTable columns={columns} rows={shown} sortKey="changed_at" limit={TABLE_ROWS} />
+        {fromUpload && <p className="gads-footnote">Sebagian perubahan berasal dari file yang diunggah di Performance Database ({data.uploadedFiles.join(', ')}).</p>}
+      </div>
+      <SettingChanges rows={settingChanges} p2={p2} />
+    </>
   );
 }
 
@@ -177,8 +268,9 @@ export function aiNotes(report: GadsReport, f: Formatter): string[] {
   if (terms.length) {
     notes.push(`Top search term (urut cost): ${terms.map((t) => `"${t.search_term}" (${matchTypeLabel(t.match_type)}) cost ${f.money(t.cost)}, klik ${f.int(t.clicks)}, konversi ${f.dec(t.conversions)}`).join(' | ')}`);
     const wasted = byCost(cur.searchTerms.filter((t) => t.conversions === 0 && t.cost > 0));
-    const wastedCost = wasted.reduce((a, t) => a + t.cost, 0);
-    notes.push(`Wasted spend search term (cost tanpa konversi): total ${f.money(wastedCost)} dari ${wasted.length} term (${cur.totals.cost ? ((wastedCost / cur.totals.cost) * 100).toFixed(1) : '0'}% cost). Terbesar: ${wasted.slice(0, 6).map((t) => `"${t.search_term}" ${f.money(t.cost)}`).join(', ') || '—'}`);
+    // The list may be trimmed for large accounts; the backend summary covers every term.
+    const wastedCost = cur.searchTermSummary?.observed_no_conversion_spend ?? wasted.reduce((a, t) => a + t.cost, 0);
+    notes.push(`Biaya search term tanpa konversi (teramati, belum tentu pemborosan): total ${f.money(wastedCost)} dari ${wasted.length} term (${cur.totals.cost ? ((wastedCost / cur.totals.cost) * 100).toFixed(1) : '0'}% cost). Terbesar: ${wasted.slice(0, 6).map((t) => `"${t.search_term}" ${f.money(t.cost)}`).join(', ') || '—'}`);
   } else {
     notes.push('Search term: tidak ada data pada periode utama.');
   }
@@ -192,15 +284,41 @@ export function aiNotes(report: GadsReport, f: Formatter): string[] {
   const ai = report.auctionInsights;
   if (ai.cur.rows.length) {
     const old = new Map(ai.old.rows.map((r) => [r.domain.toLowerCase(), r]));
+    const rCur = auctionRanks(ai.cur.rows);
+    const rOld = auctionRanks(ai.old.rows);
     const line = (r: GadsAuctionRow) => {
-      const prev = old.get(r.domain.toLowerCase());
-      return `${r.isYou ? 'BRAND INI' : r.domain}: impr. share ${shareText(r.impression_share)}${prev ? ` (periode pembanding ${shareText(prev.impression_share)})` : ''}, overlap ${shareText(r.overlap_rate)}, position above ${shareText(r.position_above_rate)}, top of page ${shareText(r.top_of_page_rate)}, outranking ${shareText(r.outranking_share)}`;
+      const prev = old.get(r.domain.toLowerCase()) ?? (r.isYou ? ai.old.rows.find((o) => o.isYou) : undefined);
+      return `${r.isYou ? 'BRAND INI' : r.domain}: impr. share ${shareText(r.impression_share)} (peringkat ${rCur.get(r.domain.toLowerCase())})${prev ? `, periode pembanding ${shareText(prev.impression_share)} (peringkat ${rOld.get(prev.domain.toLowerCase())})` : ''}, overlap ${shareText(r.overlap_rate)}, position above ${shareText(r.position_above_rate)}, top of page ${shareText(r.top_of_page_rate)}, outranking ${shareText(r.outranking_share)}`;
     };
     const rows = [...ai.cur.rows].sort((a, b) => Number(b.isYou) - Number(a.isYou) || (b.impression_share.value ?? 0) - (a.impression_share.value ?? 0)).slice(0, 8);
     notes.push(`Auction insights (${ai.cur.months.map(monthName).join(', ')}): ${rows.map(line).join(' | ')}`);
   } else {
     notes.push('Auction insights: belum diunggah untuk periode utama, jadi posisi terhadap kompetitor tidak dapat dinilai.');
   }
+
+  // Structured findings from the backend's analytics (googleAdsDiagnostics.js):
+  // the model reasons over these instead of recomputing anything.
+  const g = cur.goals;
+  if (g) {
+    const line = (label: string, k: 'purchase' | 'lead') => `${label}: ${f.dec(g[k].conversions)} primer${g[k].all_conversions > g[k].conversions ? ` (${f.dec(g[k].all_conversions)} termasuk sekunder)` : ''}, cost per hasil (seluruh biaya) ${f.money(g[k].blended_cost_per_result ?? null)}, cost per hasil (campaign yang menargetkannya) ${f.money(g[k].focus_cost_per_result ?? null)}`;
+    notes.push(`Konversi dipisah per tujuan bisnis — JANGAN gabungkan Purchase dan Lead sebagai satu KPI. ${line('Purchase', 'purchase')}; nilai ${f.money(g.purchase.conversions_value)}, ROAS ${g.purchase.blended_roas == null ? 'N/A' : `${f.dec(g.purchase.blended_roas)}x`}. ${line('Lead', 'lead')}. Micro conversion (sekunder): ${f.dec(g.micro.all_conversions)}.`);
+    const unverified = g.purchase.unverified + g.lead.unverified + g.micro.unverified + g.other.unverified;
+    if (unverified) notes.push(`${unverified} conversion action masih memakai pemetaan bawaan dan belum diverifikasi brand — sebutkan sebagai keterbatasan bila relevan.`);
+  }
+  const settings = report.campaignSettings ?? [];
+  if (settings.length) {
+    notes.push(`Setting campaign: ${settings.filter((x) => x.status === 'ENABLED').map((x) => `${x.campaign_name} — ${x.bidding_strategy_type ?? '?'}${x.target_cpa ? `, target CPA ${f.money(x.target_cpa)}` : ''}${x.target_roas ? `, target ROAS ${f.dec(x.target_roas)}x` : ''}${!x.target_cpa && !x.target_roas ? ', tanpa target' : ''}, budget ${f.money(x.budget_amount)}/hari`).join(' | ')}. Rekomendasi bidding harus sesuai strategi ini; jangan mengarang target CPA atau margin.`);
+  }
+  const findings = report.diagnostics ?? [];
+  if (findings.length) {
+    notes.push(`Temuan diagnostics berbasis aturan (${findings.length}), urut keparahan. Fakta sudah terverifikasi angka; penyebab adalah hipotesis:`);
+    findings.slice(0, 12).forEach((x) => notes.push(`[${x.severity}/${x.confidence}] ${x.type} · ${x.entity_type === 'account' ? 'akun' : x.entity_name}: ${x.facts.join('; ')}. Kemungkinan penyebab: ${x.possible_causes.join('; ')}.`));
+  }
+  if (cur.keywordSummary) notes.push(`Klasifikasi keyword: ${Object.entries(cur.keywordSummary).map(([k, n]) => `${k} ${n}`).join(', ')}. Keyword "insufficient_data" belum boleh disimpulkan buruk.`);
+  const ts = cur.searchTermSummary;
+  if (ts) notes.push(`Search term: biaya tanpa konversi teramati ${f.money(ts.observed_no_conversion_spend)} (belum tentu pemborosan), berpotensi tidak relevan ${f.money(ts.potentially_irrelevant_spend)}, terkonfirmasi tidak relevan: belum direview. Cakupan search term ${f.pct(ts.coverage)} dari biaya Search/Shopping.`);
+  const anomalies = report.anomalies?.anomalies ?? [];
+  if (anomalies.length) notes.push(`Hari tidak biasa: ${anomalies.slice(0, 6).map((a) => `${a.date} ${a.metric} ${a.direction === 'up' ? 'naik' : 'turun'} (${f.dec(a.value)} vs ±${f.dec(a.expected)})`).join('; ')}.`);
 
   const changes = report.changeHistory.rows;
   if (changes.length) {

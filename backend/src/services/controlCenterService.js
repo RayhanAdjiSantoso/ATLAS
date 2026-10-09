@@ -1,5 +1,5 @@
 import pool from '../config/db.js';
-import { LIBRARY_CHANNELS, REFERENCE_CHANNELS } from './brandLibraryService.js';
+import { LIBRARY_CHANNELS, REFERENCE_CHANNELS, isAutoOnly } from './brandLibraryService.js';
 import { openTasksOf } from '../utils/momTasks.js';
 import { currentMonth, daysBetween, monthBounds, shiftMonth, todayJakarta } from '../utils/monthPeriod.js';
 
@@ -62,7 +62,9 @@ export function buildCompleteness({ month, brands, files, today = todayJakarta()
   const { days } = monthBounds(month);
   const expectedDays = expectedDaysFor(month, today);
   const byBrand = new Map(brands.map((b) => [b.brand_id, []]));
-  for (const f of files) if (byBrand.has(f.brand_id) && !REFERENCE_CHANNELS.has(f.channel)) byBrand.get(f.brand_id).push(f);
+  // Archive slots ATLAS files itself are nobody's to-do: a month without one
+  // is not an upload the team owes, so they stay out of completeness.
+  for (const f of files) if (byBrand.has(f.brand_id) && !REFERENCE_CHANNELS.has(f.channel) && !isAutoOnly(f.platform, f.channel)) byBrand.get(f.brand_id).push(f);
 
   const out = brands.map((brand) => {
     const brandFiles = byBrand.get(brand.brand_id);

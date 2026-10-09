@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../../api/client.js';
 import BrandCombo from './BrandCombo.jsx';
+import { presetBrandSettings } from '../common/brandSettingsLink.js';
 
 const EMPTY_FORM = { id: '', client: '', type: 'MAIN', token: '', boostMatch: '' };
 
@@ -15,8 +17,8 @@ const sortBrands = (list) => [...list].sort((a, b) =>
   || (a.client || '').localeCompare(b.client || '', 'id', { sensitivity: 'base' })
   || a.id.localeCompare(b.id));
 
-// Alur 1 — Tambah Brand ke Database: cuma kredensial ad account, TIDAK
-// ADA pengaturan notifikasi di sini sama sekali. Itu ada di SubscriptionsSection.
+// Registry and editing only. New accounts are added in Data Collection Hub;
+// notification settings belong to SubscriptionsSection.
 //
 // Sejak transisi menjauh dari Google Sheet: begitu Nama Brand (yang otomatis
 // menautkan ke brand_id ATLAS) dan Kata Kunci Boost Post (akun MAIN saja,
@@ -80,24 +82,15 @@ export default function BrandsSection() {
     setFormMessage(null);
   };
 
-  const isExistingBrand = brands.some((b) => b.id === form.id);
+  const isExistingBrand = brands.some((b) => b.id === form.id && b.source === 'dynamic');
 
   const handleSave = async () => {
+    if (!isExistingBrand || saving) return;
     if (!form.id.trim() || !form.client.trim()) {
       setFormMessage({ type: 'error', text: 'ID akun dan nama brand wajib diisi.' });
       return;
     }
-    const isEdit = brands.some((b) => b.id === form.id && b.source === 'dynamic');
-    if (!isEdit && !form.token.trim()) {
-      setFormMessage({ type: 'error', text: 'Token wajib diisi untuk brand baru.' });
-      return;
-    }
-
-    const confirmed = window.confirm(
-      isEdit
-        ? `Simpan perubahan ke brand "${form.client}"?`
-        : `Tambah brand "${form.client}" baru? Ini akan menyimpan token ke Script Properties Apps Script.`,
-    );
+    const confirmed = window.confirm(`Simpan perubahan ke brand "${form.client}"?`);
     if (!confirmed) return;
 
     const payload = {
@@ -111,10 +104,7 @@ export default function BrandsSection() {
     setSaving(true);
     setFormMessage(null);
     try {
-      const res = isEdit
-        ? await api.put(`/meta-automation/brands/${encodeURIComponent(form.id)}`, payload)
-        : await api.post('/meta-automation/brands', { ...payload, id: form.id.trim() });
-      setFormMessage({ type: 'success', text: `Tersimpan: "${res.data.brand.client}". Belum ada yang dinotifikasi — buat langganan di tab Langganan kalau perlu.` });
+      await api.put(`/meta-automation/brands/${encodeURIComponent(form.id)}`, payload);
       resetForm();
       load();
     } catch (err) {
@@ -136,6 +126,7 @@ export default function BrandsSection() {
     setError('');
     try {
       await api.delete(`/meta-automation/brands/${encodeURIComponent(b.id)}`);
+      if (form.id === b.id) resetForm();
       load();
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menghapus brand');
@@ -216,8 +207,16 @@ export default function BrandsSection() {
         )}
       </div>
 
+      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+        Tambahkan akun baru melalui{' '}
+        <Link to="/data-brand" onClick={() => presetBrandSettings({ view: 'data', platform: 'meta' })}>
+          Data Collection Hub › Input Performance Data › Meta Ads
+        </Link>.
+      </p>
+
+      {isExistingBrand && (
       <div className="card">
-        <h3 style={{ marginBottom: '0.5rem' }}>{form.id && isExistingBrand ? `Edit: ${form.client}` : 'Tambah Brand ke Database'}</h3>
+        <h3 style={{ marginBottom: '0.5rem' }}>Edit: {form.client}</h3>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
           Kredensial ad account, plus (opsional) kata kunci Boost Post — begitu Nama Brand cocok
           dengan brand ATLAS dan Kata Kunci Boost Post terisi (akun CPAS tidak perlu), brand ini
@@ -231,8 +230,7 @@ export default function BrandsSection() {
             <label>ID Ad Account (act_...)</label>
             <input
               value={form.id}
-              disabled={!!form.id && isExistingBrand}
-              onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))}
+              disabled
               placeholder="act_123456789012345"
             />
           </div>
@@ -287,7 +285,7 @@ export default function BrandsSection() {
             type="password"
             value={form.token}
             onChange={(e) => setForm((f) => ({ ...f, token: e.target.value }))}
-            placeholder={isExistingBrand ? 'Kosongkan kalau tidak ganti token' : 'Token system user Meta Ads'}
+            placeholder="Kosongkan kalau tidak ganti token"
           />
         </div>
 
@@ -298,10 +296,11 @@ export default function BrandsSection() {
             {saving ? 'Menyimpan...' : 'Simpan'}
           </button>
           <button type="button" className="btn btn-secondary" onClick={resetForm} disabled={saving}>
-            Batal / Form Kosong
+            Batal
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

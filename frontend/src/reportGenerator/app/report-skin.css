@@ -206,9 +206,14 @@
 
 /* ── AI Consultant Brief: sits in the report's reading column ──────────── */
 /* Under a two-column section deck the brief lines up with the section on the
-   right, not the full width beneath both columns. */
+   right, not the full width beneath both columns. In a paged report only the
+   page on screen counts: every page stays mounted, so a deck on a hidden page
+   (Overall) used to push the brief in beside a full-width table (Auction
+   Insights). A page with a single section has no deck, and the brief spans
+   the full width like its table. */
 @media (min-width: 1101px) {
-  .mil-ui.report-generator-app [data-role="r-body"]:has(.sdeck) + .ai-sum { margin-left: calc(270px + 22px); }
+  .mil-ui.report-generator-app [data-role="r-body"]:has(.report-tab-panel.active .sdeck) + .ai-sum,
+  .mil-ui.report-generator-app [data-role="r-body"]:not(:has(.report-tab-panel)):has(.sdeck) + .ai-sum { margin-left: calc(270px + 22px); }
 }
 .mil-ui.report-generator-app .ai-sum { margin-top: 22px; }
 .mil-ui.report-generator-app .ai-sum-heading { justify-content: flex-start; }

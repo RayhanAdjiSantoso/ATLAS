@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { config } from '../config/index.js';
 import { AppError } from '../utils/errors.js';
 
@@ -10,8 +11,12 @@ export function verifyIngestKey(req, res, next) {
   if (!config.dailyTracking.ingestApiKey) {
     return next(new AppError('DAILY_TRACKING_INGEST_API_KEY belum dikonfigurasi di server', 500));
   }
-  const provided = req.headers['x-ingest-key'];
-  if (!provided || provided !== config.dailyTracking.ingestApiKey) {
+  const provided = String(req.headers['x-ingest-key'] ?? '');
+  // Constant-time comparison: a plain !== leaks how many leading characters
+  // matched through response timing.
+  const expected = Buffer.from(config.dailyTracking.ingestApiKey);
+  const given = Buffer.from(provided);
+  if (!provided || given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
     return next(new AppError('Ingest key tidak valid', 401));
   }
   next();

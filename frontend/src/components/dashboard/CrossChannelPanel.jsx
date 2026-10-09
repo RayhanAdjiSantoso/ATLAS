@@ -10,7 +10,7 @@ import { buildCrossChannel, buildShopeeProducts, META_BASIS, MIN_ATC, MIN_PURCHA
 import './crossChannel.css';
 
 // Executive Snapshot — which product to push where, Meta × Shopee.
-// Reads the month's files from Data Brand (CPAS, Iklan Produk Shopee,
+// Reads the month's files from Data Collection Hub (CPAS, Iklan Produk Shopee,
 // Product Performance); the scoring rule lives in
 // reportGenerator/lib/crossChannel.ts. The files are read once; switching
 // the comparison measure re-ranks in the browser.
@@ -205,7 +205,7 @@ export default function CrossChannelPanel({ filters }) {
         const perf = parseProductPerfRows((await Promise.all(perfFiles.map(readSpreadsheetFile))).flat());
         if (alive) setState({ status: 'ready', cpasRows, products: buildShopeeProducts(perf, adRows), used });
       } catch (e) {
-        // A role without access to Data Brand's files simply does not get
+        // A role without access to Data Collection Hub's files simply does not get
         // this reading; anything else is a real failure worth saying.
         if (alive) setState(e?.response?.status === 403 ? { status: 'hidden' } : { status: 'error', message: e?.message || 'Gagal membaca file' });
       }
@@ -249,7 +249,7 @@ export default function CrossChannelPanel({ filters }) {
         {state.status === 'loading' && <div className="xc-note">Membaca file CPAS dan Iklan Shopee bulan ini…</div>}
         {state.status === 'error' && <div className="xc-note is-bad">Rekomendasi belum bisa dihitung: {state.message}</div>}
         {state.status === 'missing' && (
-          <div className="xc-note">Butuh file bulan {monthLabel} di Data Brand: <strong>{state.missing.join(', ')}</strong>.</div>
+          <div className="xc-note">Butuh file bulan {monthLabel} di Data Collection Hub: <strong>{state.missing.join(', ')}</strong>.</div>
         )}
 
         {r && (
@@ -265,7 +265,7 @@ export default function CrossChannelPanel({ filters }) {
               </div>
               <small>{basisInfo.hint}</small>
               {r.totals.spend > 0 && r.totals.atc === 0 && r.totals.orders === 0 && (
-                <small className="xc2-unit">File CPAS bulan ini tidak memuat add to cart maupun pembelian “with shared items”, jadi kekuatan materi Meta belum bisa dinilai. Periksa pengaturan tarik otomatis CPAS brand ini, atau unggah ekspor CPAS dari Ads Manager (level Ad, dengan kolom shared items) di Data Brand.</small>
+                <small className="xc2-unit">File CPAS bulan ini tidak memuat add to cart maupun pembelian “with shared items”, jadi kekuatan materi Meta belum bisa dinilai. Periksa pengaturan tarik otomatis CPAS brand ini, atau unggah ekspor CPAS dari Ads Manager (level Ad, dengan kolom shared items) di Data Collection Hub.</small>
               )}
               {r.unit === 'campaign' && <small className="xc2-unit">File CPAS bulan ini tidak memuat kolom Ad name (ditarik per campaign), jadi yang dinilai adalah campaign, bukan materi iklan.</small>}
             </div>

@@ -216,7 +216,7 @@ export function HomepageManager({ onClose, onChanged }) {
                   <span>Portofolio MIL Digital</span>
                   <textarea rows={5} value={settings.about} maxLength={600} onChange={(e) => setSettings({ ...settings, about: e.target.value })} />
                 </label>
-                <p className="hm-note">Kosongkan kolom untuk kembali ke teks bawaan. Angka klien aktif dihitung otomatis dari Pengaturan Brand.</p>
+                <p className="hm-note">Kosongkan kolom untuk kembali ke teks bawaan. Angka klien aktif dihitung otomatis dari Brand Setting.</p>
                 <button type="submit" className="hm-save" disabled={Boolean(busy)}>
                   {saved ? 'Tersimpan' : 'Simpan teks'}
                 </button>

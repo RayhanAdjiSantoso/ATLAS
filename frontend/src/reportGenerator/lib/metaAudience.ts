@@ -1,5 +1,5 @@
 import { isAllValue } from './meta';
-import { metaBrandMetrics, metaLeadMetrics, metaObjectiveMetrics, metaSalesMetrics, type MetaBrandMetrics, type MetaLeadMetrics, type MetaObjectiveMetrics, type MetaSalesMetrics } from './metaFunnel';
+import { LEAD_RESULT, leadResultKind, metaBrandMetrics, metaLeadMetrics, metaObjectiveMetrics, metaSalesMetrics, type LeadResultKind, type MetaBrandMetrics, type MetaLeadMetrics, type MetaObjectiveMetrics, type MetaSalesMetrics } from './metaFunnel';
 import type { MetaObjectiveKey } from './meta';
 import type { PivotFmt } from './shopeeDeepDivePivot';
 import type { SheetRow } from './types';
@@ -52,8 +52,25 @@ export function buildObjectiveAudience(rows: SheetRow[], dimCol: string): Audien
   return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaObjectiveMetrics(g.rows) }));
 }
 
-export function buildLeadAudience(rows: SheetRow[], dimCol: string): AudienceSlice<MetaLeadMetrics>[] {
-  return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaLeadMetrics(g.rows) }));
+// Every slice reads the same result (picked from all the rows), so one age
+// group is never in leads while the next is in chats.
+export function buildLeadAudience(rows: SheetRow[], dimCol: string, kind: LeadResultKind = leadResultKind(rows)): AudienceSlice<MetaLeadMetrics>[] {
+  return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaLeadMetrics(g.rows, kind) }));
+}
+
+// A lead / B2B menu relabelled for the result actually read ("Leads Rate" →
+// "Conversation Rate" for a messaging campaign).
+export function leadMenuFor<M>(menu: readonly AudienceMetricDef<M>[], kind: LeadResultKind): AudienceMetricDef<M>[] {
+  if (kind === 'leads') return [...menu];
+  const names = LEAD_RESULT[kind];
+  const rateShort = names.rate.replace(/\s*\(.*\)$/, '');
+  return menu.map((m) => {
+    const key = String(m.key);
+    if (key === 'leads') return { ...m, label: names.label };
+    if (key === 'leadRate') return { ...m, label: m.label.startsWith('Click') ? `Click → ${names.label} Rate` : rateShort };
+    if (key === 'costPerLead') return { ...m, label: names.cost };
+    return m;
+  });
 }
 
 // Non-Boost B2B Leads, read on the architecture sheet's own purchase-funnel
@@ -68,9 +85,9 @@ export interface MetaB2bMetrics extends MetaSalesMetrics {
   costPerLead: number | null;
 }
 
-export function metaB2bMetrics(rows: SheetRow[]): MetaB2bMetrics {
+export function metaB2bMetrics(rows: SheetRow[], leadKind?: LeadResultKind): MetaB2bMetrics {
   const s = metaSalesMetrics(rows);
-  const l = metaLeadMetrics(rows);
+  const l = metaLeadMetrics(rows, leadKind);
   return {
     ...s,
     purchase: s.purchase ?? l.leads,
@@ -82,18 +99,18 @@ export function metaB2bMetrics(rows: SheetRow[]): MetaB2bMetrics {
   };
 }
 
-export function buildB2bAudience(rows: SheetRow[], dimCol: string): AudienceSlice<MetaB2bMetrics>[] {
-  return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaB2bMetrics(g.rows) }));
+export function buildB2bAudience(rows: SheetRow[], dimCol: string, leadKind: LeadResultKind = leadResultKind(rows)): AudienceSlice<MetaB2bMetrics>[] {
+  return sliceRows(rows, dimCol).map((g) => ({ ...g, metrics: metaB2bMetrics(g.rows, leadKind) }));
 }
 
 // The metric family a section reads, by the job the ads were bought for.
 export type MetaMetricKind = 'sales' | 'brand' | 'objective' | 'lead' | 'b2b';
 
-export function metricsFor(kind: MetaMetricKind, rows: SheetRow[]): Record<string, unknown> {
+export function metricsFor(kind: MetaMetricKind, rows: SheetRow[], leadKind?: LeadResultKind): Record<string, unknown> {
   if (kind === 'brand') return metaBrandMetrics(rows) as unknown as Record<string, unknown>;
   if (kind === 'objective') return metaObjectiveMetrics(rows) as unknown as Record<string, unknown>;
-  if (kind === 'lead') return metaLeadMetrics(rows) as unknown as Record<string, unknown>;
-  if (kind === 'b2b') return metaB2bMetrics(rows) as unknown as Record<string, unknown>;
+  if (kind === 'lead') return metaLeadMetrics(rows, leadKind) as unknown as Record<string, unknown>;
+  if (kind === 'b2b') return metaB2bMetrics(rows, leadKind) as unknown as Record<string, unknown>;
   return metaSalesMetrics(rows) as unknown as Record<string, unknown>;
 }
 

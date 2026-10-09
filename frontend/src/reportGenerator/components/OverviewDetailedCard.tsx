@@ -20,6 +20,8 @@ interface OverviewDetailedCardProps {
   // Rendered beside the table instead of below it — the root cause tree that
   // explains the numbers belongs next to them, not in a section of its own.
   aside?: ReactNode;
+  // A control for the table, shown beside "Hapus Semua".
+  toolbar?: ReactNode;
 }
 
 // Shared by Meta (Boost/Non-Boost/CPAS) and Shopee Ads: a single table
@@ -30,14 +32,18 @@ interface OverviewDetailedCardProps {
 // row here already carries its own resolved `.label` (from
 // displayName()/shopeeLabelFor upstream), so the full universe can be handed
 // straight to KpiTable with no separate label-resolution step needed here.
-export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRows, allCols, p1, p2, headingClassName, aside }: OverviewDetailedCardProps) {
+export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRows, allCols, p1, p2, headingClassName, aside, toolbar }: OverviewDetailedCardProps) {
   if (!overviewRows.length && !detailedRows.length) return null;
 
   // overviewRows' underlying `col` (present on every row except a computed
   // Cost-per-X row, which has no single raw column — its `label` doubles as
   // a stable id in that case) is excluded from the extra pool so a default
   // metric can't appear twice.
-  const overviewCols = new Set((overviewRows as (KpiRowDisplay & { col?: string })[]).map((r) => r.col).filter((c): c is string => Boolean(c)));
+  // Meta's computed defaults also name the raw columns holding the same metric
+  // (sameCols), so "Amount spent (IDR)" is not offered beside "Amount Spent".
+  const overviewCols = new Set((overviewRows as (KpiRowDisplay & { col?: string; sameCols?: string[] })[])
+    .flatMap((r) => [r.col, ...(r.sameCols ?? [])])
+    .filter((c): c is string => Boolean(c)));
   // A computed row is keyed by its label under its own namespace: a file can
   // carry a raw column with the very same name ("Profile Visit Rate"), and a
   // shared id would let that raw column's value stand in for the computed one.
@@ -63,13 +69,13 @@ export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRow
         <div className="sec-split-wrap">
           <div className="sec-split sec-split-padded">
             <div className="sec-split-main">
-              <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded />
+              <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} />
             </div>
             {aside}
           </div>
         </div>
       ) : (
-        <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded />
+        <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} />
       )}
     </div>
   );

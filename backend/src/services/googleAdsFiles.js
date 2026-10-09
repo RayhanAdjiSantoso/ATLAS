@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 
-// The three Google Ads datasets of Pengaturan Brand › Data & file, as files:
+// The three Google Ads datasets of Pengaturan Brand › Performance Database, as files:
 //
 //   auction_insights  Auction insights export (manual only — Google does not
 //                     open these metrics to scripts or the API)
@@ -225,4 +225,59 @@ export function buildChangeHistoryWorkbook(month, rows) {
     ['Date & time', 'User', 'Tool', 'Item changed', 'Campaign', 'Ad group', 'Changes'],
     rows.map((r) => [r.changed_at, r.user_email, r.client_type, [r.resource_type, r.operation].filter(Boolean).join(' · '), r.campaign_name, r.ad_group_name, r.changes]),
   );
+}
+
+/* ── Archive copies of the synced datasets (migrations 040/041) ─────── */
+// Monthly files ATLAS writes into Performance Database for the datasets the script
+// syncs. They are an archive — the report reads the tables, never these —
+// so these slots take no uploads (brandLibraryService.AUTO_ONLY_CHANNELS).
+const list = (v) => (Array.isArray(v) ? v : []);
+const texts = (v) => list(v).map((x) => (typeof x === 'object' && x ? x.text ?? x.category ?? JSON.stringify(x) : String(x))).join(' | ');
+
+export const ARCHIVE_SPECS = {
+  ads: {
+    title: 'Ad performance (ATLAS auto-fetch)',
+    headers: ['Campaign', 'Ad group', 'Ad ID', 'Ad type', 'Status', 'Ad strength', 'Cost', 'Impr.', 'Clicks', 'Conversions', 'Conv. value', 'All conv.', 'Final URL', 'Headlines', 'Descriptions', 'Path 1', 'Path 2'],
+    row: (r) => [r.campaign_name, r.ad_group_name, r.ad_id, r.ad_type, r.ad_status, r.ad_strength, r.cost, r.impressions, r.clicks, r.conversions, r.conversions_value, r.all_conversions, list(r.final_urls)[0] ?? '', texts(r.headlines), texts(r.descriptions), r.path1, r.path2],
+  },
+  conversions: {
+    title: 'Conversions by conversion action (ATLAS auto-fetch)',
+    headers: ['Campaign', 'Conversion action', 'Category', 'Primary (account)', 'Conversions', 'Conv. value', 'All conv.', 'All conv. value'],
+    row: (r) => [r.campaign_name, r.conversion_action_name, r.conversion_category, r.include_in_conversions == null ? '' : r.include_in_conversions ? 'Yes' : 'No', r.conversions, r.conversions_value, r.all_conversions, r.all_conversions_value],
+  },
+  impression_share: {
+    title: 'Impression share (ATLAS auto-fetch) — range = Google figure for the month, day = daily value',
+    headers: ['Granularity', 'Level', 'Start', 'End', 'Campaign', 'Ad group', 'Keyword', 'Match type', 'Impr.', 'Search IS', 'Lost IS (budget)', 'Lost IS (rank)', 'Top IS', 'Abs. top IS', 'Lost top IS (budget)', 'Lost top IS (rank)', 'Lost abs. top IS (budget)', 'Lost abs. top IS (rank)'],
+    row: (r) => [r.granularity, r.level, r.start_date, r.end_date, r.campaign_name, r.ad_group_name, r.keyword, r.match_type, r.impressions, r.search_impression_share, r.search_budget_lost_is, r.search_rank_lost_is, r.search_top_is, r.search_abs_top_is, r.search_budget_lost_top_is, r.search_rank_lost_top_is, r.search_budget_lost_abs_top_is, r.search_rank_lost_abs_top_is],
+  },
+  devices: {
+    title: 'Device performance (ATLAS auto-fetch)',
+    headers: ['Campaign', 'Device', 'Cost', 'Impr.', 'Clicks', 'Conversions', 'Conv. value', 'All conv.'],
+    row: (r) => [r.campaign_name, r.device, r.cost, r.impressions, r.clicks, r.conversions, r.conversions_value, r.all_conversions],
+  },
+  hourly: {
+    title: 'Performance by hour, account time zone (ATLAS auto-fetch)',
+    headers: ['Date', 'Hour', 'Campaign', 'Cost', 'Impr.', 'Clicks', 'Conversions', 'Conv. value'],
+    row: (r) => [r.date, r.hour, r.campaign_name, r.cost, r.impressions, r.clicks, r.conversions, r.conversions_value],
+  },
+  landing_pages: {
+    title: 'Landing pages (ATLAS auto-fetch) — empty metric = not available from Google',
+    headers: ['Landing page', 'Campaign', 'Clicks', 'Impr.', 'Cost', 'Conversions', 'Conv. value'],
+    row: (r) => [r.url, r.campaign_name, r.clicks, r.impressions, r.cost, r.conversions, r.conversions_value],
+  },
+  keyword_quality: {
+    title: 'Quality Score — last snapshot in the month (ATLAS auto-fetch); empty = no score from Google',
+    headers: ['Snapshot date', 'Campaign', 'Ad group', 'Keyword', 'Match type', 'Status', 'Quality Score', 'Expected CTR', 'Ad relevance', 'Landing page experience'],
+    row: (r) => [r.snapshot_date, r.campaign_name, r.ad_group_name, r.keyword, r.match_type, r.status, r.quality_score, r.expected_ctr, r.ad_relevance, r.landing_page_experience],
+  },
+  campaign_settings: {
+    title: 'Campaign settings in force during the month (ATLAS auto-fetch); one row per version',
+    headers: ['Campaign', 'Version seen from', 'Last seen', 'Status', 'Type', 'Bidding strategy', 'Strategy source', 'Target CPA', 'Target ROAS', 'Target IS', 'Daily budget', 'Shared budget', 'Conversion goals', 'Google Search', 'Search partners', 'Display', 'Locations included', 'Locations excluded', 'Location option', 'Start date', 'End date', 'Not readable'],
+    row: (r) => [r.campaign_name, new Date(r.valid_from).toISOString().slice(0, 16).replace('T', ' '), new Date(r.last_seen_at).toISOString().slice(0, 16).replace('T', ' '), r.status, r.channel_type, r.bidding_strategy_type, r.bidding_strategy_source, r.target_cpa, r.target_roas, r.target_impression_share, r.budget_amount, r.budget_shared, texts(r.conversion_goals), r.network_google_search, r.network_search_partners, r.network_display, texts(r.locations_included), texts(r.locations_excluded), r.positive_geo_target_type, r.start_date, r.end_date, texts(r.unavailable)],
+  },
+};
+
+export function buildArchiveWorkbook(channel, month, rows) {
+  const spec = ARCHIVE_SPECS[channel];
+  return workbookOf(spec.title, month, spec.headers, rows.map((r) => spec.row(r).map((v) => (v == null ? '' : v))));
 }

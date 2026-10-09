@@ -5,40 +5,6 @@ import pool from '../config/db.js';
 // SELECTs, same reasoning as dailyTrackingRepository.
 
 // ---------------------------------------------------------------------
-// meta_ads_fetch_config
-// ---------------------------------------------------------------------
-export async function listConfigs(brandId, db = pool) {
-  const { rows } = await db.query(
-    `SELECT account_type, extra_metrics, updated_at
-     FROM meta_ads_fetch_config WHERE brand_id = $1`,
-    [brandId],
-  );
-  return rows;
-}
-
-export async function getExtraMetrics(brandId, accountType, db = pool) {
-  const { rows } = await db.query(
-    'SELECT extra_metrics FROM meta_ads_fetch_config WHERE brand_id = $1 AND account_type = $2',
-    [brandId, accountType],
-  );
-  return rows[0]?.extra_metrics ?? [];
-}
-
-export async function upsertConfig({ brandId, accountType, extraMetrics, userId }, db = pool) {
-  const { rows } = await db.query(
-    `INSERT INTO meta_ads_fetch_config (brand_id, account_type, extra_metrics, updated_by)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (brand_id, account_type) DO UPDATE SET
-       extra_metrics = EXCLUDED.extra_metrics,
-       updated_by    = EXCLUDED.updated_by,
-       updated_at    = now()
-     RETURNING account_type, extra_metrics, updated_at`,
-    [brandId, accountType, extraMetrics, userId ?? null],
-  );
-  return rows[0];
-}
-
-// ---------------------------------------------------------------------
 // meta_ads_insights_daily
 // ---------------------------------------------------------------------
 // Bulk upsert through jsonb_to_recordset: one bound parameter no matter how
@@ -47,18 +13,23 @@ export async function upsertInsightRows({ brandId, accountType, adAccountId, run
   if (!rows.length) return 0;
   const { rowCount } = await db.query(
     `INSERT INTO meta_ads_insights_daily
-       (brand_id, account_type, ad_account_id, entry_date, campaign_id, campaign_name, age, gender,
+       (brand_id, account_type, ad_account_id, entry_date, campaign_id, campaign_name,
+        adset_id, adset_name, ad_id, ad_name, age, gender,
         objective, amount_spent, impressions, reach, link_clicks, purchases, purchase_value, metrics, fetch_run_id)
-     SELECT $1, $2, $3, r.entry_date, r.campaign_id, r.campaign_name, r.age, r.gender,
+     SELECT $1, $2, $3, r.entry_date, r.campaign_id, r.campaign_name,
+            COALESCE(r.adset_id, ''), COALESCE(r.adset_name, ''), COALESCE(r.ad_id, ''), COALESCE(r.ad_name, ''), r.age, r.gender,
             r.objective, r.amount_spent, r.impressions, r.reach, r.link_clicks, r.purchases, r.purchase_value,
             COALESCE(r.metrics, '{}'::jsonb), $5
      FROM jsonb_to_recordset($4::jsonb) AS r(
-       entry_date date, campaign_id text, campaign_name text, age text, gender text,
+       entry_date date, campaign_id text, campaign_name text,
+       adset_id text, adset_name text, ad_id text, ad_name text, age text, gender text,
        objective text, amount_spent numeric, impressions numeric, reach numeric,
        link_clicks numeric, purchases numeric, purchase_value numeric, metrics jsonb)
-     ON CONFLICT (brand_id, account_type, entry_date, campaign_id, age, gender) DO UPDATE SET
+     ON CONFLICT (brand_id, account_type, entry_date, campaign_id, adset_id, ad_id, age, gender) DO UPDATE SET
        ad_account_id  = EXCLUDED.ad_account_id,
        campaign_name  = EXCLUDED.campaign_name,
+       adset_name     = EXCLUDED.adset_name,
+       ad_name        = EXCLUDED.ad_name,
        objective      = EXCLUDED.objective,
        amount_spent   = EXCLUDED.amount_spent,
        impressions    = EXCLUDED.impressions,
@@ -99,14 +70,24 @@ export async function deleteMonthRows({ brandId, accountType, startDate, endDate
 // file (one month) and for the Report Generator's custom range.
 export async function listRowsInRange({ brandId, accountType, startDate, endDate }, db = pool) {
   const { rows } = await db.query(
-    `SELECT entry_date::text AS entry_date, campaign_name, age, gender, objective,
+    `SELECT entry_date::text AS entry_date, ad_account_id, campaign_name, adset_name, ad_name, age, gender, objective,
             amount_spent, impressions, reach, link_clicks, purchases, purchase_value, metrics
      FROM meta_ads_insights_daily
      WHERE brand_id = $1 AND account_type = $2 AND entry_date >= $3 AND entry_date <= $4
-     ORDER BY entry_date, campaign_name, age, gender`,
+     ORDER BY entry_date, campaign_name, adset_name, ad_name, age, gender`,
     [brandId, accountType, startDate, endDate],
   );
   return rows;
+}
+
+// Kata Kunci Boost Post per MAIN ad account of the brand, from the Meta Ads
+// Automation mirror (brand_ad_accounts, kept lower-case there).
+export async function listBoostKeywords(brandId, db = pool) {
+  const { rows } = await db.query(
+    "SELECT ad_account_id, boost_keyword FROM brand_ad_accounts WHERE brand_id = $1 AND account_type = 'MAIN'",
+    [brandId],
+  );
+  return new Map(rows.map((r) => [r.ad_account_id, r.boost_keyword]));
 }
 
 // Per account type × month: what is actually stored.

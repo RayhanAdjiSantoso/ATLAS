@@ -5,6 +5,7 @@ import { processUpload } from '../services/import/importService.js';
 import * as brandService from '../services/brandService.js';
 import * as library from '../services/brandLibraryService.js';
 import * as ai from '../services/aiSummaryService.js';
+import { splitMetaExport } from '../services/metaUploadSplit.js';
 
 async function requireBrand(brandId) {
   const brand = await brandService.getBrandById(brandId);
@@ -27,6 +28,10 @@ export const getProfile = asyncHandler(async (req, res) => {
 export const saveProfile = asyncHandler(async (req, res) => {
   const brandId = parseBrandId(req);
   await requireBrand(brandId);
+  const industry = req.body?.industry;
+  if (industry != null && industry !== '' && !library.INDUSTRY_OPTIONS.includes(industry)) {
+    throw new AppError('Kategori industri tidak valid', 400);
+  }
   const profile = await library.saveProfile(brandId, req.body ?? {}, req.user?.userId);
   res.json({ profile });
 });
@@ -144,6 +149,9 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
   if (!library.isValidScope(platform, channel)) {
     throw reject(`Kombinasi platform "${platform}" dan channel "${channel}" tidak dikenal`);
   }
+  if (library.isAutoOnly(platform, channel)) {
+    throw reject('Slot ini terisi otomatis dari Google Ads Script setiap bulan dan tidak menerima unggahan');
+  }
 
   // multer .array: one slot can receive several files at once, which is how
   // a split export ("part 1 of 2") is filed in a single action.
@@ -160,6 +168,13 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
   for (const file of files) {
     const mismatch = library.shopeeChannelMismatch(platform, channel, file.originalname);
     if (mismatch) throw reject(mismatch);
+  }
+
+  // A Meta Ads export lands in Boost Post and Non Boost Post at once.
+  if (platform === 'meta' && channel === 'meta') {
+    if (!month) throw reject('Bulan periode wajib dipilih untuk dataset ini');
+    res.status(201).json(await storeSplitMetaExport({ req, brandId, month, files }));
+    return;
   }
 
   const saved = [];
@@ -182,6 +197,39 @@ export const uploadLibraryFile = asyncHandler(async (req, res) => {
 
   res.status(201).json({ files: saved, file: saved[0], warning: warnings[0] ?? null, warnings, imported });
 });
+
+// The upload replaces the month's Meta Ads files outright — Boost Post, Non
+// Boost Post, and the combined file of before the split, whether uploaded or
+// auto-fetched: the new export is the whole month, so anything left beside it
+// would count the month twice.
+async function storeSplitMetaExport({ req, brandId, month, files }) {
+  const halves = splitMetaExport(files);
+  if (!halves.some((h) => h.rowCount)) throw new AppError('File tidak berisi baris campaign', 400);
+
+  for (const ch of ['boost', 'nonboost', 'meta']) {
+    for (const part of await library.listSlotParts(brandId, 'meta', ch, `${month}-01`)) {
+      await library.deleteLibraryFile(brandId, part.id);
+    }
+  }
+
+  const saved = [];
+  const warnings = [];
+  for (const half of halves) {
+    if (!half.file) {
+      warnings.push(`Tidak ada campaign ${half.label} di file ini.`);
+      continue;
+    }
+    const result = await storeOnePart({
+      req, brandId, platform: 'meta', channel: half.channel, month, isReference: false, file: half.file, replaceFileId: null,
+    });
+    saved.push(result.file);
+    if (result.warning) warnings.push(result.warning);
+  }
+  return {
+    files: saved, file: saved[0], warning: warnings[0] ?? null, warnings, imported: null,
+    split: Object.fromEntries(halves.map((h) => [h.channel, h.rowCount])),
+  };
+}
 
 // One part: read it, file it under the right part number, and — for the three
 // Dashboard datasets — parse it into the fact tables Business Overview reads.

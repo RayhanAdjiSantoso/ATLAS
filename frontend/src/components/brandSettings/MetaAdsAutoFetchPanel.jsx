@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Check, CircleAlert, FolderInput, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CalendarClock, Check, CircleAlert, FolderInput, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import SelectMenu from '../common/SelectMenu.jsx';
@@ -56,15 +56,13 @@ function runState(run) {
   }[run.status];
 }
 
-// Auto-fetch of Meta Ads / CPAS insights into ATLAS. Lives under Data & file
+// Auto-fetch of Meta Ads / CPAS insights into ATLAS. Lives under Performance Database
 // › Meta Ads. An account is eligible exactly when it is registered in Meta
 // Brand › Meta Automation and linked to this ATLAS brand — the
 // same rule Daily Tracking's auto-fill uses. Admin only: it reaches the Meta
 // tokens held in Apps Script.
-// `onOpenAutomation` switches Pengaturan Brand to its Meta Automation
-// section — the registry this panel depends on now lives on the same page,
-// so the two pointers below are buttons rather than links.
-export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenAutomation }) {
+// `onOpenAutomation` scrolls to the account form in the same Meta Ads channel.
+export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLibraryChanged, onOpenAutomation }) {
   const { isAdmin, isViewOnly } = useAuth();
   const brandId = brand?.brand_id;
 
@@ -73,7 +71,6 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
   const [accountsError, setAccountsError] = useState('');
   const [error, setError] = useState('');
   const [type, setType] = useState('MAIN');
-  const [draft, setDraft] = useState({ MAIN: [], CPAS: [] });
   const [month, setMonth] = useState(() => monthOptions()[0].value);
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState('');
@@ -94,20 +91,23 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
     }
   }, [brandId]);
 
-  // Config comes from ATLAS's own DB (fast); eligibility needs Apps Script
+  // Stored months and runs come from ATLAS's own DB (fast); eligibility needs Apps Script
   // (seconds to a minute) — loaded separately so the panel is usable at once.
+  useEffect(() => {
+    if (!isAdmin || !brandId) return;
+    setOverview(null); setNotice('');
+    loadOverview();
+  }, [isAdmin, brandId, loadOverview]);
+
   useEffect(() => {
     if (!isAdmin || !brandId) return undefined;
     let cancelled = false;
-    setOverview(null); setAccounts(null); setAccountsError(''); setNotice('');
-    loadOverview().then((data) => {
-      if (!cancelled && data) setDraft({ MAIN: data.config.MAIN.extraMetrics, CPAS: data.config.CPAS.extraMetrics });
-    });
+    setAccounts(null); setAccountsError('');
     api.get('/meta-ads-insights/accounts', { params: { brandId } })
       .then((res) => { if (!cancelled) setAccounts(res.data.accounts); })
       .catch((err) => { if (!cancelled) setAccountsError(err.response?.data?.message || 'Gagal memeriksa akun di Meta Ads Automation'); });
     return () => { cancelled = true; };
-  }, [isAdmin, brandId, loadOverview]);
+  }, [isAdmin, brandId, accountsVersion]);
 
   useEffect(() => () => { clearTimeout(pollTimer.current); clearTimeout(libraryTimer.current); }, []);
 
@@ -131,34 +131,12 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
     pollTimer.current = setTimeout(tick, POLL_MS);
   }, [loadOverview, onLibraryChanged]);
 
-  const catalog = overview?.catalog ?? [];
-  const defaults = useMemo(() => catalog.filter((m) => m.group === 'default'), [catalog]);
-  const optionals = useMemo(() => catalog.filter((m) => m.group === 'optional'), [catalog]);
+  // The fixed metric set per campaign type (backend/src/config/metaAdsMetrics.js).
+  const sections = (overview?.catalog ?? []).filter((s) => s.accountType === type);
   const registered = (t) => accounts?.find((a) => a.accountType === t)?.registered;
-  const saved = overview?.config[type].extraMetrics ?? [];
-  const selected = draft[type];
-  const dirty = saved.length !== selected.length || saved.some((k) => !selected.includes(k));
   const readOnly = isViewOnly;
 
-  const toggleMetric = (key) => setDraft((d) => ({
-    ...d,
-    [type]: d[type].includes(key) ? d[type].filter((k) => k !== key) : [...d[type], key],
-  }));
-
-  const saveConfig = async () => {
-    setBusy('save'); setNotice('');
-    try {
-      const res = await api.put('/meta-ads-insights/config', { brandId, accountType: type, extraMetrics: selected });
-      setOverview((o) => ({ ...o, config: { ...o.config, [type]: { extraMetrics: res.data.extraMetrics } } }));
-      setNotice('Pilihan metrik tersimpan. Berlaku untuk penarikan berikutnya.');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Gagal menyimpan pilihan metrik');
-    } finally { setBusy(''); }
-  };
-
   const fetchNow = async () => {
-    // A dirty selection would silently be ignored (the run reads the SAVED one).
-    if (dirty && !window.confirm('Pilihan metrik belum disimpan dan tidak dipakai penarikan ini. Lanjut tarik data dengan pilihan tersimpan?')) return;
     setBusy('fetch'); setNotice(''); setError('');
     try {
       await api.post('/meta-ads-insights/fetch', { brandId, accountType: type, month });
@@ -170,16 +148,16 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
     } finally { setBusy(''); }
   };
 
-  // Rebuilds the Data & file library copy of a fetched month — for months
+  // Rebuilds the Performance Database library copy of a fetched month — for months
   // fetched before that step existed, or when it was skipped or failed.
   const syncLibrary = async (row) => {
     setBusy(`lib:${row.accountType}:${row.month}`); setNotice(''); setError('');
     try {
       await api.post('/meta-ads-insights/library', { brandId, accountType: row.accountType, month: row.month });
-      setNotice(`${monthName(row.month)} disimpan ke Data & file — sekarang bisa dipilih di Report Generator.`);
+      setNotice(`${monthName(row.month)} disimpan ke Performance Database — sekarang bisa dipilih di Report Generator.`);
       onLibraryChanged?.();
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal menyimpan ke Data & file');
+      setError(err.response?.data?.message || 'Gagal menyimpan ke Performance Database');
     } finally { setBusy(''); }
   };
 
@@ -206,10 +184,10 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
       <header className="maf-head">
         <span className="maf-head-icon" aria-hidden="true"><CalendarClock size={18} /></span>
         <div>
-          <h3>Tarik otomatis dari Meta</h3>
+          <h3>Automate Input with API</h3>
           <p>
             Tiap hari, ATLAS menarik data 7 hari terakhir sampai kemarin (tanggal 1: seluruh bulan sebelumnya) per
-            campaign, umur, gender, dan hari untuk akun yang sudah terdaftar di bagian <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini.
+            campaign, ad set, ad, umur, gender, dan hari untuk akun yang sudah terdaftar di bagian <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini.
           </p>
         </div>
       </header>
@@ -252,36 +230,20 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
         <>
           <div className="maf-block">
             <h4>Metrik</h4>
-            <div className="maf-chips" aria-label="Metrik default">
-              {defaults.map((m) => (
-                <span key={m.key} className="maf-chip is-locked" title={m.note ?? 'Selalu ditarik'}>
-                  {m.label}{m.note ? ' *' : ''}
-                </span>
-              ))}
-            </div>
+            {sections.map((section) => (
+              <div key={section.key} className="maf-section">
+                <h5>{section.label}</h5>
+                <div className="maf-chips" aria-label={`Metrik ${section.label}`}>
+                  {section.metrics.map((m) => <span key={m.key} className="maf-chip is-locked">{m.label}</span>)}
+                </div>
+              </div>
+            ))}
             <p className="maf-hint">
-              Breakdown: campaign name, age, gender, day. * Instagram profile visits diambil dari Results campaign profile visit; Cost
-              per Profile Visit = Amount Spent ÷ profile visits.
+              Breakdown: campaign name, ad set name, ad name, age, gender, objective, day.
+              {type === 'MAIN'
+                ? ' Boost Post dan Non Boost Post dipisah dari Kata Kunci Boost Post akun (campaign yang namanya mengandung kata itu = Boost Post). Non Boost Post menyimpan metrik E-commerce dan B2B sekaligus. Profile visit diambil dari Results campaign profile visit; Post interactions = post reactions + comments + saves + shares.'
+                : ' Metrik "with shared items" adalah angka produk katalog yang dibagikan (CPAS).'}
             </p>
-
-            <h4 className="maf-sub">Tambahan (opsional)</h4>
-            <div className="maf-options">
-              {optionals.map((m) => (
-                <label key={m.key} className="maf-option">
-                  <input
-                    type="checkbox" checked={selected.includes(m.key)}
-                    disabled={readOnly} onChange={() => toggleMetric(m.key)}
-                  />
-                  <span>{m.label}</span>
-                </label>
-              ))}
-            </div>
-            <div className="maf-actions">
-              <button type="button" className="btn btn-secondary dt-btn-sm" onClick={saveConfig} disabled={!dirty || busy === 'save' || readOnly}>
-                {busy === 'save' ? <Loader2 size={14} className="maf-spin" /> : <Save size={14} />} Simpan metrik
-              </button>
-              <small className="maf-hint">Metrik baru hanya berlaku untuk penarikan berikutnya; bulan yang sudah tersimpan perlu ditarik ulang.</small>
-            </div>
           </div>
 
           <div className="maf-block">
@@ -291,7 +253,7 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
               <button type="button" className="btn btn-primary dt-btn-sm" onClick={fetchNow} disabled={!canAct || busy === 'fetch'}>
                 {busy === 'fetch' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Tarik {typeLabel}
               </button>
-              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta. Hasilnya juga disimpan ke Data & file (Meta Ads / CPAS) dan bisa dipilih di Report Generator, per bulan atau dengan rentang tanggal bebas.</small>
+              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta. Hasilnya juga disimpan ke Performance Database ({type === 'MAIN' ? 'Boost Post dan Non Boost Post' : 'CPAS'}) dan bisa dipilih di Report Generator, per bulan atau dengan rentang tanggal bebas.</small>
             </div>
           </div>
 
@@ -317,8 +279,8 @@ export default function MetaAdsAutoFetchPanel({ brand, onLibraryChanged, onOpenA
                         <td>{dateTime(row.fetchedAt)}</td>
                         <td className="maf-row-actions">
                           <button
-                            type="button" className="btn btn-icon" title="Simpan ke Data & file"
-                            aria-label={`Simpan ${monthName(row.month)} ke Data & file`}
+                            type="button" className="btn btn-icon" title="Simpan ke Performance Database"
+                            aria-label={`Simpan ${monthName(row.month)} ke Performance Database`}
                             onClick={() => syncLibrary(row)} disabled={readOnly || busy === `lib:${row.accountType}:${row.month}`}
                           >
                             {busy === `lib:${row.accountType}:${row.month}` ? <Loader2 size={14} className="maf-spin" /> : <FolderInput size={14} />}

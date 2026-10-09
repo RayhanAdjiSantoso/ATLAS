@@ -416,9 +416,9 @@ const pctOf = (part, whole) => (whole > 0 && part != null ? Number(((part / whol
 const growthOf = (cur, prev) => (cur == null || prev == null ? null : calculateGrowth(cur, prev));
 
 const MONTHLY_UNAVAILABLE = {
-  'no-upload': 'File Performance Overview (shop-stats) bulan ini belum di-upload di Pengaturan Brand.',
+  'no-upload': 'File Performance Overview (shop-stats) bulan ini belum di-upload di Brand Setting.',
   'split-upload': 'Data bulan ini berasal dari beberapa file terpisah, sehingga total bulanan Shopee tidak bisa dibaca. Upload ulang satu file untuk 1 bulan penuh.',
-  'no-raw-file': 'File asli bulan ini tidak tersimpan. Upload ulang file Performance Overview di Pengaturan Brand.',
+  'no-raw-file': 'File asli bulan ini tidak tersimpan. Upload ulang file Performance Overview di Brand Setting.',
 };
 
 // One month's traffic snapshot. Every figure is Shopee's own monthly total

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import SearchField from '../common/SearchField.jsx';
 
 // Type-to-filter brand picker, meniru "pilih klien" di Report Generator
 // (src/reportGenerator/features/reports/ClientPicker.tsx): tombol pemicu
@@ -94,7 +95,7 @@ export default function BrandCombo({
           }}
         >
           <div style={{ padding: '0.5rem' }}>
-            <input
+            <SearchField
               ref={inputRef}
               value={query}
               placeholder="Cari brand…"
@@ -107,13 +108,7 @@ export default function BrandCombo({
                   else if (showCustomRow) pick(trimmedQuery);
                 }
               }}
-              style={{
-                width: '100%',
-                padding: '0.5rem 0.625rem',
-                fontSize: '0.85rem',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-              }}
+              aria-label="Cari brand"
             />
           </div>
           <div style={{ maxHeight: 220, overflowY: 'auto' }}>

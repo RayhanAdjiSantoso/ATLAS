@@ -1,5 +1,5 @@
 import { getLayoutRect, getLayoutViewport } from '../../utils/uiScale.js';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { getPortalContainer } from '../utils/portalTarget';
 
@@ -12,6 +12,9 @@ interface MetricPickerProps {
   // callers (e.g. KpiTable's default mode) that are already nested inside a
   // padded wrapper and would otherwise double the inset.
   dense?: boolean;
+  // A table-level control shown beside "Hapus Semua" (e.g. Meta B2B's result
+  // picker), so the table's toolbar stays one row.
+  extra?: ReactNode;
 }
 
 // The "+ Tambah metrik" add-back control only — rename, reorder, and remove
@@ -25,18 +28,25 @@ interface MetricPickerProps {
 // (needed for its rounded corners) clipping the popup. A React portal into
 // document.body achieves that escape; the viewport-edge flip/clamp math
 // below keeps it on-screen.
-export function MetricPicker({ allCols, activeCols, onChange, labelFn, dense }: MetricPickerProps) {
+export function MetricPicker({ allCols, activeCols, onChange, labelFn, dense, extra }: MetricPickerProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
 
   const label = (col: string) => (labelFn ? labelFn(col) : col);
-  const extras = allCols.filter((c) => !activeCols.includes(c));
+  // Hidden metrics A–Z, narrowed by the search box.
+  const extras = allCols
+    .filter((c) => !activeCols.includes(c))
+    .sort((a, b) => label(a).localeCompare(label(b), 'id', { sensitivity: 'base' }));
+  const q = query.trim().toLowerCase();
+  const shown = q ? extras.filter((c) => label(c).toLowerCase().includes(q)) : extras;
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) {
       setPos(null);
+      setQuery('');
       return;
     }
     const rect = getLayoutRect(triggerRef.current);
@@ -89,8 +99,9 @@ export function MetricPicker({ allCols, activeCols, onChange, labelFn, dense }: 
     onChange([...activeCols, col]);
   }
 
+  // "Pilih Semua" takes what the search currently shows.
   function selectAll() {
-    onChange([...activeCols, ...extras]);
+    onChange([...activeCols, ...shown]);
     setOpen(false);
   }
 
@@ -113,15 +124,32 @@ export function MetricPicker({ allCols, activeCols, onChange, labelFn, dense }: 
               style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, maxHeight: pos.maxHeight }}
             >
               {extras.length > 0 && (
+                <div className="add-metric-search">
+                  <input
+                    type="search"
+                    autoFocus
+                    placeholder="Cari metrik…"
+                    aria-label="Cari metrik"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
+                  />
+                </div>
+              )}
+              {shown.length > 0 && (
                 <>
                   <div className="add-metric-opt add-metric-opt-all" onClick={selectAll}>
-                    ✓ Pilih Semua Metrik
+                    ✓ {q ? `Pilih Semua (${shown.length})` : 'Pilih Semua Metrik'}
                   </div>
                   <div className="add-metric-divider" />
                 </>
               )}
-              {extras.length ? (
-                extras.map((col) => (
+              {extras.length && !shown.length ? (
+                <div className="add-metric-opt" style={{ color: 'var(--muted)' }}>
+                  Tidak ada metrik yang cocok
+                </div>
+              ) : extras.length ? (
+                shown.map((col) => (
                   <label key={col} className="add-metric-opt add-metric-opt-check">
                     <input type="checkbox" onChange={() => addCol(col)} />
                     {label(col)}
@@ -141,6 +169,7 @@ export function MetricPicker({ allCols, activeCols, onChange, labelFn, dense }: 
           ✕ Hapus Semua
         </div>
       )}
+      {extra && <div className="metric-picker-extra">{extra}</div>}
     </div>
   );
 }

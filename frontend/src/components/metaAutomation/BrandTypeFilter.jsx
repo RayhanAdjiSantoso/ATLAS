@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import SearchField from '../common/SearchField.jsx';
 
 // Filter brand untuk daftar Langganan: satu dropdown bertingkat. Brand yang
 // punya lebih dari satu ad account (MAIN + CPAS) tampil sekali dan bisa
@@ -114,7 +115,7 @@ export default function BrandTypeFilter({ brands, value, onChange }) {
           }}
         >
           <div style={{ padding: '0.5rem' }}>
-            <input
+            <SearchField
               ref={inputRef}
               value={query}
               placeholder="Cari brand…"
@@ -126,13 +127,7 @@ export default function BrandTypeFilter({ brands, value, onChange }) {
                   if (filtered.length > 0) pickGroup(filtered[0]);
                 }
               }}
-              style={{
-                width: '100%',
-                padding: '0.5rem 0.625rem',
-                fontSize: '0.85rem',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-              }}
+              aria-label="Cari brand"
             />
           </div>
           <div style={{ maxHeight: 260, overflowY: 'auto' }}>

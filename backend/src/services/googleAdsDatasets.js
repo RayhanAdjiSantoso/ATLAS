@@ -374,7 +374,7 @@ const HANDLERS = {
   },
 };
 
-const ctx = (run) => ({ brandId: run.brand_id, customerId: run.customer_id, runId: run.fetch_run_id, source: run.source });
+const ctx = (run) => ({ brandId: run.brand_id, customerId: run.customer_id, runId: run.fetch_run_id, source: run.source, runStartedAt: run.started_at });
 
 export async function ingestDataset(run, dataset, rows) {
   const handler = HANDLERS[dataset];
@@ -411,7 +411,7 @@ export async function deleteStaleDatasets(run, results, db) {
     const r = results[dataset];
     if (r?.status !== 'success' || !r.rowCount) continue;
     removed[dataset] = await repo.deleteStaleDataset({
-      dataset, customerId: run.customer_id, startDate: run.start_date, endDate: run.end_date, runId: run.fetch_run_id,
+      dataset, customerId: run.customer_id, startDate: run.start_date, endDate: run.end_date, runId: run.fetch_run_id, runStartedAt: run.started_at,
       levels: dataset === 'competitive' ? (r.levels?.length ? r.levels : null) : null,
     }, db);
   }

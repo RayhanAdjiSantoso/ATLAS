@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import SearchField from './SearchField.jsx';
 
 export default function MultiSelectDropdown({ options, selected, onChange, placeholder = 'Semua' }) {
   const [open, setOpen] = useState(false);
@@ -79,20 +80,12 @@ export default function MultiSelectDropdown({ options, selected, onChange, place
         >
           {options.length > 6 && (
             <div style={{ padding: '0.5rem', borderBottom: '1px solid var(--border)' }}>
-              <input
+              <SearchField
                 autoFocus
                 placeholder="Cari..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.4rem 0.6rem',
-                  background: 'var(--bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  color: 'var(--text)',
-                  fontSize: '0.85rem',
-                }}
+                aria-label="Cari pilihan"
               />
             </div>
           )}

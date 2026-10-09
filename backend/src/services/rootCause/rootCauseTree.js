@@ -124,7 +124,7 @@ const TRAFFIC_SECTIONS = [
   },
 ];
 
-const ORDER_FILE_ABSENT = 'Butuh file Order (Pesanan) Shopee dengan pesanan berstatus Selesai pada periode ini. Upload di Pengaturan Brand.';
+const ORDER_FILE_ABSENT = 'Butuh file Order (Pesanan) Shopee dengan pesanan berstatus Selesai pada periode ini. Upload di Brand Setting.';
 const CPAS_NOTE =
   'Data CPAS (iklan Meta yang diarahkan ke Shopee) belum tersambung ke tree ini. Sumbernya ada di Meta Ads, bukan di file Shopee.';
 const ADS_CTR_NOTE =
@@ -331,7 +331,7 @@ export async function getRootCauseAnalysis({ brandId, startDate, endDate }) {
   // whole calendar month the node says so instead of showing a sum.
   const visitors = monthly?.available ? n(monthly.stages['Pesanan Dibayar'].totals.visitors) : null;
   const visitorsAbsent = isWholeCalendarMonth
-    ? 'Total pengunjung unik bulan ini belum tersedia. Upload file Performance Overview 1 bulan penuh di Pengaturan Brand.'
+    ? 'Total pengunjung unik bulan ini belum tersedia. Upload file Performance Overview 1 bulan penuh di Brand Setting.'
     : 'Pengunjung unik hanya tersedia per 1 bulan kalender penuh (angka Shopee tidak bisa dipecah per hari). Pilih periode 1 bulan untuk melihatnya.';
   const aov = div(gmv, orders);
 

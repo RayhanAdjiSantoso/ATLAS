@@ -27,7 +27,7 @@ import {
   type MetaObjectiveSource,
 } from '../../lib/meta';
 import { findCol, matchDef } from '../../lib/columns';
-import { buildMetaBrandFunnel, buildMetaLeadFunnel, buildMetaSalesFunnel, metaLeadMetrics, type MetaFunnel } from '../../lib/metaFunnel';
+import { buildMetaBrandFunnel, buildMetaLeadFunnel, buildMetaSalesFunnel, leadResultKind, leadResultKinds, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
 import { toISODate } from '../../lib/dateFmt';
 import { buildParsedPeriod, comparePeriodDays, daysBetweenInclusive, type ParsedPeriod } from '../../lib/periodLabel';
 import { toSummaryKpi, type SpendEntry, type SummaryKpi } from '../../lib/summary';
@@ -95,6 +95,15 @@ export interface NonBoostLane {
   campCol: string | null;
   ageCol: string | null;
   genderCol: string | null;
+  // B2B only: the results this lane has a count for (leads / messaging
+  // conversations started / messaging contacts), the one picked
+  // automatically, and the table + root cause for each — the report lets the
+  // user switch between them without generating again.
+  leadResults?: {
+    kinds: LeadResultKind[];
+    auto: LeadResultKind;
+    byKind: Partial<Record<LeadResultKind, { overviewRows: KpiRowDisplay[]; funnel: MetaFunnel }>>;
+  };
 }
 
 export const NON_BOOST_LANE_LABEL: Record<NonBoostLaneKey, string> = { retail: 'Retail', b2b: 'B2B Leads' };
@@ -161,8 +170,13 @@ export interface MetaReport {
   };
 }
 
+// A column with no value in either period belongs to another campaign type
+// (the Boost file's profile visits read on Non-Boost rows, a CPAS-only
+// column…), so it is not offered under "+ Tambah metrik" here.
 function toDisplayRows(rows: MetaKpiRow[]): DetailedRow[] {
-  return rows.map((r) => ({ col: r.col, label: displayName(r.col), old: r.old, cur: r.val, delta: r.delta, cls: r.cls }));
+  return rows
+    .filter((r) => r.old !== '—' || r.val !== '—')
+    .map((r) => ({ col: r.col, label: displayName(r.col), old: r.old, cur: r.val, delta: r.delta, cls: r.cls }));
 }
 
 // Default Overview rows (lib/metaOverview) as Summary Overview entries.
@@ -183,26 +197,39 @@ function nonBoostKind(key: MetaObjectiveKey | null, industry: MetaIndustry): Met
 // Exported so the Fase 2 save-to-database row mapping can classify each raw
 // row into the same boost/nonboost channel this report used, without
 // duplicating the classification rule.
+//
+// Files written by ATLAS's Meta API fetch carry a "Campaign type" column
+// (Boost Post / Non Boost Post) decided from the account's Kata Kunci Boost
+// Post; where it is filled it wins over the name rule.
 export function isBoostRow(campCol: string | null) {
   return (r: SheetRow) => {
+    const type = String(r['Campaign type'] ?? '').trim().toLowerCase();
+    if (type) return type.startsWith('boost');
     const v = String((campCol ? r[campCol] : '') || '').toLowerCase();
     return v.includes('profile visit') || v.includes('instagram post') || /\bpv\b/.test(v) || /\bpost\b/.test(v);
   };
 }
 
 // Which Non-Boost lane a campaign belongs to:
-//   1. its name says so ("… | B2B", "… Retail", "… Lead …") — MIL's own label wins;
-//   2. its objective: Sales → Retail; Leads → B2B Leads; Engagement that
-//      actually produced chats or leads (Send Message) → B2B Leads;
+//   1. its name says so ("… | B2B", "… Retail", "… Lead …", or a chat
+//      campaign — "Send Message", "WhatsApp", "WA", "Chat") — MIL's own
+//      label wins. A Send Message campaign optimised for a custom conversion
+//      reports no leads or messaging figures at all, so without the name
+//      rule it fell through to the Industry and landed in Retail;
+//   2. its objective: Sales → Retail; Leads and Engagement → B2B Leads
+//      (Engagement whether or not it produced leads or chats in the period
+//      — MIL runs it for B2B; a Send Message campaign optimised for a
+//      custom conversion reports neither);
 //   3. anything else (Traffic, Awareness, a post-engagement push) follows the
 //      Industry picked in the form, Retail when none was picked.
-export function laneOfCampaign(name: string, objective: MetaObjectiveKey | null, rows: SheetRow[], industry: MetaIndustry): { lane: NonBoostLaneKey; basis: NonBoostLane['basis'] } {
+export function laneOfCampaign(name: string, objective: MetaObjectiveKey | null, _rows: SheetRow[], industry: MetaIndustry): { lane: NonBoostLaneKey; basis: NonBoostLane['basis'] } {
   const lc = name.toLowerCase();
   if (/\bb2b\b|\blead(s|gen)?\b/.test(lc)) return { lane: 'b2b', basis: 'name' };
+  if (/\bsend message|\bmessag(e|es|ing)\b|\bwhats\s?app\b|\bwa\b|\bchat\b/.test(lc)) return { lane: 'b2b', basis: 'name' };
   if (/\bretail\b|\bb2c\b/.test(lc)) return { lane: 'retail', basis: 'name' };
   if (objective === 'sales') return { lane: 'retail', basis: 'objective' };
   if (objective === 'leads') return { lane: 'b2b', basis: 'objective' };
-  if (objective === 'engagement' && (metaLeadMetrics(rows).leads ?? 0) > 0) return { lane: 'b2b', basis: 'objective' };
+  if (objective === 'engagement') return { lane: 'b2b', basis: 'objective' };
   return { lane: industry === 'b2b' ? 'b2b' : 'retail', basis: 'industry' };
 }
 
@@ -442,9 +469,9 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     // "Amount Spent · Sales / · Leads / …" — the split the user actually asked
     // for, right under the blended total so every figure is labelled.
     const spendSplitRows = nbGroups.groups
-      .map((g) => buildLabeledAggRow(`Amount Spent · ${g.label}`, mSpentCol ?? null, g.old, g.cur))
+      .map((g) => buildLabeledAggRow(`${mSpentCol ? displayName(mSpentCol) : 'Amount spent'} · ${g.label}`, mSpentCol ?? null, g.old, g.cur))
       .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    const spentRowIdx = blendedOvRows.findIndex((r) => r.label === 'Amount Spent');
+    const spentRowIdx = (blendedOvRows as MetaOverviewRow[]).findIndex((r) => r.key === 'spend');
     if (spentRowIdx >= 0) blendedOvRows.splice(spentRowIdx + 1, 0, ...spendSplitRows);
     else blendedOvRows.unshift(...spendSplitRows);
     report.nonBoost = { overviewRows: blendedOvRows, detailedRows: toDisplayRows(buildKPI(mNonOld, mNonCur, mAllCols)), allCols: mAllCols };
@@ -456,7 +483,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       // Each objective opens with its own default set; the Amount Spent row
       // says which objective it is.
       const segOvRows = buildMetaOverviewRows(nonBoostKind(g.key, industry), g.old, g.cur, !reachWarning).map((r) =>
-        r.label === 'Amount Spent' ? { ...r, label: `Amount Spent (${g.label})` } : r,
+        r.key === 'spend' ? { ...r, label: `${r.label} (${g.label})` } : r,
       );
       metaKpis.push(...overviewSummary(segOvRows, `Non-Boost · ${g.label}`));
       return {
@@ -474,7 +501,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const objKey = soleKey ?? objective ?? null;
     const objLabel = objKey ? META_OBJECTIVE_DEFS[objKey].label : null;
     const mainOvRows = buildMetaOverviewRows(nonBoostKind(objKey, industry), mNonOld, mNonCur, !reachWarning).map((r) =>
-      objLabel && r.label === 'Amount Spent' ? { ...r, label: `Amount Spent (${objLabel})` } : r,
+      objLabel && r.key === 'spend' ? { ...r, label: `${r.label} (${objLabel})` } : r,
     );
     let mainDetailedRows = toDisplayRows(buildKPI(mNonOld, mNonCur, mAllCols));
     if (objKey) mainDetailedRows = deblend(mainDetailedRows);
@@ -512,6 +539,17 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
       }
       const objectives = [...new Set(camps.map(([, v]) => (v.objective ? META_OBJECTIVE_DEFS[v.objective].label : null)).filter((x): x is string => Boolean(x)))];
       const ovRows = buildMetaOverviewRows(key === 'retail' ? 'ecommerce' : 'b2b', oldRows, curRows, !reachWarning);
+      const leadKinds = key === 'b2b' ? leadResultKinds(oldRows, curRows) : [];
+      const leadResults = key === 'b2b'
+        ? {
+          kinds: leadKinds,
+          auto: leadResultKind(oldRows, curRows),
+          byKind: Object.fromEntries(leadKinds.map((k) => [k, {
+            overviewRows: buildMetaOverviewRows('b2b', oldRows, curRows, !reachWarning, k),
+            funnel: buildMetaLeadFunnel(oldRows, curRows, k),
+          }])),
+        }
+        : undefined;
       lanes.push({
         key,
         label: NON_BOOST_LANE_LABEL[key],
@@ -524,6 +562,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
         campCol: mCampCol,
         ageCol: mAgeCol,
         genderCol: mGenderCol,
+        leadResults,
       });
     }
     if (lanes.length) report.nonBoostLanes = lanes;
@@ -556,20 +595,22 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     // it the "Overall" tab double-counts every absolute metric (the NV/RM
     // tabs happen to escape it only because groupByCamp's "NV"/"RM" regex
     // never matches a subtotal's "All" campaign name).
-    // CPAS exports come with either a Month or a Day breakdown; both compare
-    // the first and last calendar month in the file(s).
+    // A Day-breakdown CPAS file read alongside picked date ranges is cut at
+    // those same ranges — the two sides of a range comparison usually sit in
+    // one calendar month, and splitting that by month put the whole file on
+    // both sides. Otherwise (Month breakdown, or no ranges picked) CPAS
+    // compares the first and last calendar month in its file(s).
     const cpasLeaves = stripCampaignSubtotals(cpasRows);
-    const { old: cOld, cur: cCur, months: cMonths } = cDayCol
-      ? splitDayRowsByMonth(cpasLeaves, cDayCol)
-      : splitMonths(cpasLeaves, cMonthCol);
-    // CPAS has its own comparison periods — the two calendar months its file
-    // spans — not the main-account file's p1/p2 (which may be a custom
-    // Day-breakdown sub-range). Fall back to the main periods only if the
-    // CPAS Month column couldn't be parsed into labels.
-    const cOldPeriod = parseMetaMonthValue(cMonths[0]);
-    const cCurPeriod = parseMetaMonthValue(cMonths[cMonths.length - 1]);
-    const cP1 = cOldPeriod.label || p1;
-    const cP2 = cCurPeriod.label || p2;
+    const byRange = Boolean(cDayCol && dayRanges);
+    const { old: cOld, cur: cCur, months: cMonths } = byRange
+      ? { ...splitByDayRange(cpasLeaves, cDayCol!, dayRanges!.old, dayRanges!.cur), months: [] as string[] }
+      : cDayCol
+        ? splitDayRowsByMonth(cpasLeaves, cDayCol)
+        : splitMonths(cpasLeaves, cMonthCol);
+    // Month mode: CPAS's own months, not the main file's p1/p2. Fall back to
+    // the main periods if the CPAS Month column couldn't be parsed.
+    const cP1 = byRange ? p1 : parseMetaMonthValue(cMonths[0]).label || p1;
+    const cP2 = byRange ? p2 : parseMetaMonthValue(cMonths[cMonths.length - 1]).label || p2;
     // A Day-breakdown CPAS file sums reach per day — same over-count as the
     // main file's, so Reach/Frequency/Cost per Reach are not offered either.
     const cAllCols = cpasHeaders.filter((h) => isNumericCol(h, cpasRows) && !cDimCols.includes(h) && !(cDayCol && isReachDependentCol(h)));

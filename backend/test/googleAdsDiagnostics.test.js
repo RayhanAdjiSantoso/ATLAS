@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   classifyKeyword, classifySearchTerm, searchTermSummary, diagnoseCampaigns, detectAnomalies, deviceInsights, scheduleInsights,
-  landingPageInsights, messageMatch, adInsights, campaignBaselines, competitorTokens,
+  landingPageInsights, messageMatch, adInsights, campaignBaselines, competitorTokens, qualityPatterns,
 } from '../src/services/googleAdsDiagnostics.js';
 import { normalizeKeywordQuality, normalizeLandingPageRow, normalizeHourRow, normalizeDeviceRow } from '../src/services/googleAdsDatasets.js';
 import { withRatios } from '../src/services/googleAdsAnalytics.js';
@@ -125,6 +125,8 @@ test('CPA increase needs volume in both periods; changes in the period are conte
   assert.ok(cpa);
   assert.equal(cpa.severity, 'high');
   assert.equal(cpa.metrics.cost_per_conv.change, 0.6);
+  const myr = diagnoseCampaigns({ old: period([old]), cur: period([cur]), currency: 'MYR' }).find((x) => x.type === 'cpa_increase');
+  assert.match(myr.facts[0], /RM50\.00 → RM80\.00/);
   assert.match(cpa.possible_causes.at(-1), /2026-09-12.*bukan bukti/);
   const small = diagnoseCampaigns({ old: period([camp({ conversions: 2, cost: 100 })]), cur: period([camp({ conversions: 2, cost: 300 })]) });
   assert.ok(!small.some((x) => x.type === 'cpa_increase'), 'two conversions are not enough');
@@ -206,6 +208,36 @@ test('landing pages: missing conversions are said, not invented', () => {
   assert.equal(lp.conversions_available, false);
   assert.equal(lp.pages[0].cvr, null);
   assert.deepEqual(lp.pages[0].flags, ['Speed score mobile 3/10']);
+});
+
+// Shaped like Petite Fleur KL on 2026-10-04: LP experience below average on
+// most scored keywords, ad relevance on fewer, many keywords unscored.
+test('a Quality Score component weak across most keyword spend is one account finding', () => {
+  const kw = (quality_score, lpe, rel, cost) => ({ quality_score, landing_page_experience: lpe, ad_relevance: rel, expected_ctr: 'AVERAGE', cost, quality_date: '2026-10-04' });
+  const keywords = [
+    ...Array.from({ length: 8 }, () => kw(3, 'BELOW_AVERAGE', 'BELOW_AVERAGE', 30)),
+    ...Array.from({ length: 6 }, () => kw(7, 'BELOW_AVERAGE', 'ABOVE_AVERAGE', 20)),
+    ...Array.from({ length: 6 }, () => kw(8, 'AVERAGE', 'ABOVE_AVERAGE', 10)),
+    ...Array.from({ length: 5 }, () => ({ quality_score: null, cost: 5 })),
+  ];
+  const f = qualityPatterns(keywords);
+  assert.deepEqual(f.map((x) => x.type), ['quality_landing_page_experience', 'quality_ad_relevance']);
+  assert.equal(f[0].severity, 'high', '360 of 420 cost = 86%');
+  assert.match(f[0].facts[0], /14 dari 20 keyword/);
+  assert.match(f[0].facts[1], /^5 keyword belum punya/);
+  assert.equal(qualityPatterns(keywords.slice(0, 9)).length, 0, 'fewer than 10 scored keywords: no pattern claimed');
+});
+
+test('landing pages: the long tail is summed, totals still cover every page', () => {
+  const rows = Array.from({ length: 130 }, (_, i) => ({ url: `https://x.my/p${i}`, clicks: 200 - i, impressions: 1000, cost: 1, conversions: null }));
+  const lp = landingPageInsights(rows);
+  assert.equal(lp.pages.length, 100);
+  assert.equal(lp.pages[0].url, 'https://x.my/p0');
+  assert.equal(lp.others.pages, 30);
+  assert.equal(lp.totals.pages, 130);
+  assert.equal(lp.totals.cost, 130);
+  assert.equal(lp.totals.conversions, null, 'unavailable stays null in totals');
+  assert.equal(lp.totals.clicks, lp.pages.reduce((a, p) => a + p.clicks, 0) + lp.others.clicks);
 });
 
 test('message match flags ad groups whose keyword spend is missing from headlines', () => {

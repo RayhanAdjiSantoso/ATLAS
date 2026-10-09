@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowUpRight, CalendarDays, Check, CheckCircle2, Circle, CircleAlert, Clock3, Database, ListChecks,
-  Loader2, Radar, RefreshCw, Search, Sparkles, Undo2,
+  Loader2, Radar, RefreshCw, Sparkles, Undo2,
 } from 'lucide-react';
 import api from '../api/client';
 import useSessionState from '../hooks/useSessionState.js';
 import SelectMenu from '../components/common/SelectMenu.jsx';
+import SearchField from '../components/common/SearchField.jsx';
 import { presetBrandSettings } from '../components/common/brandSettingsLink.js';
 import { MOM_TYPE_LABELS, OVERDUE_DAYS, dateLabel, daysSince, taskGroups } from '../components/mom/momModel.js';
 import atlasIcon from '../assets/atlas-icon.png';
@@ -131,10 +132,7 @@ function CompletenessView({ state, month, scope, onScope, onRetry }) {
         ))}
       </div>
       <div className="cc-toolbar">
-        <label className="brand-picker-search cc-search">
-          <Search size={15} aria-hidden="true" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari brand…" aria-label="Cari brand" />
-        </label>
+        <SearchField className="brand-picker-search cc-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari brand…" aria-label="Cari brand" />
         <div className="brand-status-filter" role="group" aria-label="Cakupan brand">
           {[['active', 'Brand aktif'], ['all', 'Semua brand']].map(([key, label]) => (
             <button key={key} type="button" aria-pressed={scope === key} className={scope === key ? 'is-selected' : ''} onClick={() => onScope(key)}>{label}</button>

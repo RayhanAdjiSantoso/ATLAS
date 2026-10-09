@@ -19,18 +19,6 @@ export const listAccounts = asyncHandler(async (req, res) => {
   res.json({ accounts: await service.listEligibleAccounts(Number(req.query.brandId)) });
 });
 
-// PUT /api/meta-ads-insights/config  { brandId, accountType, extraMetrics }
-export const saveConfig = asyncHandler(async (req, res) => {
-  validate(req);
-  const saved = await service.saveConfig({
-    brandId: Number(req.body.brandId),
-    accountType: req.body.accountType,
-    extraMetrics: req.body.extraMetrics,
-    userId: req.user.userId,
-  });
-  res.json(saved);
-});
-
 // POST /api/meta-ads-insights/fetch  { brandId, accountType, month }
 export const fetchNow = asyncHandler(async (req, res) => {
   validate(req);
@@ -43,7 +31,7 @@ export const fetchNow = asyncHandler(async (req, res) => {
 });
 
 // POST /api/meta-ads-insights/library  { brandId, accountType, month }
-// Rebuilds the Data & file library copy of an already-fetched month.
+// Rebuilds the Performance Database library copy of an already-fetched month.
 export const syncLibrary = asyncHandler(async (req, res) => {
   validate(req);
   const result = await service.syncLibraryFile({

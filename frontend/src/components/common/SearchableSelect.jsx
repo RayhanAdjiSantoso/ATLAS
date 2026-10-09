@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import SearchField from './SearchField.jsx';
 
 // Single-select combobox with a type-to-filter search box. Drop-in
 // replacement for a plain <select> where the option list is long enough
@@ -100,7 +101,7 @@ export default function SearchableSelect({
           }}
         >
           <div style={{ padding: '0.5rem' }}>
-            <input
+            <SearchField
               ref={inputRef}
               type="search"
               placeholder="Cari…"
@@ -113,13 +114,7 @@ export default function SearchableSelect({
                   pick(filtered[0].value);
                 }
               }}
-              style={{
-                width: '100%',
-                padding: '0.4rem 0.6rem',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--text)',
-              }}
+              aria-label="Cari pilihan"
             />
           </div>
           <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
