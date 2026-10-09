@@ -1,8 +1,7 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { BRAND_SETTING_SECTIONS } from '../components/brandSettings/sections.js';
-import atlasWordmark from '../assets/atlas-wordmark.png';
+import PageBand from '../components/common/PageBand.jsx';
 import '../components/dashboard/console.css';
 import '../components/dashboard/softShell.css';
 import './brandPages.css';
@@ -23,7 +22,6 @@ import './brandPages.css';
 export default function BrandSettingLayout() {
   const { can } = useAuth();
   const { pathname } = useLocation();
-  const reduced = useReducedMotion();
   const sections = BRAND_SETTING_SECTIONS.filter((s) => can(s.module));
   const current = sections.find((s) => pathname.startsWith(s.to)) ?? sections[0];
   // An account with one section (a client: Brand Tracking only) gets that
@@ -33,41 +31,15 @@ export default function BrandSettingLayout() {
   return (
     <div className="con brand-settings soft-shell bp bs">
       <div className="soft-frame">
-        <header className={`bs-head${single ? ' is-single' : ''}`}>
-          <div className="bs-head-top">
-            <div className="bs-head-copy">
-              <span className="bs-head-kicker">{single ? 'ATLAS · Ruang klien' : 'Workspace · Input brand'}</span>
-              <h1>{single ? current.label : 'Brand Setting'}</h1>
-              <p>{current?.desc}</p>
-            </div>
-            <img src={atlasWordmark} alt="ATLAS" className="bs-head-mark" />
-          </div>
-
-          {!single && (
-            <nav className="bs-tabs" aria-label="Bagian Brand Setting" style={{ '--bs-count': sections.length }}>
-              {sections.map((s, i) => {
-                const on = s === current;
-                return (
-                  <NavLink key={s.to} to={s.to} className={`bs-tab${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined}>
-                    {on && (
-                      <motion.span
-                        layoutId="bs-tab-sheet"
-                        className="bs-tab-sheet"
-                        transition={reduced ? { duration: 0 } : { type: 'spring', duration: 0.42, bounce: 0.1 }}
-                      />
-                    )}
-                    <span className="bs-tab-ico"><s.Icon size={19} aria-hidden="true" /></span>
-                    <span className="bs-tab-text">
-                      <small>{String(i + 1).padStart(2, '0')}</small>
-                      <strong>{s.label}</strong>
-                      <em>{s.hint}</em>
-                    </span>
-                  </NavLink>
-                );
-              })}
-            </nav>
-          )}
-        </header>
+        <PageBand
+          kicker={single ? 'ATLAS · Ruang klien' : 'Workspace · Input brand'}
+          title={single ? current.label : 'Brand Setting'}
+          desc={current?.desc}
+          tabs={single ? [] : sections.map((s) => ({ key: s.to, to: s.to, label: s.label, hint: s.hint, icon: <s.Icon size={19} /> }))}
+          activeKey={current?.to}
+          layoutId="bs-tab-sheet"
+          ariaLabel="Bagian Brand Setting"
+        />
 
         <Outlet />
       </div>
