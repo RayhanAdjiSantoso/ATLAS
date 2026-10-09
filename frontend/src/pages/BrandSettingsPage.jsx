@@ -253,7 +253,7 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
     >
       <header className="bp-setting-head">
         <div>
-          <span className="bp-setting-kicker"><Settings2 size={14} aria-hidden="true" /> Brand Setting</span>
+          <span className="bp-setting-kicker"><Settings2 size={14} aria-hidden="true" /> Profil brand</span>
           <h2 id="bp-setting-title">{brand.brand_name}</h2>
           {profile?.sector && <p>{profile.sector}</p>}
         </div>
@@ -483,7 +483,29 @@ export default function BrandSettingsPage() {
     // with the other two Brand Setting sections.
     <>
 
-      <section className="soft-card bp-command" aria-label="Cari dan saring brand">
+      <section className="soft-card bp-command bp-portfolio" aria-label="Portofolio klien">
+        <header className="bp-portfolio-head">
+          <div>
+            <h2>Portofolio klien</h2>
+            <p>Status setiap brand dipakai bersama oleh seluruh modul ATLAS.</p>
+          </div>
+          {!isViewOnly && (creating ? (
+            <form className="bp-new-form" onSubmit={createBrand}>
+              <input
+                value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Nama brand baru" autoFocus
+                onKeyDown={(event) => { if (event.key === 'Escape') setCreating(false); }} aria-label="Nama brand baru"
+              />
+              <button type="submit" className="bp-primary" disabled={creatingBusy || !newName.trim()}>
+                {creatingBusy ? <Loader2 size={15} className="brand-spin" /> : <Check size={15} />} Simpan
+              </button>
+              <button type="button" className="bp-icon-btn" onClick={() => setCreating(false)} aria-label="Batal"><X size={16} /></button>
+            </form>
+          ) : (
+            <button type="button" className="bp-primary" onClick={() => { setNewName(''); setCreating(true); }}>
+              <Plus size={16} /> Brand baru
+            </button>
+          ))}
+        </header>
         <div className="bp-stats bp-overview-stats">
           <div className="bp-stat"><span>Total Brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
           <div className="bp-stat"><span>Brand Aktif</span><strong>{loaded ? counts.active : '…'}</strong></div>
@@ -507,22 +529,6 @@ export default function BrandSettingsPage() {
             </ul>
           </div>
         </div>
-        {!isViewOnly && (creating ? (
-          <form className="bp-new-form" onSubmit={createBrand}>
-            <input
-              value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Nama brand baru" autoFocus
-              onKeyDown={(event) => { if (event.key === 'Escape') setCreating(false); }} aria-label="Nama brand baru"
-            />
-            <button type="submit" className="bp-primary" disabled={creatingBusy || !newName.trim()}>
-              {creatingBusy ? <Loader2 size={15} className="brand-spin" /> : <Check size={15} />} Simpan
-            </button>
-            <button type="button" className="bp-icon-btn" onClick={() => setCreating(false)} aria-label="Batal"><X size={16} /></button>
-          </form>
-        ) : (
-          <button type="button" className="bp-primary" onClick={() => { setNewName(''); setCreating(true); }}>
-            <Plus size={16} /> Brand baru
-          </button>
-        ))}
       </section>
 
       {error && (

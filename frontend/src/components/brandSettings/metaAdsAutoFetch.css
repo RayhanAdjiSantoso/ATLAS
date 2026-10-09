@@ -62,3 +62,134 @@
 
 /* The same list inside a Meta dataset row of Performance Database (non-admin). */
 .maf-specs { margin: 0 0 .9rem; }
+
+/* ── Meta cards in Data Collection Hub › Meta Ads ─────────────────────────
+   Meta Automation (accounts, subscriptions) and Automate Input with API as
+   two cards of the same build: an icon-led header, one row of underline
+   tabs, then content in the order it is used. Reference material (the
+   column list) is folded; errors are one line with their action. */
+.mx-card,
+.maf.mx-card {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  padding: 22px 24px;
+  border: 1px solid var(--soft-border, var(--border));
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(25, 40, 65, .04);
+}
+.maf.mx-card { margin-top: 18px; }
+.mx-head { display: flex; align-items: flex-start; gap: 14px; }
+.mx-head-ico { display: grid; flex: 0 0 auto; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--soft-tint, var(--primary-light)); color: var(--soft-accent, var(--primary)); }
+.mx-head-copy { flex: 1 1 auto; min-width: 0; }
+.mx-head h3 { margin: 0; color: var(--soft-ink, var(--text)); font-size: 1.08rem; font-weight: 800; letter-spacing: -.015em; }
+.mx-head p { margin: 4px 0 0; color: var(--soft-muted, var(--text-muted)); font-size: .84rem; line-height: 1.5; }
+.mx-pill { flex: 0 0 auto; align-self: center; padding: 5px 12px; border-radius: 999px; background: var(--soft-secondary, #f5f8fd); color: var(--soft-muted, var(--text-muted)); font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.mx-pill.is-on { background: #e7f6ee; color: #18794e; }
+.mx-link { padding: 0; border: 0; background: none; color: var(--soft-accent, var(--primary)); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+.mx-tabs { display: flex; gap: 26px; border-bottom: 1px solid var(--soft-border, var(--border)); }
+.mx-tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: -1px; padding: 2px 2px 11px;
+  border: 0; border-bottom: 3px solid transparent;
+  background: none; color: var(--soft-muted, var(--text-muted));
+  font: inherit; font-size: .92rem; font-weight: 700;
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease;
+}
+.mx-tab:hover { color: var(--soft-ink, var(--text)); }
+.mx-tab.is-on { color: var(--soft-ink, var(--text)); border-bottom-color: var(--soft-accent, var(--primary)); }
+.mx-tab b { padding: 1px 7px; border-radius: 999px; background: var(--soft-tint, var(--primary-light)); color: var(--soft-accent, var(--primary)); font-size: .7rem; }
+.mx-tab:focus-visible { outline: 2px solid var(--soft-accent, var(--primary)); outline-offset: 2px; border-radius: 6px; }
+.mx-status { padding: 1px 8px; border-radius: 999px; background: var(--soft-secondary, #f5f8fd); color: var(--soft-muted, var(--text-muted)); font-size: .7rem; font-weight: 650; }
+.mx-status.is-on { background: #e7f6ee; color: #18794e; }
+.mx-status.is-off { background: #fdf3e2; color: #9a5a0c; }
+
+.mx-panel { display: grid; gap: 14px; }
+.mx-notice { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 12px; font-size: .82rem; line-height: 1.45; }
+.mx-notice svg { flex: 0 0 auto; }
+.mx-notice span { flex: 1 1 auto; min-width: 0; }
+.mx-notice.is-error { border: 1px solid #f3c1bd; background: #fef5f4; color: #9b2c22; }
+.mx-notice.is-muted { background: var(--soft-secondary, #f5f8fd); color: var(--soft-muted, var(--text-muted)); }
+.mx-empty { margin: 0; padding: 14px 16px; border: 1px dashed var(--soft-border, var(--border)); border-radius: 12px; color: var(--soft-muted, var(--text-muted)); font-size: .82rem; }
+
+.mx-table { border: 1px solid var(--soft-border, var(--border)); border-radius: 12px; }
+.mx-table .maf-table { font-size: .82rem; }
+.mx-table .maf-table th { padding: 10px 14px; background: #f6f8fc; color: var(--soft-muted, var(--text-muted)); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
+.mx-table .maf-table td { padding: 10px 14px; border-bottom-color: #eef2f8; }
+.mx-table .maf-table tr:last-child td { border-bottom: 0; }
+.mx-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.mx-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; }
+.mx-type { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: .7rem; font-weight: 800; letter-spacing: .04em; }
+.mx-type.is-main { background: var(--soft-tint, var(--primary-light)); color: var(--soft-accent, var(--primary)); }
+.mx-type.is-cpas { background: #e4f4f7; color: #0a6d80; }
+
+.mx-add {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 13px;
+  border: 1.5px dashed #b5c4e3; border-radius: 12px;
+  background: transparent; color: var(--soft-accent, var(--primary));
+  font: inherit; font-size: .88rem; font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.mx-add:hover:not(:disabled) { border-color: var(--soft-accent, var(--primary)); background: var(--soft-secondary, #f5f8fd); }
+.mx-add:disabled { opacity: .5; cursor: not-allowed; }
+.mx-form { display: grid; gap: 16px; padding: 18px 20px; border: 1px solid var(--soft-border, var(--border)); border-radius: 14px; background: var(--soft-secondary, #f8fafd); }
+.mx-form-head h4 { margin: 0; color: var(--soft-ink, var(--text)); font-size: .95rem; font-weight: 800; }
+.mx-form-head p { margin: 3px 0 0; color: var(--soft-muted, var(--text-muted)); font-size: .78rem; }
+.mx-form .bp-meta-account-fields { margin: 0; }
+.mx-form .form-group label,
+.con .mx-form .form-group label { margin-bottom: 6px; color: var(--soft-ink, var(--text)); font-size: .8rem; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.mx-form input { background: #fff; }
+.mx-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.mx-fetch { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 16px 18px; border: 1px solid var(--soft-border, var(--border)); border-radius: 14px; background: linear-gradient(180deg, #f8fbff, #f3f7fd); }
+.mx-fetch-copy { flex: 1 1 260px; min-width: 0; }
+.mx-fetch-copy h4 { margin: 0; color: var(--soft-ink, var(--text)); font-size: .92rem; font-weight: 800; }
+.mx-fetch-copy p { margin: 3px 0 0; color: var(--soft-muted, var(--text-muted)); font-size: .78rem; }
+.mx-h { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px !important; color: var(--soft-ink, var(--text)) !important; font-size: .92rem !important; font-weight: 800 !important; }
+.mx-h small { color: var(--soft-muted, var(--text-muted)); font-size: .74rem; font-weight: 600; }
+.mx-runs { margin: 0; padding: 0; }
+.mx-runs li { padding: 8px 12px; border-radius: 10px; background: var(--soft-secondary, #f5f8fd); }
+
+.mx-specs { border: 1px solid var(--soft-border, var(--border)); border-radius: 14px; background: #fff; }
+.mx-specs > summary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 16px;
+  color: var(--soft-ink, var(--text)); font-size: .88rem; font-weight: 750;
+  list-style: none; cursor: pointer;
+}
+.mx-specs > summary::-webkit-details-marker { display: none; }
+.mx-specs > summary::after { content: ''; width: 8px; height: 8px; margin-left: auto; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform .2s ease; opacity: .55; }
+.mx-specs[open] > summary::after { transform: rotate(225deg); }
+.mx-specs > summary small { color: var(--soft-muted, var(--text-muted)); font-size: .76rem; font-weight: 600; }
+.mx-specs > .maf-block { padding: 4px 16px 16px; border-top: 1px solid #eef2f8; }
+.mx-specs > .maf-block h4 { margin-top: 12px; }
+
+/* Data Collection Hub › Meta Ads: the two automation panels as one group
+   with a switch — Tarik data API first (the daily job), Akun & langganan
+   second (occasional setup). */
+.mx-group { display: grid; gap: 14px; }
+.mx-group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.mx-group-head h3 { margin: 0; color: var(--soft-ink, var(--text)); font-size: 1.1rem; font-weight: 800; letter-spacing: -.015em; }
+.mx-switch { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--soft-border, var(--border)); border-radius: 13px; background: var(--soft-secondary, #f5f8fd); }
+.mx-switch button {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 15px;
+  border: 0; border-radius: 10px;
+  background: transparent; color: var(--soft-muted, var(--text-muted));
+  font: inherit; font-size: .85rem; font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.mx-switch button:hover { color: var(--soft-ink, var(--text)); }
+.mx-switch button.is-on { background: #fff; color: var(--soft-accent, var(--primary)); box-shadow: 0 1px 2px rgba(25, 40, 65, .08), inset 0 0 0 1px rgba(40, 86, 182, .16); }
+.mx-switch button:focus-visible { outline: 2px solid var(--soft-accent, var(--primary)); outline-offset: 1px; }
+.mx-group .maf.mx-card { margin-top: 0; }
+.mx-group [role="tabpanel"][hidden] { display: none; }
+
+/* Google Ads card: its inner blocks sit flush in the card now. */
+.maf.mx-card.is-google { margin-top: 0; }

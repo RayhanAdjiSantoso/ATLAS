@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Loader2, Pencil, Plus, X } from 'lucide-react';
+import { BadgeCheck, Check, CircleAlert, Loader2, Pencil, Plus, X } from 'lucide-react';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import SelectMenu from '../common/SelectMenu.jsx';
@@ -25,6 +25,9 @@ export default function MetaAutomationSection({ brand, onAccountAdded }) {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  // The add form stays folded until asked for: most visits are to read the
+  // accounts, and four empty fields made the panel look unfinished.
+  const [adding, setAdding] = useState(false);
   const disabled = !brand || isViewOnly || !can('meta_automation') || saving;
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
@@ -102,6 +105,7 @@ export default function MetaAutomationSection({ brand, onAccountAdded }) {
         boostMatch: form.type === 'CPAS' ? undefined : form.boostMatch.trim() || undefined,
       });
       setForm(EMPTY);
+      setAdding(false);
       setMessage({ type: 'success', text: 'Akun ' + id + ' berhasil ditambahkan ke ' + brand.brand_name + '.' });
       onAccountAdded?.();
       loadAccounts();
@@ -113,20 +117,23 @@ export default function MetaAutomationSection({ brand, onAccountAdded }) {
   };
 
   return (
-    <>
-      <div className="brand-workspace-head">
-        <div>
-          <h2>Meta Automation</h2>
+    <div className="mx-card">
+      <header className="mx-head">
+        <span className="mx-head-ico" aria-hidden="true"><BadgeCheck size={18} /></span>
+        <div className="mx-head-copy">
+          <h3>Meta Automation</h3>
           <p>{subscriptionsOnly
             ? <>Langganan notifikasi Weekly &amp; Daily untuk akun Meta Ads {brand?.brand_name ?? 'brand yang dipilih'}.</>
-            : <>Akun Meta Ads dan langganan notifikasi untuk {brand?.brand_name ?? 'brand yang dipilih'}. Akun otomatis ditautkan ke brand ini.</>}</p>
+            : <>Akun Meta Ads dan langganan notifikasi {brand?.brand_name ?? 'brand yang dipilih'}.</>}</p>
         </div>
-      </div>
-      <div className="maf-types bp-meta-tabs" role="tablist" aria-label="Meta Automation">
+        {accounts && <span className={'mx-pill' + (accounts.length ? ' is-on' : '')}>{accounts.length ? accounts.length + ' akun terdaftar' : 'Belum ada akun'}</span>}
+      </header>
+      <div className="mx-tabs" role="tablist" aria-label="Meta Automation">
         {tabs.map((t) => (
           <button key={t.key} type="button" role="tab" id={'meta-auto-tab-' + t.key} aria-selected={tab === t.key} aria-controls={'meta-auto-panel-' + t.key}
-            className={'maf-type' + (tab === t.key ? ' is-active' : '')} onClick={() => setTab(t.key)}>
-            {t.label}<small>{t.hint}</small>
+            title={t.hint} className={'mx-tab' + (tab === t.key ? ' is-on' : '')} onClick={() => setTab(t.key)}>
+            {t.label}
+            {t.key === 'accounts' && accounts?.length > 0 && <b>{accounts.length}</b>}
           </button>
         ))}
       </div>
@@ -137,101 +144,119 @@ export default function MetaAutomationSection({ brand, onAccountAdded }) {
             : brand && <SubscriptionsSection brand={brand} readOnly={isViewOnly} />}
         </div>
       ) : (
-      <div role="tabpanel" id="meta-auto-panel-accounts" aria-labelledby="meta-auto-tab-accounts">
-      {accountsError && (
-        <p className="alert alert-error" role="alert">
-          {accountsError}{' '}
-          <button type="button" className="brand-inline-link" onClick={loadAccounts}>Coba lagi</button>
-        </p>
-      )}
-      {accounts === null && !accountsError && hasAccess && brand && (
-        <p className="maf-loading"><Loader2 size={14} className="maf-spin" /> Memuat akun…</p>
-      )}
-      {accounts?.length > 0 && (
-        <div className="maf-block bp-meta-accounts">
-          <h4>Akun terdaftar</h4>
-          <div className="maf-table-wrap">
-            <table className="maf-table">
-              <thead><tr><th>ID Ad Account</th><th>Tipe</th><th>Kata kunci Boost Post</th><th /></tr></thead>
-              <tbody>
-                {accounts.map((account) => {
-                  const isCpas = account.type === 'CPAS';
-                  const editable = canEdit && !isCpas && account.source === 'dynamic';
-                  const isEditing = editing?.id === account.id;
-                  return (
-                    <tr key={account.id}>
-                      <td>{account.id}</td>
-                      <td>{account.type}</td>
-                      <td>
-                        {isCpas ? <span className="maf-run-meta">Tidak diperlukan</span>
-                          : isEditing ? (
-                            <input className="form-input" aria-label={'Kata kunci Boost Post ' + account.id} value={editing.value} autoFocus
-                              placeholder="mis. profile visit" disabled={editSaving}
-                              onChange={(event) => setEditing({ id: account.id, value: event.target.value })}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') { event.preventDefault(); saveBoostMatch(account); }
-                                if (event.key === 'Escape') setEditing(null);
-                              }} />
-                          ) : account.boostMatch || <span className="maf-run-meta">Belum diisi</span>}
-                      </td>
-                      <td className="maf-row-actions">
-                        {isEditing ? (
-                          <>
-                            <button type="button" className="btn btn-icon" title="Simpan" aria-label="Simpan kata kunci" onClick={() => saveBoostMatch(account)} disabled={editSaving}>
-                              {editSaving ? <Loader2 size={14} className="maf-spin" /> : <Check size={14} />}
-                            </button>
-                            <button type="button" className="btn btn-icon" title="Batal" aria-label="Batal" onClick={() => setEditing(null)} disabled={editSaving}>
-                              <X size={14} />
-                            </button>
-                          </>
-                        ) : editable && (
-                          <button type="button" className="btn btn-icon" title="Edit kata kunci Boost Post" aria-label={'Edit kata kunci Boost Post ' + account.id}
-                            onClick={() => { setEditing({ id: account.id, value: account.boostMatch || '' }); setEditMessage(null); }} disabled={editSaving}>
-                            <Pencil size={14} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="maf-hint">Nama campaign yang mengandung kata kunci masuk Boost Post, sisanya Non-Boost Post. Data yang sudah tersimpan baru ikut terpisah ulang setelah Tarik sekarang.</p>
-          {editMessage && <p className={'alert alert-' + editMessage.type} role={editMessage.type === 'error' ? 'alert' : 'status'}>{editMessage.text}</p>}
+        <div role="tabpanel" id="meta-auto-panel-accounts" aria-labelledby="meta-auto-tab-accounts" className="mx-panel">
+          {accountsError && (
+            <div className="mx-notice is-error" role="alert">
+              <CircleAlert size={16} aria-hidden="true" />
+              <span>{accountsError.replace(/\.:\s*/, ': ')}</span>
+              <button type="button" className="mx-link" onClick={loadAccounts}>Coba lagi</button>
+            </div>
+          )}
+          {accounts === null && !accountsError && hasAccess && brand && (
+            <p className="maf-loading"><Loader2 size={14} className="maf-spin" /> Memuat akun…</p>
+          )}
+          {accounts?.length === 0 && (
+            <p className="mx-empty">Belum ada akun Meta Ads yang tertaut ke {brand?.brand_name ?? 'brand ini'}. Tambahkan akun agar laporan dan penarikan otomatis berjalan.</p>
+          )}
+          {accounts?.length > 0 && (
+            <div className="bp-meta-accounts">
+              <div className="maf-table-wrap mx-table">
+                <table className="maf-table">
+                  <thead><tr><th>ID Ad Account</th><th>Tipe</th><th>Kata kunci Boost Post</th><th aria-label="Aksi" /></tr></thead>
+                  <tbody>
+                    {accounts.map((account) => {
+                      const isCpas = account.type === 'CPAS';
+                      const editable = canEdit && !isCpas && account.source === 'dynamic';
+                      const isEditing = editing?.id === account.id;
+                      return (
+                        <tr key={account.id}>
+                          <td className="mx-mono">{account.id}</td>
+                          <td><span className={'mx-type is-' + account.type.toLowerCase()}>{account.type}</span></td>
+                          <td>
+                            {isCpas ? <span className="maf-run-meta">Tidak diperlukan</span>
+                              : isEditing ? (
+                                <input className="form-input" aria-label={'Kata kunci Boost Post ' + account.id} value={editing.value} autoFocus
+                                  placeholder="mis. profile visit" disabled={editSaving}
+                                  onChange={(event) => setEditing({ id: account.id, value: event.target.value })}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') { event.preventDefault(); saveBoostMatch(account); }
+                                    if (event.key === 'Escape') setEditing(null);
+                                  }} />
+                              ) : account.boostMatch || <span className="maf-run-meta">Belum diisi</span>}
+                          </td>
+                          <td className="maf-row-actions">
+                            {isEditing ? (
+                              <>
+                                <button type="button" className="btn btn-icon" title="Simpan" aria-label="Simpan kata kunci" onClick={() => saveBoostMatch(account)} disabled={editSaving}>
+                                  {editSaving ? <Loader2 size={14} className="maf-spin" /> : <Check size={14} />}
+                                </button>
+                                <button type="button" className="btn btn-icon" title="Batal" aria-label="Batal" onClick={() => setEditing(null)} disabled={editSaving}>
+                                  <X size={14} />
+                                </button>
+                              </>
+                            ) : editable && (
+                              <button type="button" className="btn btn-icon" title="Edit kata kunci Boost Post" aria-label={'Edit kata kunci Boost Post ' + account.id}
+                                onClick={() => { setEditing({ id: account.id, value: account.boostMatch || '' }); setEditMessage(null); }} disabled={editSaving}>
+                                <Pencil size={14} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="maf-hint">Campaign yang namanya mengandung kata kunci masuk Boost Post, sisanya Non-Boost Post.</p>
+              {editMessage && <p className={'alert alert-' + editMessage.type} role={editMessage.type === 'error' ? 'alert' : 'status'}>{editMessage.text}</p>}
+            </div>
+          )}
+
+          {message && !adding && <p className={'alert alert-' + message.type} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</p>}
+          {!can('meta_automation') && <p className="bp-drawer-note">Akses Meta Automation diperlukan untuk menambahkan akun.</p>}
+
+          {adding ? (
+            <form onSubmit={save} className="mx-form">
+              <div className="mx-form-head">
+                <h4>Tambah akun Meta Ads</h4>
+                <p>Akun otomatis ditautkan ke {brand?.brand_name ?? 'brand ini'}.</p>
+              </div>
+              <fieldset disabled={disabled} className="bp-meta-account-fields">
+                <div className="form-group">
+                  <label htmlFor="meta-account-id">ID Ad Account</label>
+                  <input id="meta-account-id" value={form.id} onChange={set('id')} placeholder="act_123456789012345" required />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="meta-account-type">Tipe akun</label>
+                  <SelectMenu id="meta-account-type" label="Tipe Ad Account" value={form.type} disabled={disabled}
+                    options={[{ value: 'MAIN', label: 'MAIN' }, { value: 'CPAS', label: 'CPAS' }]}
+                    onChange={(type) => setForm((current) => ({ ...current, type }))} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="meta-account-boost">Kata kunci Boost Post</label>
+                  <input id="meta-account-boost" value={form.boostMatch} onChange={set('boostMatch')} disabled={disabled || form.type === 'CPAS'} placeholder={form.type === 'CPAS' ? 'Tidak diperlukan untuk CPAS' : 'mis. profile visit'} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="meta-account-token">Token Meta Ads</label>
+                  <input id="meta-account-token" type="password" autoComplete="new-password" value={form.token} onChange={set('token')} placeholder="Token system user" required />
+                </div>
+              </fieldset>
+              {message && <p className={'alert alert-' + message.type} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</p>}
+              <div className="mx-form-actions">
+                <button type="button" className="bp-ghost" onClick={() => { setAdding(false); setForm(EMPTY); setMessage(null); }} disabled={saving}>Batal</button>
+                <button type="submit" className="bp-primary" disabled={disabled}>
+                  {saving ? <Loader2 size={16} className="brand-spin" /> : <Check size={16} />}
+                  {saving ? 'Menyimpan…' : 'Simpan akun'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button type="button" className="mx-add" onClick={() => { setAdding(true); setMessage(null); }} disabled={!brand || isViewOnly || !can('meta_automation')}>
+              <Plus size={16} aria-hidden="true" /> Tambah akun Meta Ads
+            </button>
+          )}
         </div>
       )}
-      <form onSubmit={save}>
-        <fieldset disabled={disabled} className="bp-meta-account-fields">
-          <div className="form-group">
-            <label htmlFor="meta-account-id">ID Ad Account</label>
-            <input id="meta-account-id" value={form.id} onChange={set('id')} placeholder="act_123456789012345" required />
-          </div>
-          <div className="form-group">
-            <label htmlFor="meta-account-type">Tipe Ad Account</label>
-            <SelectMenu id="meta-account-type" label="Tipe Ad Account" value={form.type} disabled={disabled}
-              options={[{ value: 'MAIN', label: 'MAIN' }, { value: 'CPAS', label: 'CPAS' }]}
-              onChange={(type) => setForm((current) => ({ ...current, type }))} />
-          </div>
-          <div className="form-group">
-            <label htmlFor="meta-account-boost">Kata Kunci Boost Post</label>
-            <input id="meta-account-boost" value={form.boostMatch} onChange={set('boostMatch')} disabled={disabled || form.type === 'CPAS'} placeholder="mis. profile visit" />
-            <small>{form.type === 'CPAS' ? 'Tidak diperlukan untuk akun CPAS.' : 'Nama campaign yang mengandung kata ini masuk Boost Post, sisanya Non-Boost Post.'}</small>
-          </div>
-          <div className="form-group">
-            <label htmlFor="meta-account-token">Token Meta Ads</label>
-            <input id="meta-account-token" type="password" autoComplete="new-password" value={form.token} onChange={set('token')} placeholder="Token system user Meta Ads" required />
-          </div>
-        </fieldset>
-        {message && <p className={'alert alert-' + message.type} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</p>}
-        {!can('meta_automation') && <p className="bp-drawer-note">Akses Meta Automation diperlukan untuk menambahkan akun.</p>}
-        <button type="submit" className="bp-primary" disabled={disabled}>
-          {saving ? <Loader2 size={16} className="brand-spin" /> : <Plus size={16} />}
-          {saving ? 'Menyimpan…' : 'Tambah akun'}
-        </button>
-      </form>
-      </div>
-      )}
-    </>
+    </div>
   );
 }

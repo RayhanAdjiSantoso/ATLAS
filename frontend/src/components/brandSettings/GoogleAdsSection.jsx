@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, CircleAlert, Loader2, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, CircleAlert, Link2, Loader2, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import './metaAdsAutoFetch.css';
@@ -307,20 +307,15 @@ export default function GoogleAdsSection({ brand }) {
   const accounts = overview?.accounts ?? [];
 
   return (
-    <>
-      <div className="brand-workspace-head">
-        <div>
-          <h2>Google Ads</h2>
-          <p>
-            Hubungkan akun Google Ads brand ini dengan Customer ID-nya. Setiap hari jam 01.00 ATLAS menarik data harian per campaign,
-            ad group, keyword, search term, kota, iklan, konversi per action, device, jam, dan landing page, plus setting campaign dan Quality Score —
-            cost kemarin masuk ke Brand Tracking, dan semuanya tersusun di Report Generator › Google Ads.
-          </p>
+    <section className="maf mx-card is-google" aria-label="Akun Google Ads">
+      <header className="mx-head">
+        <span className="mx-head-ico" aria-hidden="true"><Link2 size={18} /></span>
+        <div className="mx-head-copy">
+          <h3>Google Ads</h3>
+          <p>Hubungkan Customer ID brand ini. Setiap hari jam 01.00 ATLAS menarik data harian; cost kemarin masuk ke Brand Tracking, sisanya ke Report Generator › Google Ads.</p>
         </div>
-        <span className="brand-section-meta">{accounts.length ? `${accounts.length} akun terhubung` : 'Belum terhubung'}</span>
-      </div>
-
-      <section className="maf" aria-label="Akun Google Ads">
+        <span className={'mx-pill' + (accounts.length ? ' is-on' : '')}>{accounts.length ? `${accounts.length} akun terhubung` : 'Belum terhubung'}</span>
+      </header>
         {error && <div className="alert alert-error">{error}</div>}
         {notice && <div className="alert alert-success">{notice}</div>}
 
@@ -459,7 +454,6 @@ export default function GoogleAdsSection({ brand }) {
             </div>
           </>
         )}
-      </section>
-    </>
+    </section>
   );
 }

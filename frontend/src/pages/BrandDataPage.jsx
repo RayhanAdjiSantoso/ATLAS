@@ -7,7 +7,7 @@ import {
   Archive, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
   Database, Download, FileSpreadsheet, Loader2, Plus, RefreshCw, Save,
   Trash2, Upload, UsersRound, PenLine, NotebookPen, Circle, CheckCircle2,
-  ChevronsDownUp, ChevronsUpDown, CalendarRange, HelpCircle,
+  ChevronsDownUp, ChevronsUpDown, CalendarRange, HelpCircle, BadgeCheck, CalendarClock,
 } from 'lucide-react';
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
 import MetaDatasetSpecs from '../components/brandSettings/MetaDatasetSpecs.jsx';
@@ -1012,13 +1012,8 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
           <strong>{platform.label}</strong>
           <small>{platform.role}</small>
         </span>
-        <span className="brand-market-months" aria-label="Ketersediaan per bulan">
-          {summary.monthStates.map((month) => (
-            <span key={month.key} className={`brand-market-month is-${month.state}`} title={`${month.full} · ${month.state === 'full' ? 'lengkap' : month.state === 'partial' ? 'sebagian' : 'belum ada'}`}>
-              <i aria-hidden="true" />{month.label}
-            </span>
-          ))}
-        </span>
+        {/* No per-month chips here: the dataset cells below already show each
+            month's state, and the chips made a third row of months. */}
         <span className="brand-market-ready">
           <span className="brand-market-ready-num">{summary.ready}%</span>
           <small>dataset inti siap</small>
@@ -1061,10 +1056,17 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
   // A Meta dataset row's "Lihat breakdown & metrik": the auto-fetch panel
   // switches to that account type and scrolls to its highlighted sections.
   const [specFocus, setSpecFocus] = useState(null);
-  const showSpecs = (specs) => setSpecFocus({ ...specs, at: Date.now() });
+  // Meta's two automation panels share one place, as tabs: pulling data from
+  // the API is the daily job and opens first; account and subscription setup
+  // is occasional. Non-admins only have the second.
+  const [metaPane, setMetaPane] = useState(isAdmin ? 'api' : 'accounts');
+  const showSpecs = (specs) => { setMetaPane('api'); setSpecFocus({ ...specs, at: Date.now() }); };
   const openAccounts = () => {
-    accountsRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
-    accountsRef.current?.focus({ preventScroll: true });
+    if (marketId === 'meta') setMetaPane('accounts');
+    requestAnimationFrame(() => {
+      accountsRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+      accountsRef.current?.focus({ preventScroll: true });
+    });
   };
   const platform = PLATFORMS.find((p) => p.id === marketId) ?? PLATFORMS[0];
   const focusMonth = focus ? months.find((m) => m.key === focus) : null;
@@ -1165,12 +1167,33 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
       </details>
 
       {platform.id === 'meta' && (
-        <>
-          <section ref={accountsRef} className="bp-channel-accounts" tabIndex={-1} aria-label="Pengaturan akun Meta Ads">
+        <section ref={accountsRef} className="bp-channel-accounts mx-group" tabIndex={-1} aria-label="Otomasi Meta Ads">
+          <div className="mx-group-head">
+            <h3>Otomasi Meta Ads</h3>
+            {isAdmin && (
+              <div className="mx-switch" role="tablist" aria-label="Otomasi Meta Ads">
+                {[
+                  { id: 'api', label: 'Tarik data API', Icon: CalendarClock },
+                  { id: 'accounts', label: 'Akun & langganan', Icon: BadgeCheck },
+                ].map(({ id, label, Icon }) => (
+                  <button key={id} type="button" role="tab" aria-selected={metaPane === id} className={metaPane === id ? 'is-on' : ''} onClick={() => setMetaPane(id)}>
+                    <Icon size={15} aria-hidden="true" /> {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Both stay mounted (hidden, not removed): switching back keeps
+              the chosen month, open forms and loaded tables. */}
+          {isAdmin && (
+            <div role="tabpanel" hidden={metaPane !== 'api'}>
+              <MetaAdsAutoFetchPanel brand={brand} accountsVersion={accountsVersion} onLibraryChanged={onLibraryChanged} onOpenAutomation={openAccounts} specFocus={specFocus} />
+            </div>
+          )}
+          <div role="tabpanel" hidden={metaPane !== 'accounts'}>
             <MetaAutomationSection key={brand?.brand_id ?? 'none'} brand={brand} onAccountAdded={() => setAccountsVersion((version) => version + 1)} />
-          </section>
-          <MetaAdsAutoFetchPanel brand={brand} accountsVersion={accountsVersion} onLibraryChanged={onLibraryChanged} onOpenAutomation={openAccounts} specFocus={specFocus} />
-        </>
+          </div>
+        </section>
       )}
       {platform.id === 'google' && (
         <section ref={accountsRef} className="bp-channel-accounts" tabIndex={-1} aria-label="Pengaturan akun Google Ads">

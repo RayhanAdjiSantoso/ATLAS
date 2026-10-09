@@ -87,11 +87,15 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
   const specsRef = useRef(null);
   const rootRef = useRef(null);
   const [highlight, setHighlight] = useState([]);
+  // The column list is reference, not something read every visit: folded,
+  // and opened by a dataset row's "lihat kolom" jump (specFocus).
+  const [specsOpen, setSpecsOpen] = useState(false);
 
   useEffect(() => {
     if (!specFocus) return undefined;
     setType(specFocus.type);
     setHighlight(specFocus.sections ?? []);
+    setSpecsOpen(true);
     const frame = requestAnimationFrame(() => {
       const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       // Still loading: the metrics block is not there yet, land on the panel.
@@ -205,34 +209,35 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
   const canAct = typeRegistered && !readOnly;
 
   return (
-    <section ref={rootRef} className="maf" aria-label="Tarik otomatis Meta Ads">
-      <header className="maf-head">
-        <span className="maf-head-icon" aria-hidden="true"><CalendarClock size={18} /></span>
-        <div>
+    <section ref={rootRef} className="maf mx-card" aria-label="Tarik otomatis Meta Ads">
+      <header className="mx-head">
+        <span className="mx-head-ico" aria-hidden="true"><CalendarClock size={18} /></span>
+        <div className="mx-head-copy">
           <h3>Automate Input with API</h3>
           <p>
-            Tiap hari, ATLAS menarik data 7 hari terakhir sampai kemarin (tanggal 1: seluruh bulan sebelumnya) per
-            campaign, ad set, ad, umur, gender, dan hari untuk akun yang sudah terdaftar di bagian <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini.
+            Setiap hari ATLAS menarik 7 hari terakhir dari akun di{' '}
+            <button type="button" className="mx-link" onClick={onOpenAutomation}>Meta Automation</button>
+            {' '}— tanggal 1 menarik seluruh bulan sebelumnya.
           </p>
         </div>
       </header>
 
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-success">{notice}</div>}
-      {accountsError && <div className="alert alert-error">{accountsError}</div>}
+      {/* Same cause as the Meta Automation card above, so said quietly here. */}
+      {accountsError && <p className="mx-notice is-muted"><CircleAlert size={15} aria-hidden="true" /> Status akun belum bisa diperiksa — lihat pesan di Meta Automation.</p>}
 
-      <div className="maf-types" role="tablist" aria-label="Jenis akun">
+      <div className="mx-tabs" role="tablist" aria-label="Jenis akun">
         {TYPES.map((t) => {
           const reg = registered(t.type);
+          const state = accounts == null && !accountsError ? 'checking' : reg ? 'on' : 'off';
           return (
             <button
               key={t.type} type="button" role="tab" aria-selected={type === t.type}
-              className={`maf-type ${type === t.type ? 'is-active' : ''}`} onClick={() => setType(t.type)}
+              className={`mx-tab${type === t.type ? ' is-on' : ''}`} onClick={() => setType(t.type)}
             >
               {t.label}
-              <small className={reg ? 'is-on' : ''}>
-                {accounts == null && !accountsError ? 'memeriksa…' : reg ? 'terdaftar' : 'belum terdaftar'}
-              </small>
+              <span className={`mx-status is-${state}`}>{state === 'checking' ? 'memeriksa…' : state === 'on' ? 'terdaftar' : 'belum terdaftar'}</span>
             </button>
           );
         })}
@@ -242,9 +247,8 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
         <div className="maf-empty">
           <CircleAlert size={16} />
           <span>
-            Brand ini belum punya akun {typeLabel} yang tertaut. Daftarkan dulu di{' '}
-            <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> pada halaman ini (pilih tipe {type}, dan pastikan
-            nama brand-nya cocok dengan brand ini) agar penarikan otomatis berjalan.
+            Belum ada akun {typeLabel} yang tertaut ke brand ini. Daftarkan di{' '}
+            <button type="button" className="brand-inline-link" onClick={onOpenAutomation}>Meta Automation</button> (tipe {type}) agar penarikan otomatis berjalan.
           </span>
         </div>
       )}
@@ -253,59 +257,37 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
         <p className="maf-loading"><Loader2 size={14} className="maf-spin" /> Memuat…</p>
       ) : (
         <>
-          <div className="maf-block" ref={specsRef} tabIndex={-1}>
-            <h4>Breakdown</h4>
-            <div className="maf-chips" aria-label="Breakdown">
-              {BREAKDOWNS.map((b) => <span key={b} className="maf-chip is-locked">{b}</span>)}
+          <div className="mx-fetch">
+            <div className="mx-fetch-copy">
+              <h4>Tarik sekarang</h4>
+              <p>Bulan yang sudah ada diganti data terbaru; hasilnya masuk ke Performance Database.</p>
             </div>
-            <h4 className="maf-sub">Metrik per jenis campaign</h4>
-            {sections.map((section) => (
-              <div key={section.key} className={`maf-section${highlight.includes(section.key) ? ' is-highlight' : ''}`}>
-                <h5>{section.label}</h5>
-                <div className="maf-chips" aria-label={`Metrik ${section.label}`}>
-                  {section.metrics.map((m) => <span key={m.key} className="maf-chip is-locked">{m.label}</span>)}
-                </div>
-              </div>
-            ))}
-            <p className="maf-hint">
-              Setiap file (unggah manual maupun tarik otomatis) memakai breakdown dan metrik di atas.
-              {type === 'MAIN'
-                ? ' Boost Post dan Non Boost Post dipisah dari Kata Kunci Boost Post akun (campaign yang namanya mengandung kata itu = Boost Post). Non Boost Post menyimpan metrik E-commerce dan B2B sekaligus. Profile visit diambil dari Results campaign profile visit; Post interactions = Facebook likes + post comments + post saves + post shares.'
-                : ' Metrik "with shared items" adalah angka produk katalog yang dibagikan (CPAS).'}
-            </p>
+            <div className="maf-month"><SelectMenu value={month} onChange={setMonth} options={monthOptions()} label="Bulan" /></div>
+            <button type="button" className="bp-primary" onClick={fetchNow} disabled={!canAct || busy === 'fetch'}>
+              {busy === 'fetch' ? <Loader2 size={15} className="maf-spin" /> : <RefreshCw size={15} />} Tarik {typeLabel}
+            </button>
           </div>
 
           <div className="maf-block">
-            <h4>Tarik sekarang</h4>
-            <div className="maf-actions">
-              <div className="maf-month"><SelectMenu value={month} onChange={setMonth} options={monthOptions()} label="Bulan" /></div>
-              <button type="button" className="btn btn-primary dt-btn-sm" onClick={fetchNow} disabled={!canAct || busy === 'fetch'}>
-                {busy === 'fetch' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Tarik {typeLabel}
-              </button>
-              <small className="maf-hint">Menarik ulang bulan yang sudah ada akan menggantinya dengan data terbaru dari Meta. Hasilnya juga disimpan ke Performance Database ({type === 'MAIN' ? 'Boost Post dan Non Boost Post' : 'CPAS'}) dan bisa dipilih di Report Generator, per bulan atau dengan rentang tanggal bebas.</small>
-            </div>
-          </div>
-
-          <div className="maf-block">
-            <h4>Data tersimpan</h4>
+            <h4 className="mx-h">Data tersimpan <small>{overview.months.length} bulan</small></h4>
             {overview.months.length === 0 ? (
-              <p className="maf-hint">Belum ada data yang ditarik.</p>
+              <p className="mx-empty">Belum ada data yang ditarik.</p>
             ) : (
-              <div className="maf-table-wrap">
+              <div className="maf-table-wrap mx-table">
                 <table className="maf-table">
                   <thead>
-                    <tr><th>Bulan</th><th>Akun</th><th>Baris</th><th>Hari</th><th>Campaign</th><th>Amount spent</th><th>Terakhir ditarik</th><th /></tr>
+                    <tr><th>Bulan</th><th>Akun</th><th className="is-num">Baris</th><th className="is-num">Hari</th><th className="is-num">Campaign</th><th className="is-num">Amount spent</th><th>Terakhir ditarik</th><th aria-label="Aksi" /></tr>
                   </thead>
                   <tbody>
                     {overview.months.map((row) => (
                       <tr key={`${row.accountType}-${row.month}`}>
-                        <td>{monthName(row.month)}</td>
-                        <td>{row.accountType === 'CPAS' ? 'CPAS' : 'Meta Ads'}</td>
-                        <td>{row.rowCount.toLocaleString('id-ID')}</td>
-                        <td>{row.dayCount}</td>
-                        <td>{row.campaignCount}</td>
-                        <td>{idr(row.amountSpent)}</td>
-                        <td>{dateTime(row.fetchedAt)}</td>
+                        <td><strong>{monthName(row.month)}</strong></td>
+                        <td><span className={`mx-type is-${row.accountType === 'CPAS' ? 'cpas' : 'main'}`}>{row.accountType === 'CPAS' ? 'CPAS' : 'Meta Ads'}</span></td>
+                        <td className="is-num">{row.rowCount.toLocaleString('id-ID')}</td>
+                        <td className="is-num">{row.dayCount}</td>
+                        <td className="is-num">{row.campaignCount}</td>
+                        <td className="is-num">{idr(row.amountSpent)}</td>
+                        <td className="maf-run-meta">{dateTime(row.fetchedAt)}</td>
                         <td className="maf-row-actions">
                           <button
                             type="button" className="btn btn-icon" title="Simpan ke Performance Database"
@@ -315,7 +297,7 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
                             {busy === `lib:${row.accountType}:${row.month}` ? <Loader2 size={14} className="maf-spin" /> : <FolderInput size={14} />}
                           </button>
                           <button
-                            type="button" className="btn btn-icon" aria-label={`Hapus ${monthName(row.month)}`}
+                            type="button" className="btn btn-icon" title="Hapus bulan ini" aria-label={`Hapus ${monthName(row.month)}`}
                             onClick={() => deleteMonth(row)} disabled={readOnly || busy === `del:${row.accountType}:${row.month}`}
                           >
                             <Trash2 size={14} />
@@ -330,11 +312,11 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
           </div>
 
           <div className="maf-block">
-            <h4>Riwayat penarikan</h4>
+            <h4 className="mx-h">Riwayat penarikan <small>5 terakhir</small></h4>
             {overview.runs.length === 0 ? (
-              <p className="maf-hint">Belum ada penarikan.</p>
+              <p className="mx-empty">Belum ada penarikan.</p>
             ) : (
-              <ul className="maf-runs">
+              <ul className="maf-runs mx-runs">
                 {overview.runs.slice(0, 5).map((run, index) => {
                   const state = runState(run);
                   return (
@@ -354,6 +336,34 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
               </ul>
             )}
           </div>
+
+          <details className="mx-specs" open={specsOpen} onToggle={(e) => setSpecsOpen(e.currentTarget.open)}>
+            <summary>
+              <span>Kolom yang ditarik</span>
+              <small>{BREAKDOWNS.length} breakdown · {sections.reduce((n, sec) => n + sec.metrics.length, 0)} metrik</small>
+            </summary>
+            <div className="maf-block" ref={specsRef} tabIndex={-1}>
+              <h4>Breakdown</h4>
+              <div className="maf-chips" aria-label="Breakdown">
+                {BREAKDOWNS.map((b) => <span key={b} className="maf-chip is-locked">{b}</span>)}
+              </div>
+              <h4 className="maf-sub">Metrik per jenis campaign</h4>
+              {sections.map((section) => (
+                <div key={section.key} className={`maf-section${highlight.includes(section.key) ? ' is-highlight' : ''}`}>
+                  <h5>{section.label}</h5>
+                  <div className="maf-chips" aria-label={`Metrik ${section.label}`}>
+                    {section.metrics.map((m) => <span key={m.key} className="maf-chip is-locked">{m.label}</span>)}
+                  </div>
+                </div>
+              ))}
+              <p className="maf-hint">
+                Setiap file (unggah manual maupun tarik otomatis) memakai breakdown dan metrik di atas.
+                {type === 'MAIN'
+                  ? ' Boost Post dan Non Boost Post dipisah dari Kata Kunci Boost Post akun (campaign yang namanya mengandung kata itu = Boost Post). Non Boost Post menyimpan metrik E-commerce dan B2B sekaligus. Profile visit diambil dari Results campaign profile visit; Post interactions = Facebook likes + post comments + post saves + post shares.'
+                  : ' Metrik "with shared items" adalah angka produk katalog yang dibagikan (CPAS).'}
+              </p>
+            </div>
+          </details>
         </>
       )}
     </section>
