@@ -79,6 +79,7 @@ export const shiftMonth = (ym, delta) => {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 export const monthName = (ym) => `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+export const monthShort = (ym) => MONTHS[Number(ym.slice(5, 7)) - 1];
 
 // The grid cut to days 1..maxDay. A running month is compared with the same
 // stretch of the month before — 9 days of October against all of September
@@ -90,4 +91,43 @@ export function sliceGrid(grid, maxDay) {
     k, Object.fromEntries(Object.entries(byDate || {}).filter(([d]) => keep(d))),
   ]));
   return { ...grid, days: grid.days.filter(keep), sales: cut(grid.sales), spend: cut(grid.spend) };
+}
+
+// Running total per day of the month; null after the last entered day, so
+// the line stops where the data stops instead of running flat to the 31st.
+export function cumulative(series) {
+  let last = -1;
+  series.forEach((v, i) => { if (v != null) last = i; });
+  let acc = 0;
+  return series.map((v, i) => {
+    if (i > last) return null;
+    acc += v ?? 0;
+    return acc;
+  });
+}
+
+// Average per weekday over the days that hold a value (Mon first, the way
+// the team reads a week).
+export function weekdayAverages(days, series) {
+  const sum = Array(7).fill(0);
+  const cnt = Array(7).fill(0);
+  days.forEach((d, i) => {
+    if (series[i] == null) return;
+    const w = (weekday(d) + 6) % 7;
+    sum[w] += series[i];
+    cnt[w] += 1;
+  });
+  return sum.map((s, w) => ({ day: WEEKDAYS[(w + 1) % 7], avg: cnt[w] ? s / cnt[w] : null, n: cnt[w] }));
+}
+
+// Each channel's month total and share of its section, biggest first.
+export function channelMix(grid, channels, kind) {
+  const field = kind === 'sales' ? 'revenue' : 'amount';
+  const rows = (channels?.[kind] || []).map((c) => ({
+    key: c.key,
+    label: c.label,
+    value: sumMaybe(Object.values(grid?.[kind]?.[c.key] || {}).map((r) => r?.[field])),
+  })).filter((r) => r.value != null && r.value > 0);
+  const total = rows.reduce((a, r) => a + r.value, 0);
+  return { total, rows: rows.map((r) => ({ ...r, share: total ? r.value / total : 0 })).sort((a, b) => b.value - a.value) };
 }

@@ -9,6 +9,7 @@ import MonthPillNav from '../components/dailyTracking/MonthPillNav.jsx';
 import TrackingKpis from '../components/dailyTracking/TrackingKpis.jsx';
 import TrackingPulse from '../components/dailyTracking/TrackingPulse.jsx';
 import CoverageMap from '../components/dailyTracking/CoverageMap.jsx';
+import { ChannelMix, PaceChart, WeekdayChart, defaultMetric } from '../components/dailyTracking/TrackingInsights.jsx';
 import TrackingCompare from '../components/dailyTracking/TrackingCompare.jsx';
 import ChannelRail from '../components/dailyTracking/ChannelRail.jsx';
 import ChannelInsight from '../components/dailyTracking/ChannelInsight.jsx';
@@ -32,9 +33,9 @@ function currentMonth() {
 
 // Brand Tracking — Brand Setting's third section, and a client's whole ATLAS:
 // what a brand sold and spent, per channel, per day. Two views under one
-// brand and month: Performance Overview reads it (six numbers against last
-// month, the daily chart, and any two periods side by side — kept short on
-// purpose; the deep analysis lives in Business Overview); Input Brand Tracking is
+// brand and month: Performance Overview reads the month (six numbers against
+// last month, any two periods side by side, the daily chart, pace, weekday
+// pattern, channel mix); Input Brand Tracking is
 // where the days are typed in, led by the map of which days are still empty.
 // The frame and masthead are BrandSettingLayout's.
 // Session keys keep their old "daily-tracking:" names so nobody's open brand
@@ -292,8 +293,17 @@ export default function DailyTrackingPage() {
         <div className="bt-view" key="overview">
           <TrackingKpis grid={grid} channels={channels} loading={loading} prev={prevSame} compareLabel={compareLabel} />
           <p className="bt-compare-note">Perubahan dibanding <b>{compareLabel}</b>{running ? ' — rentang tanggal yang sama, karena bulan ini masih berjalan.' : '.'}</p>
-          <TrackingPulse grid={grid} channels={channels} loading={loading} />
           <TrackingCompare brandId={brandId} channels={channels} month={month} />
+          <TrackingPulse grid={grid} channels={channels} loading={loading} />
+          <div className="bt-duo">
+            <PaceChart
+              key={`pace:${brandId}:${month}:${defaultMetric(grid, channels)}`}
+              grid={grid} prevGrid={prevGrid} channels={channels} month={month} prevMonth={prevMonth} running={running}
+              initialMetric={defaultMetric(grid, channels)}
+            />
+            <WeekdayChart key={`week:${brandId}:${month}:${defaultMetric(grid, channels)}`} grid={grid} channels={channels} initialMetric={defaultMetric(grid, channels)} />
+          </div>
+          <ChannelMix grid={grid} prevSame={prevSame} channels={channels} prevMonth={prevMonth} />
         </div>
       ) : (
         <div className="bt-view" key="input">
