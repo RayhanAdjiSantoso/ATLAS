@@ -705,7 +705,7 @@ export default function DashboardPage() {
                 <li>Seluruh domain {channel.label} di atas ikut terisi</li>
               </ol>
               <p className="channel-pending-note">
-                Belanja iklan {channel.label} yang sudah diisi di Daily Tracking tetap terbaca pada Executive Snapshot.
+                Belanja iklan {channel.label} yang sudah diisi di Brand Tracking tetap terbaca pada Executive Snapshot.
               </p>
               <Link to="/data-brand" className="mom-head-link">Buka Data Collection Hub <ArrowUpRight size={13} /></Link>
             </div>

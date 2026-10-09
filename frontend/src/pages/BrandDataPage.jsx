@@ -20,7 +20,6 @@ import MetaAdsAutoFetchPanel from '../components/brandSettings/MetaAdsAutoFetchP
 import {
   MOM_TYPES, MOM_TYPE_LABELS, dateLabel, emptyMinute, longDateLabel, parseISO, recapPreview, taskGroups, taskStats,
 } from '../components/mom/momModel.js';
-import atlasWordmark from '../assets/atlas-wordmark.png';
 import { BrandLogo } from '../reportGenerator/components/BrandLogo';
 import { describeError } from '../components/brandSettings/describeError.js';
 import '../components/dashboard/console.css';
@@ -1458,111 +1457,100 @@ export default function BrandDataPage() {
   const spring = reduced ? { duration: 0 } : { type: 'spring', stiffness: 480, damping: 40, mass: .6 };
 
   return (
-    <div className="con brand-settings soft-shell bp">
+    // Frame and masthead come from BrandSettingLayout (shared with the
+    // other Brand Setting sections).
+    <>
       <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" multiple hidden onChange={handleFile} />
 
-      <div className="soft-frame">
-        <header className="soft-masthead">
-          <div className="soft-masthead-copy">
-            <h1><span>Data</span> Collection Hub<span className="soft-title-dot" aria-hidden="true">.</span></h1>
-            <p>File bulanan, catatan meeting, dan akun iklan setiap brand — sumber yang dibaca Business Overview dan Report Generator.</p>
+      <section className="soft-card bp-command" aria-label="Brand yang dikelola">
+        <div className="bp-command-brand">
+          <span className="bp-label">Brand</span>
+          <BrandPicker brands={brands} brand={brand} sector={profile?.sector} onSelect={setBrand} reduced={reduced} />
+        </div>
+        <div className="bp-stats">
+          <div className="bp-stat">
+            <span><CalendarRange size={14} aria-hidden="true" /> Rentang data</span>
+            <strong className="is-text">{loading ? '…' : spanLabel}</strong>
           </div>
-          <div className="soft-masthead-signature">
-            <img src={atlasWordmark} alt="ATLAS" />
-            <span>Ruang data brand</span>
+          <div className="bp-stat">
+            <span><FileSpreadsheet size={14} aria-hidden="true" /> File tersimpan</span>
+            <strong>{loading ? '…' : files.length}</strong>
           </div>
-        </header>
+          <div className="bp-stat">
+            <span><Database size={14} aria-hidden="true" /> Dataset aktif</span>
+            <strong>{loading ? '…' : totals.active}<small>/{totals.all}</small></strong>
+          </div>
+        </div>
+        {brand && (
+          <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand context dan current direction diatur di Brand Setting">
+            <NotebookPen size={15} aria-hidden="true" /> Context &amp; direction
+          </Link>
+        )}
+      </section>
 
-        <section className="soft-card bp-command" aria-label="Brand yang dikelola">
-          <div className="bp-command-brand">
-            <span className="bp-label">Brand</span>
-            <BrandPicker brands={brands} brand={brand} sector={profile?.sector} onSelect={setBrand} reduced={reduced} />
-          </div>
-          <div className="bp-stats">
-            <div className="bp-stat">
-              <span><CalendarRange size={14} aria-hidden="true" /> Rentang data</span>
-              <strong className="is-text">{loading ? '…' : spanLabel}</strong>
-            </div>
-            <div className="bp-stat">
-              <span><FileSpreadsheet size={14} aria-hidden="true" /> File tersimpan</span>
-              <strong>{loading ? '…' : files.length}</strong>
-            </div>
-            <div className="bp-stat">
-              <span><Database size={14} aria-hidden="true" /> Dataset aktif</span>
-              <strong>{loading ? '…' : totals.active}<small>/{totals.all}</small></strong>
-            </div>
-          </div>
-          {brand && (
-            <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand context dan current direction diatur di Brand Setting">
-              <NotebookPen size={15} aria-hidden="true" /> Context &amp; direction
-            </Link>
-          )}
-        </section>
+      <nav className="soft-tabs bp-tabs" aria-label={`Bagian data ${brand?.brand_name ?? 'brand'}`} role="tablist">
+        {VIEWS.map(({ id, label, hint, Icon }) => {
+          const on = activeView === id;
+          return (
+            <button type="button" role="tab" key={id} aria-selected={on} className={`soft-tab${on ? ' is-on' : ''}`} onClick={() => setActiveView(id)}>
+              {on && <motion.span layoutId="bp-tab-pill" className="soft-tab-pill" transition={spring} aria-hidden="true" />}
+              <span className="soft-tab-ico" aria-hidden="true"><Icon size={17} /></span>
+              <span className="soft-tab-text"><strong>{label}</strong><small>{hint}</small></span>
+            </button>
+          );
+        })}
+      </nav>
 
-        <nav className="soft-tabs bp-tabs" aria-label={`Bagian data ${brand?.brand_name ?? 'brand'}`} role="tablist">
-          {VIEWS.map(({ id, label, hint, Icon }) => {
-            const on = activeView === id;
-            return (
-              <button type="button" role="tab" key={id} aria-selected={on} className={`soft-tab${on ? ' is-on' : ''}`} onClick={() => setActiveView(id)}>
-                {on && <motion.span layoutId="bp-tab-pill" className="soft-tab-pill" transition={spring} aria-hidden="true" />}
-                <span className="soft-tab-ico" aria-hidden="true"><Icon size={17} /></span>
-                <span className="soft-tab-text"><strong>{label}</strong><small>{hint}</small></span>
-              </button>
-            );
-          })}
+      {activeView === 'data' && (
+        <nav className="soft-subtabs" aria-label="Bagian Performance Database" role="tablist">
+          {DATABASE_VIEWS.map(({ id, label, Icon }) => (
+            <button key={id} type="button" role="tab" aria-selected={databaseView === id}
+              className={`soft-subtab bp-platform${databaseView === id ? ' is-on' : ''}`} onClick={() => setDatabaseView(id)}>
+              <Icon size={16} aria-hidden="true" /> {label}
+            </button>
+          ))}
         </nav>
+      )}
 
-        {activeView === 'data' && (
-          <nav className="soft-subtabs" aria-label="Bagian Performance Database" role="tablist">
-            {DATABASE_VIEWS.map(({ id, label, Icon }) => (
-              <button key={id} type="button" role="tab" aria-selected={databaseView === id}
-                className={`soft-subtab bp-platform${databaseView === id ? ' is-on' : ''}`} onClick={() => setDatabaseView(id)}>
-                <Icon size={16} aria-hidden="true" /> {label}
-              </button>
-            ))}
-          </nav>
+      {loading && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat data {brand?.brand_name ?? 'brand'}…</p>}
+      {error && (
+        <div className="brand-flash is-error">
+          <CircleAlert size={15} />
+          <span>{error}</span>
+          <button type="button" onClick={() => brand && loadBrand(brand.brand_id)}>Coba lagi</button>
+        </div>
+      )}
+      {notice && (
+        <div className="brand-flash">
+          <CircleAlert size={15} />
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice(null)}>Tutup</button>
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        {activeView === 'data' && databaseView === 'files' && (
+          <ViewShell viewId="data" reduced={reduced}>
+            <DataView
+              brand={brand} months={months} axis={axis}
+              windowStart={windowStart} setWindowStart={(next) => { setWindowStart(next); setFocus(null); }}
+              focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
+              onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}
+              onLibraryChanged={() => brand && refreshFiles(brand.brand_id)}
+              marketId={marketId} setMarketId={setMarketId}
+            />
+          </ViewShell>
         )}
 
-        {loading && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat data {brand?.brand_name ?? 'brand'}…</p>}
-        {error && (
-          <div className="brand-flash is-error">
-            <CircleAlert size={15} />
-            <span>{error}</span>
-            <button type="button" onClick={() => brand && loadBrand(brand.brand_id)}>Coba lagi</button>
-          </div>
-        )}
-        {notice && (
-          <div className="brand-flash">
-            <CircleAlert size={15} />
-            <span>{notice}</span>
-            <button type="button" onClick={() => setNotice(null)}>Tutup</button>
-          </div>
+        {activeView === 'mom' && (
+          <ViewShell viewId="mom" reduced={reduced}>
+            <div className="soft-card bp-panel">
+              <MinutesView key={brand?.brand_id ?? 'none'} brand={brand} minutes={minutes} loading={loading} onSave={saveMinute} onDelete={deleteMinute} busy={minuteBusy} reduced={reduced} />
+            </div>
+          </ViewShell>
         )}
 
-        <AnimatePresence mode="wait">
-          {activeView === 'data' && databaseView === 'files' && (
-            <ViewShell viewId="data" reduced={reduced}>
-              <DataView
-                brand={brand} months={months} axis={axis}
-                windowStart={windowStart} setWindowStart={(next) => { setWindowStart(next); setFocus(null); }}
-                focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
-                onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}
-                onLibraryChanged={() => brand && refreshFiles(brand.brand_id)}
-                marketId={marketId} setMarketId={setMarketId}
-              />
-            </ViewShell>
-          )}
-
-          {activeView === 'mom' && (
-            <ViewShell viewId="mom" reduced={reduced}>
-              <div className="soft-card bp-panel">
-                <MinutesView key={brand?.brand_id ?? 'none'} brand={brand} minutes={minutes} loading={loading} onSave={saveMinute} onDelete={deleteMinute} busy={minuteBusy} reduced={reduced} />
-              </div>
-            </ViewShell>
-          )}
-
-        </AnimatePresence>
-      </div>
-    </div>
+      </AnimatePresence>
+    </>
   );
 }

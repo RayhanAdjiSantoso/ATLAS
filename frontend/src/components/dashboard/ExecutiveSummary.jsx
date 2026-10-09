@@ -238,9 +238,9 @@ function Shell({ children, state }) {
       <div className="con-focus-head xs-head">
         <div className="xs-head-copy">
           <h2 id="xs-title">Executive Snapshot</h2>
-          <p>Seluruh channel dalam satu pembacaan — marketplace, offline, B2B, dan belanja iklan — bersumber dari Daily Tracking.</p>
+          <p>Seluruh channel dalam satu pembacaan — marketplace, offline, B2B, dan belanja iklan — bersumber dari Brand Tracking.</p>
         </div>
-        <Link to="/daily-tracking" className="mom-head-link">Isi Daily Tracking <ArrowUpRight size={13} /></Link>
+        <Link to="/brand-tracking" className="mom-head-link">Isi Brand Tracking <ArrowUpRight size={13} /></Link>
       </div>
       <div className={`con-focus-body xs-body${state ? ' is-state' : ''}`}>{children}</div>
     </section>
@@ -320,10 +320,10 @@ export default function ExecutiveSummary({ filters }) {
         <div className="xs-state is-empty">
           <Database size={22} />
           <span>
-            <strong>Belum ada data Daily Tracking untuk brand ini</strong>
+            <strong>Belum ada data Brand Tracking untuk brand ini</strong>
             Seluruh angka pada ringkasan ini muncul setelah revenue dan belanja iklan harian diisi.
           </span>
-          <Link to="/daily-tracking" className="mom-head-link">Isi Daily Tracking <ArrowUpRight size={13} /></Link>
+          <Link to="/brand-tracking" className="mom-head-link">Isi Brand Tracking <ArrowUpRight size={13} /></Link>
         </div>
       </Shell>
     );
@@ -373,7 +373,7 @@ export default function ExecutiveSummary({ filters }) {
 
       {!hasLastYear && (
         <p className="xs-lastyear-note">
-          Perbandingan <strong>tahun lalu</strong> belum tersedia untuk rentang ini — kolomnya muncul sendiri begitu Daily Tracking punya data pada rentang yang sama
+          Perbandingan <strong>tahun lalu</strong> belum tersedia untuk rentang ini — kolomnya muncul sendiri begitu Brand Tracking punya data pada rentang yang sama
           tahun sebelumnya.
         </p>
       )}

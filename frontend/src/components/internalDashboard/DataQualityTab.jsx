@@ -28,7 +28,7 @@ const CHANNELS = SALES_CHANNELS.map((c) => c.value);
 // source_status.state -> [badge class, label]. Severity comes from the API.
 const SOURCE_STATE = {
   ok: ['badge-success', 'OK'],
-  no_daily_tracking: ['badge-warning', 'Belum isi Daily Tracking'],
+  no_daily_tracking: ['badge-warning', 'Belum isi Brand Tracking'],
   not_synced: ['badge-warning', 'Belum masuk'],
   sync_failed: ['badge-danger', 'Pembaruan gagal'],
   needs_sync: ['badge-warning', 'Tertinggal'],
@@ -133,7 +133,7 @@ export default function DataQualityTab() {
                   <h3 style={{ fontSize: '1rem' }}>Status Sumber Data — client aktif</h3>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.3rem 0 0' }}>
                     {Object.entries(data.source_status.summary).map(([k, n]) => `${SOURCE_STATE[k]?.[1] || k}: ${n}`).join(' · ')}.
-                    {' '}Data masuk otomatis dari halaman Daily Tracking (sales & spend) dan Data Collection Hub (Meta Ads Auto Fetch, Meta Ads Automation).
+                    {' '}Data masuk otomatis dari halaman Brand Tracking (sales & spend) dan Data Collection Hub (Meta Ads Auto Fetch, Meta Ads Automation).
                   </p>
                 </div>
               </div>

@@ -25,7 +25,7 @@ export const ROLE_LABELS = {
 // entry and route, the backend to its API routers.
 export const MODULES = [
   { key: 'dashboard', label: 'Business Overview' },
-  { key: 'daily_tracking', label: 'Daily Tracking' },
+  { key: 'daily_tracking', label: 'Brand Tracking' },
   { key: 'brand_settings', label: 'Brand Setting' },
   { key: 'report_generator', label: 'Report Generator' },
   { key: 'history', label: 'History Upload' },

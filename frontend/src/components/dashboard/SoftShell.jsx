@@ -133,7 +133,7 @@ export default function SoftShell({
             <h2>{channel ? `${channel.label} · ${channelDomains.find((d) => d.key === domainKey)?.label ?? ''}` : 'Executive Snapshot'}</h2>
             <p>{question}</p>
           </div>
-          {!channel && <Link to="/daily-tracking" className="soft-head-link">Isi Daily Tracking <ArrowUpRight size={14} aria-hidden="true" /></Link>}
+          {!channel && <Link to="/brand-tracking" className="soft-head-link">Isi Brand Tracking <ArrowUpRight size={14} aria-hidden="true" /></Link>}
         </div>
 
         {channel?.ready && kpiEntry && <Tiles entry={kpiEntry} />}

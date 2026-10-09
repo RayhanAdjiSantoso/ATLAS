@@ -380,7 +380,7 @@ export default function DailyTrackingTab() {
               <p style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '0.35rem' }}>
                 Nama brand ini tidak cocok dengan brand ATLAS manapun — config akan tetap tersimpan
                 dan tetap menulis ke Sheet, tapi TIDAK akan muncul di dropdown "Pilih config" pada
-                halaman Daily Tracking ATLAS. Perbaiki lewat tab Brand kalau perlu.
+                halaman Brand Tracking ATLAS. Perbaiki lewat tab Brand kalau perlu.
               </p>
             )}
           </div>

@@ -12,7 +12,6 @@ import { presetBrandSettings } from '../components/common/brandSettingsLink.js';
 import { describeError } from '../components/brandSettings/describeError.js';
 import SearchField from '../components/common/SearchField.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
-import atlasWordmark from '../assets/atlas-wordmark.png';
 import '../components/dashboard/console.css';
 import '../components/dashboard/softShell.css';
 import './brandPages.css';
@@ -156,7 +155,7 @@ function DeleteBrand({ brand, onDeleted }) {
         <div className="bp-danger-body is-force">
           <p>
             <b>Ini tidak bisa dibatalkan.</b> {brand.brand_name} dan <b>semua datanya</b> akan dihapus permanen dari ATLAS:
-            file Data Collection Hub, laporan tersimpan, data Shopee, Daily Tracking, Google &amp; Meta Ads, catatan meeting, dan lainnya.
+            file Data Collection Hub, laporan tersimpan, data Shopee, Brand Tracking, Google &amp; Meta Ads, catatan meeting, dan lainnya.
           </p>
           <ul>{state.blocking.map((b) => <li key={b.label}><span>{b.label}</span><b>{b.count.toLocaleString('id-ID')}</b></li>)}</ul>
           {state.error && <p className="bp-drawer-msg is-error" role="alert"><CircleAlert size={15} /> {state.error}</p>}
@@ -480,126 +479,116 @@ export default function BrandSettingsPage() {
   };
 
   return (
-    <div className="con brand-settings soft-shell bp">
-      <div className="soft-frame">
-        <header className="soft-masthead">
-          <div className="soft-masthead-copy">
-            <h1><span>Brand</span> Setting<span className="soft-title-dot" aria-hidden="true">.</span></h1>
-            <p>Daftar klien MIL Digital: atur status setiap brand, lalu lengkapi brand context dan current direction yang dibaca seluruh analisis ATLAS.</p>
-          </div>
-          <div className="soft-masthead-signature">
-            <img src={atlasWordmark} alt="ATLAS" />
-            <span>Ruang Brand Setting</span>
-          </div>
-        </header>
+    // The page's frame and masthead belong to BrandSettingLayout, shared
+    // with the other two Brand Setting sections.
+    <>
 
-        <section className="soft-card bp-command" aria-label="Cari dan saring brand">
-          <div className="bp-stats bp-overview-stats">
-            <div className="bp-stat"><span>Total Brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
-            <div className="bp-stat"><span>Brand Aktif</span><strong>{loaded ? counts.active : '…'}</strong></div>
-            <div className="bp-stat"><span>Nonaktif</span><strong>{loaded ? counts.off : '…'}</strong></div>
-            <div className="bp-stat"><span>Dibekukan</span><strong>{loaded ? counts.freeze : '…'}</strong></div>
-            <div className="bp-industry-summary">
-              <div className="bp-industry-summary-copy">
-                <span>Industri Brand Aktif</span>
-                <small>{loaded ? `${industryComposition.total} brand berkategori` : 'Memuat komposisi…'}</small>
-              </div>
-              <div
-                className="bp-industry-pie"
-                style={{ background: industryComposition.gradient }}
-                role="img"
-                aria-label={`Komposisi industri brand aktif: ${industryComposition.items.map((item) => `${item.value} ${item.count}`).join(', ')}`}
-              />
-              <ul className="bp-industry-legend">
-                {industryComposition.items.map((item) => (
-                  <li key={item.value}><i style={{ background: item.color }} /><span>{item.value}</span><b>{item.count}</b></li>
-                ))}
-              </ul>
+      <section className="soft-card bp-command" aria-label="Cari dan saring brand">
+        <div className="bp-stats bp-overview-stats">
+          <div className="bp-stat"><span>Total Brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
+          <div className="bp-stat"><span>Brand Aktif</span><strong>{loaded ? counts.active : '…'}</strong></div>
+          <div className="bp-stat"><span>Nonaktif</span><strong>{loaded ? counts.off : '…'}</strong></div>
+          <div className="bp-stat"><span>Dibekukan</span><strong>{loaded ? counts.freeze : '…'}</strong></div>
+          <div className="bp-industry-summary">
+            <div className="bp-industry-summary-copy">
+              <span>Industri Brand Aktif</span>
+              <small>{loaded ? `${industryComposition.total} brand berkategori` : 'Memuat komposisi…'}</small>
             </div>
+            <div
+              className="bp-industry-pie"
+              style={{ background: industryComposition.gradient }}
+              role="img"
+              aria-label={`Komposisi industri brand aktif: ${industryComposition.items.map((item) => `${item.value} ${item.count}`).join(', ')}`}
+            />
+            <ul className="bp-industry-legend">
+              {industryComposition.items.map((item) => (
+                <li key={item.value}><i style={{ background: item.color }} /><span>{item.value}</span><b>{item.count}</b></li>
+              ))}
+            </ul>
           </div>
-          {!isViewOnly && (creating ? (
-            <form className="bp-new-form" onSubmit={createBrand}>
-              <input
-                value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Nama brand baru" autoFocus
-                onKeyDown={(event) => { if (event.key === 'Escape') setCreating(false); }} aria-label="Nama brand baru"
-              />
-              <button type="submit" className="bp-primary" disabled={creatingBusy || !newName.trim()}>
-                {creatingBusy ? <Loader2 size={15} className="brand-spin" /> : <Check size={15} />} Simpan
-              </button>
-              <button type="button" className="bp-icon-btn" onClick={() => setCreating(false)} aria-label="Batal"><X size={16} /></button>
-            </form>
-          ) : (
-            <button type="button" className="bp-primary" onClick={() => { setNewName(''); setCreating(true); }}>
-              <Plus size={16} /> Brand baru
+        </div>
+        {!isViewOnly && (creating ? (
+          <form className="bp-new-form" onSubmit={createBrand}>
+            <input
+              value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Nama brand baru" autoFocus
+              onKeyDown={(event) => { if (event.key === 'Escape') setCreating(false); }} aria-label="Nama brand baru"
+            />
+            <button type="submit" className="bp-primary" disabled={creatingBusy || !newName.trim()}>
+              {creatingBusy ? <Loader2 size={15} className="brand-spin" /> : <Check size={15} />} Simpan
             </button>
-          ))}
-        </section>
+            <button type="button" className="bp-icon-btn" onClick={() => setCreating(false)} aria-label="Batal"><X size={16} /></button>
+          </form>
+        ) : (
+          <button type="button" className="bp-primary" onClick={() => { setNewName(''); setCreating(true); }}>
+            <Plus size={16} /> Brand baru
+          </button>
+        ))}
+      </section>
 
-        {error && (
-          <div className="brand-flash is-error">
-            <CircleAlert size={15} />
-            <span>{error}</span>
-            <button type="button" onClick={() => setError(null)}>Tutup</button>
-          </div>
-        )}
-        {notice && (
-          <div className="brand-flash">
-            <CircleAlert size={15} />
-            <span>{notice}</span>
-            <button type="button" onClick={() => setNotice(null)}>Tutup</button>
-          </div>
-        )}
+      {error && (
+        <div className="brand-flash is-error">
+          <CircleAlert size={15} />
+          <span>{error}</span>
+          <button type="button" onClick={() => setError(null)}>Tutup</button>
+        </div>
+      )}
+      {notice && (
+        <div className="brand-flash">
+          <CircleAlert size={15} />
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice(null)}>Tutup</button>
+        </div>
+      )}
 
-        <div className="bp-master">
-          <aside className="soft-card bp-list" aria-label="Daftar brand">
-            <div className="bp-list-head">
-              <SearchField className="bp-search" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
-              {/* Status filter without count badges, matching the compact list control. */}
-              <div className="bp-filter" role="radiogroup" aria-label="Filter status klien">
-                {FILTERS.map((key) => {
-                  const on = listStatus === key;
-                  return (
-                    <button key={key} type="button" role="radio" aria-checked={on} className={`is-${key}${on ? ' is-on' : ''}`} onClick={() => setListStatus(key)}>
-                      {key !== 'all' && <i aria-hidden="true" />}
-                      <span>{key === 'all' ? 'Semua' : BRAND_STATUS_LABELS[key]}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <ul className="bp-list-items">
-              {shown.map((b) => {
-                const status = b.status || 'unknown';
-                const on = b.brand_id === selected?.brand_id;
+      <div className="bp-master">
+        <aside className="soft-card bp-list" aria-label="Daftar brand">
+          <div className="bp-list-head">
+            <SearchField className="bp-search" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
+            {/* Status filter without count badges, matching the compact list control. */}
+            <div className="bp-filter" role="radiogroup" aria-label="Filter status klien">
+              {FILTERS.map((key) => {
+                const on = listStatus === key;
                 return (
-                  <li key={b.brand_id}>
-                    <button type="button" className={`bp-list-item${on ? ' is-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => select(b)}>
-                      <span className="bp-list-name">{b.brand_name}</span>
-                      <span className={`bp-status-chip is-${status}`}><i aria-hidden="true" />{BRAND_STATUS_LABELS[status]}</span>
-                    </button>
-                  </li>
+                  <button key={key} type="button" role="radio" aria-checked={on} className={`is-${key}${on ? ' is-on' : ''}`} onClick={() => setListStatus(key)}>
+                    {key !== 'all' && <i aria-hidden="true" />}
+                    <span>{key === 'all' ? 'Semua' : BRAND_STATUS_LABELS[key]}</span>
+                  </button>
                 );
               })}
-            </ul>
-            {loaded && !shown.length && <p className="brand-picker-empty">Tidak ada brand yang cocok. Ubah pencarian atau filter status.</p>}
-            {!loaded && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat daftar brand…</p>}
-          </aside>
+            </div>
+          </div>
+          <ul className="bp-list-items">
+            {shown.map((b) => {
+              const status = b.status || 'unknown';
+              const on = b.brand_id === selected?.brand_id;
+              return (
+                <li key={b.brand_id}>
+                  <button type="button" className={`bp-list-item${on ? ' is-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => select(b)}>
+                    <span className="bp-list-name">{b.brand_name}</span>
+                    <span className={`bp-status-chip is-${status}`}><i aria-hidden="true" />{BRAND_STATUS_LABELS[status]}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {loaded && !shown.length && <p className="brand-picker-empty">Tidak ada brand yang cocok. Ubah pencarian atau filter status.</p>}
+          {!loaded && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat daftar brand…</p>}
+        </aside>
 
-          {selected ? (
-            <BrandSetting
-              key={selected.brand_id} brand={selected} isViewOnly={isViewOnly}
-              canDelete={isAdmin && !isViewOnly} statusBusy={statusBusy === selected.brand_id}
-              onStatus={changeStatus} onDeleted={brandDeleted} onOpenData={navigateToData} onDirtyChange={onDirtyChange}
-              onIndustrySaved={industrySaved}
-            />
-          ) : (
-            <div className="soft-card bp-setting bp-setting-empty">{loaded ? 'Pilih brand di daftar untuk membuka Brand Setting.' : 'Memuat…'}</div>
-          )}
-        </div>
-        <p className="bp-foot-note">
-          File bulanan, Minutes of Meeting, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Collection Hub</Link>.
-        </p>
+        {selected ? (
+          <BrandSetting
+            key={selected.brand_id} brand={selected} isViewOnly={isViewOnly}
+            canDelete={isAdmin && !isViewOnly} statusBusy={statusBusy === selected.brand_id}
+            onStatus={changeStatus} onDeleted={brandDeleted} onOpenData={navigateToData} onDirtyChange={onDirtyChange}
+            onIndustrySaved={industrySaved}
+          />
+        ) : (
+          <div className="soft-card bp-setting bp-setting-empty">{loaded ? 'Pilih brand di daftar untuk membuka Brand Setting.' : 'Memuat…'}</div>
+        )}
       </div>
-    </div>
+      <p className="bp-foot-note">
+        File bulanan, Minutes of Meeting, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Collection Hub</Link>.
+      </p>
+    </>
   );
 }

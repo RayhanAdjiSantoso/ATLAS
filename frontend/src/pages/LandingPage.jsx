@@ -312,7 +312,7 @@ function Inside({ home, signedIn }) {
         </article>
         <article className="lp-tile lp-tile-daily" data-reveal style={{ '--i': 1 }}>
           <div className="lp-tile-copy">
-            <strong>Daily Tracking</strong>
+            <strong>Brand Tracking</strong>
             <p>Daily revenue and ad spend, side by side in one place.</p>
           </div>
           <svg className="lp-spark" viewBox="0 0 300 90" preserveAspectRatio="none" aria-hidden="true">

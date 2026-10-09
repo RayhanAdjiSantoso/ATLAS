@@ -82,7 +82,7 @@ export default function ImportFileButton({ brandId, onImported }) {
         onChange={handleFile}
       />
       <button type="button" className="btn btn-secondary dt-btn-sm" onClick={() => inputRef.current?.click()} disabled={busy}>
-        <Upload size={14} /> {busy && !preview ? 'Membaca file...' : 'Upload File Daily Tracking'}
+        <Upload size={14} /> {busy && !preview ? 'Membaca file...' : 'Upload file'}
       </button>
 
       {error && !preview && (

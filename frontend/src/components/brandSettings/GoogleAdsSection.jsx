@@ -314,7 +314,7 @@ export default function GoogleAdsSection({ brand }) {
           <p>
             Hubungkan akun Google Ads brand ini dengan Customer ID-nya. Setiap hari jam 01.00 ATLAS menarik data harian per campaign,
             ad group, keyword, search term, kota, iklan, konversi per action, device, jam, dan landing page, plus setting campaign dan Quality Score —
-            cost kemarin masuk ke Daily Tracking, dan semuanya tersusun di Report Generator › Google Ads.
+            cost kemarin masuk ke Brand Tracking, dan semuanya tersusun di Report Generator › Google Ads.
           </p>
         </div>
         <span className="brand-section-meta">{accounts.length ? `${accounts.length} akun terhubung` : 'Belum terhubung'}</span>

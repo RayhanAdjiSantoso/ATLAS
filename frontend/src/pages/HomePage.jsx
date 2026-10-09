@@ -25,7 +25,7 @@ const MODULES = [
   {
     key: 'brand-settings',
     to: '/pengaturan-brand',
-    label: 'Brand Setting',
+    label: 'Brand Context',
     tagline: 'Langkah pertama',
     desc: 'Daftar klien dan statusnya, lalu brand context dan current direction setiap brand yang dibaca analisis ATLAS.',
     accent: 'var(--acc)',
@@ -54,8 +54,8 @@ const MODULES = [
   },
   {
     key: 'daily-tracking',
-    to: '/daily-tracking',
-    label: 'Daily Tracking',
+    to: '/brand-tracking',
+    label: 'Brand Tracking',
     tagline: 'Input harian',
     desc: 'Revenue per channel dan belanja iklan harian — sumber angka Executive Snapshot di dashboard.',
     accent: 'var(--gold)',

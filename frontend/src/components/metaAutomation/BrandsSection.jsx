@@ -157,7 +157,7 @@ export default function BrandsSection() {
                 <th>ID Ad Account</th>
                 <th>Tipe</th>
                 <th>Token</th>
-                <th>Daily Tracking Otomatis</th>
+                <th>Brand Tracking Otomatis</th>
                 <th>Langganan</th>
                 <th></th>
               </tr>
@@ -220,7 +220,7 @@ export default function BrandsSection() {
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
           Kredensial ad account, plus (opsional) kata kunci Boost Post — begitu Nama Brand cocok
           dengan brand ATLAS dan Kata Kunci Boost Post terisi (akun CPAS tidak perlu), brand ini
-          otomatis ikut ditarik & mengisi halaman Daily Tracking ATLAS setiap jam 01:00 WIB, tanpa
+          otomatis ikut ditarik & mengisi halaman Brand Tracking ATLAS setiap jam 01:00 WIB, tanpa
           perlu apa pun lagi di tab Daily Tracking. Belum ada yang dinotifikasi lewat email sampai
           ada langganan dibuat di tab Langganan.
         </p>
@@ -249,7 +249,7 @@ export default function BrandsSection() {
             />
             {form.client && !atlasBrandMatch && (
               <p style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '0.35rem' }}>
-                Nama brand ini tidak cocok dengan brand ATLAS manapun — Daily Tracking otomatis
+                Nama brand ini tidak cocok dengan brand ATLAS manapun — Brand Tracking otomatis
                 TIDAK akan aktif untuk brand ini sampai dipilih ulang dari daftar.
               </p>
             )}

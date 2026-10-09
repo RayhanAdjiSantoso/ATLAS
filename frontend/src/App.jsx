@@ -11,6 +11,7 @@ import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
 import BrandSettingsPage from './pages/BrandSettingsPage.jsx';
 import BrandDataPage from './pages/BrandDataPage.jsx';
+import BrandSettingLayout from './pages/BrandSettingLayout.jsx';
 import ControlCenterPage from './pages/ControlCenterPage.jsx';
 import AccessSettingsPage from './pages/AccessSettingsPage.jsx';
 import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
@@ -41,14 +42,20 @@ export default function App() {
           <Route element={<ProtectedRoute module="dashboard" />}>
             <Route path="/dashboard" element={<DashboardPage />} />
           </Route>
-          <Route element={<ProtectedRoute module="daily_tracking" />}>
-            <Route path="/daily-tracking" element={<DailyTrackingPage />} />
+          {/* Brand Setting: one page whose three sections share a frame and
+              a section bar (BrandSettingLayout); each keeps its own
+              permission. */}
+          <Route element={<BrandSettingLayout />}>
+            <Route element={<ProtectedRoute module="brand_settings" />}>
+              <Route path="/pengaturan-brand" element={<BrandSettingsPage />} />
+              <Route path="/data-brand" element={<BrandDataPage />} />
+            </Route>
+            <Route element={<ProtectedRoute module="daily_tracking" />}>
+              <Route path="/brand-tracking" element={<DailyTrackingPage />} />
+            </Route>
           </Route>
-          <Route element={<ProtectedRoute module="brand_settings" />}>
-            <Route path="/pengaturan-brand" element={<BrandSettingsPage />} />
-            {/* Files, MOM and ad accounts — split out of Pengaturan Brand, same permission. */}
-            <Route path="/data-brand" element={<BrandDataPage />} />
-          </Route>
+          {/* Brand Tracking's old address — bookmarks and links still land. */}
+          <Route path="/daily-tracking" element={<Navigate to="/brand-tracking" replace />} />
           <Route element={<ProtectedRoute module="history" />}>
             <Route path="/history" element={<HistoryPage />} />
           </Route>

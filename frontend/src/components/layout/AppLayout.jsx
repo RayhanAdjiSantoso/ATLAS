@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, History, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, FolderOpen, CalendarCheck, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, History, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
+import { BRAND_SETTING_SECTIONS } from '../brandSettings/sections.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import api from '../../api/client.js';
 import atlasIcon from '../../assets/atlas-icon.png';
@@ -9,18 +10,15 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 
 // One entry per destination so the collapsed rail, the expanded list and the
 // tooltips can never drift apart.
-// Ordered the way ATLAS is worked: a brand is set up first (status, context,
-// direction), its data comes in next, and only then is it read and reported.
+// Ordered the way ATLAS is worked. Everything a brand puts IN — its context,
+// its files, its daily numbers — is one entry, Brand Setting, whose own
+// section bar switches between the three; what ATLAS gives back OUT
+// (Business Overview, Report Generator) follows, so input and output never
+// read as one long list.
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
-  { to: '/pengaturan-brand', label: 'Brand Setting', Icon: SlidersHorizontal, group: 'Workspace', module: 'brand_settings' },
-  // The brand's files, Minutes of Meeting and ad accounts — what Business
-  // Overview and Report Generator read. Same permission as Pengaturan Brand.
-  { to: '/data-brand', label: 'Data Collection Hub', Icon: FolderOpen, group: 'Workspace', module: 'brand_settings' },
+  { id: 'brand-setting', label: 'Brand Setting', Icon: SlidersHorizontal, group: 'Workspace', sections: BRAND_SETTING_SECTIONS },
   { to: '/dashboard', label: 'Business Overview', Icon: LayoutDashboard, group: 'Workspace', module: 'dashboard' },
-  // No adminOnly: both internal staff and client accounts fill this in
-  // themselves, unlike everywhere else a view-only account can only read.
-  { to: '/daily-tracking', label: 'Daily Tracking', Icon: CalendarCheck, group: 'Workspace', module: 'daily_tracking' },
   { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace', module: 'report_generator' },
   { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, group: 'Operasional', module: 'meta_automation' },
   { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, group: 'Operasional', module: 'internal_dashboard' },
@@ -29,7 +27,6 @@ const NAV = [
   // Account and permission management — superadmin and admin only.
   { to: '/pengaturan-akses', label: 'Pengaturan Akses', Icon: ShieldCheck, group: 'Operasional', adminOnly: true },
 ];
-
 const ROLE_BADGE = { superadmin: 'Superadmin', admin: 'Admin', user: 'User', client: 'Client' };
 
 export default function AppLayout() {
@@ -100,7 +97,20 @@ export default function AppLayout() {
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileOpen]);
 
-  const links = NAV.filter((n) => (!n.adminOnly || (isAdmin && !isViewOnly)) && (!n.module || can(n.module)));
+  const allowed = (n) => (!n.adminOnly || (isAdmin && !isViewOnly)) && (!n.module || can(n.module));
+  // Brand Setting opens on the first section this account may use and
+  // disappears when it has none.
+  const links = NAV
+    .map((n) => {
+      if (!n.sections) return n;
+      const sections = n.sections.filter(allowed);
+      if (!sections.length) return null;
+      // One section left (a client account: Brand Tracking only) is named for
+      // what it is, not for a group of one.
+      if (sections.length === 1) return { ...n, to: sections[0].to, label: sections[0].label, Icon: sections[0].Icon, sections };
+      return { ...n, to: sections[0].to, sections };
+    })
+    .filter((n) => n && (n.sections || allowed(n)));
   const groups = ['Workspace', 'Operasional']
     .map((label) => ({ label, links: links.filter((link) => link.group === label) }))
     .filter((group) => group.links.length > 0);
@@ -112,6 +122,27 @@ export default function AppLayout() {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+
+  const navLink = ({ to, label, Icon, end, sections }) => (
+    <NavLink
+      key={to}
+      to={to}
+      end={end}
+      onClick={() => setMobileOpen(false)}
+      // Brand Setting stays lit on every one of its sections, not only the
+      // first one it links to.
+      className={({ isActive }) => `sidebar-link${isActive || sections?.some((x) => location.pathname.startsWith(x.to)) ? ' active' : ''}`}
+      // Only useful while collapsed; when the label is on screen a tooltip
+      // repeating it is noise.
+      title={open ? undefined : label}
+    >
+      <Icon size={18} className="sidebar-ico" />
+      <span className="sidebar-label">{label}</span>
+      {to === '/pusat-kendali' && badgeCount > 0 && (
+        <span className="sidebar-badge" title={badgeTitle} aria-label={badgeTitle}>{badgeCount > 99 ? '99+' : badgeCount}</span>
+      )}
+    </NavLink>
+  );
 
   return (
     <div className="layout">
@@ -145,24 +176,7 @@ export default function AppLayout() {
           {groups.map((group) => (
             <div className="sidebar-nav-group" key={group.label}>
               <span className="sidebar-nav-title">{group.label}</span>
-              {group.links.map(({ to, label, Icon, end }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  onClick={() => setMobileOpen(false)}
-                  className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
-                  // Only useful while collapsed; when the label is on screen a
-                  // tooltip repeating it is noise.
-                  title={open ? undefined : label}
-                >
-                  <Icon size={18} className="sidebar-ico" />
-                  <span className="sidebar-label">{label}</span>
-                  {to === '/pusat-kendali' && badgeCount > 0 && (
-                    <span className="sidebar-badge" title={badgeTitle} aria-label={badgeTitle}>{badgeCount > 99 ? '99+' : badgeCount}</span>
-                  )}
-                </NavLink>
-              ))}
+              {group.links.map(navLink)}
             </div>
           ))}
         </nav>

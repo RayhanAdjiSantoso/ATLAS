@@ -67,7 +67,7 @@ export const REPORT_NAV: ReportNavItem[] = [
     label: 'Business Overview',
     short: 'Business',
     tagline: 'Revenue per channel',
-    desc: 'Revenue, transaksi, dan qty terjual per channel beserta AOV, AUR, dan basket size — ditarik dari Revenue Data di Daily Tracking.',
+    desc: 'Revenue, transaksi, dan qty terjual per channel beserta AOV, AUR, dan basket size — ditarik dari Revenue Data di Brand Tracking.',
     accent: 'var(--biz)',
     tint: 'var(--biz-100)',
     mark: 'B',

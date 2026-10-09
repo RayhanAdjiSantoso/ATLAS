@@ -73,8 +73,8 @@ const isEmpty = (t: Totals) => t.revenue == null && t.transaksi == null && t.qty
 
 function errMessage(err: unknown): string {
   const res = (err as { response?: { status?: number; data?: { error?: string; message?: string } } })?.response;
-  if (res?.status === 403) return 'Akun ini tidak punya akses ke modul Daily Tracking.';
-  return res?.data?.error || res?.data?.message || 'Gagal memuat data Daily Tracking.';
+  if (res?.status === 403) return 'Akun ini tidak punya akses ke modul Brand Tracking.';
+  return res?.data?.error || res?.data?.message || 'Gagal memuat data Brand Tracking.';
 }
 
 // Business Overview: the brand's revenue per sales channel, Periode Lalu vs
@@ -155,10 +155,10 @@ export function BusinessOverviewTab({ isActive, clientId }: BusinessOverviewTabP
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
       {!clientId ? (
-        <InlineNotice title="Pilih brand terlebih dahulu" tone="info">Business Overview disusun dari data Daily Tracking brand yang dipilih di atas.</InlineNotice>
+        <InlineNotice title="Pilih brand terlebih dahulu" tone="info">Business Overview disusun dari data Brand Tracking brand yang dipilih di atas.</InlineNotice>
       ) : (
         <>
-          <SetupBoard title="Periode" note={<>Data diambil dari <Link to="/daily-tracking">Daily Tracking › Revenue Data</Link> untuk bulan yang dipilih.</>}>
+          <SetupBoard title="Periode" note={<>Data diambil dari <Link to="/brand-tracking">Brand Tracking › Revenue Data</Link> untuk bulan yang dipilih.</>}>
             <SetupGrid>
               <SetupRow
                 label="Bulan"
@@ -170,9 +170,9 @@ export function BusinessOverviewTab({ isActive, clientId }: BusinessOverviewTabP
           </SetupBoard>
 
           {error ? (
-            <InlineNotice title="Data Daily Tracking tidak dapat dimuat">{error}</InlineNotice>
+            <InlineNotice title="Data Brand Tracking tidak dapat dimuat">{error}</InlineNotice>
           ) : !rows || !total ? (
-            <div className="empty-note"><Loader2 size={13} className="rg-spin" aria-hidden /> Memuat data Daily Tracking…</div>
+            <div className="empty-note"><Loader2 size={13} className="rg-spin" aria-hidden /> Memuat data Brand Tracking…</div>
           ) : (
             <>
               <div id="business-overview-container">
@@ -195,7 +195,7 @@ export function BusinessOverviewTab({ isActive, clientId }: BusinessOverviewTabP
                           height={320}
                           ariaLabel={`Revenue per channel, ${p1} dibanding ${p2}`}
                         />
-                        <p className="chart-foot">Revenue per channel dari Daily Tracking. Channel tanpa data revenue di kedua periode tidak ditampilkan.</p>
+                        <p className="chart-foot">Revenue per channel dari Brand Tracking. Channel tanpa data revenue di kedua periode tidak ditampilkan.</p>
                       </div>
                     </div>
                     <div className="sec-block">
@@ -230,7 +230,7 @@ export function BusinessOverviewTab({ isActive, clientId }: BusinessOverviewTabP
                     <SectionDownloadButton />
                   </div>
                   <div style={{ padding: '0 1.4rem 1.4rem' }}>
-                    {!hasData && <div className="empty-note">Belum ada data Revenue di Daily Tracking untuk {monthLabel(oldMonth)} maupun {monthLabel(curMonth)}.</div>}
+                    {!hasData && <div className="empty-note">Belum ada data Revenue di Brand Tracking untuk {monthLabel(oldMonth)} maupun {monthLabel(curMonth)}.</div>}
                     <div className="tbl-scroll">
                       <table className="kpi-table biz-overview-table">
                         <thead>
