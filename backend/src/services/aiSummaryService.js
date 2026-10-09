@@ -99,6 +99,7 @@ function historyBlock(rows) {
     const s = row.edited_summary ?? row.summary;
     const label = row.period_cur_label || row.created_at?.toISOString?.().slice(0, 10) || 'periode sebelumnya';
     const lines = [`### ${label}${row.edited_summary ? ' (sudah disunting tim)' : ''}`];
+    if (s.headline) lines.push(`Kesimpulan: ${s.headline}${s.verdict ? ` [${s.verdict}]` : ''}`);
     if (s.diagnosis) lines.push(`Diagnosis: ${s.diagnosis}`);
     if (s.objective_alignment) lines.push(`Keselarasan objective: ${s.objective_alignment}`);
     if (s.winning?.length) lines.push(`Winning: ${s.winning.join('; ')}`);
@@ -135,16 +136,19 @@ function performanceBlock(performance) {
   return lines;
 }
 
-export function buildPrompt({ brandName, platform, period, profile, history, performance }) {
+// `rules: false` leaves the instructions out (the Claude path sends them as
+// its system prompt); `extra` appends further context sections after E/F.
+export function buildPrompt({ brandName, platform, period, profile, history, performance, industry, rules = true, extra = [] }) {
   const blocks = [
-    `Brand: ${brandName}. Platform: ${PLATFORM_LABEL[platform] ?? platform}.`,
+    `Brand: ${brandName}${industry ? ` (industri: ${industry})` : ''}. Platform: ${PLATFORM_LABEL[platform] ?? platform}.`,
     section('A. Brand Context', brandContextBlock(profile)) ?? '## A. Brand Context\n(belum diisi di Brand Setting)',
     section('B. Current Direction', currentDirectionBlock(profile)) ?? '## B. Current Direction\n(belum diisi di Brand Setting)',
     section('C. Historical / Period Learning', historyBlock(history)) ?? '## C. Historical / Period Learning\n(belum ada ringkasan periode sebelumnya)',
     section('D. Scope perbandingan yang dipilih user', periodScopeBlock(period, performance)),
     section('E. Performance Data dalam scope tersebut', performanceBlock(performance)),
     performance.upcoming ? section('F. Rencana / konteks periode berikutnya', performance.upcoming) : null,
-    SYSTEM_RULES,
+    ...extra,
+    rules ? SYSTEM_RULES : null,
   ].filter(Boolean);
   return blocks.join('\n\n');
 }
@@ -255,6 +259,17 @@ export function normaliseSummary(raw) {
     action_items: list(raw.action_items),
     risks: list(raw.risks),
     data_gaps: list(raw.data_gaps),
+    // Fields of the Claude brief (aiBriefClaude.js). Kept through an edit;
+    // absent on Gemini briefs, where they stay out of the object.
+    ...(raw.headline != null ? { headline: String(raw.headline).trim() } : {}),
+    ...(raw.verdict != null ? { verdict: ['on_track', 'watch', 'off_track'].includes(raw.verdict) ? raw.verdict : null } : {}),
+    ...(raw.verdict_reason != null ? { verdict_reason: String(raw.verdict_reason).trim() } : {}),
+    ...(raw.next_review != null ? { next_review: String(raw.next_review).trim() } : {}),
+    ...(Array.isArray(raw.key_metrics) ? {
+      key_metrics: raw.key_metrics
+        .map((k) => ({ metric: String(k?.metric ?? '').trim(), movement: String(k?.movement ?? '').trim(), reading: String(k?.reading ?? '').trim(), tone: ['positive', 'negative', 'neutral'].includes(k?.tone) ? k.tone : 'neutral' }))
+        .filter((k) => k.metric),
+    } : {}),
   };
 }
 
@@ -331,7 +346,7 @@ export async function listForBrand(brandId, platform) {
   return result.rows;
 }
 
-export async function saveSummary({ brandId, platform, period, payloadHash, inputPayload, summary, userId }) {
+export async function saveSummary({ brandId, platform, period, payloadHash, inputPayload, summary, userId, model = MODEL }) {
   const result = await pool.query(
     `INSERT INTO ads_reports.ai_summaries
        (brand_id, platform, period_old_label, period_cur_label,
@@ -345,7 +360,7 @@ export async function saveSummary({ brandId, platform, period, payloadHash, inpu
     [
       brandId, platform, period?.oldLabel ?? null, period?.curLabel ?? null,
       period?.oldStart ?? null, period?.oldEnd ?? null, period?.curStart ?? null, period?.curEnd ?? null,
-      payloadHash, JSON.stringify(inputPayload), JSON.stringify(summary), MODEL, userId ?? null,
+      payloadHash, JSON.stringify(inputPayload), JSON.stringify(summary), model, userId ?? null,
     ],
   );
   const saved = await pool.query(`SELECT ${SUMMARY_COLUMNS} ${SUMMARY_FROM} WHERE s.id = $1`, [result.rows[0].id]);

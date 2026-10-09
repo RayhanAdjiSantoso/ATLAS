@@ -12,6 +12,7 @@
   },
   "comment": "dependencies below are for the Vercel serverless function (api/index.mjs -> backend/src). Keep in sync with backend/package.json.",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",

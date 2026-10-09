@@ -1,0 +1,255 @@
+/* ── AI Consultant Brief ────────────────────────────────────────────────
+   Kartu terakhir di tiap laporan platform. Urutannya mengikuti deliverable
+   consultant: verdict + kesimpulan di atas, diagnosis di samping bukti,
+   insight 2×2, lalu keputusan (arah + action plan), dan penutup (data gaps,
+   review berikutnya). Warna aksen mengikuti platform lewat --acc. */
+
+.mil-ui .cb {
+  --cb-good: var(--good, #16a34a);
+  --cb-bad: var(--bad, #dc2626);
+  --cb-warn: var(--warn, #d97706);
+  --cb-radius: 14px;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Header */
+.mil-ui .cb-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 1.1rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--acc) 9%, var(--surface)), var(--surface) 60%);
+}
+.mil-ui .cb-title { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.mil-ui .cb-title-ico {
+  display: grid; place-items: center; flex: none;
+  width: 38px; height: 38px; border-radius: 11px;
+  background: var(--acc); color: #fff;
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--acc) 70%, transparent);
+}
+.mil-ui .cb-title h3 { margin: 0; font-size: 1.02rem; font-weight: 800; letter-spacing: -.01em; color: var(--text); }
+.mil-ui .cb-title p { margin: .1rem 0 0; font-size: .78rem; color: var(--muted); }
+.mil-ui .cb-engine {
+  margin-left: .25rem; padding: .22rem .6rem; border-radius: 999px;
+  font-size: .72rem; font-weight: 700; white-space: nowrap;
+  border: 1px solid var(--border); color: var(--muted); background: var(--surface);
+}
+.mil-ui .cb-engine.is-claude { color: #b4532a; border-color: color-mix(in srgb, #d97757 35%, var(--border)); background: color-mix(in srgb, #d97757 9%, var(--surface)); }
+.mil-ui .cb-tools { display: flex; align-items: center; gap: .45rem; flex: none; }
+.mil-ui .cb-btn {
+  display: inline-flex; align-items: center; gap: .38rem;
+  height: 34px; padding: 0 .8rem; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-size: .8rem; font-weight: 650; cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 140ms ease-out;
+}
+.mil-ui .cb-btn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--acc) 40%, var(--border)); background: color-mix(in srgb, var(--acc) 5%, var(--surface)); }
+.mil-ui .cb-btn:active:not(:disabled) { transform: scale(.97); }
+.mil-ui .cb-btn:disabled { opacity: .55; cursor: not-allowed; }
+.mil-ui .cb-btn.is-primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+.mil-ui .cb-btn.is-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--acc) 88%, #000); }
+
+/* Context strip */
+.mil-ui .cb-context {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .4rem;
+  padding: .65rem 1.4rem; border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--acc) 3%, var(--surface));
+}
+.mil-ui .cb-context::before { content: 'Konteks dibaca'; margin-right: .3rem; font-size: .7rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted2); }
+.mil-ui .cb-context span {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .2rem .55rem; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--acc) 16%, var(--border));
+  background: var(--surface); color: var(--muted); font-size: .72rem; font-weight: 650;
+}
+.mil-ui .cb-context span svg { color: var(--acc); }
+
+/* Empty */
+.mil-ui .cb-empty {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem 2rem;
+  padding: 1.6rem 1.4rem;
+}
+.mil-ui .cb-empty h4 { margin: 0 0 .35rem; font-size: 1rem; font-weight: 800; color: var(--text); }
+.mil-ui .cb-empty p { margin: 0; max-width: 68ch; font-size: .87rem; line-height: 1.65; color: var(--muted); }
+.mil-ui .cb-empty ul { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin: .85rem 0 0; padding: 0; list-style: none; }
+.mil-ui .cb-empty li { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; font-weight: 650; color: var(--text); }
+.mil-ui .cb-empty li svg { color: var(--acc); }
+.mil-ui .cb-warn { grid-column: 1 / -1; margin: 0; font-size: .82rem; font-weight: 650; color: var(--cb-warn); }
+.mil-ui .cb-cta {
+  display: inline-flex; align-items: center; gap: .5rem;
+  height: 44px; padding: 0 1.2rem; border: 0; border-radius: 11px;
+  background: var(--acc); color: #fff; font-size: .9rem; font-weight: 750; cursor: pointer;
+  box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--acc) 80%, transparent);
+  transition: transform 140ms ease-out, background-color 150ms ease;
+}
+.mil-ui .cb-cta:hover:not(:disabled) { background: color-mix(in srgb, var(--acc) 88%, #000); }
+.mil-ui .cb-cta:active:not(:disabled) { transform: scale(.97); }
+.mil-ui .cb-cta:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+/* Loading */
+.mil-ui .cb-loading { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .6rem 1.4rem; padding: 1.6rem 1.4rem; }
+.mil-ui .cb-loading-orb {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px;
+  background: color-mix(in srgb, var(--acc) 12%, var(--surface)); color: var(--acc);
+  animation: cb-breathe 1.8s ease-in-out infinite;
+}
+.mil-ui .cb-loading ol { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
+.mil-ui .cb-loading li { display: flex; align-items: center; gap: .55rem; font-size: .85rem; color: var(--muted2); transition: color 200ms ease; }
+.mil-ui .cb-loading li > span { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--muted2) 50%, transparent); }
+.mil-ui .cb-loading li.is-done { color: var(--muted); }
+.mil-ui .cb-loading li.is-done svg { color: var(--cb-good); }
+.mil-ui .cb-loading li.is-now { color: var(--text); font-weight: 700; }
+.mil-ui .cb-loading li.is-now svg { color: var(--acc); }
+.mil-ui .cb-loading small { grid-column: 2; font-size: .76rem; color: var(--muted2); }
+.mil-ui .cb-spin { animation: cb-spin .9s linear infinite; }
+@keyframes cb-spin { to { transform: rotate(360deg); } }
+@keyframes cb-breathe { 50% { transform: scale(.94); opacity: .75; } }
+
+/* Error */
+.mil-ui .cb-error {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .9rem;
+  margin: 1.2rem 1.4rem; padding: .95rem 1.1rem; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--cb-bad) 30%, transparent);
+  background: color-mix(in srgb, var(--cb-bad) 6%, var(--surface));
+}
+.mil-ui .cb-error > svg { color: var(--cb-bad); }
+.mil-ui .cb-error > div { display: grid; gap: .15rem; }
+.mil-ui .cb-error strong { font-size: .88rem; color: var(--cb-bad); }
+.mil-ui .cb-error span { font-size: .83rem; line-height: 1.55; color: var(--text); }
+.mil-ui .cb-error small { font-size: .75rem; color: var(--muted); }
+
+/* Body */
+.mil-ui .cb-body { display: grid; gap: 1rem; padding: 1.3rem 1.4rem 1.4rem; transition: opacity 200ms ease; }
+.mil-ui .cb-body.is-refreshing { opacity: .5; pointer-events: none; }
+.mil-ui .cb-card { padding: 1.05rem 1.15rem; border: 1px solid var(--border); border-radius: var(--cb-radius); background: var(--surface); }
+.mil-ui .cb-eyebrow {
+  display: flex; align-items: center; gap: .38rem; margin-bottom: .6rem;
+  font-size: .71rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--acc);
+}
+.mil-ui .cb-eyebrow small { margin-left: auto; font-size: .72rem; font-weight: 550; letter-spacing: 0; text-transform: none; color: var(--muted2); }
+.mil-ui .cb-none { margin: 0; font-size: .82rem; color: var(--muted2); font-style: italic; }
+
+/* Verdict */
+.mil-ui .cb-verdict {
+  --v: var(--acc);
+  position: relative; padding: 1.15rem 1.3rem 1.15rem 1.5rem; border-radius: var(--cb-radius);
+  border: 1px solid color-mix(in srgb, var(--v) 28%, var(--border));
+  background: linear-gradient(110deg, color-mix(in srgb, var(--v) 10%, var(--surface)), var(--surface) 70%);
+  overflow: hidden;
+}
+.mil-ui .cb-verdict::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--v); }
+.mil-ui .cb-verdict.is-on_track { --v: var(--cb-good); }
+.mil-ui .cb-verdict.is-watch { --v: var(--cb-warn); }
+.mil-ui .cb-verdict.is-off_track { --v: var(--cb-bad); }
+.mil-ui .cb-verdict-pill {
+  display: inline-flex; align-items: center; gap: .35rem; margin-bottom: .55rem;
+  padding: .24rem .65rem; border-radius: 999px; background: var(--v); color: #fff;
+  font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+}
+.mil-ui .cb-verdict h4 { margin: 0; max-width: 80ch; font-size: 1.14rem; line-height: 1.45; font-weight: 800; letter-spacing: -.01em; color: var(--text); text-wrap: pretty; }
+.mil-ui .cb-verdict p { margin: .45rem 0 0; max-width: 90ch; font-size: .86rem; line-height: 1.6; color: var(--muted); }
+
+/* Lead: diagnosis + evidence */
+.mil-ui .cb-lead { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(290px, 1fr); gap: 1rem; align-items: start; }
+.mil-ui .cb-diagnosis > .cb-none { margin: 0; }
+/* Prose: a lead sentence, then one point per sentence, at a readable measure. */
+.mil-ui .cb-prose { display: grid; gap: .6rem; max-width: 78ch; }
+.mil-ui .cb-prose-lead { margin: 0; max-width: 78ch; font-size: .95rem; line-height: 1.6; font-weight: 600; color: var(--text); text-wrap: pretty; }
+.mil-ui .cb-points { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
+.mil-ui .cb-points li { position: relative; padding-left: 1.05rem; font-size: .87rem; line-height: 1.6; color: var(--text); text-wrap: pretty; }
+.mil-ui .cb-points li::before { content: ''; position: absolute; left: .1rem; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--acc); opacity: .7; }
+.mil-ui .cb-align .cb-points li, .mil-ui .cb-align .cb-prose-lead { color: var(--muted); font-weight: 500; font-size: .85rem; }
+.mil-ui .cb-num { font-weight: 750; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mil-ui .cb-verdict .cb-eyebrow { margin-bottom: .4rem; }
+.mil-ui .cb-align { margin-top: 1rem; padding: .85rem 1rem; border-radius: 11px; background: color-mix(in srgb, var(--acc) 5%, var(--surface)); border: 1px dashed color-mix(in srgb, var(--acc) 25%, var(--border)); }
+.mil-ui .cb-align .cb-eyebrow { margin-bottom: .35rem; color: var(--text); }
+.mil-ui .cb-align p { margin: 0; font-size: .85rem; line-height: 1.65; color: var(--muted); }
+.mil-ui .cb-evidence { display: grid; gap: .55rem; background: color-mix(in srgb, var(--muted2) 4%, var(--surface)); }
+.mil-ui .cb-evidence .cb-eyebrow { margin-bottom: .1rem; }
+.mil-ui .cb-metric { --t: var(--muted2); padding: .6rem .75rem; border-radius: 10px; border: 1px solid var(--border); border-left: 3px solid var(--t); background: var(--surface); }
+.mil-ui .cb-metric.is-positive { --t: var(--cb-good); }
+.mil-ui .cb-metric.is-negative { --t: var(--cb-bad); }
+.mil-ui .cb-metric-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.mil-ui .cb-metric-top strong { font-size: .8rem; font-weight: 750; color: var(--text); }
+.mil-ui .cb-metric-top svg { flex: none; color: var(--t); }
+.mil-ui .cb-metric-move { display: block; margin-top: .15rem; font-size: .82rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--t); }
+.mil-ui .cb-metric.is-neutral .cb-metric-move { color: var(--text); }
+.mil-ui .cb-metric p { margin: .3rem 0 0; font-size: .78rem; line-height: 1.5; color: var(--muted); }
+
+/* Insights 2×2 */
+.mil-ui .cb-insights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.mil-ui .cb-insight { --i: var(--acc); }
+.mil-ui .cb-insight.is-good { --i: var(--cb-good); }
+.mil-ui .cb-insight.is-warn { --i: var(--cb-warn); }
+.mil-ui .cb-insight.is-risk { --i: var(--cb-bad); }
+.mil-ui .cb-insight h5 { display: flex; align-items: center; gap: .6rem; margin: 0 0 .7rem; font-size: .88rem; font-weight: 800; color: var(--text); }
+.mil-ui .cb-insight h5 > span:last-child { display: grid; gap: .05rem; }
+.mil-ui .cb-insight h5 small { font-size: .72rem; font-weight: 550; color: var(--muted2); }
+.mil-ui .cb-insight-ico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: color-mix(in srgb, var(--i) 12%, var(--surface)); color: var(--i); }
+.mil-ui .cb-insight ul { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.mil-ui .cb-insight li { position: relative; padding-left: 1rem; font-size: .85rem; line-height: 1.6; color: var(--text); text-wrap: pretty; }
+.mil-ui .cb-insight li::before { content: ''; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; border-radius: 2px; background: var(--i); }
+
+/* Decide: direction + action plan */
+.mil-ui .cb-decide { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.4fr); gap: 1rem; align-items: start; }
+.mil-ui .cb-direction ol { display: grid; gap: .7rem; margin: 0; padding: 0; list-style: none; }
+.mil-ui .cb-direction li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .7rem; align-items: start; }
+.mil-ui .cb-direction li > b { font-size: .8rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--acc); padding-top: .1rem; }
+.mil-ui .cb-direction li > span { font-size: .86rem; line-height: 1.6; color: var(--text); }
+.mil-ui .cb-action-list { display: grid; }
+.mil-ui .cb-action { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .85rem; padding: .8rem 0; border-top: 1px solid var(--border); }
+.mil-ui .cb-action:first-child { padding-top: .2rem; border-top: 0; }
+.mil-ui .cb-action:last-child { padding-bottom: 0; }
+.mil-ui .cb-prio { display: grid; place-items: center; width: 34px; height: 26px; border-radius: 7px; font-size: .74rem; font-weight: 800; color: #fff; background: var(--muted2); }
+.mil-ui .cb-prio.is-p1 { background: var(--cb-bad); }
+.mil-ui .cb-prio.is-p2 { background: var(--cb-warn); }
+.mil-ui .cb-prio.is-p3 { background: color-mix(in srgb, var(--muted2) 85%, var(--text)); }
+.mil-ui .cb-action-head { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem 1rem; flex-wrap: wrap; }
+.mil-ui .cb-action-head strong { font-size: .88rem; line-height: 1.5; font-weight: 750; color: var(--text); }
+.mil-ui .cb-action-head em { display: inline-flex; align-items: center; gap: .3rem; flex: none; padding: .14rem .5rem; border-radius: 999px; background: color-mix(in srgb, var(--acc) 8%, var(--surface)); color: var(--acc); font-size: .72rem; font-weight: 700; font-style: normal; white-space: nowrap; }
+.mil-ui .cb-action dl { display: grid; gap: .25rem; margin: .4rem 0 0; }
+.mil-ui .cb-action dl > div { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: .5rem; }
+.mil-ui .cb-action dt { font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted2); padding-top: .12rem; }
+.mil-ui .cb-action dd { margin: 0; font-size: .82rem; line-height: 1.55; color: var(--muted); }
+.mil-ui .cb-action-main > p { margin: .3rem 0 0; font-size: .82rem; color: var(--muted); }
+
+/* Close: data gaps + next review */
+.mil-ui .cb-close { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+.mil-ui .cb-gaps, .mil-ui .cb-next { display: flex; gap: .7rem; padding: .85rem 1rem; border-radius: 12px; }
+.mil-ui .cb-gaps { background: color-mix(in srgb, var(--muted2) 7%, var(--surface)); border: 1px solid var(--border); }
+.mil-ui .cb-gaps > svg { flex: none; margin-top: .1rem; color: var(--muted); }
+.mil-ui .cb-next { background: color-mix(in srgb, var(--acc) 7%, var(--surface)); border: 1px solid color-mix(in srgb, var(--acc) 22%, var(--border)); }
+.mil-ui .cb-next > svg { flex: none; margin-top: .1rem; color: var(--acc); }
+.mil-ui .cb-close strong { display: block; margin-bottom: .25rem; font-size: .8rem; font-weight: 800; color: var(--text); }
+.mil-ui .cb-close ul { display: grid; gap: .2rem; margin: 0; padding-left: 1rem; }
+.mil-ui .cb-close li, .mil-ui .cb-close p { margin: 0; font-size: .8rem; line-height: 1.55; color: var(--muted); }
+
+/* Edit */
+.mil-ui .cb-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1rem; padding: 1.3rem 1.4rem 1.4rem; }
+.mil-ui .cb-edit label { display: grid; gap: .35rem; }
+.mil-ui .cb-edit label:nth-child(-n+4) { grid-column: 1 / -1; }
+.mil-ui .cb-edit label > span { font-size: .78rem; font-weight: 750; color: var(--text); }
+.mil-ui .cb-edit label > span small { margin-left: .35rem; font-weight: 500; color: var(--muted2); }
+.mil-ui .cb-edit input, .mil-ui .cb-edit textarea {
+  width: 100%; padding: .6rem .75rem; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font: inherit; font-size: .85rem; line-height: 1.55; resize: vertical;
+}
+.mil-ui .cb-edit input:focus, .mil-ui .cb-edit textarea:focus { outline: 2px solid color-mix(in srgb, var(--acc) 35%, transparent); outline-offset: 1px; border-color: var(--acc); }
+
+/* Footer */
+.mil-ui .cb-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem 1rem;
+  padding: .7rem 1.4rem; border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted2) 4%, var(--surface));
+  font-size: .74rem; color: var(--muted2);
+}
+.mil-ui .cb-disclaimer { font-style: italic; }
+
+@media (max-width: 1100px) {
+  .mil-ui .cb-lead, .mil-ui .cb-decide { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mil-ui .cb-spin, .mil-ui .cb-loading-orb { animation: none; }
+}

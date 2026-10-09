@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as ai from '../../services/aiSummaryService.js';
 import * as brandService from '../../services/brandService.js';
 import * as library from '../../services/brandLibraryService.js';
+import * as claude from '../../services/aiBriefClaude.js';
 
 // AI Summary — satu ringkasan terstruktur per brand + platform + periode.
 //
@@ -50,12 +51,19 @@ aiSummaryRouter.post('/', async (req, res) => {
   // angka periode ini plus konteks brand. Konteks brand ikut karena
   // mengubah objective di Pengaturan Brand memang harus menghasilkan
   // ringkasan yang berbeda walau angkanya sama.
+  // Claude when its key is set (a richer brief with more context), Gemini
+  // otherwise. The engine and the extra context are part of the cache key:
+  // a new target, meeting or Brand Tracking figure is a different brief.
+  const useClaude = claude.hasClaude();
+  const extra = useClaude ? await claude.gatherBrandContext(brandId, period) : null;
   const cacheInput = {
-    prompt_version: ai.PROMPT_VERSION,
+    prompt_version: useClaude ? `claude-brief-v2:${claude.CLAUDE_MODEL}` : ai.PROMPT_VERSION,
     platform,
     period,
     performance,
+    extra,
     profile: profile && {
+      industry: profile.industry,
       brand_products_customer: profile.brand_products_customer,
       positioning_driver: profile.positioning_driver,
       key_products_channels: profile.key_products_channels,
@@ -81,14 +89,20 @@ aiSummaryRouter.post('/', async (req, res) => {
     profile,
     history,
     performance,
+    industry: profile?.industry,
+    rules: !useClaude,
+    extra: useClaude ? claude.contextSections(extra) : [],
   });
 
   try {
-    const summary = await ai.callGemini(prompt);
+    const { summary, model } = useClaude
+      ? await claude.generateBrief(prompt)
+      : { summary: await ai.callGemini(prompt), model: ai.MODEL };
     const saved = await ai.saveSummary({
       brandId, platform, period, payloadHash,
       inputPayload: { prompt, cacheInput },
       summary,
+      model,
       userId: req.user?.userId,
     });
     res.json({ summary: saved, cached: false });
@@ -97,11 +111,16 @@ aiSummaryRouter.post('/', async (req, res) => {
     // pesannya spesifik, dan frontend merender ini sebagai satu kartu error
     // di bawah laporan yang tetap utuh.
     if (err instanceof ai.AiSummaryError) {
-      console.warn('[ai-summary] gagal', { brandId, platform, reason: err.message });
+      console.warn('[ai-summary] gagal', { brandId, platform, engine: useClaude ? 'claude' : 'gemini', reason: err.message });
       return fail(res, err.statusCode, err.message);
     }
     throw err;
   }
+});
+
+// GET /engine  — which engine the next brief will use (shown on the page).
+aiSummaryRouter.get('/engine', (req, res) => {
+  res.json(claude.hasClaude() ? { engine: 'claude', model: claude.CLAUDE_MODEL } : { engine: 'gemini', model: ai.MODEL });
 });
 
 // PUT /:id  — simpan hasil suntingan tim (draft AI tetap tersimpan apa adanya).

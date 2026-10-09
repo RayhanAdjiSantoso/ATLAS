@@ -164,7 +164,20 @@ export async function replaceProductMaster(brandId: number, entries: ProductMast
 // terjadi di backend (key-nya tidak pernah menyeberang ke browser); di sini
 // hanya endpoint ATLAS sendiri.
 
+export interface AiKeyMetric {
+  metric: string;
+  movement: string;
+  reading: string;
+  tone: 'positive' | 'negative' | 'neutral';
+}
+
 export interface AiSummaryContent {
+  /** Claude brief only (absent on older Gemini briefs). */
+  headline?: string;
+  verdict?: 'on_track' | 'watch' | 'off_track' | null;
+  verdict_reason?: string;
+  key_metrics?: AiKeyMetric[];
+  next_review?: string;
   diagnosis: string;
   objective_alignment?: string;
   winning: string[];
@@ -217,6 +230,15 @@ export async function generateAiSummary(input: {
     return res.data;
   } catch (err) {
     unwrap(err);
+  }
+}
+
+export async function getAiEngine(): Promise<{ engine: 'claude' | 'gemini'; model: string } | null> {
+  try {
+    const res = await api.get('/report-generator/ai-summary/engine');
+    return res.data;
+  } catch {
+    return null;
   }
 }
 
