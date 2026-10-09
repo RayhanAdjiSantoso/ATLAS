@@ -144,3 +144,24 @@ export const ingestFromAppsScript = asyncHandler(async (req, res) => {
   });
   res.json({ ok: true, ...result });
 });
+
+// GET /api/daily-tracking/targets?brandId=&month=YYYY-MM
+export const getTarget = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await service.getTarget(Number(req.query.brandId), req.query.month));
+});
+
+// PUT /api/daily-tracking/targets  { brandId, month, targetSales, targetSpend, allocation, notes }
+export const saveTarget = asyncHandler(async (req, res) => {
+  validate(req);
+  const target = await service.saveTarget({
+    brandId: Number(req.body.brandId),
+    month: req.body.month,
+    targetSales: req.body.targetSales,
+    targetSpend: req.body.targetSpend,
+    allocation: req.body.allocation,
+    notes: req.body.notes,
+    userId: req.user.userId,
+  });
+  res.json({ target });
+});

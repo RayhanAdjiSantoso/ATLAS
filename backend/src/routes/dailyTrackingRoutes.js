@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate, authorize, requireModule } from '../middlewares/auth.js';
-import { requireBrandAccess } from '../middlewares/brandAccess.js';
+import { blockWriteIfViewOnly, requireBrandAccess } from '../middlewares/brandAccess.js';
 import { AppError } from '../utils/errors.js';
 import { verifyIngestKey } from '../middlewares/dailyTrackingIngestAuth.js';
 import { uploadDataFile } from '../middlewares/upload.js';
@@ -15,6 +15,8 @@ import {
   moveChannelBodyValidation,
   metaSyncBodyValidation,
   ingestBodyValidation,
+  targetQueryValidation,
+  targetBodyValidation,
 } from '../validators/dailyTrackingValidators.js';
 
 // Daily Tracking — unlike every other brand-scoped router, client accounts
@@ -35,6 +37,7 @@ function clientRevenueOnly(req, res, next) {
   const touchesSpend =
     req.method === 'DELETE'
     || req.path.startsWith('/import')
+    || req.path === '/targets'
     || req.path === '/channels/move'
     || (req.path === '/channels' && req.body?.kind !== 'sales')
     || (req.path === '/entries' && Array.isArray(req.body?.spend) && req.body.spend.length > 0);
@@ -88,6 +91,18 @@ router.post(
   '/import',
   authenticate, dailyTracking, clientRevenueOnly, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),
   importFileBodyValidation, ctrl.importFile,
+);
+// Targets & budget: everyone with the module reads them (a client sees its
+// own achievement); only the team sets them — they are spend decisions.
+router.get(
+  '/targets',
+  authenticate, dailyTracking, requireBrandAccess((req) => req.query.brandId),
+  targetQueryValidation, ctrl.getTarget,
+);
+router.put(
+  '/targets',
+  authenticate, dailyTracking, clientRevenueOnly, blockWriteIfViewOnly, requireBrandAccess((req) => req.body.brandId),
+  targetBodyValidation, ctrl.saveTarget,
 );
 router.post(
   '/meta-sync',

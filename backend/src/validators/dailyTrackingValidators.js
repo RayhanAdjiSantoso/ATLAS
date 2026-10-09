@@ -73,3 +73,17 @@ export const ingestBodyValidation = [
   body('entries.*.channelKey').isString().notEmpty(),
   body('entries.*.amount').isFloat({ min: 0 }).withMessage('amount harus angka >= 0'),
 ];
+
+export const targetQueryValidation = [
+  query('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+  query('month').matches(MONTH_RE).withMessage('month harus format YYYY-MM'),
+];
+
+export const targetBodyValidation = [
+  body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+  body('month').matches(MONTH_RE).withMessage('month harus format YYYY-MM'),
+  body('targetSales').optional({ values: 'null' }).isFloat({ min: 0 }).withMessage('Target sales harus angka ≥ 0'),
+  body('targetSpend').optional({ values: 'null' }).isFloat({ min: 0 }).withMessage('Budget spend harus angka ≥ 0'),
+  body('allocation').optional().isObject().withMessage('allocation harus object'),
+  body('notes').optional({ values: 'null' }).isString().isLength({ max: 1000 }),
+];

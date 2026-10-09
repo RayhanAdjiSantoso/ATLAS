@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { BadgeDollarSign, CheckCircle2, Eye, Loader2, PencilLine, PieChart, Receipt, TriangleAlert } from 'lucide-react';
+import { BadgeDollarSign, CheckCircle2, Eye, Loader2, PencilLine, PieChart, Receipt, Target, TriangleAlert } from 'lucide-react';
 import api from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
@@ -11,6 +11,7 @@ import TrackingPulse from '../components/dailyTracking/TrackingPulse.jsx';
 import CoverageMap from '../components/dailyTracking/CoverageMap.jsx';
 import { ChannelMix, PaceChart, WeekdayChart, defaultMetric } from '../components/dailyTracking/TrackingInsights.jsx';
 import TrackingCompare from '../components/dailyTracking/TrackingCompare.jsx';
+import TargetBudget from '../components/dailyTracking/TargetBudget.jsx';
 import ChannelRail from '../components/dailyTracking/ChannelRail.jsx';
 import ChannelInsight from '../components/dailyTracking/ChannelInsight.jsx';
 import DailyEntryTable from '../components/dailyTracking/DailyEntryTable.jsx';
@@ -43,6 +44,7 @@ function currentMonth() {
 
 const VIEWS = [
   { id: 'overview', label: 'Performance Overview', hint: 'Grafik & pembacaan bulan ini', Icon: PieChart },
+  { id: 'target', label: 'Target & Budget', hint: 'Target, alokasi & pencapaian', Icon: Target },
   { id: 'input', label: 'Input Brand Tracking', hint: 'Isi revenue & spend harian', Icon: PencilLine },
 ];
 
@@ -289,7 +291,11 @@ export default function DailyTrackingPage() {
         })}
       </nav>
 
-      {view === 'overview' ? (
+      {view === 'target' ? (
+        <div className="bt-view" key="target">
+          <TargetBudget brandId={brandId} month={month} grid={grid} channels={channels} canEdit={canEditSpend} />
+        </div>
+      ) : view === 'overview' ? (
         <div className="bt-view" key="overview">
           <TrackingKpis grid={grid} channels={channels} loading={loading} prev={prevSame} compareLabel={compareLabel} />
           <p className="bt-compare-note">Perubahan dibanding <b>{compareLabel}</b>{running ? ' — rentang tanggal yang sama, karena bulan ini masih berjalan.' : '.'}</p>

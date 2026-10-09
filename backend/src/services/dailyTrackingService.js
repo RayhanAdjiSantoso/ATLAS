@@ -556,3 +556,51 @@ export async function ingestFromAppsScript({ brandId, entryDate, entries }) {
   if (!Array.isArray(entries) || !entries.length) throw new AppError('entries wajib diisi', 400);
   return applyMetaSpend({ brandId, entryDate, entries, userId: null });
 }
+
+// ---------------------------------------------------------------------
+// Targets & budget (Brand Tracking › Target & Budget, migration 046)
+// ---------------------------------------------------------------------
+const numOrNull = (v) => (v == null || v === '' ? null : Number(v));
+const shapeTarget = (row) => (row ? {
+  month: row.month.slice(0, 7),
+  targetSales: numOrNull(row.target_sales),
+  targetSpend: numOrNull(row.target_spend),
+  allocation: row.allocation ?? {},
+  notes: row.notes ?? '',
+  updatedAt: row.updated_at ?? null,
+  updatedByName: row.updated_by_name ?? null,
+} : null);
+
+// The month's target, plus the latest earlier month's for "Salin dari bulan
+// sebelumnya" when this one is still empty.
+export async function getTarget(brandId, month) {
+  await assertBrand(brandId);
+  const monthStart = `${month}-01`;
+  const target = await repo.getTarget(brandId, monthStart);
+  const previous = target ? null : await repo.getPreviousTarget(brandId, monthStart);
+  return { target: shapeTarget(target), previous: shapeTarget(previous) };
+}
+
+// Allocation keys must be this brand's spend channels; percentages 0–100.
+// A split that does not add up to 100% is allowed (a budget may be partly
+// unassigned while it is being worked out) — the page says so.
+export async function saveTarget({ brandId, month, targetSales, targetSpend, allocation, notes, userId }) {
+  await assertBrand(brandId);
+  const { spend } = await listChannels(brandId);
+  const known = new Set(spend.map((c) => c.key));
+  const clean = {};
+  for (const [key, raw] of Object.entries(allocation ?? {})) {
+    if (!known.has(key)) throw new AppError(`Channel spend tidak dikenal: ${key}`, 400);
+    const pct = Number(raw);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) throw new AppError(`Persentase ${key} harus 0–100`, 400);
+    if (pct > 0) clean[key] = Math.round(pct * 100) / 100;
+  }
+  const total = Object.values(clean).reduce((a, b) => a + b, 0);
+  if (total > 100.01) throw new AppError(`Total alokasi ${total.toLocaleString('id-ID')}% melebihi 100%`, 400);
+  const row = await repo.upsertTarget({
+    brandId, monthStart: `${month}-01`, userId,
+    targetSales: numOrNull(targetSales), targetSpend: numOrNull(targetSpend),
+    allocation: clean, notes: notes?.trim() || null,
+  });
+  return shapeTarget(row);
+}

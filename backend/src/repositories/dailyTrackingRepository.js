@@ -256,3 +256,50 @@ export async function forgetIgnoredColumn(brandId, kind, columnLabel, db = pool)
     [brandId, kind, columnLabel],
   );
 }
+
+// ---------------------------------------------------------------------
+// brand_tracking_targets — a month's sales target, spend budget and its
+// split across spend channels (migration 046)
+// ---------------------------------------------------------------------
+export async function getTarget(brandId, monthStart, db = pool) {
+  const { rows } = await db.query(
+    `SELECT t.month::text AS month, t.target_sales, t.target_spend, t.allocation, t.notes,
+            t.updated_at, u.full_name AS updated_by_name
+     FROM brand_tracking_targets t
+     LEFT JOIN users u ON u.user_id = t.updated_by
+     WHERE t.brand_id = $1 AND t.month = $2`,
+    [brandId, monthStart],
+  );
+  return rows[0] ?? null;
+}
+
+// The most recent month before `monthStart` that has a target — the source
+// for "Salin dari bulan sebelumnya".
+export async function getPreviousTarget(brandId, monthStart, db = pool) {
+  const { rows } = await db.query(
+    `SELECT month::text AS month, target_sales, target_spend, allocation, notes
+     FROM brand_tracking_targets
+     WHERE brand_id = $1 AND month < $2
+     ORDER BY month DESC LIMIT 1`,
+    [brandId, monthStart],
+  );
+  return rows[0] ?? null;
+}
+
+export async function upsertTarget(v, db = pool) {
+  const { rows } = await db.query(
+    `INSERT INTO brand_tracking_targets
+       (brand_id, month, target_sales, target_spend, allocation, notes, created_by, updated_by)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $7)
+     ON CONFLICT (brand_id, month) DO UPDATE SET
+       target_sales = EXCLUDED.target_sales,
+       target_spend = EXCLUDED.target_spend,
+       allocation   = EXCLUDED.allocation,
+       notes        = EXCLUDED.notes,
+       updated_by   = EXCLUDED.updated_by,
+       updated_at   = now()
+     RETURNING month::text AS month, target_sales, target_spend, allocation, notes, updated_at`,
+    [v.brandId, v.monthStart, v.targetSales, v.targetSpend, JSON.stringify(v.allocation ?? {}), v.notes ?? null, v.userId],
+  );
+  return rows[0];
+}
