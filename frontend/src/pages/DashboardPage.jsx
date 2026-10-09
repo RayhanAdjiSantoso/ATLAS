@@ -22,6 +22,7 @@ import {
 } from '../components/dashboard/domains.js';
 import { Delta, Figure, InfoTip, Spark } from '../components/dashboard/figures.jsx';
 import ExecutiveSummary from '../components/dashboard/ExecutiveSummary.jsx';
+import MetaOverview from '../components/dashboard/MetaOverview.jsx';
 import SoftShell from '../components/dashboard/SoftShell.jsx';
 import CrossChannelPanel from '../components/dashboard/CrossChannelPanel.jsx';
 import '../components/dashboard/console.css';
@@ -684,6 +685,12 @@ export default function DashboardPage() {
                 setProductPerformanceLevel={setProductLevel}
                 onNavigateTab={setActiveKey}
               />
+            </div>
+          ) : channel.id === 'meta' ? (
+            // Meta has no fact tables, but its three datasets (Boost Post,
+            // Non Boost Post, CPAS) are read straight from the library files.
+            <div className="con-focus-body" key="meta-overview">
+              <MetaOverview filters={filters} />
             </div>
           ) : (
             // An empty state that says what has to happen, not just that

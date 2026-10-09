@@ -109,7 +109,11 @@ export const CHANNELS = [
     accent: '#1e3eb8',
     Icon: Megaphone,
     ready: false,
-    note: 'Data Meta belum diimpor ke tabel fakta — file-nya masih berupa arsip di Data Collection Hub.',
+    readable: true,
+    // Not `ready` (no fact tables, so no seven domains), but the Meta tab
+    // reads the Boost Post / Non Boost Post / CPAS files directly
+    // (MetaOverview).
+    note: 'Spend, ROAS, dan hasil Boost Post, Non Boost Post, serta CPAS — dibaca dari file Meta di Data Collection Hub.',
   },
   {
     id: 'shopee',
