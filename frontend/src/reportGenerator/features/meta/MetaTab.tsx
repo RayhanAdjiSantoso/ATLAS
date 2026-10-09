@@ -178,6 +178,11 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const metaHeaders = useMemo(() => (metaRows?.length ? Object.keys(metaRows[0]) : []), [metaRows]);
   const cpasRows = useMemo(() => (cpasSides.old || cpasSides.cur ? alignRowKeys([...(cpasSides.old?.rows ?? []), ...(cpasSides.cur?.rows ?? [])]) : null), [cpasSides]);
   const cpasHeaders = useMemo(() => (cpasRows?.length ? Object.keys(cpasRows[0]) : []), [cpasRows]);
+  // Meta Ads and CPAS are each optional — a brand that only runs CPAS gets a
+  // CPAS-only report. The periods (and the day pickers) follow Meta Ads when
+  // it is loaded, else CPAS.
+  const periodSides = metaSides.old || metaSides.cur ? metaSides : cpasSides;
+  const periodRows = metaRows ?? cpasRows;
 
   // B2B / Retail — not in the export; read from the brand's Kategori Industri
   // in Brand Setting and only editable there. Objective — Meta's ODAX
@@ -201,7 +206,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // of "Month" (a real per-day export, not a bucketed calendar month), its
   // own min/max day becomes that side's default range — the date pickers
   // below still let the user trim within it.
-  const dayCol = useMemo(() => (metaRows ? findCol(metaRows, ['day']) : null), [metaRows]);
+  const dayCol = useMemo(() => (periodRows ? findCol(periodRows, ['day']) : null), [periodRows]);
 
   // The report is read one ad source at a time (CPAS / Non-Boost / Boost), so
   // Special Moment is too: each section's own rows, both periods, subtotal
@@ -233,8 +238,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   }, [cpasSides, cpasDayCol]);
   const [oldRange, setOldRange] = useState<{ start: Date; end: Date } | null>(null);
   const [curRange, setCurRange] = useState<{ start: Date; end: Date } | null>(null);
-  const oldDayBounds = useMemo(() => (dayCol && metaSides.old ? metaDayRange(metaSides.old.rows, dayCol) : null), [dayCol, metaSides.old]);
-  const curDayBounds = useMemo(() => (dayCol && metaSides.cur ? metaDayRange(metaSides.cur.rows, dayCol) : null), [dayCol, metaSides.cur]);
+  const oldDayBounds = useMemo(() => (dayCol && periodSides.old ? metaDayRange(periodSides.old.rows, dayCol) : null), [dayCol, periodSides.old]);
+  const curDayBounds = useMemo(() => (dayCol && periodSides.cur ? metaDayRange(periodSides.cur.rows, dayCol) : null), [dayCol, periodSides.cur]);
 
   // Each side's suggested range is simply that side's own file bounds —
   // exact by construction now that old/cur are 2 separate uploads, not a
@@ -400,10 +405,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         range.channels.cpas ? downloadAutoRange(clientId, 'CPAS', range) : Promise.resolve(null),
       ]);
       const metaRowsRange = metaFile ? await readSpreadsheetFile(metaFile) : [];
-      if (!metaRowsRange.length) throw new Error('Belum ada data Meta Ads tersimpan pada rentang ini.');
       const cpasRowsRange = cpasFile ? await readSpreadsheetFile(cpasFile) : [];
+      if (!metaRowsRange.length && !cpasRowsRange.length) throw new Error('Belum ada data Meta Ads atau CPAS tersimpan pada rentang ini.');
       const name = `Tarikan otomatis · ${range.label}`;
-      setMetaSides((prev) => ({ ...prev, [targetRole]: { rows: metaRowsRange, fileName: name } }));
+      setMetaSides((prev) => ({ ...prev, [targetRole]: metaRowsRange.length ? { rows: metaRowsRange, fileName: name } : null }));
       setCpasSides((prev) => ({ ...prev, [targetRole]: cpasRowsRange.length ? { rows: cpasRowsRange, fileName: name } : null }));
       setReport(null);
       onInvalidate();
@@ -569,15 +574,16 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
   const objectiveOk = Boolean(objectiveCol) || Boolean(objective) || Boolean(industry);
   const dayRangesOk = !dayCol || Boolean(oldRange && curRange && oldRange.start <= oldRange.end && curRange.start <= curRange.end);
-  const ready = Boolean(metaRows && objectiveOk && clientId && dayRangesOk);
+  // Either source is enough; the objective only matters when Meta Ads (Non-Boost) is in.
+  const ready = Boolean((metaRows || cpasRows) && (!metaRows || objectiveOk) && clientId && dayRangesOk);
   const dayRanges = oldRange && curRange ? { old: oldRange, cur: curRange } : null;
 
   const autoSave = useAutoSave('meta');
   const armReportScroll = useScrollAfterGenerate('report-meta', report);
 
   function generate() {
-    if (!metaRows) return;
-    const r = buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
+    if (!metaRows && !cpasRows) return;
+    const r = buildMetaReport({ metaRows: metaRows ?? [], metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
     setNbLane(r.nonBoostLanes?.[0]?.key ?? 'retail');
     setB2bResult(null);
     setReport(r);
@@ -781,9 +787,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
   const steps: Step[] = [
     {
-      label: 'Pilih file Meta Ads & industri',
-      sub: metaSides.old && metaSides.cur ? `${metaSides.old.fileName} · ${metaSides.cur.fileName}` : undefined,
-      status: metaRows && objectiveOk ? 'done' : 'current',
+      label: 'Pilih file Meta Ads / CPAS',
+      sub: periodSides.old && periodSides.cur ? `${periodSides.old.fileName} · ${periodSides.cur.fileName}` : undefined,
+      status: (metaRows && objectiveOk) || (!metaRows && cpasRows) ? 'done' : 'current',
     },
     { label: 'Generate laporan', status: report ? 'done' : ready ? 'current' : 'todo' },
     { label: 'Lihat & unduh PDF', status: report ? 'current' : 'todo' },
@@ -832,7 +838,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           </div>
         </HowToStep>
         <HowToStep num={2} title="Pilih sumber & buat laporan">
-          Pilih file Meta Ads untuk periode lalu dan periode ini dari Data Collection Hub (wajib). Pilih juga file CPAS jika tersedia. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
+          Pilih file Meta Ads dan/atau CPAS untuk periode lalu dan periode ini dari Data Collection Hub — cukup salah satu, misalnya CPAS saja untuk brand yang hanya butuh analisa CPAS. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
         </HowToStep>
       </HowTo>
 
@@ -846,7 +852,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         <header className="setup-board-head">
           <h3>Sumber data</h3>
           <p>
-            Meta Ads wajib, CPAS opsional. Pilihan <strong>Perpustakaan</strong>, <strong>Arsip</strong>, atau <strong>Rentang tanggal</strong> mengisi Meta Ads
+            Isi Meta Ads, CPAS, atau keduanya — cukup salah satu. Pilihan <strong>Perpustakaan</strong>, <strong>Arsip</strong>, atau <strong>Rentang tanggal</strong> mengisi Meta Ads
             dan CPAS periode itu sekaligus; upload di satu baris hanya mengganti file baris itu.
           </p>
         </header>
@@ -919,7 +925,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
           <div className="setup-row-head">
             <strong>Meta Ads</strong>
-            <small className="is-req">wajib</small>
+            <small>opsional · Boost & Non-Boost</small>
           </div>
           <div className="setup-cell" data-label="Periode Lalu">{metaDropzone('meta', 'old', 'Periode Lalu')}</div>
           <div className="setup-cell" data-label="Periode Ini">{metaDropzone('meta', 'cur', 'Periode Ini')}</div>

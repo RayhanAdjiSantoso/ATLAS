@@ -335,7 +335,22 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
   // specifically (not the Month-breakdown path, and not a single-day
   // selection) makes Reach/Frequency untrustworthy.
   let reachWarning: string | null = null;
-  if (mDayCol && dayRanges) {
+  if (!metaRows.length) {
+    // CPAS-only report: no Boost / Non-Boost rows. The periods come from the
+    // picked day ranges, else from the CPAS file's first and last month.
+    mOld = [];
+    mCur = [];
+    if (dayRanges) {
+      oldPeriod = buildParsedPeriod(dayRanges.old.start, dayRanges.old.end);
+      curPeriod = buildParsedPeriod(dayRanges.cur.start, dayRanges.cur.end);
+    } else {
+      const leaves = cpasRows ?? [];
+      const cDay = findCol(leaves, ['day']);
+      const { months } = cDay ? splitDayRowsByMonth(leaves, cDay) : splitMonths(leaves, findCol(leaves, ['month']));
+      oldPeriod = parseMetaMonthValue(months[0]);
+      curPeriod = parseMetaMonthValue(months[months.length - 1]);
+    }
+  } else if (mDayCol && dayRanges) {
     const split = splitByDayRange(metaRows, mDayCol, dayRanges.old, dayRanges.cur);
     mOld = split.old;
     mCur = split.cur;
