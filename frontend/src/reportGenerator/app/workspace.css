@@ -90,6 +90,32 @@
 .mil-ui.report-generator-app ::selection { background: color-mix(in srgb, var(--pf, #2856b6) 22%, #fff); color: #0f1a3a; }
 
 /* ── Frame ──────────────────────────────────────────────────────────────── */
+/* The shared PageBand header reaches this frame's edges (its padding) and
+   paints the open tab this floor colour. */
+.mil-ui.report-generator-app .gen-main#app { --band-bleed: 22px; --band-floor: var(--rx-floor); --band-kicker: rgba(255, 255, 255, .74); --band-accent: var(--pf); }
+/* The band takes the colour of the report open — the generator's signature:
+   Meta blue (default), Shopee orange, TikTok black with its cyan/pink glow,
+   Google blue, Summary violet, Riwayat slate. */
+.mil-ui.report-generator-app .gen-main#app[data-platform='shopee'] {
+  --band-from: #7d1f0c; --band-mid: #cf3d1d; --band-to: #f2673a;
+  --band-glow-a: rgba(255, 176, 92, .5); --band-glow-b: rgba(255, 112, 72, .45);
+}
+.mil-ui.report-generator-app .gen-main#app[data-platform='tiktok'] {
+  --band-from: #030303; --band-mid: #121214; --band-to: #2a2a30;
+  --band-glow-a: rgba(37, 244, 238, .26); --band-glow-b: rgba(254, 44, 85, .26);
+}
+.mil-ui.report-generator-app .gen-main#app[data-platform='google'] {
+  --band-from: #0b3780; --band-mid: #1559c9; --band-to: #1a73e8;
+  --band-glow-a: rgba(52, 168, 83, .32); --band-glow-b: rgba(251, 188, 5, .22);
+}
+.mil-ui.report-generator-app .gen-main#app[data-platform='summary'] {
+  --band-from: #2a0d63; --band-mid: #5321b0; --band-to: #7c3aed;
+  --band-glow-a: rgba(56, 189, 248, .32); --band-glow-b: rgba(192, 132, 252, .4);
+}
+.mil-ui.report-generator-app .gen-main#app[data-platform='reports'] {
+  --band-from: #0f172a; --band-mid: #1e293b; --band-to: #3b4a61;
+  --band-glow-a: rgba(148, 163, 184, .3); --band-glow-b: rgba(100, 116, 139, .35);
+}
 .mil-ui.report-generator-app .gen-main#app {
   display: flex;
   flex-direction: column;

@@ -1,6 +1,6 @@
-import { useEffect, type CSSProperties } from 'react';
+import { useEffect } from 'react';
 import { clearLibraryCatalog } from '../features/reports/LibraryFileSlot';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, NavLink, useParams } from 'react-router-dom';
 import { MetaTab } from '../features/meta/MetaTab';
 import { ShopeeTab } from '../features/shopee/ShopeeTab';
 import { TiktokTab } from '../features/tiktok/TiktokTab';
@@ -9,14 +9,13 @@ import { BusinessOverviewTab } from '../features/business/BusinessOverviewTab';
 import { SummaryTab } from '../features/summary/SummaryTab';
 import { ClientPicker } from '../features/reports/ClientPicker';
 import { ReportsTab } from '../features/reports/ReportsTab';
-import { GenTopNav } from './GenTopNav';
+import PageBand from '../../components/common/PageBand.jsx';
 import { ReportIcon } from '../components/ReportIcon';
 import { BRAND_KEYS, BrandLogo, type BrandKey } from '../components/BrandLogo';
-import { DISABLED_REPORTS, ENABLED_NAV, isReportKey, reportByKey, type ReportKey } from './reports';
+import { DISABLED_REPORTS, ENABLED_NAV, REPORT_NAV, isReportKey, reportByKey, type ReportKey } from './reports';
 import type { BizState } from '../lib/business';
 import type { PlatformKey, PlatformResultData, PlatformStateMap } from '../lib/summary';
-import { Archive, Layers, LayoutGrid } from 'lucide-react';
-import atlasWordmark from '../../assets/atlas-wordmark.png';
+import { Archive, History, Layers, LayoutGrid } from 'lucide-react';
 
 export interface GeneratorShellProps {
   clientId: number | null;
@@ -45,6 +44,9 @@ export interface GeneratorShellProps {
 // Ported from MRG's app/GeneratorShell.tsx. Two things differ: the route base
 // is /report-generator rather than /generate, and there is no BrandSettingsPage
 // branch (that page is not ported — see reports.ts).
+// Report types shown as band tabs: every enabled one except Riwayat.
+const TAB_REPORTS = REPORT_NAV.filter((r) => !DISABLED_REPORTS.includes(r.key) && r.key !== 'reports');
+
 export function GeneratorShell(props: GeneratorShellProps) {
   const { platform } = useParams();
   useEffect(() => () => clearLibraryCatalog(), []);
@@ -56,20 +58,35 @@ export function GeneratorShell(props: GeneratorShellProps) {
   return (
     <div className="gen-wrap bleed">
       <div className="gen-main" id="app" data-platform={activeTab}>
-        {/* The same world as the ATLAS Business Overview: a masthead on a soft
-            wash, one command bar for the brand, then the blue report rail. */}
-        <header className="rgx-masthead">
-          <div className="rgx-masthead-copy">
-            <h1>
-              <span>Report</span> Generator<span className="rgx-dot" aria-hidden="true">.</span>
-            </h1>
-            <p>Bandingkan performa lintas platform, susun insight berbasis konteks brand, lalu hasilkan laporan yang siap dipresentasikan.</p>
-          </div>
-          <div className="rgx-signature">
-            <img src={atlasWordmark} alt="ATLAS" />
-            <span>Ruang pembuatan laporan</span>
-          </div>
-        </header>
+        {/* Level 1 on the shared ATLAS header band (the same component as
+            Brand Setting and Business Overview): the report types as folder
+            tabs, the open one's description under the title. Riwayat is a
+            utility, not a report type, so it sits in the band's corner. */}
+        <PageBand
+          kicker="Workspace · Laporan"
+          title="Report Generator"
+          desc={active.desc}
+          compact
+          ariaLabel="Jenis laporan"
+          layoutId="rg-tab-sheet"
+          activeKey={activeTab}
+          tabs={TAB_REPORTS.map((r) => ({
+            key: r.key,
+            to: `/report-generator/${r.key}`,
+            label: r.label,
+            hint: r.tagline,
+            logo: BRAND_KEYS.includes(r.key),
+            icon: BRAND_KEYS.includes(r.key)
+              ? <BrandLogo name={r.key as BrandKey} size={20} />
+              : <ReportIcon name={r.key} />,
+            badge: props.badges[r.key] === '✓' ? '✓' : props.badges[r.key] && props.badges[r.key] !== '—' ? props.badges[r.key] : undefined,
+          }))}
+          aside={(
+            <NavLink to="/report-generator/reports" className={`band-action${activeTab === 'reports' ? ' is-on' : ''}`}>
+              <History size={15} aria-hidden="true" /> Riwayat laporan
+            </NavLink>
+          )}
+        />
 
         <section className="rgx-command" aria-label="Brand untuk laporan">
           <div className="rgx-field rgx-field-brand">
@@ -91,23 +108,6 @@ export function GeneratorShell(props: GeneratorShellProps) {
             </div>
           </dl>
         </section>
-
-        <GenTopNav badges={props.badges} />
-        <div className="rgx-head" key={activeTab} style={{ '--rg-accent': active.accent } as CSSProperties}>
-          {BRAND_KEYS.includes(activeTab) ? (
-            <span className="rgx-head-ico is-brand" aria-hidden="true">
-              <BrandLogo name={activeTab as BrandKey} size={28} />
-            </span>
-          ) : (
-            <span className="rgx-head-ico" aria-hidden="true">
-              <ReportIcon name={activeTab} />
-            </span>
-          )}
-          <div>
-            <h2>{active.label}</h2>
-            <p>{active.desc}</p>
-          </div>
-        </div>
 
         <MetaTab key={`${props.clientId}-MetaTab`}
             isActive={activeTab === 'meta'}
