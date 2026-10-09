@@ -111,6 +111,38 @@ function measure(channel, rows) {
   };
 }
 
+// The in-range leaf rows of every dataset for one period — what both the
+// Ringkasan measures and the analysis tabs (metaAnalysis.js) are built from.
+// `legacy` holds rows of months read from the old combined export.
+export async function readMetaRows(brandId, start, end, mode = 'auto') {
+  const files = await listFiles(brandId);
+  const months = monthsIn(start, end);
+  const monthOf = (f) => String(f.period_month).slice(0, 7);
+  const metaFiles = files.filter((f) => ['boost', 'nonboost', 'meta'].includes(f.channel));
+  const monthSources = months.map((m) => resolveMetaMonth(metaFiles, m, mode));
+  const chosen = new Set(monthSources.flatMap((src) => src.files));
+  const out = { rows: {}, missing: {}, monthSources };
+  await Promise.all(['boost', 'nonboost', 'cpas', 'meta'].map(async (channel) => {
+    const picked = channel === 'cpas'
+      ? files.filter((f) => f.channel === 'cpas' && months.includes(monthOf(f)))
+      : [...chosen].filter((f) => f.channel === channel);
+    out.missing[channel] = months.filter((m) => !picked.some((f) => monthOf(f) === m));
+    if (!picked.length) { out.rows[channel] = null; return; }
+    const all = (await Promise.all(picked.map((f) => rowsOf(brandId, f)))).flat();
+    const rows = stripCampaignSubtotals(all);
+    const dayCol = Object.keys(rows[0] || {}).find((h) => h.trim().toLowerCase() === 'day');
+    out.rows[channel] = dayCol
+      ? rows.filter((r) => {
+        const d = parseMetaDayValue(r[dayCol]);
+        if (!d) return false;
+        const iso = isoOf(d);
+        return iso >= start && iso <= end;
+      })
+      : rows;
+  }));
+  return out;
+}
+
 // One period: { boost, nonboost, cpas } measures (null where the dataset has
 // no file for the period), plus the months with no file at all.
 // `mode`: 'auto' — per month, the split files (Boost / Non Boost) when the

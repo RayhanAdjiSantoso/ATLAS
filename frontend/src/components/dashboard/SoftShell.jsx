@@ -101,12 +101,14 @@ export default function SoftShell({
 
         {/* Level 2: this channel's analyses, alone on the floor under the band
             (brand and period now live in the band's corner). */}
-        {channel?.ready && (
+        {/* Every channel carries the same domains; one whose data is not
+            imported yet marks them and opens an honest pending state. */}
+        {channel && (
           <nav className="soft-subtabs bo-views" aria-label={`Analisis ${channel.label}`} role="tablist">
             {channelDomains.map((d) => {
               const on = d.key === domainKey;
               return (
-                <button type="button" role="tab" key={d.key} aria-selected={on} className={`soft-subtab${on ? ' is-on' : ''}`} onClick={() => setActiveKey(d.key)}>
+                <button type="button" role="tab" key={d.key} aria-selected={on} className={`soft-subtab${on ? ' is-on' : ''}${d.pending ? ' is-pending' : ''}`} onClick={() => setActiveKey(d.key)} title={d.pending ? `${d.label} — data ${channel.label} belum diimpor` : undefined} aria-description={d.pending ? 'belum ada data' : undefined}>
                   {on && <motion.span layoutId="soft-subtab-line" className="soft-subtab-line" transition={spring} aria-hidden="true" />}
                   {d.label}
                 </button>
@@ -117,7 +119,7 @@ export default function SoftShell({
 
         <div className="soft-head">
           <div>
-            <h2>{!channel ? 'Executive Snapshot' : channel.ready ? `${channel.label} · ${channelDomains.find((d) => d.key === domainKey)?.label ?? ''}` : `${channel.label} · Ringkasan`}</h2>
+            <h2>{!channel ? 'Executive Snapshot' : `${channel.label} · ${channelDomains.find((d) => d.key === domainKey)?.label ?? ''}`}</h2>
             <p>{question}</p>
           </div>
           {!channel && <Link to="/brand-tracking" className="soft-head-link">Isi Brand Tracking <ArrowUpRight size={14} aria-hidden="true" /></Link>}

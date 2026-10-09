@@ -10,6 +10,8 @@ import {
   Megaphone,
   ShoppingBag,
   Video,
+  Users,
+  LayoutList,
 } from 'lucide-react';
 import { formatPercent } from '../../utils/format.js';
 
@@ -137,15 +139,48 @@ export const CHANNELS = [
 
 export const CHANNEL_BY_ID = Object.fromEntries(CHANNELS.map((c) => [c.id, c]));
 
+// A channel without fact tables that can still be read another way (Meta's
+// Boost / Non-Boost / CPAS files) opens on this tab, ahead of its domains.
+export const CHANNEL_OVERVIEW = {
+  key: 'Channel Overview',
+  label: 'Ringkasan',
+  short: 'Ringkasan',
+  Icon: Gauge,
+  endpoint: null,
+  prefetch: false,
+  question: 'Berapa spend, hasil, dan ROAS tiap jenis iklan pada periode ini?',
+};
+
+// Meta Ads' own analyses, read straight from the Boost Post / Non Boost Post
+// / CPAS files (MetaAnalysis.jsx). The Shopee domains that need customer
+// orders — Retention, Transaction Behavior, Basket — have no counterpart in
+// an ads export; Meta answers the questions it can: who sees and buys
+// (Audience) and which campaign or ad carries the result.
+export const META_DOMAINS = [
+  CHANNEL_OVERVIEW,
+  { key: 'Meta Growth', view: 'growth', label: 'Business Growth', short: 'Growth', Icon: TrendingUp, endpoint: null, prefetch: false,
+    question: 'Apakah spend, purchase value, dan ROAS iklan Meta tumbuh dibanding periode pembanding — dan dari jenis iklan mana?' },
+  { key: 'Meta Funnel', view: 'funnel', label: 'Traffic & Funnel', short: 'Funnel', Icon: Filter, endpoint: null, prefetch: false,
+    question: 'Di tahap mana orang yang melihat iklan paling banyak berhenti sebelum membeli?' },
+  { key: 'Meta Audience', view: 'audience', label: 'Audience Analysis', short: 'Audience', Icon: Users, endpoint: null, prefetch: false,
+    question: 'Umur dan gender mana yang paling efisien membeli, dan ke mana spend paling banyak mengalir?' },
+  { key: 'Meta Campaign', view: 'campaign', label: 'Campaign Performance', short: 'Campaign', Icon: LayoutList, endpoint: null, prefetch: false,
+    question: 'Campaign, ad set, dan iklan mana yang mendorong hasil — dan mana yang menghabiskan budget tanpa hasil?' },
+  { key: 'Meta Root Cause', view: 'rootcause', label: 'Root Cause Analysis', short: 'Root Cause', Icon: ListTree, endpoint: null, prefetch: false,
+    question: 'Komponen mana — biaya tayang, CTR, konversi, atau nilai pembelian — yang paling menggerakkan ROAS iklan periode ini?' },
+];
+
 // The seven analytic domains belong to whichever channel can answer them.
 // Today that is Shopee for all of them; Meta and TikTok list the same domains
-// so the shape of the page is stable once their importers exist.
+// — marked `pending` — so every channel has the same navigation and the
+// shape of the page is stable once their importers exist.
 export const CHANNEL_DOMAINS = Object.fromEntries(
-  CHANNELS.map((channel) => [
-    channel.id,
-    DOMAINS.filter((d) => d.key !== 'Executive Snapshot')
-      .map((d) => (channel.ready ? d : { ...d, endpoint: null, prefetch: false })),
-  ]),
+  CHANNELS.map((channel) => {
+    const domains = DOMAINS.filter((d) => d.key !== 'Executive Snapshot')
+      .map((d) => (channel.ready ? d : { ...d, endpoint: null, prefetch: false, pending: true }));
+    if (channel.id === 'meta') return [channel.id, META_DOMAINS];
+    return [channel.id, !channel.ready && channel.readable ? [CHANNEL_OVERVIEW, ...domains] : domains];
+  }),
 );
 
 // The page's top navigation. Executive Snapshot is not a channel — it is the

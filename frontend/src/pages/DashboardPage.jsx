@@ -23,6 +23,7 @@ import {
 import { Delta, Figure, InfoTip, Spark } from '../components/dashboard/figures.jsx';
 import ExecutiveSummary from '../components/dashboard/ExecutiveSummary.jsx';
 import MetaOverview from '../components/dashboard/MetaOverview.jsx';
+import MetaAnalysis from '../components/dashboard/MetaAnalysis.jsx';
 import SoftShell from '../components/dashboard/SoftShell.jsx';
 import CrossChannelPanel from '../components/dashboard/CrossChannelPanel.jsx';
 import '../components/dashboard/console.css';
@@ -619,6 +620,15 @@ export default function DashboardPage() {
 
   const { read, retry } = useConsoleData({ filters, activeKey, productLevel });
 
+  // Opening Meta lands on its Ringkasan tab — the one reading it has until
+  // its importer exists — rather than on a remembered Shopee domain that is
+  // still pending there.
+  const selectView = (id) => {
+    setViewId(id);
+    const first = CHANNEL_DOMAINS[id]?.[0];
+    if (first && !first.endpoint && !first.pending) setActiveKey(first.key);
+  };
+
   const view = VIEW_BY_ID[viewId] ?? EXECUTIVE_VIEW;
   const isSnapshot = view.id === EXECUTIVE_VIEW.id;
   const channel = isSnapshot ? null : CHANNEL_BY_ID[view.id];
@@ -626,7 +636,7 @@ export default function DashboardPage() {
   const domainKey = channelDomains.some((d) => d.key === activeKey)
     ? activeKey
     : (channelDomains[0]?.key ?? activeKey);
-  const active = DOMAIN_BY_KEY[domainKey];
+  const active = channelDomains.find((d) => d.key === domainKey) ?? DOMAIN_BY_KEY[domainKey];
   const activeEntry = read(domainKey);
 
   // Only a channel view owns the domain selection. The snapshot leaves the
@@ -667,7 +677,7 @@ export default function DashboardPage() {
               </span>
               {active.label}
             </h2>
-            <p className="con-focus-q">{channel.ready ? active.question : channel.hint}</p>
+            <p className="con-focus-q">{channel.ready || !active.pending ? active.question : channel.hint}</p>
           </div>
           {channel.ready ? (
             // Keyed on the domain so the settle animation replays on every
@@ -686,11 +696,11 @@ export default function DashboardPage() {
                 onNavigateTab={setActiveKey}
               />
             </div>
-          ) : channel.id === 'meta' ? (
+          ) : channel.id === 'meta' && !active.pending ? (
             // Meta has no fact tables, but its three datasets (Boost Post,
             // Non Boost Post, CPAS) are read straight from the library files.
-            <div className="con-focus-body" key="meta-overview">
-              <MetaOverview filters={filters} />
+            <div className="con-focus-body" key={`meta-${active.view ?? 'overview'}`}>
+              {active.view ? <MetaAnalysis view={active.view} filters={filters} /> : <MetaOverview filters={filters} />}
             </div>
           ) : (
             // An empty state that says what has to happen, not just that
@@ -702,7 +712,7 @@ export default function DashboardPage() {
                   <Database size={20} />
                 </span>
                 <div>
-                  <strong>{channel.label} belum punya data terimpor</strong>
+                  <strong>{active.label} {channel.label} belum tersedia</strong>
                   <p>{channel.note}</p>
                 </div>
               </div>
@@ -727,9 +737,9 @@ export default function DashboardPage() {
     return (
       <SoftShell
         filters={filters} setFilters={setFilters}
-        views={VIEWS} view={view} setViewId={setViewId}
+        views={VIEWS} view={view} setViewId={selectView}
         channel={channel} channelDomains={channelDomains} domainKey={domainKey} setActiveKey={setActiveKey}
-        question={isSnapshot ? EXECUTIVE_VIEW.question : channel.ready ? active.question : channel.note}
+        question={isSnapshot ? EXECUTIVE_VIEW.question : active.pending ? channel.note : active.question}
         kpiEntry={channel?.ready ? read('Executive Snapshot') : null}
         onClassic={() => setLook('classic')}
       >
@@ -793,7 +803,7 @@ export default function DashboardPage() {
                 type="button" role="tab" key={v.id}
                 className={`brand-view-tab${isActive ? ' is-active' : ''}`}
                 style={{ '--ch-accent': v.accent }}
-                onClick={() => setViewId(v.id)}
+                onClick={() => selectView(v.id)}
                 aria-selected={isActive}
               >
                 {isActive && (
@@ -824,7 +834,7 @@ export default function DashboardPage() {
           {channelDomains.map((d) => {
             const entry = channel.ready ? read(d.key) : { status: 'idle' };
             const isActive = d.key === domainKey;
-            const stateLabel = !channel.ready ? 'Belum ada data'
+            const stateLabel = !channel.ready ? (d.pending ? 'Belum ada data' : 'Siap dibaca')
               : entry.status === 'ready' ? 'Siap dibaca'
                 : entry.status === 'loading' ? 'Memuat…'
                   : entry.status === 'error' ? 'Gagal dimuat' : 'Belum dimuat';
@@ -866,7 +876,7 @@ export default function DashboardPage() {
       )}
 
       <div className="dashboard-domain-caption">
-        <span>{isSnapshot ? EXECUTIVE_VIEW.question : channel.ready ? active.question : channel.note}</span>
+        <span>{isSnapshot ? EXECUTIVE_VIEW.question : active.pending ? channel.note : active.question}</span>
         <span className="brand-caption-rule" />
         <Link to="/data-brand"><Database size={13} /> Data bersumber dari <strong>Data Collection Hub</strong></Link>
       </div>
