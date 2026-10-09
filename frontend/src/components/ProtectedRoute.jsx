@@ -38,8 +38,10 @@ export function ProtectedRoute({ roles, module, guestHome }) {
 }
 
 export function PublicRoute() {
-  const { user, loading } = useAuth();
+  const { user, loading, can } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/dashboard" replace />;
+  // Straight to Business Overview where the role has it; anyone else (a
+  // client) lands on Beranda instead of being bounced there through it.
+  if (user) return <Navigate to={can('dashboard') ? '/dashboard' : '/'} replace />;
   return <Outlet />;
 }

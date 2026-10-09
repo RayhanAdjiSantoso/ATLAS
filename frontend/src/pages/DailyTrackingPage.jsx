@@ -9,7 +9,6 @@ import MonthPillNav from '../components/dailyTracking/MonthPillNav.jsx';
 import TrackingKpis from '../components/dailyTracking/TrackingKpis.jsx';
 import TrackingPulse from '../components/dailyTracking/TrackingPulse.jsx';
 import CoverageMap from '../components/dailyTracking/CoverageMap.jsx';
-import { ChannelMix, PaceChart, WeekdayChart, defaultMetric } from '../components/dailyTracking/TrackingInsights.jsx';
 import TrackingCompare from '../components/dailyTracking/TrackingCompare.jsx';
 import ChannelRail from '../components/dailyTracking/ChannelRail.jsx';
 import ChannelInsight from '../components/dailyTracking/ChannelInsight.jsx';
@@ -31,10 +30,11 @@ function currentMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// Brand Tracking — Brand Setting's third section: what a brand sold and
-// spent, per channel, per day. Two views under one brand and month:
-// Performance Overview reads the month (six numbers against last month, the
-// daily chart, pace, weekday pattern, channel mix); Input Brand Tracking is
+// Brand Tracking — Brand Setting's third section, and a client's whole ATLAS:
+// what a brand sold and spent, per channel, per day. Two views under one
+// brand and month: Performance Overview reads it (six numbers against last
+// month, the daily chart, and any two periods side by side — kept short on
+// purpose; the deep analysis lives in Business Overview); Input Brand Tracking is
 // where the days are typed in, led by the map of which days are still empty.
 // The frame and masthead are BrandSettingLayout's.
 // Session keys keep their old "daily-tracking:" names so nobody's open brand
@@ -65,7 +65,10 @@ export default function DailyTrackingPage() {
   const [view, setView] = useSessionState('daily-tracking:view', 'overview');
   const [activeTab, setActiveTab] = useSessionState('daily-tracking:tab', 'sales');
   const [brands, setBrands] = useState([]);
-  const [brandId, setBrandId] = useSessionState('daily-tracking:client', null);
+  const [storedBrandId, setBrandId] = useSessionState('daily-tracking:client', null);
+  // A client account is pinned to its own brand from the first request on,
+  // whatever an earlier session left behind.
+  const brandId = locked ? allowedBrandId : storedBrandId;
   const [brandStatus, setBrandStatus] = useSessionState('daily-tracking:brand-status', 'active');
   const [month, setMonth] = useSessionState('daily-tracking:month', currentMonth());
   const [activeSalesTab, setActiveSalesTab] = useSessionState('daily-tracking:sales-tab', FIXED_SALES_CHANNELS[0].key);
@@ -289,17 +292,8 @@ export default function DailyTrackingPage() {
         <div className="bt-view" key="overview">
           <TrackingKpis grid={grid} channels={channels} loading={loading} prev={prevSame} compareLabel={compareLabel} />
           <p className="bt-compare-note">Perubahan dibanding <b>{compareLabel}</b>{running ? ' — rentang tanggal yang sama, karena bulan ini masih berjalan.' : '.'}</p>
-          <TrackingCompare brandId={brandId} channels={channels} month={month} />
           <TrackingPulse grid={grid} channels={channels} loading={loading} />
-          <div className="bt-duo">
-            <PaceChart
-              key={`pace:${brandId}:${month}:${defaultMetric(grid, channels)}`}
-              grid={grid} prevGrid={prevGrid} channels={channels} month={month} prevMonth={prevMonth} running={running}
-              initialMetric={defaultMetric(grid, channels)}
-            />
-            <WeekdayChart key={`week:${brandId}:${month}:${defaultMetric(grid, channels)}`} grid={grid} channels={channels} initialMetric={defaultMetric(grid, channels)} />
-          </div>
-          <ChannelMix grid={grid} prevSame={prevSame} channels={channels} prevMonth={prevMonth} />
+          <TrackingCompare brandId={brandId} channels={channels} month={month} />
         </div>
       ) : (
         <div className="bt-view" key="input">

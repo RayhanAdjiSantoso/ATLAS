@@ -38,8 +38,11 @@ const MODULE_KEYS = new Set(MODULES.map((m) => m.key));
 
 // Starting point, from the brief: admin runs everything; user does the ads
 // work (dashboard, report generator, brand data) but not the internal
-// dashboard or the operational tools; client sees its dashboard and fills in
-// its own daily revenue in Daily Tracking (ad spend stays with the team).
+// dashboard or the operational tools; client works in Brand Tracking alone —
+// fills in its own daily revenue (ad spend stays with the team) and reads its
+// performance there. Business Overview is the team's analysis room on the
+// marketplace files, so it is off for clients unless Pengaturan Akses turns
+// it back on.
 export const DEFAULTS = {
   admin: {
     dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
@@ -52,7 +55,7 @@ export const DEFAULTS = {
     homepage_content: false,
   },
   client: {
-    dashboard: true, daily_tracking: true, brand_settings: false, report_generator: false,
+    dashboard: false, daily_tracking: true, brand_settings: false, report_generator: false,
     history: false, meta_automation: false, internal_dashboard: false, control_center: false,
     homepage_content: false,
   },

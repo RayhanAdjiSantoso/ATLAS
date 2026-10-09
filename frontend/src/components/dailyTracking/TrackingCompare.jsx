@@ -7,7 +7,8 @@ import { fmtNum, fmtRp, fmtRpShort, sumMaybe } from '../../dailyTracking/lib/sum
 import { todayIso } from '../../dailyTracking/lib/daily.js';
 
 // Any two stretches of days, side by side: the brand's totals and every
-// channel's revenue and ad spend in period A against period B. The month
+// channel's revenue and ad spend (with its share of period A) in period A
+// against period B. The month
 // view above always compares with the month before; this is where a client
 // asks their own question — this Ramadan against last, a campaign week
 // against the week before it. Ranges may cross months (and years): the
@@ -25,6 +26,9 @@ const shiftMonths = (s, n) => {
   const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
   return iso(new Date(target.getFullYear(), target.getMonth(), Math.min(d.getDate(), last)));
 };
+// Whole calendar months differ in length by nature (30 vs 31 days) — no
+// warning needed for comparing one with another.
+const isFullMonth = ({ startDate, endDate }) => startDate.endsWith('-01') && endDate === lastDayOf(startDate.slice(0, 7));
 const fmtRange = ({ startDate, endDate }) => {
   const a = parse(startDate);
   const b = parse(endDate);
@@ -136,6 +140,8 @@ function ChannelTable({ title, kind, rowsA, rowsB, field }) {
     .filter((r) => (r.a ?? 0) !== 0 || (r.b ?? 0) !== 0)
     .sort((x, y) => (y.a ?? 0) - (x.a ?? 0));
   const max = Math.max(0, ...rows.flatMap((r) => [r.a ?? 0, r.b ?? 0]));
+  // Each channel's share of period A — what the composition chart used to say.
+  const totalA = rows.reduce((t, r) => t + Math.max(r.a ?? 0, 0), 0);
   return (
     <div className="bt-cmp-block">
       <h3>{title}</h3>
@@ -151,7 +157,10 @@ function ChannelTable({ title, kind, rowsA, rowsB, field }) {
           {rows.map((r) => (
             <div className="bt-cmp-row" role="row" key={r.key}>
               <span role="cell" className="bt-cmp-name">
-                {r.label}
+                <span className="bt-cmp-label">
+                  {r.label}
+                  {totalA > 0 && r.a > 0 && <small>{(r.a / totalA * 100).toLocaleString('id-ID', { maximumFractionDigits: r.a / totalA < 0.1 ? 1 : 0 })}%</small>}
+                </span>
                 <Bars a={r.a} b={r.b} max={max} kind={kind} />
               </span>
               <span role="cell" className="is-num is-strong">{fmtRp(r.a)}</span>
@@ -247,7 +256,7 @@ export default function TrackingCompare({ brandId, channels, month }) {
             <small>{daysBetween(b.startDate, b.endDate)} hari</small>
           </div>
         </div>
-        {daysBetween(a.startDate, a.endDate) !== daysBetween(b.startDate, b.endDate) && (
+        {daysBetween(a.startDate, a.endDate) !== daysBetween(b.startDate, b.endDate) && !(isFullMonth(a) && isFullMonth(b)) && (
           <p className="bt-cmp-warn">Jumlah hari kedua periode berbeda — total akan condong ke periode yang lebih panjang; bandingkan juga AOV dan cost per revenue.</p>
         )}
       </div>
