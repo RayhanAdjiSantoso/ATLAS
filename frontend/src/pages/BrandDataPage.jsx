@@ -101,7 +101,7 @@ const PLATFORMS = [
       { channel: 'cpas', name: 'CPAS', hint: 'Export Ads Manager · akun CPAS Shopee/Tokopedia', kind: 'core', specs: { type: 'CPAS', sections: ['cpas'] } },
       // The combined file of before the split. Shown only for brands that
       // still have one; an upload here is split like any other Meta export.
-      { channel: 'meta', uploadChannel: 'meta', name: 'Meta Ads (gabungan lama)', hint: 'File gabungan sebelum Boost & Non-Boost dipisah · unggahan baru masuk ke dua slot di atas', kind: 'extra', legacy: true },
+      { channel: 'meta', uploadChannel: 'meta', name: 'Meta Ads (gabungan lama)', hint: 'Opsional · arsip sebelum Boost & Non-Boost dipisah — tidak diperlukan bila Boost Post, Non Boost Post, atau CPAS sudah ada', kind: 'extra', legacy: true },
     ],
   },
   {
@@ -271,6 +271,9 @@ function datasetStatus(dataset, months, lookup, platformId) {
       : { label: 'Belum ada', tone: 'idle' };
   }
   const present = months.filter((m) => lookup.has(fileKey(platformId, dataset.channel, m.key)));
+  // The old combined Meta export is an archive, never a gap to close: the
+  // split Boost / Non Boost / CPAS files replace it.
+  if (dataset.legacy) return { label: 'Arsip · opsional', tone: 'ref' };
   if (!present.length) return dataset.autoOnly ? { label: 'Otomatis', tone: 'idle' } : dataset.kind === 'extra' ? { label: 'Opsional', tone: 'idle' } : { label: 'Belum ada', tone: 'warn' };
 
   // File ada, tapi untuk dataset Dashboard belum tentu datanya terbaca.
@@ -1469,7 +1472,7 @@ export default function BrandDataPage() {
 
   // Whole-library figures for the command card.
   const totals = useMemo(() => {
-    const all = PLATFORMS.flatMap((p) => p.datasets.map((d) => `${p.id}:${d.channel}`));
+    const all = PLATFORMS.flatMap((p) => p.datasets.filter((d) => !d.legacy).map((d) => `${p.id}:${d.channel}`));
     const withData = new Set(files.map((f) => `${f.platform}:${f.channel}`));
     return { all: all.length, active: all.filter((k) => withData.has(k)).length };
   }, [files]);
