@@ -179,6 +179,12 @@
 .bp-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bp-channel-accounts { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--bp-line); scroll-margin-top: 24px; }
 .bp-channel-accounts:focus-visible { outline: 2px solid var(--soft-accent); outline-offset: 4px; border-radius: 12px; }
+.bp-meta-tabs { margin: 0 0 18px; }
+.bp-meta-accounts { margin: 0 0 20px; }
+.bp-meta-accounts .maf-table td { vertical-align: middle; }
+.bp-meta-accounts .form-input { width: 100%; min-width: 180px; padding: .3rem .55rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: .78rem; }
+.bp-meta-accounts .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }
+.bp-meta-accounts .alert { margin: .6rem 0 0; }
 .bp-meta-account-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
 .bp-meta-account-fields .form-group { min-width: 0; margin: 0; }
 .bp-meta-account-fields small { display: block; margin-top: 6px; color: var(--soft-muted); font-size: .76rem; }

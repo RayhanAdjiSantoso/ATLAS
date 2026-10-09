@@ -125,12 +125,6 @@ th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(-
 th { background: var(--bg-elevated); color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
 tr:hover td { background: var(--primary-light); }
 
-/* History Upload: scrolls sideways on a narrow screen instead of clipping the
-   last columns; dates and badges never break mid-value. */
-.history-table-wrap { overflow-x: auto; }
-.history-table td { vertical-align: middle; }
-.history-table td:nth-child(n+3) { white-space: nowrap; }
-.history-table td:nth-child(2) { min-width: 16rem; overflow-wrap: anywhere; }
 .page-header { margin-bottom: 1.5rem; }
 /* Same title scale as the masthead pages (1.4rem / 800), so moving between
    modules does not change the page's first line. */

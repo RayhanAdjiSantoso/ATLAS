@@ -864,7 +864,6 @@ function isPlainObject_(v) {
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
 
-var ZERO_RULE_FIELDS_ = { spend: 1, results: 1 };
 
 /**
  * Validasi & normalisasi satu daftar aturan metrik (weeklyMetrics ATAU
@@ -887,7 +886,7 @@ function normalizeMetricRules_(arr, allowZero, label) {
     var ruleType = r.ruleType === 'zero' ? 'zero' : 'delta';
     if (ruleType === 'zero') {
       if (!allowZero) throw new Error('Aturan "berhenti (nol)" cuma bisa dipakai di metrik Daily (' + label + ').');
-      if (!ZERO_RULE_FIELDS_[field]) throw new Error('Aturan "berhenti (nol)" cuma berlaku untuk field spend atau results (' + label + ').');
+      if (!isZeroRuleField_(field)) throw new Error('Aturan "berhenti (nol)" cuma berlaku untuk spend, results, atau metrik hitungan (mis. Purchases, Leads) (' + label + ').');
       return { id: String(r.id || Utilities.getUuid()), field: field, ruleType: 'zero' };
     }
     var direction = r.direction === 'up' ? 'up' : (r.direction === 'down' ? 'down' : null);

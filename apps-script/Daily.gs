@@ -152,7 +152,7 @@ function dailyUrgentCheck() {
       var baseUntil = new Date(y); baseUntil.setDate(baseUntil.getDate() - 1);
       var baseSince = new Date(baseUntil); baseSince.setDate(baseSince.getDate() - (maxBaseline - 1));
       var byDate = fetchDailyInsights_(token, acct.id, 'campaign',
-        Utilities.formatDate(baseSince, tz, 'yyyy-MM-dd'), yStr);
+        Utilities.formatDate(baseSince, tz, 'yyyy-MM-dd'), yStr, { catalog: acct.type === 'CPAS' });
 
       var brandFindingsCount = 0;
       brandSubs.forEach(function (s) {
@@ -269,10 +269,13 @@ function evaluateBrandDailyForSub_(acct, meta, byDate, tz, sub, yesterdayDate) {
 
     ds.metrics.forEach(function (rule) {
       if (rule.ruleType === 'zero') {
-        if (rule.field !== 'results') return;   // 'spend' sudah ditangani di atas
-        if (dc.resultsPrev < ds.minBaselineRes) return;
+        if (rule.field === 'spend') return;   // sudah ditangani di atas
+        // Results atau metrik hitungan katalog (Purchases, Leads, dst.):
+        // baseline-nya harus cukup besar, sama seperti results.
+        var zf = METRIC_FIELDS[rule.field];
+        if (!zf || !(dc[zf.prev] >= ds.minBaselineRes)) return;
         if (evaluateZeroRule_(dc, rule)) {
-          findings.push(makeFinding_(ctx, rule, zeroFindingTitle_('results'), zeroFindingDetail_('results', ctx), dc));
+          findings.push(makeFinding_(ctx, rule, zeroFindingTitle_(rule.field), zeroFindingDetail_(rule.field, ctx, dc), dc));
         }
         return;
       }
@@ -341,7 +344,7 @@ function buildDailyComparison_(a, b, key, baselineDays) {
   var cprNow  = resNow  ? spendNow  / resNow  : null;
   var cprBase = resBase ? spendBase / resBase : null;
 
-  return {
+  return addCatalogComparison_({
     spendNow: spendNow, spendPrev: spendBase, spendDelta: delta_(spendNow, spendBase),
     resultsNow: resNow, resultsPrev: resBase, resultsDelta: delta_(resNow, resBase),
     cprNow: cprNow, cprPrev: cprBase, cprDelta: (cprNow !== null && cprBase !== null) ? delta_(cprNow, cprBase) : null,
@@ -360,20 +363,27 @@ function buildDailyComparison_(a, b, key, baselineDays) {
     socialSpendNow: socialSpendNow, socialSpendPrev: socialSpendBase, socialSpendDelta: delta_(socialSpendNow, socialSpendBase),
     fullViewImpressionsNow: fullViewImpressionsNow, fullViewImpressionsPrev: fullViewImpressionsBase, fullViewImpressionsDelta: delta_(fullViewImpressionsNow, fullViewImpressionsBase),
     fullViewReachNow: fullViewReachNow, fullViewReachPrev: fullViewReachBase, fullViewReachDelta: delta_(fullViewReachNow, fullViewReachBase)
-  };
+  }, a, b, baselineDays);
 }
 
 function zeroFindingTitle_(field) {
-  return field === 'spend' ? 'Delivery berhenti' : 'Berhenti menghasilkan result';
+  if (field === 'spend') return 'Delivery berhenti';
+  if (field === 'results') return 'Berhenti menghasilkan result';
+  return (FIELD_LABELS[field] || field) + ' berhenti (nol)';
 }
 
-function zeroFindingDetail_(field, ctx) {
+function zeroFindingDetail_(field, ctx, dc) {
   if (field === 'spend') {
     return 'Tidak ada spend kemarin, padahal rata-rata ' + rupiah_(ctx.spendBase) +
       '/hari selama ' + ctx.baselineDays + ' hari sebelumnya.';
   }
-  return 'Nol result kemarin dengan spend ' + rupiah_(ctx.spendNow) +
-    ', padahal rata-rata ' + fmt_(ctx.resBase) + ' result/hari sebelumnya.';
+  if (field === 'results') {
+    return 'Nol result kemarin dengan spend ' + rupiah_(ctx.spendNow) +
+      ', padahal rata-rata ' + fmt_(ctx.resBase) + ' result/hari sebelumnya.';
+  }
+  var label = FIELD_LABELS[field] || field;
+  return 'Nol ' + label + ' kemarin dengan spend ' + rupiah_(ctx.spendNow) +
+    ', padahal rata-rata ' + formatFieldValue_(field, dc[METRIC_FIELDS[field].prev]) + '/hari sebelumnya.';
 }
 
 function deltaFindingDetail_(rule, dc) {

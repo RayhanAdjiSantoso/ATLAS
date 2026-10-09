@@ -4,36 +4,109 @@ import api from '../../api/client.js';
 import BrandCombo from './BrandCombo.jsx';
 import BrandTypeFilter from './BrandTypeFilter.jsx';
 import SearchField from '../common/SearchField.jsx';
+import SelectMenu from '../common/SelectMenu.jsx';
 
-// Katalog field yang bisa dipantau -- BUKAN daftar metrik tetap lagi.
-// User bebas menyusun kombinasi field + arah + threshold sendiri lewat
-// rule builder di bawah. 'zero' (berhenti total, tanpa threshold) cuma
-// masuk akal & cuma diizinkan untuk spend/results, dan cuma di grup Daily
-// (Weekly tidak punya konsep "kemarin").
-const FIELD_OPTIONS = [
-  { value: 'spend', label: 'Spend' },
-  { value: 'results', label: 'Result' },
-  { value: 'cpr', label: 'Cost per Result' },
-  { value: 'ctr', label: 'CTR' },
-  { value: 'cpm', label: 'CPM' },
-  { value: 'frequency', label: 'Frequency' },
-  { value: 'impressions', label: 'Impressions' },
-  { value: 'reach', label: 'Reach' },
-  { value: 'clicks', label: 'Clicks' },
-  { value: 'cpc', label: 'CPC (Cost per Click)' },
-  { value: 'uniqueClicks', label: 'Unique Clicks' },
-  { value: 'inlineLinkClicks', label: 'Link Clicks' },
-  { value: 'costPerInlineLinkClick', label: 'Cost per Link Click' },
-  { value: 'uniqueCtr', label: 'Unique CTR' },
-  { value: 'costPerUniqueClick', label: 'Cost per Unique Click' },
-  { value: 'socialSpend', label: 'Social Spend' },
-  { value: 'fullViewImpressions', label: 'Full View Impressions' },
-  { value: 'fullViewReach', label: 'Full View Reach' },
+// Field yang bisa dipantau = metrik yang ditarik Meta Automation ke ATLAS
+// (backend/src/config/metaAdsMetrics.js), per section. Key-nya = key
+// METRIC_FIELDS / CATALOG_ALERT_METRICS di apps-script/Weekly.gs, yang
+// menghitungnya untuk alert. Metrik yang ada di setiap section cukup
+// tampil sekali di "Semua campaign".
+const ALL_SECTIONS = 'Semua campaign';
+const FIELD_GROUPS = [
+  { group: ALL_SECTIONS, types: ['MAIN', 'CPAS'], fields: [
+    ['spend', 'Amount spent (IDR)'],
+    ['impressions', 'Impressions'],
+    ['cpm', 'CPM (cost per 1,000 impressions)'],
+    ['inlineLinkClicks', 'Link clicks'],
+    ['costPerInlineLinkClick', 'CPC (cost per link click)'],
+    ['linkCtr', 'CTR (link click-through rate)'],
+  ] },
+  { group: 'Boost Post', types: ['MAIN'], fields: [
+    ['profile_visits', 'Instagram profile visits'],
+    ['cost_per_profile_visit', 'Cost per Instagram profile visit'],
+    ['profile_visit_rate', 'Profile visit rate'],
+    ['interactions', 'Post interactions'],
+    ['cost_per_interaction', 'Cost per post interaction'],
+  ] },
+  { group: 'Non Boost Post (E-commerce)', types: ['MAIN'], fields: [
+    ['purchase_value', 'Purchases conversion value'],
+    ['purchase_roas', 'Purchase ROAS (return on ad spend)'],
+    ['content_views', 'Content views'],
+    ['cost_per_content_view', 'Cost per content view'],
+    ['adds_to_cart', 'Adds to cart'],
+    ['cost_per_add_to_cart', 'Cost per add to cart'],
+    ['add_to_cart_rate', 'Add to cart rate'],
+    ['purchases', 'Purchases'],
+    ['cost_per_purchase', 'Cost per purchase'],
+    ['purchase_rate', 'Purchase rate'],
+    ['conversion_rate', 'Conversion rate (purchases ÷ content views)'],
+    ['average_order_value', 'Average order value'],
+  ] },
+  { group: 'Non Boost Post (B2B)', types: ['MAIN'], fields: [
+    ['leads', 'Leads'],
+    ['cost_per_lead', 'Cost per lead'],
+    ['messaging_contacts', 'Messaging contacts'],
+    ['cost_per_messaging_contact', 'Cost per messaging contact'],
+    ['messaging_conversations', 'Messaging conversations started'],
+    ['cost_per_messaging_conversation', 'Cost per messaging conversation started'],
+    ['lead_conversion_rate', 'Lead conversion rate (leads ÷ link clicks)'],
+  ] },
+  { group: 'CPAS', types: ['CPAS'], fields: [
+    ['shared_purchase_value', 'Purchases conversion value for shared items only'],
+    ['shared_purchase_roas', 'Purchase ROAS for shared items only'],
+    ['shared_content_views', 'Content views with shared items'],
+    ['cost_per_shared_content_view', 'Cost per content view with shared items'],
+    ['shared_adds_to_cart', 'Adds to cart with shared items'],
+    ['cost_per_shared_add_to_cart', 'Cost per add to cart with shared items'],
+    ['shared_add_to_cart_rate', 'Add to cart rate with shared items'],
+    ['shared_purchases', 'Purchases with shared items'],
+    ['cost_per_shared_purchase', 'Cost per purchase with shared items'],
+    ['shared_purchase_rate', 'Purchase rate with shared items'],
+    ['shared_conversion_rate', 'Conversion rate with shared items'],
+    ['shared_average_order_value', 'Average order value with shared items'],
+  ] },
 ];
-const ZERO_ALLOWED_FIELDS = ['spend', 'results'];
+const CATALOG_OPTIONS = FIELD_GROUPS.flatMap(({ group, types, fields }) =>
+  fields.map(([value, label]) => ({ value, label, group, types })));
+
+// Field sebelum katalog. Apps Script masih menghitungnya, jadi langganan
+// lama tetap jalan; form hanya menampilkannya pada aturan yang memakainya.
+const LEGACY_LABELS = {
+  results: 'Result', cpr: 'Cost per Result', ctr: 'CTR (semua klik)', frequency: 'Frequency', reach: 'Reach',
+  clicks: 'Clicks', cpc: 'CPC (semua klik)', uniqueClicks: 'Unique Clicks', uniqueCtr: 'Unique CTR',
+  costPerUniqueClick: 'Cost per Unique Click', socialSpend: 'Social Spend',
+  fullViewImpressions: 'Full View Impressions', fullViewReach: 'Full View Reach',
+};
+
+// Pilihan field untuk tipe akun ini ('' = belum dipilih: semua), satu daftar
+// urut abjad tanpa judul section, plus field
+// aturan yang sedang dipakai kalau tidak termasuk (field lama / tipe lain).
+function fieldOptionsFor(accountType, currentField) {
+  const options = CATALOG_OPTIONS
+    .filter((o) => !accountType || o.types.includes(accountType))
+    .map(({ value, label }) => ({ value, label }))
+    .sort((x, y) => x.label.localeCompare(y.label, 'en', { sensitivity: 'base' }));
+  if (currentField && !options.some((o) => o.value === currentField)) {
+    const other = CATALOG_OPTIONS.find((o) => o.value === currentField);
+    options.unshift(other
+      ? { value: other.value, label: other.label }
+      : { value: currentField, label: `${LEGACY_LABELS[currentField] ?? currentField} (field lama)` });
+  }
+  return options;
+}
+
+// "Berhenti (nol)": spend, results, dan metrik hitungan (isZeroRuleField_ di Weekly.gs).
+const ZERO_ALLOWED_FIELDS = [
+  'spend', 'results', 'profile_visits', 'interactions', 'content_views', 'adds_to_cart', 'purchases',
+  'leads', 'messaging_contacts', 'messaging_conversations',
+  'shared_content_views', 'shared_adds_to_cart', 'shared_purchases',
+];
+
+const RULE_TYPE_OPTIONS = [{ value: 'delta', label: 'Perubahan (%)' }, { value: 'zero', label: 'Berhenti (nol)' }];
+const DIRECTION_OPTIONS = [{ value: 'down', label: 'Turun' }, { value: 'up', label: 'Naik' }];
 
 function newRule() {
-  return { id: null, field: 'results', ruleType: 'delta', direction: 'down', threshold: '' };
+  return { id: null, field: 'spend', ruleType: 'delta', direction: 'down', threshold: '' };
 }
 
 function ruleToForm(r) {
@@ -98,41 +171,35 @@ function subscriptionToForm(s, brands) {
   };
 }
 
-function RuleRow({ rule, onChange, onRemove, allowZero }) {
+function RuleRow({ rule, onChange, onRemove, allowZero, accountType }) {
   return (
     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-      <div style={{ width: '160px' }}>
+      <div style={{ width: '300px', maxWidth: '100%' }}>
         <label style={{ fontSize: '0.75rem', fontWeight: 400 }}>Field</label>
-        <select
+        <SelectMenu
+          label="Field"
+          searchable
+          searchPlaceholder="Cari metrik…"
           value={rule.field}
-          style={{ width: '100%' }}
-          onChange={(e) => {
-            const field = e.target.value;
+          options={fieldOptionsFor(accountType, rule.field)}
+          onChange={(field) => {
             const next = { ...rule, field };
             if (next.ruleType === 'zero' && !ZERO_ALLOWED_FIELDS.includes(field)) next.ruleType = 'delta';
             onChange(next);
           }}
-        >
-          {FIELD_OPTIONS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-        </select>
+        />
       </div>
       {allowZero && ZERO_ALLOWED_FIELDS.includes(rule.field) && (
         <div style={{ width: '160px' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: 400 }}>Tipe Aturan</label>
-          <select value={rule.ruleType} style={{ width: '100%' }} onChange={(e) => onChange({ ...rule, ruleType: e.target.value })}>
-            <option value="delta">Perubahan (%)</option>
-            <option value="zero">Berhenti (nol)</option>
-          </select>
+          <SelectMenu label="Tipe Aturan" value={rule.ruleType} options={RULE_TYPE_OPTIONS} onChange={(ruleType) => onChange({ ...rule, ruleType })} />
         </div>
       )}
       {rule.ruleType === 'delta' && (
         <>
           <div style={{ width: '160px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 400 }}>Arah</label>
-            <select value={rule.direction} style={{ width: '100%' }} onChange={(e) => onChange({ ...rule, direction: e.target.value })}>
-              <option value="down">Turun</option>
-              <option value="up">Naik</option>
-            </select>
+            <SelectMenu label="Arah" value={rule.direction} options={DIRECTION_OPTIONS} onChange={(direction) => onChange({ ...rule, direction })} />
           </div>
           <div style={{ width: '160px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 400 }}>Threshold (%)</label>
@@ -215,9 +282,12 @@ function GuardHelp() {
   );
 }
 
-export default function SubscriptionsSection() {
+// `brand` (an ATLAS brand, from Brand Setting › Data Collection Hub) scopes
+// the section to that brand's linked ad accounts: only their subscriptions
+// are listed and the form picks one of those accounts instead of any brand.
+export default function SubscriptionsSection({ brand: scope = null, readOnly = false }) {
   const [subscriptions, setSubscriptions] = useState([]);
-  const [brands, setBrands] = useState([]);
+  const [allBrands, setAllBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -229,6 +299,9 @@ export default function SubscriptionsSection() {
   const [formMessage, setFormMessage] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
+  const scopedBase = scope ? `/meta-automation/brand/${encodeURIComponent(scope.brand_id)}` : null;
+  const subscriptionsUrl = scope ? `${scopedBase}/subscriptions` : '/meta-automation/subscriptions';
+
   const load = async () => {
     setLoading(true);
     setError('');
@@ -237,10 +310,18 @@ export default function SubscriptionsSection() {
       // so the two requests never overlap (concurrent calls to one Apps
       // Script project can make Google's front end serve an interstitial
       // page instead of proxying through — see metaAutomationService.js).
+      // Scoped to a brand: one brand-limited call (also open to Brand
+      // Setting users without Meta Ads Automation), already filtered.
+      if (scope) {
+        const res = await api.get(`${scopedBase}/subscriptions`);
+        setSubscriptions(res.data.subscriptions || []);
+        setAllBrands(res.data.accounts || []);
+        return;
+      }
       const subsRes = await api.get('/meta-automation/subscriptions');
       const brandsRes = await api.get('/meta-automation/brands');
       setSubscriptions(subsRes.data.subscriptions || []);
-      setBrands(brandsRes.data.brands || []);
+      setAllBrands(brandsRes.data.brands || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal memuat langganan');
     } finally {
@@ -253,6 +334,12 @@ export default function SubscriptionsSection() {
   // function and crash the whole tree the moment it tries to call it —
   // wrap it so the effect callback itself returns nothing.
   useEffect(() => { load(); }, []);
+
+  const brands = scope
+    ? allBrands.filter((b) => Number(b.atlasBrandId) === Number(scope.brand_id))
+    : allBrands;
+  const scopedIds = scope ? new Set(brands.map((b) => b.id)) : null;
+  const visibleSubscriptions = scopedIds ? subscriptions.filter((s) => scopedIds.has(s.brandId)) : subscriptions;
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -289,7 +376,7 @@ export default function SubscriptionsSection() {
       return;
     }
     if (!form.brandId) {
-      setFormMessage({ type: 'error', text: 'Brand & Tipe Ad Account wajib dipilih.' });
+      setFormMessage({ type: 'error', text: scope ? 'Ad Account wajib dipilih.' : 'Brand & Tipe Ad Account wajib dipilih.' });
       return;
     }
     if (!form.weeklyMetrics.length && !form.dailyMetrics.length) {
@@ -325,8 +412,8 @@ export default function SubscriptionsSection() {
     setFormMessage(null);
     try {
       const res = isEditing
-        ? await api.put(`/meta-automation/subscriptions/${encodeURIComponent(form.id)}`, payload)
-        : await api.post('/meta-automation/subscriptions', payload);
+        ? await api.put(`${subscriptionsUrl}/${encodeURIComponent(form.id)}`, payload)
+        : await api.post(subscriptionsUrl, payload);
       setFormMessage({ type: 'success', text: `Tersimpan: langganan "${res.data.subscription.email}" untuk "${res.data.subscription.brandClient}".` });
       resetForm();
       load();
@@ -344,7 +431,8 @@ export default function SubscriptionsSection() {
     setDeletingId(s.id);
     setError('');
     try {
-      const res = await api.delete(`/meta-automation/subscriptions/${encodeURIComponent(s.id)}`);
+      const res = await api.delete(`${subscriptionsUrl}/${encodeURIComponent(s.id)}`);
+      if (form.id === s.id) resetForm();
       setSubscriptions(res.data.subscriptions || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menghapus langganan');
@@ -360,7 +448,7 @@ export default function SubscriptionsSection() {
       .map((b) => b.id))
     : null;
 
-  const filtered = subscriptions.filter((s) => {
+  const filtered = visibleSubscriptions.filter((s) => {
     if (filterEmail && !s.email.toLowerCase().includes(filterEmail.toLowerCase())) return false;
     if (filterBrandIds && !filterBrandIds.has(s.brandId)) return false;
     return true;
@@ -375,28 +463,34 @@ export default function SubscriptionsSection() {
         </div>
       )}
 
-      <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Saring Email</label>
-          <SearchField value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} placeholder="Cari email…" aria-label="Cari email" />
+      {scope ? (
+        !loading && brands.length === 0 && (
+          <div className="alert alert-warning">Belum ada akun Meta Ads untuk {scope.brand_name}. Tambahkan akun di tab Akun dulu, lalu buat langganan untuk akun itu.</div>
+        )
+      ) : (
+        <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Saring Email</label>
+            <SearchField value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} placeholder="Cari email…" aria-label="Cari email" />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Saring Brand</label>
+            <BrandTypeFilter brands={brands} value={filterBrand} onChange={setFilterBrand} />
+          </div>
         </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Saring Brand</label>
-          <BrandTypeFilter brands={brands} value={filterBrand} onChange={setFilterBrand} />
-        </div>
-      </div>
+      )}
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
           <div className="empty-state">Memuat...</div>
         ) : filtered.length === 0 ? (
-          <div className="empty-state">{subscriptions.length === 0 ? 'Belum ada langganan.' : 'Tidak ada langganan yang cocok dengan saringan.'}</div>
+          <div className="empty-state">{visibleSubscriptions.length === 0 ? 'Belum ada langganan.' : 'Tidak ada langganan yang cocok dengan saringan.'}</div>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>Email</th>
-                <th>Brand</th>
+                {scope ? <th>ID Ad Account</th> : <th>Brand</th>}
                 <th>Tipe</th>
                 <th>Aturan Weekly</th>
                 <th>Aturan Daily</th>
@@ -408,21 +502,21 @@ export default function SubscriptionsSection() {
               {filtered.map((s) => (
                 <tr key={s.id}>
                   <td>{s.email}</td>
-                  <td>{s.brandClient}</td>
+                  <td>{scope ? s.brandId : s.brandClient}</td>
                   <td>{brands.find((b) => b.id === s.brandId)?.type || '-'}</td>
                   <td>{(s.weeklyMetrics || []).length}</td>
                   <td>{(s.dailyMetrics || []).length}</td>
                   <td>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('id-ID') : '-'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button type="button" className="btn btn-secondary btn-icon" title="Edit" onClick={() => handleEdit(s)}>
+                      <button type="button" className="btn btn-secondary btn-icon" title="Edit" disabled={readOnly} onClick={() => handleEdit(s)}>
                         <Pencil size={16} />
                       </button>
                       <button
                         type="button"
                         className="btn btn-danger btn-icon"
                         title="Hapus"
-                        disabled={deletingId === s.id}
+                        disabled={readOnly || deletingId === s.id}
                         onClick={() => handleDelete(s)}
                       >
                         <Trash2 size={16} />
@@ -439,7 +533,7 @@ export default function SubscriptionsSection() {
       <div className="card">
         <h3 style={{ marginBottom: '0.5rem' }}>{isEditing ? `Edit Langganan: ${form.email}` : 'Tambah Langganan Notifikasi'}</h3>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: scope ? '1fr 1fr' : '1fr 1fr 1fr', gap: '1rem' }}>
           <div className="form-group">
             <label>Email Penerima</label>
             <input
@@ -452,6 +546,21 @@ export default function SubscriptionsSection() {
             />
             {isEditing && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Tidak bisa diubah.</p>}
           </div>
+          {scope ? (
+            <div className="form-group">
+              <label>Ad Account</label>
+              <SelectMenu
+                label="Ad Account"
+                placeholder="Pilih ad account…"
+                value={form.brandId}
+                options={brands.map((b) => ({ value: b.id, label: b.id, description: b.type || 'MAIN' }))}
+                onChange={(brandId) => {
+                  const match = brands.find((b) => b.id === brandId);
+                  setForm((f) => ({ ...f, brandId: match ? match.id : '', brand: match ? match.client : '', type: match ? (match.type || 'MAIN') : '' }));
+                }}
+              />
+            </div>
+          ) : (<>
           <div className="form-group">
             <label>Brand</label>
             <BrandCombo
@@ -463,20 +572,19 @@ export default function SubscriptionsSection() {
           </div>
           <div className="form-group">
             <label>Tipe Ad Account</label>
-            <select
+            <SelectMenu
+              label="Tipe Ad Account"
               value={form.type}
               disabled={!form.brand}
-              style={{ width: '100%' }}
-              onChange={(e) => {
-                const type = e.target.value;
+              placeholder={form.brand ? 'Pilih tipe…' : 'Pilih brand dulu'}
+              options={typesForBrand.map((t) => ({ value: t, label: t }))}
+              onChange={(type) => {
                 const match = brands.find((b) => b.client === form.brand && (b.type || 'MAIN') === type);
                 setForm((f) => ({ ...f, type, brandId: match ? match.id : '' }));
               }}
-            >
-              <option value="">{form.brand ? 'Pilih tipe...' : 'Pilih brand dulu'}</option>
-              {typesForBrand.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            />
           </div>
+          </>)}
         </div>
 
         {duplicate && (
@@ -489,13 +597,14 @@ export default function SubscriptionsSection() {
         <div className="form-group">
           <label>Aturan Weekly Campaign Review — dibanding {weeklyDaysLabel} hari sebelumnya</label>
           <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            Susun sendiri field mana yang dipantau, arahnya, dan threshold-nya. Tidak terbatas pilihan tetap.
+            Susun sendiri metrik mana yang dipantau, arahnya, dan threshold-nya. Pilihan metrik mengikuti tipe ad account (MAIN atau CPAS).
           </p>
           {form.weeklyMetrics.map((rule, idx) => (
             <RuleRow
               key={idx}
               rule={rule}
               allowZero={false}
+              accountType={form.type}
               onChange={(next) => updateWeeklyRule(idx, next)}
               onRemove={() => setForm((f) => ({ ...f, weeklyMetrics: f.weeklyMetrics.filter((_, i) => i !== idx) }))}
             />
@@ -526,13 +635,14 @@ export default function SubscriptionsSection() {
         <div className="form-group">
           <label>Aturan Daily Urgent Check — dibanding rata-rata harian {baselineDaysLabel} hari sebelumnya</label>
           <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            Sama seperti Weekly, tapi juga bisa aturan "Berhenti (nol)" untuk Spend/Result (dulu disebut Delivery/Result berhenti) -- tanpa threshold.
+            Sama seperti Weekly, tapi juga bisa aturan "Berhenti (nol)" untuk Amount spent dan metrik hitungan (mis. Purchases, Leads, Instagram profile visits) -- tanpa threshold.
           </p>
           {form.dailyMetrics.map((rule, idx) => (
             <RuleRow
               key={idx}
               rule={rule}
               allowZero
+              accountType={form.type}
               onChange={(next) => updateDailyRule(idx, next)}
               onRemove={() => setForm((f) => ({ ...f, dailyMetrics: f.dailyMetrics.filter((_, i) => i !== idx) }))}
             />
@@ -589,7 +699,7 @@ export default function SubscriptionsSection() {
         {formMessage && <div className={`alert alert-${formMessage.type}`}>{formMessage.text}</div>}
 
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving || !!duplicate}>
+          <button type="button" className="btn btn-primary" onClick={handleSave} disabled={readOnly || saving || !!duplicate}>
             {saving ? 'Menyimpan...' : 'Simpan'}
           </button>
           <button type="button" className="btn btn-secondary" onClick={resetForm} disabled={saving}>

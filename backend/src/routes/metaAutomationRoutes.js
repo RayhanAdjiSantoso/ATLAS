@@ -1,8 +1,21 @@
 import { Router } from 'express';
 import { authenticate, requireModule } from '../middlewares/auth.js';
+import { blockWriteIfViewOnly, requireBrandAccess } from '../middlewares/brandAccess.js';
 import * as metaAutomationController from '../controllers/metaAutomationController.js';
 
 const router = Router();
+
+// Subscriptions for one brand's linked ad accounts, from Brand Setting. Also
+// open to roles with Brand Setting but not Meta Ads Automation (User
+// internal); the controller keeps every read and write inside the brand.
+const brandScoped = [
+  authenticate, requireModule('meta_automation', 'brand_settings'),
+  requireBrandAccess((req) => req.params.brandId), blockWriteIfViewOnly,
+];
+router.get('/brand/:brandId/subscriptions', brandScoped, metaAutomationController.brandSubscriptionList);
+router.post('/brand/:brandId/subscriptions', brandScoped, metaAutomationController.brandSubscriptionCreate);
+router.put('/brand/:brandId/subscriptions/:id', brandScoped, metaAutomationController.brandSubscriptionUpdate);
+router.delete('/brand/:brandId/subscriptions/:id', brandScoped, metaAutomationController.brandSubscriptionDelete);
 
 router.use(authenticate, requireModule('meta_automation'));
 

@@ -5,6 +5,10 @@ import { useAuth } from '../../contexts/AuthContext.jsx';
 import SelectMenu from '../common/SelectMenu.jsx';
 import './metaAdsAutoFetch.css';
 
+// The breakdown every file carries, in this order (BREAKDOWNS in
+// backend/src/config/metaAdsMetrics.js).
+const BREAKDOWNS = ['Campaign name', 'Ad set name', 'Ad name', 'Age', 'Gender', 'Objective', 'Day'];
+
 const TYPES = [
   { type: 'MAIN', label: 'Meta Ads' },
   { type: 'CPAS', label: 'CPAS' },
@@ -62,7 +66,10 @@ function runState(run) {
 // same rule Daily Tracking's auto-fill uses. Admin only: it reaches the Meta
 // tokens held in Apps Script.
 // `onOpenAutomation` scrolls to the account form in the same Meta Ads channel.
-export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLibraryChanged, onOpenAutomation }) {
+// `specFocus` ({ type, sections, at }, from a Meta dataset row) switches to
+// that account type, scrolls to the breakdown & metrics, and briefly
+// highlights the sections that dataset's file holds.
+export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLibraryChanged, onOpenAutomation, specFocus }) {
   const { isAdmin, isViewOnly } = useAuth();
   const brandId = brand?.brand_id;
 
@@ -77,6 +84,24 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
   const pollUntil = useRef(0);
   const pollTimer = useRef(null);
   const libraryTimer = useRef(null);
+  const specsRef = useRef(null);
+  const rootRef = useRef(null);
+  const [highlight, setHighlight] = useState([]);
+
+  useEffect(() => {
+    if (!specFocus) return undefined;
+    setType(specFocus.type);
+    setHighlight(specFocus.sections ?? []);
+    const frame = requestAnimationFrame(() => {
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      // Still loading: the metrics block is not there yet, land on the panel.
+      const target = specsRef.current ?? rootRef.current;
+      target?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      specsRef.current?.focus({ preventScroll: true });
+    });
+    const timer = setTimeout(() => setHighlight([]), 2600);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [specFocus]);
 
   const loadOverview = useCallback(async () => {
     if (!brandId) return null;
@@ -180,7 +205,7 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
   const canAct = typeRegistered && !readOnly;
 
   return (
-    <section className="maf" aria-label="Tarik otomatis Meta Ads">
+    <section ref={rootRef} className="maf" aria-label="Tarik otomatis Meta Ads">
       <header className="maf-head">
         <span className="maf-head-icon" aria-hidden="true"><CalendarClock size={18} /></span>
         <div>
@@ -228,10 +253,14 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
         <p className="maf-loading"><Loader2 size={14} className="maf-spin" /> Memuat…</p>
       ) : (
         <>
-          <div className="maf-block">
-            <h4>Metrik</h4>
+          <div className="maf-block" ref={specsRef} tabIndex={-1}>
+            <h4>Breakdown</h4>
+            <div className="maf-chips" aria-label="Breakdown">
+              {BREAKDOWNS.map((b) => <span key={b} className="maf-chip is-locked">{b}</span>)}
+            </div>
+            <h4 className="maf-sub">Metrik per jenis campaign</h4>
             {sections.map((section) => (
-              <div key={section.key} className="maf-section">
+              <div key={section.key} className={`maf-section${highlight.includes(section.key) ? ' is-highlight' : ''}`}>
                 <h5>{section.label}</h5>
                 <div className="maf-chips" aria-label={`Metrik ${section.label}`}>
                   {section.metrics.map((m) => <span key={m.key} className="maf-chip is-locked">{m.label}</span>)}
@@ -239,9 +268,9 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
               </div>
             ))}
             <p className="maf-hint">
-              Breakdown: campaign name, ad set name, ad name, age, gender, objective, day.
+              Setiap file (unggah manual maupun tarik otomatis) memakai breakdown dan metrik di atas.
               {type === 'MAIN'
-                ? ' Boost Post dan Non Boost Post dipisah dari Kata Kunci Boost Post akun (campaign yang namanya mengandung kata itu = Boost Post). Non Boost Post menyimpan metrik E-commerce dan B2B sekaligus. Profile visit diambil dari Results campaign profile visit; Post interactions = post reactions + comments + saves + shares.'
+                ? ' Boost Post dan Non Boost Post dipisah dari Kata Kunci Boost Post akun (campaign yang namanya mengandung kata itu = Boost Post). Non Boost Post menyimpan metrik E-commerce dan B2B sekaligus. Profile visit diambil dari Results campaign profile visit; Post interactions = Facebook likes + post comments + post saves + post shares.'
                 : ' Metrik "with shared items" adalah angka produk katalog yang dibagikan (CPAS).'}
             </p>
           </div>
@@ -306,7 +335,7 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
               <p className="maf-hint">Belum ada penarikan.</p>
             ) : (
               <ul className="maf-runs">
-                {overview.runs.slice(0, 8).map((run, index) => {
+                {overview.runs.slice(0, 5).map((run, index) => {
                   const state = runState(run);
                   return (
                     <li key={`${run.startedAt}-${index}`}>

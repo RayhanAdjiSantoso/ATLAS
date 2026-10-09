@@ -10,6 +10,7 @@ import {
   ChevronsDownUp, ChevronsUpDown, CalendarRange, HelpCircle,
 } from 'lucide-react';
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
+import MetaDatasetSpecs from '../components/brandSettings/MetaDatasetSpecs.jsx';
 import GoogleAdsSection from '../components/brandSettings/GoogleAdsSection.jsx';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -57,9 +58,10 @@ async function downloadLibraryFile(file) {
 // modules read as one product. Inside Performance Database:
 //
 //   1. One platform at a time, switched from a tab row under the card.
-//   2. The month axis is windowed, never unbounded. A brand accumulates a new
-//      month forever; the matrix shows MONTH_WINDOW of them at a time with
-//      paging, and picking one month narrows the whole panel to it — table,
+//   2. The month axis is a window of MONTH_WINDOW months, ending at the
+//      current month by default and paged back as far as needed (the same
+//      reach as Brand Tracking's month picker, not just back to the oldest
+//      file), and picking one month narrows the whole panel to it — table,
 //      day detail, and every upload target. That is also what makes uploading
 //      unambiguous: a file dropped while "Juni 2026" is selected is stored
 //      against June, not against "whatever the file looked like".
@@ -90,9 +92,13 @@ const PLATFORMS = [
       // and the server splits its rows into both slots by campaign name
       // (services/metaUploadSplit.js). The API auto-fetch splits by the
       // account's Kata Kunci Boost Post instead.
-      { channel: 'boost', uploadChannel: 'meta', name: 'Boost Post', hint: 'Export Ads Manager · campaign Boost dipisah otomatis dari file Meta Ads', kind: 'core' },
-      { channel: 'nonboost', uploadChannel: 'meta', name: 'Non Boost Post', hint: 'Export Ads Manager · campaign E-commerce & B2B selain Boost', kind: 'core' },
-      { channel: 'cpas', name: 'CPAS', hint: 'CPAS Shopee/Tokopedia · breakdown umur, gender & bulan', kind: 'core' },
+      // `specs` points at the account type and catalog sections in Automate
+      // Input with API (MetaAdsAutoFetchPanel), which lists the breakdowns
+      // and metrics each file needs — the hint stays short instead of
+      // repeating them.
+      { channel: 'boost', uploadChannel: 'meta', name: 'Boost Post', hint: 'Export Ads Manager · campaign Boost Post', kind: 'core', specs: { type: 'MAIN', sections: ['boost'] } },
+      { channel: 'nonboost', uploadChannel: 'meta', name: 'Non Boost Post', hint: 'Export Ads Manager · campaign E-commerce & B2B', kind: 'core', specs: { type: 'MAIN', sections: ['ecom', 'b2b'] } },
+      { channel: 'cpas', name: 'CPAS', hint: 'Export Ads Manager · akun CPAS Shopee/Tokopedia', kind: 'core', specs: { type: 'CPAS', sections: ['cpas'] } },
       // The combined file of before the split. Shown only for brands that
       // still have one; an upload here is split like any other Meta export.
       { channel: 'meta', uploadChannel: 'meta', name: 'Meta Ads (gabungan lama)', hint: 'File gabungan sebelum Boost & Non-Boost dipisah · unggahan baru masuk ke dua slot di atas', kind: 'extra', legacy: true },
@@ -106,15 +112,15 @@ const PLATFORMS = [
     wash: '#ff6a3d',
     tint: 'rgba(238,77,45,.13)',
     datasets: [
-      { channel: 'order', name: 'Order', hint: 'Pesanan Shopee · semua status', kind: 'core' },
-      { channel: 'performance_overview', name: 'Performance Overview', hint: 'Kinerja harian toko', kind: 'core' },
-      { channel: 'product_performance', name: 'Product Performance', hint: 'Produk · status Siap Dikirim', kind: 'core' },
-      { channel: 'produk', name: 'Iklan Produk', hint: 'Iklan produk (manual)', kind: 'core' },
-      { channel: 'produk_otomatis', name: 'Iklan Produk Otomatis', hint: 'Iklan produk mode otomatis', kind: 'extra' },
-      { channel: 'toko', name: 'Iklan Toko', hint: 'Iklan toko', kind: 'extra' },
-      { channel: 'toko_keyword', name: 'Iklan Toko — Keyword', hint: 'Kata pencarian per iklan toko', kind: 'extra' },
-      { channel: 'live', name: 'Iklan Live', hint: 'Sesi live yang diiklankan', kind: 'extra' },
-      { channel: 'overview', name: 'Product / Store Overview', hint: 'Kunjungan & konversi harian', kind: 'extra' },
+      { channel: 'order', name: 'Order', hint: 'Seller Centre › Pesanan Saya › Semua', kind: 'core' },
+      { channel: 'performance_overview', name: 'Performance Overview', hint: 'Seller Centre › Performa Toko › Tinjauan › Status Siap Dikirim', kind: 'core' },
+      { channel: 'overview', name: 'Product Overview', hint: 'Seller Centre › Performa Toko › Produk › Tinjauan Produk', kind: 'extra' },
+      { channel: 'product_performance', name: 'Product Performance', hint: 'Seller Centre › Performa Toko › Produk › Performa Produk › Status Siap Dikirim', kind: 'core' },
+      { channel: 'produk', name: 'Iklan Produk', hint: 'Seller Centre › Iklan Shopee › Iklan Produk › Download "Data Keseluruhan Iklan"', kind: 'core' },
+      { channel: 'produk_otomatis', name: 'Iklan Produk Otomatis', hint: 'Seller Centre › Iklan Shopee › Iklan Produk › Download "Rincian Data Iklan Produk Otomatis"', kind: 'extra' },
+      { channel: 'toko', name: 'Iklan Toko', hint: 'Seller Centre › Iklan Shopee › Iklan Toko+ › Download "Shop+ Ads Data"', kind: 'extra' },
+      { channel: 'toko_keyword', name: 'Iklan Toko — Keyword', hint: 'Seller Centre › Iklan Shopee › Iklan Toko+ › Download "Data Kata Pencarian"', kind: 'extra' },
+      { channel: 'live', name: 'Iklan Live', hint: 'Seller Centre › Iklan Shopee › Iklan Live', kind: 'extra' },
       { channel: 'product_master', name: 'Referensi Kategori Produk', hint: 'Nama produk → Category / Series', kind: 'reference' },
     ],
   },
@@ -172,17 +178,17 @@ const VIEWS = [
   { id: 'data', hint: 'Input Performance Data', label: 'Performance Database', Icon: Archive },
   { id: 'mom', hint: 'Recap & to do list', label: 'Minutes of Meeting', Icon: UsersRound },
 ];
-const DATABASE_VIEWS = [
-  { id: 'files', label: 'Input Performance Data', Icon: Database },
-];
 
 /* ── Month model ────────────────────────────────────────────────────────
-   Months are derived from what the brand actually has (plus the current
-   month), never hard-coded, so the axis grows with the data instead of
-   being a fixed four columns. */
+   A window of MONTH_WINDOW months ending at `endKey`. Not bounded by the
+   brand's files: paging back reaches any earlier month, as Brand Tracking's
+   month picker does, so a month can be filled before anything exists around
+   it. Paging forward stops at the current month — nothing is uploaded for a
+   month that has not started. */
 
 const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
+const shiftMonthKey = (key, delta) => monthKey(new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1 + delta, 1));
 
 function buildMonth(key) {
   const [year, month] = key.split('-').map(Number);
@@ -196,26 +202,8 @@ function buildMonth(key) {
   };
 }
 
-function buildMonthAxis(files) {
-  const now = new Date();
-  const keys = files.map((f) => f.period_month?.slice(0, 7)).filter(Boolean);
-  const latest = monthKey(now);
-  const earliestKey = keys.length ? keys.slice().sort()[0] : null;
-
-  // Always show at least one full window ending at the current month, even
-  // for a brand with no files yet — an empty grid you can click into beats
-  // an empty state with nothing to aim at.
-  const fallback = new Date(now.getFullYear(), now.getMonth() - (MONTH_WINDOW - 1), 1);
-  const start = earliestKey && earliestKey < monthKey(fallback) ? earliestKey : monthKey(fallback);
-
-  const axis = [];
-  const cursor = new Date(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, 1);
-  const end = new Date(Number(latest.slice(0, 4)), Number(latest.slice(5, 7)) - 1, 1);
-  while (cursor <= end && axis.length < 120) {
-    axis.push(buildMonth(monthKey(cursor)));
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-  return axis;
+function monthWindow(endKey) {
+  return Array.from({ length: MONTH_WINDOW }, (_, i) => buildMonth(shiftMonthKey(endKey, i - (MONTH_WINDOW - 1))));
 }
 
 const fileKey = (platform, channel, month) => `${platform}:${channel}:${month ?? 'ref'}`;
@@ -776,7 +764,7 @@ function DayStrip({ merged, month, wash }) {
   );
 }
 
-function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick, onDelete, onReimport, busyKey, targetMonth }) {
+function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick, onDelete, onReimport, busyKey, targetMonth, onShowSpecs }) {
   const [open, setOpen] = useState(false);
   const isReference = dataset.kind === 'reference';
   const status = datasetStatus(dataset, months, lookup, platform.id);
@@ -864,6 +852,17 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
             transition={{ duration: .24, ease: EASE }}
           >
             <div className="brand-ds-detail-inner">
+              {dataset.specs && (onShowSpecs ? (
+                <p className="brand-ds-note">
+                  <button type="button" className="brand-inline-link" onClick={() => onShowSpecs(dataset.specs)}>
+                    Lihat breakdown &amp; metrik yang harus ada
+                  </button>
+                  <span>di Automate Input with API</span>
+                </p>
+              ) : (
+                // Non-admins cannot open Automate Input with API: show the list here.
+                <MetaDatasetSpecs sections={dataset.specs.sections} />
+              ))}
               {isReference
                 ? <p className="brand-ds-note">File referensi tanpa periode. ATLAS memakainya untuk memetakan nama produk ke Category / Series di seluruh laporan.</p>
                 : (
@@ -946,14 +945,14 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
   );
 }
 
-function MonthRail({ axis, windowStart, setWindowStart, focus, setFocus, lookup, platformId, reduced }) {
-  const canPrev = windowStart > 0;
-  const canNext = windowStart + MONTH_WINDOW < axis.length;
-  const visible = axis.slice(windowStart, windowStart + MONTH_WINDOW);
+function MonthRail({ windowMonths, windowEnd, setWindowEnd, focus, setFocus, lookup, platformId, reduced }) {
+  const latest = monthKey(new Date());
+  const canNext = windowEnd < latest;
+  const visible = windowMonths;
 
   return (
     <div className="brand-month-rail">
-      <button type="button" className="brand-month-page" onClick={() => setWindowStart(Math.max(0, windowStart - MONTH_WINDOW))} disabled={!canPrev} aria-label="Bulan sebelumnya">
+      <button type="button" className="brand-month-page" onClick={() => setWindowEnd(shiftMonthKey(windowEnd, -MONTH_WINDOW))} aria-label="Bulan sebelumnya">
         <ChevronLeft size={16} />
       </button>
       <LayoutGroup id={`brand-month-${platformId}`}>
@@ -982,7 +981,7 @@ function MonthRail({ axis, windowStart, setWindowStart, focus, setFocus, lookup,
           })}
         </div>
       </LayoutGroup>
-      <button type="button" className="brand-month-page" onClick={() => setWindowStart(Math.min(axis.length - MONTH_WINDOW, windowStart + MONTH_WINDOW))} disabled={!canNext} aria-label="Bulan berikutnya">
+      <button type="button" className="brand-month-page" onClick={() => { const next = shiftMonthKey(windowEnd, MONTH_WINDOW); setWindowEnd(next > latest ? latest : next); }} disabled={!canNext} aria-label="Bulan berikutnya">
         <ChevronRight size={16} />
       </button>
       <button type="button" className={`brand-month-all ${focus ? '' : 'is-active'}`} onClick={() => setFocus(null)}>
@@ -992,7 +991,7 @@ function MonthRail({ axis, windowStart, setWindowStart, focus, setFocus, lookup,
   );
 }
 
-function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, onReimport, busyKey, focusMonth }) {
+function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, onReimport, busyKey, focusMonth, onShowSpecs }) {
   const summary = useMemo(() => platformSummary(platform, months, lookup), [platform, months, lookup]);
   const datasets = useMemo(() => platform.datasets.filter((d) => !d.legacy
     || [...lookup.keys()].some((k) => k.startsWith(`${platform.id}:${d.channel}:`))), [platform, lookup]);
@@ -1042,7 +1041,7 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
           <DatasetRow
             key={dataset.channel} platform={platform} dataset={dataset} months={months} lookup={lookup}
             index={index} reduced={reduced} onPick={onPick} onDelete={onDelete} onReimport={onReimport} busyKey={busyKey}
-            targetMonth={focusMonth ?? months[months.length - 1]}
+            targetMonth={focusMonth ?? months[months.length - 1]} onShowSpecs={onShowSpecs}
           />
         ))}
       </div>
@@ -1055,9 +1054,14 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
 // core datasets are for the months on screen.
 const PLATFORM_LOGO = { meta: 'meta', shopee: 'shopee', tiktok: 'tiktok', google: 'google' };
 
-function DataView({ brand, months, axis, windowStart, setWindowStart, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
+function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
+  const { isAdmin } = useAuth();
   const accountsRef = useRef(null);
   const [accountsVersion, setAccountsVersion] = useState(0);
+  // A Meta dataset row's "Lihat breakdown & metrik": the auto-fetch panel
+  // switches to that account type and scrolls to its highlighted sections.
+  const [specFocus, setSpecFocus] = useState(null);
+  const showSpecs = (specs) => setSpecFocus({ ...specs, at: Date.now() });
   const openAccounts = () => {
     accountsRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
     accountsRef.current?.focus({ preventScroll: true });
@@ -1101,7 +1105,7 @@ function DataView({ brand, months, axis, windowStart, setWindowStart, focus, set
 
       <div className="bp-toolbar">
         <MonthRail
-          axis={axis} windowStart={windowStart} setWindowStart={setWindowStart}
+          windowMonths={windowMonths} windowEnd={windowEnd} setWindowEnd={setWindowEnd}
           focus={focus} setFocus={setFocus} lookup={lookup} platformId={platform.id} reduced={reduced}
         />
         <div className="brand-cov-legend">
@@ -1117,6 +1121,7 @@ function DataView({ brand, months, axis, windowStart, setWindowStart, focus, set
         <PlatformPanel
           key={platform.id} platform={platform} months={months} lookup={lookup} reduced={reduced}
           onPick={onPick} onDelete={onDelete} onReimport={onReimport} busyKey={busyKey} focusMonth={focusMonth}
+          onShowSpecs={isAdmin && platform.id === 'meta' ? showSpecs : undefined}
         />
       </AnimatePresence>
 
@@ -1164,7 +1169,7 @@ function DataView({ brand, months, axis, windowStart, setWindowStart, focus, set
           <section ref={accountsRef} className="bp-channel-accounts" tabIndex={-1} aria-label="Pengaturan akun Meta Ads">
             <MetaAutomationSection key={brand?.brand_id ?? 'none'} brand={brand} onAccountAdded={() => setAccountsVersion((version) => version + 1)} />
           </section>
-          <MetaAdsAutoFetchPanel brand={brand} accountsVersion={accountsVersion} onLibraryChanged={onLibraryChanged} onOpenAutomation={openAccounts} />
+          <MetaAdsAutoFetchPanel brand={brand} accountsVersion={accountsVersion} onLibraryChanged={onLibraryChanged} onOpenAutomation={openAccounts} specFocus={specFocus} />
         </>
       )}
       {platform.id === 'google' && (
@@ -1187,16 +1192,13 @@ export default function BrandDataPage() {
   // Same session keys as before the split, so links elsewhere that preset a
   // brand and tab (Pusat Kendali, Business Overview) still land on them.
   const [activeView, setActiveView] = useSessionState('brand-settings:view', 'data');
-  const [databaseView, setDatabaseView] = useSessionState('brand-settings:database-view', 'files');
   const [marketId, setMarketId] = useSessionState('brand-settings:platform', 'shopee');
   // Restore legacy account tabs inside their corresponding data channel.
   useEffect(() => {
-    const legacyView = ['meta-automation', 'google-ads'].includes(activeView) ? activeView : databaseView;
-    if (legacyView === 'meta-automation') setMarketId('meta');
-    if (legacyView === 'google-ads') setMarketId('google');
-    if (!DATABASE_VIEWS.some((view) => view.id === databaseView)) setDatabaseView('files');
+    if (activeView === 'meta-automation') setMarketId('meta');
+    if (activeView === 'google-ads') setMarketId('google');
     if (!VIEWS.some((v) => v.id === activeView)) setActiveView('data');
-  }, [activeView, databaseView, setActiveView, setDatabaseView, setMarketId]);
+  }, [activeView, setActiveView, setMarketId]);
 
   const [profile, setProfile] = useState(null);
 
@@ -1208,7 +1210,7 @@ export default function BrandDataPage() {
   const [notice, setNotice] = useState(null);
   const [busyKey, setBusyKey] = useState(null);
 
-  const [windowStart, setWindowStart] = useState(0);
+  const [windowEnd, setWindowEnd] = useState(() => monthKey(new Date()));
   const [focus, setFocus] = useState(null);
 
   const pending = useRef(null);
@@ -1266,18 +1268,16 @@ export default function BrandDataPage() {
     if (!brand) return;
     setLastBrandId(brand.brand_id);
     setFocus(null);
+    setWindowEnd(monthKey(new Date()));
     loadBrand(brand.brand_id);
   }, [brand, loadBrand]);
 
-  const axis = useMemo(() => buildMonthAxis(files), [files]);
-  useEffect(() => { setWindowStart(Math.max(0, axis.length - MONTH_WINDOW)); }, [axis.length]);
-
-  const windowMonths = useMemo(() => axis.slice(windowStart, windowStart + MONTH_WINDOW), [axis, windowStart]);
+  const windowMonths = useMemo(() => monthWindow(windowEnd), [windowEnd]);
   const months = useMemo(() => {
     if (!focus) return windowMonths;
-    const picked = axis.find((m) => m.key === focus);
+    const picked = windowMonths.find((m) => m.key === focus);
     return picked ? [picked] : windowMonths;
-  }, [axis, windowMonths, focus]);
+  }, [windowMonths, focus]);
 
   const lookup = useMemo(() => {
     const map = new Map();
@@ -1501,17 +1501,6 @@ export default function BrandDataPage() {
         })}
       </nav>
 
-      {activeView === 'data' && (
-        <nav className="soft-subtabs" aria-label="Bagian Performance Database" role="tablist">
-          {DATABASE_VIEWS.map(({ id, label, Icon }) => (
-            <button key={id} type="button" role="tab" aria-selected={databaseView === id}
-              className={`soft-subtab bp-platform${databaseView === id ? ' is-on' : ''}`} onClick={() => setDatabaseView(id)}>
-              <Icon size={16} aria-hidden="true" /> {label}
-            </button>
-          ))}
-        </nav>
-      )}
-
       {loading && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat data {brand?.brand_name ?? 'brand'}…</p>}
       {error && (
         <div className="brand-flash is-error">
@@ -1529,11 +1518,11 @@ export default function BrandDataPage() {
       )}
 
       <AnimatePresence mode="wait">
-        {activeView === 'data' && databaseView === 'files' && (
+        {activeView === 'data' && (
           <ViewShell viewId="data" reduced={reduced}>
             <DataView
-              brand={brand} months={months} axis={axis}
-              windowStart={windowStart} setWindowStart={(next) => { setWindowStart(next); setFocus(null); }}
+              brand={brand} months={months} windowMonths={windowMonths}
+              windowEnd={windowEnd} setWindowEnd={(next) => { setWindowEnd(next); setFocus(null); }}
               focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
               onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}
               onLibraryChanged={() => brand && refreshFiles(brand.brand_id)}

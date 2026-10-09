@@ -16,6 +16,10 @@ const router = Router();
 
 router.use(authenticate);
 
+// Breakdowns + metric catalog for the Meta dataset rows in Performance
+// Database: static definitions, so every signed-in user may read them.
+router.get('/catalog', ctrl.getCatalog);
+
 const reportGenerator = requireModule('report_generator');
 router.get('/days', reportGenerator, requireBrandAccess((req) => req.query.brandId), brandQueryValidation, ctrl.getStoredDays);
 router.get('/export', reportGenerator, requireBrandAccess((req) => req.query.brandId), exportRangeValidation, ctrl.exportRange);

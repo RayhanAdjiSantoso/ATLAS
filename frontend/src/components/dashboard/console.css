@@ -445,6 +445,8 @@
 .brand-ds-label { display:grid; gap:.08rem; min-width:0; }
 .brand-ds-label strong { font-size:.755rem; font-weight:760; letter-spacing:-.012em; }
 .brand-ds-label small { color:var(--text-muted); font-size:.75rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* Opened row: the full hint, wrapped, instead of the one-line ellipsis. */
+.brand-ds.is-open .brand-ds-label small { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.4; }
 
 /* A coverage cell is a button: clicking it uploads into exactly that
    dataset + month, which is what makes "isi bulan Juni" unambiguous. */
