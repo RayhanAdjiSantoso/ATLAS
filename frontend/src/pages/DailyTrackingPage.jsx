@@ -10,6 +10,7 @@ import TrackingKpis from '../components/dailyTracking/TrackingKpis.jsx';
 import TrackingPulse from '../components/dailyTracking/TrackingPulse.jsx';
 import CoverageMap from '../components/dailyTracking/CoverageMap.jsx';
 import { ChannelMix, PaceChart, WeekdayChart, defaultMetric } from '../components/dailyTracking/TrackingInsights.jsx';
+import TrackingCompare from '../components/dailyTracking/TrackingCompare.jsx';
 import ChannelRail from '../components/dailyTracking/ChannelRail.jsx';
 import ChannelInsight from '../components/dailyTracking/ChannelInsight.jsx';
 import DailyEntryTable from '../components/dailyTracking/DailyEntryTable.jsx';
@@ -288,6 +289,7 @@ export default function DailyTrackingPage() {
         <div className="bt-view" key="overview">
           <TrackingKpis grid={grid} channels={channels} loading={loading} prev={prevSame} compareLabel={compareLabel} />
           <p className="bt-compare-note">Perubahan dibanding <b>{compareLabel}</b>{running ? ' — rentang tanggal yang sama, karena bulan ini masih berjalan.' : '.'}</p>
+          <TrackingCompare brandId={brandId} channels={channels} month={month} />
           <TrackingPulse grid={grid} channels={channels} loading={loading} />
           <div className="bt-duo">
             <PaceChart
