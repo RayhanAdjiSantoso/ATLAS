@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Loader2 } from 'lucide-react';
+import useSessionState from '../../hooks/useSessionState.js';
+import { META_SOURCE_LABEL } from '../../reportGenerator/lib/metaSources.ts';
 import { META_DATASETS, readMetaPeriod } from './metaOverview.js';
 import './metaOverview.css';
 
@@ -38,6 +40,10 @@ function Delta({ now, before, inverse }) {
 
 export default function MetaOverview({ filters }) {
   const [state, setState] = useState({ status: 'idle' });
+  // Source rule: 'auto' falls back to the old combined export for months the
+  // split files (Boost / Non Boost, written by the API) do not cover yet;
+  // 'split' reads the split files only.
+  const [mode, setMode] = useSessionState('dashboard:meta-source', 'auto');
   const { brandId, startDate, endDate, compare, compareStartDate, compareEndDate } = filters;
 
   useEffect(() => {
@@ -45,12 +51,12 @@ export default function MetaOverview({ filters }) {
     let alive = true;
     setState((s) => ({ ...s, status: 'loading' }));
     Promise.all([
-      readMetaPeriod(brandId, startDate, endDate),
-      compare && compareStartDate && compareEndDate ? readMetaPeriod(brandId, compareStartDate, compareEndDate) : null,
+      readMetaPeriod(brandId, startDate, endDate, mode),
+      compare && compareStartDate && compareEndDate ? readMetaPeriod(brandId, compareStartDate, compareEndDate, mode) : null,
     ]).then(([cur, prev]) => alive && setState({ status: 'ready', cur, prev }))
       .catch(() => alive && setState({ status: 'error' }));
     return () => { alive = false; };
-  }, [brandId, startDate, endDate, compare, compareStartDate, compareEndDate]);
+  }, [brandId, startDate, endDate, compare, compareStartDate, compareEndDate, mode]);
 
   if (state.status === 'loading' && !state.cur) {
     return <p className="mo-state"><Loader2 size={15} className="mo-spin" /> Membaca file Meta dari Data Collection Hub…</p>;
@@ -59,21 +65,47 @@ export default function MetaOverview({ filters }) {
   if (!state.cur) return null;
 
   const { cur, prev } = state;
+  const sourceBar = (
+    <div className="mo-source-bar">
+      <div className="mo-source-mode" role="radiogroup" aria-label="Sumber data Meta">
+        <span>Sumber data</span>
+        {[['auto', 'Otomatis'], ['split', 'Hanya data terpisah (API)']].map(([id, label]) => (
+          <button key={id} type="button" role="radio" aria-checked={mode === id} className={mode === id ? 'is-on' : ''} onClick={() => setMode(id)}>{label}</button>
+        ))}
+      </div>
+      <ul className="mo-months" aria-label="Sumber per bulan">
+        {[...(cur.monthSources ?? []), ...(prev?.monthSources ?? []).map((m) => ({ ...m, compare: true }))]
+          .filter((m, i, all) => all.findIndex((o) => o.month === m.month) === i)
+          .sort((a, b) => a.month.localeCompare(b.month))
+          .map((m) => (
+            <li key={m.month} className={`is-${m.used}${m.missing.length ? ' is-partial' : ''}`}
+              title={`${META_SOURCE_LABEL[m.used]}${m.missing.length ? ` · belum ada ${m.missing.join(' & ')}` : ''}${m.legacyIgnored ? ' · file gabungan lama diabaikan' : ''}`}>
+              <b>{new Date(`${m.month}-01T00:00:00`).toLocaleDateString('id-ID', { month: 'short', year: '2-digit' })}</b>
+              {m.used === 'split' ? (m.missing.length ? `terpisah · tanpa ${m.missing.join(' & ')}` : 'terpisah') : m.used === 'legacy' ? 'gabungan lama' : m.legacyIgnored ? 'lama diabaikan' : 'kosong'}
+            </li>
+          ))}
+      </ul>
+    </div>
+  );
   const sets = [...META_DATASETS, ...(cur.legacyMonths?.length ? [{ channel: 'meta', label: 'Meta Ads (gabungan lama)', hint: `Bulan sebelum dipisah: ${cur.legacyMonths.join(', ')}` }] : [])];
   const anyData = sets.some((d) => cur.datasets[d.channel]);
 
   if (!anyData) {
     return (
+      <div className="mo">
+      {sourceBar}
       <div className="mo-empty">
         <strong>Belum ada file Meta untuk periode ini</strong>
         <p>Unggah Boost Post, Non Boost Post, dan CPAS — atau aktifkan Tarik data API — di Data Collection Hub.</p>
         <Link to="/data-brand" className="mom-head-link">Buka Data Collection Hub <ArrowUpRight size={13} /></Link>
+      </div>
       </div>
     );
   }
 
   return (
     <div className="mo">
+      {sourceBar}
       <div className="mo-hero">
         {[
           ['Total spend Meta', rp(cur.total.spend), cur.total.spend, prev?.total.spend, false],

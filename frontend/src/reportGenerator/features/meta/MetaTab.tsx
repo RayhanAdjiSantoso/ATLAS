@@ -1,3 +1,4 @@
+import { resolveMetaMonth } from '../../lib/metaSources';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -310,7 +311,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     try {
       const { data } = await api.get(`/brands/${clientId}/library`);
       const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'meta' && f.period_month?.slice(0, 7) === month.month);
-      const metaList = files.filter((f) => (META_MAIN_CHANNELS as readonly string[]).includes(f.channel));
+      // Split files (Boost + Non Boost) win over the old combined export:
+      // a month is never read from both (lib/metaSources).
+      const source = resolveMetaMonth(files.filter((f) => (META_MAIN_CHANNELS as readonly string[]).includes(f.channel)), month.month, 'auto');
+      const metaList = source.files;
       const cpasList = files.filter((f) => f.channel === 'cpas');
 
       async function downloadAndParse(list: LibraryFileMeta[]): Promise<SheetRow[]> {

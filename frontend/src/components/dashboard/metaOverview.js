@@ -1,5 +1,6 @@
 import api from '../../api/client.js';
 import { readSpreadsheetFile } from '../../reportGenerator/lib/xlsxUtils.ts';
+import { resolveMetaMonth } from '../../reportGenerator/lib/metaSources.ts';
 import { aggSum, findDenomCol, findSpentCol, parseMetaDayValue, resolveConceptCount, stripCampaignSubtotals } from '../../reportGenerator/lib/meta.ts';
 
 // Business Overview › Meta Ads, read from Data Collection Hub's three Meta
@@ -112,20 +113,24 @@ function measure(channel, rows) {
 
 // One period: { boost, nonboost, cpas } measures (null where the dataset has
 // no file for the period), plus the months with no file at all.
-export async function readMetaPeriod(brandId, start, end) {
+// `mode`: 'auto' — per month, the split files (Boost / Non Boost) when the
+// month has them, else the old combined export; 'split' — split files only.
+// A month is never read from both (resolveMetaMonth, shared with Report
+// Generator).
+export async function readMetaPeriod(brandId, start, end, mode = 'auto') {
   const files = await listFiles(brandId);
   const months = monthsIn(start, end);
   const out = { datasets: {}, missing: {} };
   const monthOf = (f) => String(f.period_month).slice(0, 7);
-  // A month still filed only as the old combined export (before Boost and
-  // Non-Boost were split) is read from that file, as its own dataset, so a
-  // period reaching back before the split still has its spend.
-  const splitMonths = new Set(files.filter((f) => ['boost', 'nonboost'].includes(f.channel)).map(monthOf));
-  const legacyMonths = months.filter((m) => !splitMonths.has(m) && files.some((f) => f.channel === 'meta' && monthOf(f) === m));
+  const metaFiles = files.filter((f) => ['boost', 'nonboost', 'meta'].includes(f.channel));
+  out.monthSources = months.map((m) => resolveMetaMonth(metaFiles, m, mode));
+  const chosen = new Set(out.monthSources.flatMap((src) => src.files));
+  const legacyMonths = out.monthSources.filter((src) => src.used === 'legacy').map((src) => src.month);
   const sets = legacyMonths.length ? [...META_DATASETS, LEGACY] : META_DATASETS;
   await Promise.all(sets.map(async (ds) => {
-    const picked = files.filter((f) => f.channel === ds.channel && months.includes(monthOf(f))
-      && (ds.channel !== 'meta' || legacyMonths.includes(monthOf(f))));
+    const picked = ds.channel === 'cpas'
+      ? files.filter((f) => f.channel === 'cpas' && months.includes(monthOf(f)))
+      : [...chosen].filter((f) => f.channel === ds.channel);
     out.missing[ds.channel] = months.filter((m) => !picked.some((f) => monthOf(f) === m));
     if (!picked.length) { out.datasets[ds.channel] = null; return; }
     const all = (await Promise.all(picked.map((f) => rowsOf(brandId, f)))).flat();

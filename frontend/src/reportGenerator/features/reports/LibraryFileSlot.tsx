@@ -73,6 +73,11 @@ export function LibraryFileSlot({ clientId, platform, channel, tag, loaded, file
       const choices = files.filter(f => selected.includes(f.id));
       if (choices.some(f => f.period_source === 'mismatch')) throw new Error('Periode file tidak sesuai slot bulan. Perbaiki file di Data Collection Hub terlebih dahulu.');
       if (new Set(choices.map(f => f.period_month)).size > 1) throw new Error('Pilih file dari satu bulan untuk satu sisi perbandingan.');
+      // The old combined Meta export and the split Boost / Non Boost files
+      // hold the same campaigns — reading both counts the spend twice.
+      if (choices.some(f => f.channel === 'meta') && choices.some(f => f.channel === 'boost' || f.channel === 'nonboost')) {
+        throw new Error('Pilih salah satu: file Boost & Non-Boost (terpisah) atau file Meta Ads gabungan lama — keduanya berisi campaign yang sama sehingga spend akan terhitung dua kali.');
+      }
       // Sequential downloads keep large multipart selections within memory limits.
       const downloaded: File[] = [];
       for (const f of choices) {
@@ -105,7 +110,7 @@ export function LibraryFileSlot({ clientId, platform, channel, tag, loaded, file
         {months.map(m => <button type="button" key={m} aria-pressed={month === m} onClick={() => setMonth(m!)}>{formatMonth(m!)}</button>)}
       </div>}
       <div className="library-file-list">
-        {shown.map(f => <label key={f.id} className={`library-file-row${selected.includes(f.id) ? ' is-selected' : ''}`}><input type="checkbox" disabled={busy} checked={selected.includes(f.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, f.id] : ids.filter(id => id !== f.id))} /><FileSpreadsheet size={17} aria-hidden="true"/><span><strong>{f.original_filename}</strong><small>{f.period_month ? formatMonth(f.period_month) : 'Referensi lintas periode'} · Bagian {f.part_index ?? 1}{f.row_count != null ? ` · ${f.row_count.toLocaleString('id-ID')} baris` : ''}{f.period_source === 'mismatch' ? ' · periode tidak sesuai' : ''}</small></span></label>)}
+        {shown.map(f => <label key={f.id} className={`library-file-row${selected.includes(f.id) ? ' is-selected' : ''}`}><input type="checkbox" disabled={busy} checked={selected.includes(f.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, f.id] : ids.filter(id => id !== f.id))} /><FileSpreadsheet size={17} aria-hidden="true"/><span><strong>{f.original_filename}</strong><small>{f.period_month ? formatMonth(f.period_month) : 'Referensi lintas periode'} · Bagian {f.part_index ?? 1}{f.row_count != null ? ` · ${f.row_count.toLocaleString('id-ID')} baris` : ''}{f.period_source === 'mismatch' ? ' · periode tidak sesuai' : ''}{f.channel === 'meta' ? (files.some(o => (o.channel === 'boost' || o.channel === 'nonboost') && o.period_month?.slice(0, 7) === f.period_month?.slice(0, 7)) ? ' · gabungan lama — bulan ini sudah ada file terpisah' : ' · gabungan lama') : ''}</small></span></label>)}
         {!shown.length && <div className="library-source-empty"><Database size={22}/><strong>Sumber ini belum tersedia</strong><p>Unggah file melalui <Link to="/data-brand">Data Collection Hub → Performance Database</Link>, lalu muat ulang daftar ini.</p></div>}
       </div>
       {files.length > 0 && <div className="library-slot-actions"><span>{selected.length ? `${selected.length} file dipilih` : 'Pilih file yang akan digunakan'}<small>Ekspor terbagi? Pilih semua bagiannya.</small></span><button type="button" className="btn btn-primary" disabled={!selected.length || busy} onClick={apply}>{busy ? 'Membaca…' : 'Gunakan sumber'}</button></div>}
