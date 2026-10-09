@@ -69,3 +69,15 @@ export function slugifyChannelLabel(label) {
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
 }
+
+// Which ad spend buys which sales — the pairing every per-channel ROAS in
+// ATLAS uses (Business Overview, Brand Tracking's targets). Meta Non-Boost
+// and Google Ads send traffic to the website and chat; Boost Post is
+// awareness and has no sales channel of its own, so it only counts in the
+// blended ROAS. A brand's custom channels also count only in the blend.
+export const ROAS_GROUPS = [
+  { key: 'shopee', label: 'Shopee', sales: ['shopee'], spend: ['shopee_iklanku', 'cpas_shopee'] },
+  { key: 'tiktok', label: 'TikTok', sales: ['tiktok'], spend: ['gmv_max', 'ttam'] },
+  { key: 'tokopedia', label: 'Tokopedia', sales: ['tokopedia'], spend: ['cpas_tokopedia'] },
+  { key: 'web', label: 'Website & Chat', sales: ['website', 'chat'], spend: ['meta_nonboost_post', 'google_ads'] },
+];

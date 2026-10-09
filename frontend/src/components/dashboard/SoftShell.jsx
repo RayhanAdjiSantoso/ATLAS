@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Database, LayoutPanelLeft } from 'lucide-react';
 import FilterPanel from './FilterPanel.jsx';
+import ChannelRoasStrip from './ChannelRoasStrip.jsx';
 import { STRIP_METRICS, formatStripValue } from './domains.js';
 import { Delta, Figure, InfoTip } from './figures.jsx';
 import PageBand from '../common/PageBand.jsx';
@@ -83,7 +84,7 @@ export default function SoftShell({
           title="Business Overview"
           desc="Satu pandangan untuk memahami performa brand di seluruh channel."
           tabs={views.map((v) => ({
-            key: v.id, label: v.label, hint: v.ready ? v.hint : 'Belum ada data', icon: <v.Icon size={19} />, onSelect: () => setViewId(v.id),
+            key: v.id, label: v.label, hint: v.ready || v.readable ? v.hint : 'Belum ada data', icon: <v.Icon size={19} />, onSelect: () => setViewId(v.id),
           }))}
           activeKey={view.id}
           layoutId="bo-tab-sheet"
@@ -116,12 +117,13 @@ export default function SoftShell({
 
         <div className="soft-head">
           <div>
-            <h2>{channel ? `${channel.label} · ${channelDomains.find((d) => d.key === domainKey)?.label ?? ''}` : 'Executive Snapshot'}</h2>
+            <h2>{!channel ? 'Executive Snapshot' : channel.ready ? `${channel.label} · ${channelDomains.find((d) => d.key === domainKey)?.label ?? ''}` : `${channel.label} · Ringkasan`}</h2>
             <p>{question}</p>
           </div>
           {!channel && <Link to="/brand-tracking" className="soft-head-link">Isi Brand Tracking <ArrowUpRight size={14} aria-hidden="true" /></Link>}
         </div>
 
+        {channel && <ChannelRoasStrip channelId={channel.id} filters={filters} />}
         {channel?.ready && kpiEntry && <Tiles entry={kpiEntry} />}
 
         <div className="soft-content dashboard-body"><div className="con-canvas">{children}</div></div>

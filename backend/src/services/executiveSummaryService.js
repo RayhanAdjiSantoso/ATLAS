@@ -1,5 +1,5 @@
 import * as repo from '../repositories/dailyTrackingRepository.js';
-import { FIXED_SALES_LABELS, FIXED_SPEND_LABELS } from '../config/dailyTrackingChannels.js';
+import { FIXED_SALES_LABELS, FIXED_SPEND_LABELS, ROAS_GROUPS } from '../config/dailyTrackingChannels.js';
 import pool from '../config/db.js';
 
 // Executive Snapshot — the one cross-channel reading of Business Overview.
@@ -105,7 +105,17 @@ async function readPeriod(brandId, start, end, labels) {
       aov: ratio(revenue, trx),
       aur: ratio(revenue, qty),
       costPerRevenue: ratio(amountSpent, revenue),
+      // Blended ROAS: every rupiah sold over every rupiah spent, the figure
+      // the monthly target sheet calls "ROAS Real".
+      roas: ratio(revenueAll, amountSpent),
     },
+    // ROAS per channel: each channel's own sales over the ad spend that buys
+    // them (ROAS_GROUPS). A group with neither side filled is left out.
+    channelRoas: ROAS_GROUPS.map((g) => {
+      const revenueG = sumMaybe(salesRows.filter((r) => g.sales.includes(r.channel_key)).map((r) => r.revenue));
+      const spendG = sumMaybe(spendRows.filter((r) => g.spend.includes(r.channel_key)).map((r) => r.amount_spent));
+      return { key: g.key, label: g.label, revenue: revenueG, spend: spendG, roas: ratio(revenueG, spendG) };
+    }).filter((g) => g.revenue != null || g.spend != null),
     salesChannels: byChannel(salesRows, 'revenue', labels.sales),
     spendChannels: byChannel(spendRows, 'amount_spent', labels.spend),
     daily,
@@ -121,6 +131,7 @@ export const METRIC_DEFS = [
   { key: 'trx', label: 'Trx', kind: 'number', sentiment: 'higher-better' },
   { key: 'aov', label: 'AOV', kind: 'currency', sentiment: 'higher-better' },
   { key: 'aur', label: 'AUR', kind: 'currency', sentiment: 'higher-better' },
+  { key: 'roas', label: 'ROAS Blended', kind: 'ratio', sentiment: 'higher-better' },
 ];
 
 const growth = (cur, prev) => (cur == null || prev == null || prev === 0 ? null : ((cur - prev) / prev) * 100);

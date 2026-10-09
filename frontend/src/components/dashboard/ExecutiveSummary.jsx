@@ -20,7 +20,8 @@ import DonutChart from './DonutChart.jsx';
 
 const idr = (v) => (v == null ? null : `Rp${Math.round(v).toLocaleString('id-ID')}`);
 const num = (v) => (v == null ? null : Math.round(v).toLocaleString('id-ID'));
-const fmt = (value, kind) => (kind === 'currency' ? idr(value) : num(value));
+const ratioX = (v) => (v == null ? null : `${v.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x`);
+const fmt = (value, kind) => (kind === 'currency' ? idr(value) : kind === 'ratio' ? ratioX(value) : num(value));
 const dateLabel = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
 // Axis labels only. A full "Rp1.284.930.000" at 9px is a smear, and the table
@@ -36,7 +37,7 @@ const idrAxis = (v) => {
 };
 
 const HERO_KEY = 'revenue';
-const TILE_ORDER = ['revenueAll', 'amountSpent', 'trx', 'qty', 'aov', 'aur'];
+const TILE_ORDER = ['revenueAll', 'amountSpent', 'roas', 'trx', 'qty', 'aov', 'aur'];
 
 // Current against its comparison as two lengths scaled to the larger of the
 // two. The pair answers "did it move, and by how much" before the eye reaches
@@ -86,6 +87,50 @@ function ChannelBreakdown({ title, rows, emptyText, tone }) {
 // Contiguous stretches of recorded days. A gap in entry has to break the line
 // rather than be drawn through as zero, and the area fill has to close on the
 // baseline at each end of a run instead of spanning the gap.
+// ROAS per channel: each channel's sales over the spend that buys them
+// (backend ROAS_GROUPS), beside the blended figure for scale. A row with
+// spend but no sales, or sales but no spend, says so instead of a number.
+function ChannelRoas({ rows, compare, blended }) {
+  if (!rows?.length) return null;
+  const prev = new Map((compare ?? []).map((r) => [r.key, r.roas]));
+  const max = Math.max(blended?.current ?? 0, ...rows.map((r) => r.roas ?? 0));
+  return (
+    <section className="xs-roas" aria-label="ROAS per channel">
+      <header>
+        <h3>ROAS per channel</h3>
+        <p>Penjualan tiap channel dibagi belanja iklan yang mengarah ke channel itu.</p>
+      </header>
+      <div className="xs-roas-grid">
+        {blended && (
+          <article className="xs-roas-card is-blended">
+            <span>Blended</span>
+            <strong>{ratioX(blended.current) ?? '—'}</strong>
+            <small>Semua revenue ÷ semua spend</small>
+            <i style={{ transform: `scaleX(${max && blended.current ? blended.current / max : 0})` }} aria-hidden="true" />
+          </article>
+        )}
+        {rows.map((r) => {
+          const before = prev.get(r.key);
+          const ch = r.roas != null && before ? (r.roas - before) / before : null;
+          return (
+            <article className="xs-roas-card" key={r.key}>
+              <span>{r.label}</span>
+              <strong>{r.roas != null ? ratioX(r.roas) : '—'}</strong>
+              <small>
+                {r.roas == null
+                  ? (r.spend ? 'Belum ada revenue' : 'Belum ada spend')
+                  : <>{idrAxis(r.revenue)} ÷ {idrAxis(r.spend)}</>}
+                {ch != null && <b className={ch >= 0 ? 'is-up' : 'is-down'}> {ch >= 0 ? '▲' : '▼'} {Math.abs(ch * 100).toFixed(0)}%</b>}
+              </small>
+              <i style={{ transform: `scaleX(${max && r.roas ? r.roas / max : 0})` }} aria-hidden="true" />
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function runsOf(points) {
   const out = [];
   let run = [];
@@ -399,6 +444,8 @@ export default function ExecutiveSummary({ filters }) {
           )}
         </div>
       </div>
+
+      <ChannelRoas rows={current.channelRoas} compare={compare?.channelRoas} blended={byKey.roas} />
 
       <ChannelBreakdown
         title="Spend per channel" tone="spend" rows={current.spendChannels}
