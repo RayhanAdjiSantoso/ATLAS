@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext.jsx';
+import { SESSION_EXPIRED_FLAG, useAuth } from '../contexts/AuthContext.jsx';
 
 // `roles` limits a route to certain roles; `module` to roles that Pengaturan
 // Akses lets open that module. The server enforces both on every request —
@@ -19,7 +19,11 @@ export function ProtectedRoute({ roles, module, guestHome }) {
     );
   }
 
-  if (!user) return guestHome && location.pathname === '/' ? guestHome : <Navigate to="/" replace />;
+  if (!user) {
+    // A session that ended for inactivity goes straight back to the form.
+    if (sessionStorage.getItem(SESSION_EXPIRED_FLAG) === '1') return <Navigate to="/login" replace />;
+    return guestHome && location.pathname === '/' ? guestHome : <Navigate to="/" replace />;
+  }
 
   // A temporary password must be replaced before anything else opens.
   if (mustChangePassword && location.pathname !== '/ganti-password') {
@@ -38,10 +42,10 @@ export function ProtectedRoute({ roles, module, guestHome }) {
 }
 
 export function PublicRoute() {
-  const { user, loading, can } = useAuth();
+  const { user, loading } = useAuth();
   if (loading) return null;
-  // Straight to Business Overview where the role has it; anyone else (a
-  // client) lands on Beranda instead of being bounced there through it.
-  if (user) return <Navigate to={can('dashboard') ? '/dashboard' : '/'} replace />;
+  // Every account lands on Beranda after signing in — the front door that
+  // shows the day's pulse and leads on to each module.
+  if (user) return <Navigate to="/" replace />;
   return <Outlet />;
 }

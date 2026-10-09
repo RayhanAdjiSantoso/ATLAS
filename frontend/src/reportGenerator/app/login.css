@@ -113,6 +113,10 @@
     padding: .68rem .82rem; border: 1px solid #f1c4c4; border-radius: 11px;
     color: var(--bad); background: var(--bad-100); font-size: .79rem; line-height: 1.5;
   }
+  .auth-notice {
+    padding: .68rem .82rem; border: 1px solid #f3dcae; border-radius: 11px;
+    color: #8a5a06; background: #fdf6e7; font-size: .79rem; line-height: 1.5;
+  }
   .auth-submit {
     display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: .75rem;
     margin-top: .35rem; padding: .75rem 1rem .75rem 1.15rem; border: 0; border-radius: 13px;

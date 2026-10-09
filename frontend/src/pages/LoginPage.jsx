@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext.jsx';
+import { SESSION_EXPIRED_FLAG, useAuth } from '../contexts/AuthContext.jsx';
 import AuthExperience from '../components/auth/AuthExperience.jsx';
 import '../reportGenerator/index.css';
 import '../reportGenerator/app/login.css';
@@ -23,6 +23,8 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Set when an idle session was ended (AuthContext); shown once.
+  const [expired] = useState(() => sessionStorage.getItem(SESSION_EXPIRED_FLAG) === '1');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,6 +66,7 @@ export default function LoginPage() {
           </span>
         </label>
 
+        {expired && !error && <div className="auth-notice" role="status">Sesi berakhir karena lama tidak ada aktivitas. Silakan masuk kembali.</div>}
         {error && <div className="auth-error" role="alert">{error}</div>}
 
         <button type="submit" className="auth-submit" disabled={loading}>
