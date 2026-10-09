@@ -58,7 +58,7 @@ function computeCompareRange(type, startDate, endDate) {
   return { compareStartDate: toISO(compStart), compareEndDate: toISO(compEnd) };
 }
 
-export default function FilterPanel({ filters, onChange }) {
+export default function FilterPanel({ filters, onChange, variant }) {
   const [brands, setBrands] = useState([]);
   const [showCompare, setShowCompare] = useState(Boolean(filters.compare));
   const [compareType, setCompareType] = useSessionState('dashboard:compare-type', 'previous_period');
@@ -109,6 +109,73 @@ export default function FilterPanel({ filters, onChange }) {
     onChange({ ...filters, compareStartDate: startDate, compareEndDate: endDate });
   };
 
+  const toggleCompare = () => {
+    const next = !showCompare;
+    setShowCompare(next);
+    handleChange('compare', next);
+  };
+
+  // Header (Business Overview's soft layout): the controls as chips in the
+  // page header's corner, the way analytics dashboards carry their context.
+  // The comparison's switch and basis are one menu — "Tanpa pembanding" is
+  // the switch off, any basis turns it on — with the compared range as a
+  // caption. Same state and the same range rules as the classic panel below.
+  if (variant === 'band') {
+    const compareValue = showCompare ? compareType : 'none';
+    const pickCompare = (type) => {
+      if (type === 'none') {
+        setShowCompare(false);
+        handleChange('compare', false);
+        return;
+      }
+      setShowCompare(true);
+      setCompareType(type);
+      // Kustom starts from the previous period, then is edited by hand.
+      const base = type === 'custom' ? (filters.compare ? {} : computeCompareRange('previous_period', filters.startDate, filters.endDate))
+        : computeCompareRange(type, filters.startDate, filters.endDate);
+      onChange({ ...filters, compare: true, ...base });
+    };
+    return (
+      <div className="bo-band-filters">
+        <div className="bo-chip bo-chip-brand">
+          <label htmlFor="brand-select" className="bo-chip-label">Brand</label>
+          <DashboardBrandPicker
+            brands={brands}
+            value={filters.brandId}
+            status={brandStatus}
+            onStatusChange={setBrandStatus}
+            onChange={(val) => handleChange('brandId', val)}
+          />
+        </div>
+        <div className="bo-chip bo-chip-period">
+          <span className="bo-chip-label">Periode</span>
+          <DateRangePicker startDate={filters.startDate} endDate={filters.endDate} onChange={handleRangeChange} />
+        </div>
+        <div className={`bo-chip bo-chip-compare${showCompare ? ' is-on' : ''}`}>
+          <label htmlFor="compare-type-select" className="bo-chip-label">Bandingkan</label>
+          <SelectMenu
+            id="compare-type-select"
+            label="Bandingkan dengan"
+            value={compareValue}
+            onChange={pickCompare}
+            options={[{ value: 'none', label: 'Tanpa pembanding' }, ...COMPARE_TYPES.map((t) => ({ ...t, label: `vs ${t.label}` }))]}
+          />
+          {showCompare && compareType === 'custom' && (
+            <div className="bo-chip-custom">
+              <span className="sr-only">Periode pembanding</span>
+              <DateRangePicker startDate={filters.compareStartDate} endDate={filters.compareEndDate} onChange={handleCompareRangeChange} />
+            </div>
+          )}
+          {showCompare && compareType !== 'custom' && (
+            <small className="bo-chip-caption" title="Periode pembanding">
+              {formatDMY(filters.compareStartDate)} – {formatDMY(filters.compareEndDate)}
+            </small>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Brand status lives inside the picker; period controls reflow with the header.
   return (
     <div className="con-controls">
@@ -137,11 +204,7 @@ export default function FilterPanel({ filters, onChange }) {
         role="switch"
         aria-checked={showCompare}
         className={`con-switch${showCompare ? ' is-on' : ''}`}
-        onClick={() => {
-          const next = !showCompare;
-          setShowCompare(next);
-          handleChange('compare', next);
-        }}
+        onClick={toggleCompare}
       >
         <span className="con-switch-track" aria-hidden><span className="con-switch-thumb" /></span>
         Bandingkan periode

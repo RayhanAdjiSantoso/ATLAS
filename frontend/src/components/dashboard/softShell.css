@@ -262,3 +262,181 @@
 .soft-shell .soft-tile .con-delta.is-up { color: var(--good); background: var(--good-100); }
 .soft-shell .soft-tile .con-delta.is-down { color: var(--bad); background: var(--bad-100); }
 .soft-shell .soft-tile .con-delta.is-flat { color: var(--soft-muted); background: #fff; }
+
+/* ── Business Overview on the shared ATLAS structure ──────────────────────
+   Level 1 is PageBand (the channel). Below it, the same pieces in the same
+   order as Brand Setting: the command card, the level-2 segmented control,
+   a section heading at card-title scale, then the cards. */
+.bo-shell .soft-frame { gap: 16px; }
+.bo-shell .soft-command {
+  padding: 16px 18px;
+  border: 1px solid #dde2ee;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(15, 26, 58, .03);
+}
+.bo-shell .soft-head { padding: 6px 4px 0; }
+.bo-shell .soft-head h2 { font-size: clamp(1.3rem, 1.7vw, 1.55rem); letter-spacing: -.025em; }
+
+/* ── Business Overview: context in the band, analyses on the floor ────────
+   Brand, period and comparison are chips in the header's top-right corner
+   (the place Stripe, Vercel and GA4 keep a dashboard's context), so nothing
+   stands between the band and the analyses but the analysis switch itself:
+   a tinted track with the open analysis as a solid pill, then the heading. */
+.bo-shell .soft-frame { gap: 18px; }
+.band-tools { position: relative; display: flex; flex: 0 1 auto; align-items: flex-start; gap: 8px; min-width: 0; padding-top: 4px; }
+.bo-band-filters { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; gap: 8px; min-width: 0; }
+.bo-chip { display: grid; gap: 5px; min-width: 0; }
+.bo-chip-brand { width: 200px; }
+
+/* Glass chips on the band: white text on translucent white, opening the same
+   light menus as before. */
+.band-tools .dashboard-brand-trigger,
+.band-tools .bo-chip-period > div > button,
+.band-tools .bo-chip-custom > div > button,
+.band-tools .atlas-field-trigger {
+  min-height: 40px !important;
+  padding: 0 14px !important;
+  border: 1px solid rgba(255, 255, 255, .26) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, .12) !important;
+  color: #fff !important;
+  font-size: .84rem !important;
+  font-weight: 700 !important;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: background .15s ease, border-color .15s ease;
+}
+.band-tools .dashboard-brand-trigger:hover,
+.band-tools .bo-chip-period > div > button:hover,
+.band-tools .bo-chip-custom > div > button:hover,
+.band-tools .atlas-field-trigger:hover { background: rgba(255, 255, 255, .2) !important; border-color: rgba(255, 255, 255, .42) !important; }
+.band-tools .dashboard-brand-trigger svg,
+.band-tools .atlas-field-trigger svg,
+.band-tools .bo-chip-period svg,
+.band-tools .bo-chip-custom svg { color: #cfe0ff; }
+.band-tools .bo-chip-period > div > button > span,
+.band-tools .bo-chip-custom > div > button > span { white-space: nowrap !important; }
+.band-tools .atlas-field-value { color: #fff; font-weight: 700; }
+.bo-chip-compare .atlas-field-trigger { min-width: 196px; }
+.bo-chip-compare.is-on .atlas-field-trigger { border-color: rgba(255, 255, 255, .6) !important; background: rgba(255, 255, 255, .22) !important; }
+.bo-chip-caption { padding: 0 4px; color: #cddcfb; font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.band-icon-btn {
+  display: grid; flex: 0 0 auto; place-items: center;
+  width: 40px; height: 40px; padding: 0;
+  border: 1px solid rgba(255, 255, 255, .26); border-radius: 12px;
+  background: rgba(255, 255, 255, .12); color: #fff;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.band-icon-btn:hover { background: rgba(255, 255, 255, .22); }
+.band-tools :is(button, [role="switch"]):focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@media (max-width: 1240px) {
+  .bo-shell .band-top { flex-direction: column; }
+  .bo-shell .band-tools { align-self: stretch; }
+  .bo-band-filters { justify-content: flex-start; }
+}
+
+.bo-shell .soft-subtabs.bo-views {
+  display: inline-flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid rgba(40, 86, 182, .16);
+  border-radius: 16px;
+  background: #e3ebf9;
+  box-shadow: inset 0 1px 2px rgba(25, 40, 65, .06);
+}
+.bo-shell .bo-views .soft-subtab {
+  position: relative;
+  isolation: isolate;
+  padding: 9px 17px;
+  border: 0;
+  border-radius: 12px;
+  color: #3d4f70;
+  font-size: .92rem;
+  font-weight: 700;
+  transition: background .15s ease, color .15s ease;
+}
+.bo-shell .bo-views .soft-subtab:hover { background: rgba(255, 255, 255, .6); color: var(--soft-ink); }
+.bo-shell .bo-views .soft-subtab-line {
+  position: absolute; inset: 0; z-index: -1; height: auto;
+  border-radius: 12px;
+  background: var(--soft-accent);
+  box-shadow: 0 6px 14px -8px rgba(30, 62, 184, .9);
+}
+.bo-shell .bo-views .soft-subtab.is-on, .bo-shell .bo-views .soft-subtab.is-on:hover { background: transparent; color: #fff; font-weight: 800; }
+.bo-shell .bo-views .soft-subtab:focus-visible { outline: 2px solid var(--soft-accent); outline-offset: 2px; }
+.bo-shell .soft-head { padding: 2px 4px 0; }
+.bo-shell .soft-head p { margin-top: .25rem; }
+/* The band's corner holds the three chips on one row; the title column
+   gives way (its sentence wraps) rather than the chips. */
+.bo-shell .band-copy { flex: 1 1 320px; }
+.bo-shell .band-tools { flex: 0 0 auto; }
+.bo-shell .bo-band-filters { flex-wrap: nowrap; }
+.bo-chip-period { width: 272px; }
+.bo-chip-compare { width: 214px; }
+.bo-chip-compare .atlas-field-trigger { min-width: 0; }
+.bo-chip-custom > div > button { font-size: .76rem !important; }
+@media (max-width: 1240px) { .bo-shell .bo-band-filters { flex-wrap: wrap; } }
+
+/* ── Stand-out chips: solid white controls on the band ────────────────────
+   Context the whole page depends on must not read as decoration, so the
+   chips are opaque white with ink text and a small light label above each
+   — the brightest things on the band after the title. */
+.bo-chip-label { padding: 0 4px; color: rgba(255, 255, 255, .78); font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.band-tools .dashboard-brand-trigger,
+.band-tools .bo-chip-period > div > button,
+.band-tools .bo-chip-custom > div > button,
+.band-tools .atlas-field-trigger {
+  min-height: 42px !important;
+  border: 1px solid rgba(255, 255, 255, .9) !important;
+  background: #fff !important;
+  color: var(--soft-ink) !important;
+  box-shadow: 0 10px 24px -14px rgba(5, 12, 40, .7) !important;
+}
+.band-tools .dashboard-brand-trigger:hover,
+.band-tools .bo-chip-period > div > button:hover,
+.band-tools .bo-chip-custom > div > button:hover,
+.band-tools .atlas-field-trigger:hover { background: #f3f6fd !important; border-color: #fff !important; }
+.band-tools .dashboard-brand-trigger svg,
+.band-tools .atlas-field-trigger svg,
+.band-tools .bo-chip-period svg,
+.band-tools .bo-chip-custom svg { color: var(--band-accent, var(--soft-accent)); }
+.band-tools .atlas-field-value { color: var(--soft-ink); }
+.bo-chip-compare.is-on .atlas-field-trigger { border-color: #fff !important; background: #fff !important; box-shadow: 0 0 0 3px rgba(255, 255, 255, .28), 0 10px 24px -14px rgba(5, 12, 40, .7) !important; }
+.band-icon-btn { width: 42px; height: 42px; margin-top: 22px; }
+.bo-chip-caption { color: rgba(255, 255, 255, .85); }
+
+/* ── Band colour per channel (a finishing touch) ──────────────────────────
+   Executive Snapshot keeps ATLAS blue; Meta, Shopee and TikTok take their
+   own colours, crossfading on switch (the band's colours are @property
+   registered in pageBand.css). */
+.bo-shell[data-channel='meta'] {
+  --band-from: #0a2a6e; --band-mid: #0b4fd6; --band-to: #1877f2;
+  --band-glow-a: rgba(0, 200, 255, .32); --band-glow-b: rgba(130, 80, 255, .3);
+  --band-accent: #1877f2;
+}
+.bo-shell[data-channel='shopee'] {
+  --band-from: #7d1f0c; --band-mid: #cf3d1d; --band-to: #f2673a;
+  --band-glow-a: rgba(255, 176, 92, .5); --band-glow-b: rgba(255, 112, 72, .45);
+  --band-accent: #ee4d2d;
+}
+.bo-shell[data-channel='tiktok'] {
+  --band-from: #030303; --band-mid: #121214; --band-to: #2a2a30;
+  --band-glow-a: rgba(37, 244, 238, .26); --band-glow-b: rgba(254, 44, 85, .26);
+  --band-accent: #111;
+}
+.bo-shell { --band-kicker: rgba(255, 255, 255, .74); }
+/* The open analysis takes the channel's colour too. */
+.bo-shell .bo-views .soft-subtab-line { background: var(--band-accent, var(--soft-accent)); }
+.bo-shell[data-channel='tiktok'] .bo-views .soft-subtab-line { box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .8); }
+/* Chips size to their content (the date range outgrew a fixed width and
+   ran into its neighbour), with room between them. */
+.bo-shell .bo-band-filters { gap: 14px; }
+.bo-shell .band-tools { gap: 14px; }
+.bo-chip-period { width: auto; }
+.bo-chip-period > div { width: auto !important; }
+.band-tools .bo-chip-period > div > button { width: auto !important; }

@@ -4,7 +4,7 @@ import { ArrowUpRight, Database, LayoutPanelLeft } from 'lucide-react';
 import FilterPanel from './FilterPanel.jsx';
 import { STRIP_METRICS, formatStripValue } from './domains.js';
 import { Delta, Figure, InfoTip } from './figures.jsx';
-import atlasWordmark from '../../assets/atlas-wordmark.png';
+import PageBand from '../common/PageBand.jsx';
 import './softShell.css';
 
 // Business Overview, Soft Blue — a calmer, more systematic
@@ -74,48 +74,34 @@ export default function SoftShell({
   const reduce = useReducedMotion();
   const spring = reduce ? { duration: 0 } : { type: 'spring', stiffness: 480, damping: 40, mass: .6 };
   return (
-    <div className="con dashboard-console soft-shell">
+    <div className="con dashboard-console soft-shell bo-shell" data-channel={view.id}>
       <div className="soft-frame">
-        <header className="soft-masthead">
-          <div className="soft-masthead-copy">
-            <h1><span>Business</span> Overview<span className="soft-title-dot" aria-hidden="true">.</span></h1>
-            <p>Satu pandangan untuk memahami performa brand di seluruh channel.</p>
-
-          </div>
-          <div className="soft-masthead-signature">
-            <img src={atlasWordmark} alt="ATLAS" />
-            <span>Ruang analisis bisnis</span>
-          </div>
-        </header>
-
-        {/* Brand, period, and comparison reflow within the command bar. */}
-        <header className="soft-command">
-          <FilterPanel filters={filters} onChange={setFilters} />
-          <button type="button" className="soft-icon-btn" onClick={onClassic} title="Kembali ke tampilan klasik" aria-label="Kembali ke tampilan klasik">
-            <LayoutPanelLeft size={17} aria-hidden="true" />
-          </button>
-        </header>
-
-        {/* Channel: the primary switch — an ATLAS blue rail with a sliding active surface. */}
-        <nav className="soft-tabs" aria-label="Channel" role="tablist">
-          {views.map((v) => {
-            const Icon = v.Icon;
-            const on = v.id === view.id;
-            return (
-              <button type="button" role="tab" key={v.id} aria-selected={on} className={`soft-tab${on ? ' is-on' : ''}`} onClick={() => setViewId(v.id)}>
-                {on && <motion.span layoutId="soft-tab-pill" className="soft-tab-pill" transition={spring} aria-hidden="true" />}
-                <span className="soft-tab-ico" aria-hidden="true"><Icon size={17} /></span>
-                <span className="soft-tab-text">
-                  <strong>{v.label}</strong>
-                  <small>{v.ready ? v.hint : 'Belum ada data'}</small>
-                </span>
+        {/* Level 1: the channel, as folder tabs on the shared ATLAS header
+            band (the same component Brand Setting and Report Generator use). */}
+        <PageBand
+          kicker="Workspace · Analisis"
+          title="Business Overview"
+          desc="Satu pandangan untuk memahami performa brand di seluruh channel."
+          tabs={views.map((v) => ({
+            key: v.id, label: v.label, hint: v.ready ? v.hint : 'Belum ada data', icon: <v.Icon size={19} />, onSelect: () => setViewId(v.id),
+          }))}
+          activeKey={view.id}
+          layoutId="bo-tab-sheet"
+          ariaLabel="Channel"
+          tools={(
+            <>
+              <FilterPanel filters={filters} onChange={setFilters} variant="band" />
+              <button type="button" className="band-icon-btn" onClick={onClassic} title="Kembali ke tampilan klasik" aria-label="Kembali ke tampilan klasik">
+                <LayoutPanelLeft size={17} aria-hidden="true" />
               </button>
-            );
-          })}
-        </nav>
+            </>
+          )}
+        />
 
+        {/* Level 2: this channel's analyses, alone on the floor under the band
+            (brand and period now live in the band's corner). */}
         {channel?.ready && (
-          <nav className="soft-subtabs" aria-label={`Analisis ${channel.label}`} role="tablist">
+          <nav className="soft-subtabs bo-views" aria-label={`Analisis ${channel.label}`} role="tablist">
             {channelDomains.map((d) => {
               const on = d.key === domainKey;
               return (

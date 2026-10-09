@@ -633,3 +633,6 @@ button.con-kpi-note:focus-visible { border-color: var(--primary, #2563eb); color
   color: var(--text-muted, #64748b);
   line-height: 1.45;
 }
+
+/* Visible to screen readers only — a label the layout shows another way. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
