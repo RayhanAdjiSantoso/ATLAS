@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, FileBarChart, Megaphone, Building2, History, CalendarCheck, SlidersHorizontal, FolderOpen, Radar, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, FileBarChart, Megaphone, Building2, CalendarCheck, SlidersHorizontal, FolderOpen, Radar, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 // Reveal and MilMark are part of the design system ported from the Monthly
 // Report Generator, which is why they live under reportGenerator/components
@@ -108,7 +108,6 @@ const MODULES = [
 
 // A utility, not a module: somewhere you check on the data rather than read it.
 const UTILITIES = [
-  { key: 'history', to: '/history', label: 'History Upload', tagline: 'Jejak setiap file yang masuk', Icon: History },
   { key: 'access', to: '/pengaturan-akses', label: 'Pengaturan Akses', tagline: 'Akun, role, dan hak akses', Icon: ShieldCheck, adminOnly: true },
 ];
 
@@ -158,7 +157,7 @@ export default function HomePage() {
   // Same rule as the sidebar: a card shows only if this role may open it.
   const PERMISSION_OF = {
     dashboard: 'dashboard', 'daily-tracking': 'daily_tracking', 'brand-settings': 'brand_settings', 'brand-data': 'brand_settings', 'report-generator': 'report_generator',
-    'meta-automation': 'meta_automation', 'internal-dashboard': 'internal_dashboard', 'control-center': 'control_center', history: 'history',
+    'meta-automation': 'meta_automation', 'internal-dashboard': 'internal_dashboard', 'control-center': 'control_center',
   };
   const allowed = (m) => (!PERMISSION_OF[m.key] || can(PERMISSION_OF[m.key])) && (!m.adminOnly || m.key !== 'access' || (isAdmin && !isViewOnly));
   const modules = MODULES.filter(allowed);

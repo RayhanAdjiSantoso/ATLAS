@@ -1,4 +1,4 @@
-import { asyncHandler } from '../utils/errors.js';
+import { AppError, asyncHandler } from '../utils/errors.js';
 import * as metaAutomationService from '../services/metaAutomationService.js';
 import { syncMetaAccountsToDashboard } from '../services/internalDashboardSync/metaAccountsMirror.js';
 
@@ -89,6 +89,54 @@ export const brandDelete = asyncHandler(async (req, res) => {
 });
 
 // --- Alur 2: Langganan (siapa dinotifikasi, metrik & threshold) ---
+
+// Brand-scoped subscriptions (Brand Setting › Data Collection Hub › Meta Ads ›
+// Meta Automation › Langganan). Open to Brand Setting users, who may not
+// manage Meta Automation itself, so everything is limited to the ad accounts
+// linked to this ATLAS brand and the account list carries no credentials.
+async function brandAccounts(brandId) {
+  const all = await metaAutomationService.callAppsScript('brandList');
+  return (all ?? [])
+    .filter((a) => Number(a.atlasBrandId) === Number(brandId))
+    .map(({ id, client, type, atlasBrandId }) => ({ id, client, type: type || 'MAIN', atlasBrandId }));
+}
+
+// Sequential, never Promise.all: two overlapping calls to the same Apps
+// Script project can come back as Google's interstitial page.
+async function brandScope(brandId) {
+  const accounts = await brandAccounts(brandId);
+  const ids = new Set(accounts.map((a) => a.id));
+  const all = await metaAutomationService.callAppsScript('subscriptionList');
+  return { accounts, ids, subscriptions: (all ?? []).filter((s) => ids.has(s.brandId)) };
+}
+
+export const brandSubscriptionList = asyncHandler(async (req, res) => {
+  const { accounts, subscriptions } = await brandScope(req.params.brandId);
+  res.json({ accounts, subscriptions });
+});
+
+export const brandSubscriptionCreate = asyncHandler(async (req, res) => {
+  const { ids } = await brandScope(req.params.brandId);
+  if (!ids.has(req.body?.brandId)) throw new AppError('Ad account ini tidak tertaut ke brand ini.', 403);
+  const { id, ...payload } = req.body;
+  const subscription = await metaAutomationService.callAppsScript('subscriptionSave', payload);
+  res.status(201).json({ subscription });
+});
+
+export const brandSubscriptionUpdate = asyncHandler(async (req, res) => {
+  const { ids, subscriptions } = await brandScope(req.params.brandId);
+  if (!subscriptions.some((s) => s.id === req.params.id)) throw new AppError('Langganan tidak ditemukan untuk brand ini.', 404);
+  if (!ids.has(req.body?.brandId)) throw new AppError('Ad account ini tidak tertaut ke brand ini.', 403);
+  const subscription = await metaAutomationService.callAppsScript('subscriptionSave', { ...req.body, id: req.params.id });
+  res.json({ subscription });
+});
+
+export const brandSubscriptionDelete = asyncHandler(async (req, res) => {
+  const { ids, subscriptions } = await brandScope(req.params.brandId);
+  if (!subscriptions.some((s) => s.id === req.params.id)) throw new AppError('Langganan tidak ditemukan untuk brand ini.', 404);
+  const all = await metaAutomationService.callAppsScript('subscriptionDelete', { id: req.params.id });
+  res.json({ subscriptions: (all ?? []).filter((s) => ids.has(s.brandId)) });
+});
 
 export const subscriptionList = asyncHandler(async (req, res) => {
   const subscriptions = await metaAutomationService.callAppsScript('subscriptionList');

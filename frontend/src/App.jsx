@@ -5,7 +5,6 @@ import LoginPage from './pages/LoginPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import DailyTrackingPage from './pages/DailyTrackingPage.jsx';
-import HistoryPage from './pages/HistoryPage.jsx';
 import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
 import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
@@ -56,9 +55,6 @@ export default function App() {
           </Route>
           {/* Brand Tracking's old address — bookmarks and links still land. */}
           <Route path="/daily-tracking" element={<Navigate to="/brand-tracking" replace />} />
-          <Route element={<ProtectedRoute module="history" />}>
-            <Route path="/history" element={<HistoryPage />} />
-          </Route>
           <Route element={<ProtectedRoute module="report_generator" />}>
             {/* The report type is a URL param so each one is linkable and the
                 back button works; the page stays mounted across param changes,

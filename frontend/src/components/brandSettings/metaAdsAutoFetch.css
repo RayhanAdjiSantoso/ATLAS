@@ -21,6 +21,9 @@
 .maf-block .maf-sub { margin-top: 1rem; }
 .maf-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
 .maf-section + .maf-section { margin-top: .85rem; }
+.maf-block:focus { outline: none; }
+.maf-section { border-radius: 10px; transition: background .4s ease, box-shadow .4s ease; }
+.maf-section.is-highlight { background: var(--primary-light); box-shadow: 0 0 0 6px var(--primary-light); }
 .maf-section h5 { margin: 0 0 .4rem; font-size: .8rem; font-weight: 700; color: var(--text-muted, #55658a); }
 .maf-chip { padding: .2rem .55rem; border-radius: 999px; font-size: .72rem; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted); }
 .maf-hint { font-size: .72rem; color: var(--text-muted); margin: .45rem 0 0; }
@@ -56,3 +59,6 @@
 .maf label.maf-option:has(.form-input) { color: var(--text-muted); font-weight: 600; font-size: .75rem; }
 .maf .gads-add-form .maf-actions { align-items: flex-end; }
 .maf .gads-add-form .maf-option { flex-direction: column; align-items: stretch; gap: .25rem; }
+
+/* The same list inside a Meta dataset row of Performance Database (non-admin). */
+.maf-specs { margin: 0 0 .9rem; }

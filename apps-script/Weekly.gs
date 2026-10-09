@@ -282,6 +282,186 @@ var FIELD_LABELS = {
   socialSpend: 'Social Spend', fullViewImpressions: 'Full View Impressions', fullViewReach: 'Full View Reach'
 };
 
+// ============================================================
+// METRIK KATALOG ATLAS
+// ============================================================
+// Sejak Oktober 2026, pilihan field di form Langganan ATLAS = metrik yang
+// ditarik Meta Automation ke ATLAS (backend/src/config/metaAdsMetrics.js):
+// Boost Post, Non Boost Post (E-commerce / B2B), dan CPAS shared items.
+// Definisinya disalin dari sana -- ubah keduanya bersamaan. Metrik yang
+// artinya sama dengan field lama memakai key lama (Amount spent = spend,
+// Impressions, CPM, Link clicks = inlineLinkClicks, CPC per link click =
+// costPerInlineLinkClick), jadi tidak didaftarkan ulang di sini.
+//
+// Field lama di METRIC_FIELDS tetap dihitung supaya langganan yang sudah
+// memakainya terus jalan; form ATLAS hanya tidak menawarkannya lagi.
+//
+// `additive`: dijumlahkan lintas hari (dibagi baselineDays untuk baseline
+// Daily); selain itu rasio, dihitung ulang dari total periode.
+// `zero`: boleh dipakai aturan "Berhenti (nol)" di Daily.
+
+// Urutan = prioritas, yang pertama ada dipakai (bukan dijumlah -- pixel
+// dan omni_* melaporkan event yang sama). Sama dengan ACTION_TYPES di ATLAS.
+var ALERT_ACTION_TYPES = {
+  content_views: ['omni_view_content', 'offsite_conversion.fb_pixel_view_content'],
+  add_to_cart: ['omni_add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'],
+  purchase: ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'],
+  leads: ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'],
+  messaging_contacts: ['onsite_conversion.total_messaging_connection'],
+  messaging_conversations: ['onsite_conversion.messaging_conversation_started_7d'],
+  post_likes: ['like'],
+  post_comments: ['comment'],
+  post_saves: ['onsite_conversion.post_save'],
+  post_shares: ['post']
+};
+
+function pickAlertAction_(map, group) {
+  var types = ALERT_ACTION_TYPES[group];
+  for (var i = 0; i < types.length; i++) {
+    if (map && map[types[i]] !== undefined && map[types[i]] !== null) return num_(map[types[i]]);
+  }
+  return 0;
+}
+
+function ratioOrNull_(a, b) { return b ? a / b : null; }
+function pctOrNull_(a, b) { return b ? a / b * 100 : null; }
+
+// Profile visits = Results campaign profile visit (indicator profile_visit_view,
+// atau nama campaign "... Profile Visit ..."), sama seperti ATLAS.
+function profileVisitsOf_(r) {
+  if (!r.result_indicator && !r.result_value) return 0;
+  var isProfile = /profile/i.test(r.result_indicator || '') || /profile\s*visit/i.test(r.campaign_name || '');
+  return isProfile ? num_(r.result_value) : 0;
+}
+
+function postInteractionsOf_(r) {
+  return pickAlertAction_(r.actions, 'post_likes') + pickAlertAction_(r.actions, 'post_comments') +
+    pickAlertAction_(r.actions, 'post_saves') + pickAlertAction_(r.actions, 'post_shares');
+}
+
+var CATALOG_ALERT_METRICS = [
+  // Semua section
+  { key: 'linkCtr', label: 'CTR (link click-through rate)', format: 'percent',
+    compute: function (r) { return pctOrNull_(num_(r.inline_link_clicks), num_(r.impressions)); } },
+
+  // Boost Post
+  { key: 'profile_visits', label: 'Instagram profile visits', format: 'number', additive: true, zero: true,
+    compute: profileVisitsOf_ },
+  { key: 'cost_per_profile_visit', label: 'Cost per Instagram profile visit', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), profileVisitsOf_(r)); } },
+  { key: 'profile_visit_rate', label: 'Profile visit rate', format: 'percent',
+    compute: function (r) { return pctOrNull_(profileVisitsOf_(r), num_(r.impressions)); } },
+  { key: 'interactions', label: 'Post interactions', format: 'number', additive: true, zero: true,
+    compute: postInteractionsOf_ },
+  { key: 'cost_per_interaction', label: 'Cost per post interaction', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), postInteractionsOf_(r)); } },
+
+  // Non Boost Post (E-commerce)
+  { key: 'purchase_value', label: 'Purchases conversion value', format: 'currency', additive: true,
+    compute: function (r) { return pickAlertAction_(r.action_values, 'purchase'); } },
+  { key: 'purchase_roas', label: 'Purchase ROAS (return on ad spend)', format: 'number',
+    compute: function (r) { return ratioOrNull_(pickAlertAction_(r.action_values, 'purchase'), num_(r.spend)); } },
+  { key: 'content_views', label: 'Content views', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.actions, 'content_views'); } },
+  { key: 'cost_per_content_view', label: 'Cost per content view', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.actions, 'content_views')); } },
+  { key: 'adds_to_cart', label: 'Adds to cart', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.actions, 'add_to_cart'); } },
+  { key: 'cost_per_add_to_cart', label: 'Cost per add to cart', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.actions, 'add_to_cart')); } },
+  { key: 'add_to_cart_rate', label: 'Add to cart rate', format: 'percent',
+    compute: function (r) { return pctOrNull_(pickAlertAction_(r.actions, 'add_to_cart'), pickAlertAction_(r.actions, 'content_views')); } },
+  { key: 'purchases', label: 'Purchases', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.actions, 'purchase'); } },
+  { key: 'cost_per_purchase', label: 'Cost per purchase', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.actions, 'purchase')); } },
+  { key: 'purchase_rate', label: 'Purchase rate', format: 'percent',
+    compute: function (r) { return pctOrNull_(pickAlertAction_(r.actions, 'purchase'), pickAlertAction_(r.actions, 'add_to_cart')); } },
+  { key: 'conversion_rate', label: 'Conversion rate (purchases ÷ content views)', format: 'percent',
+    compute: function (r) { return pctOrNull_(pickAlertAction_(r.actions, 'purchase'), pickAlertAction_(r.actions, 'content_views')); } },
+  { key: 'average_order_value', label: 'Average order value', format: 'currency',
+    compute: function (r) { return ratioOrNull_(pickAlertAction_(r.action_values, 'purchase'), pickAlertAction_(r.actions, 'purchase')); } },
+
+  // Non Boost Post (B2B)
+  { key: 'leads', label: 'Leads', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.actions, 'leads'); } },
+  { key: 'cost_per_lead', label: 'Cost per lead', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.actions, 'leads')); } },
+  { key: 'messaging_contacts', label: 'Messaging contacts', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.actions, 'messaging_contacts'); } },
+  { key: 'cost_per_messaging_contact', label: 'Cost per messaging contact', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.actions, 'messaging_contacts')); } },
+  { key: 'messaging_conversations', label: 'Messaging conversations started', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.actions, 'messaging_conversations'); } },
+  { key: 'cost_per_messaging_conversation', label: 'Cost per messaging conversation started', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.actions, 'messaging_conversations')); } },
+  { key: 'lead_conversion_rate', label: 'Lead conversion rate (leads ÷ link clicks)', format: 'percent',
+    compute: function (r) { return pctOrNull_(pickAlertAction_(r.actions, 'leads'), num_(r.inline_link_clicks)); } },
+
+  // CPAS (shared items, catalog_segment_* -- cuma ditarik untuk akun CPAS)
+  { key: 'shared_purchase_value', label: 'Purchases conversion value for shared items only', format: 'currency', additive: true,
+    compute: function (r) { return pickAlertAction_(r.catalog_values, 'purchase'); } },
+  { key: 'shared_purchase_roas', label: 'Purchase ROAS for shared items only', format: 'number',
+    compute: function (r) { return ratioOrNull_(pickAlertAction_(r.catalog_values, 'purchase'), num_(r.spend)); } },
+  { key: 'shared_content_views', label: 'Content views with shared items', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.catalog_actions, 'content_views'); } },
+  { key: 'cost_per_shared_content_view', label: 'Cost per content view with shared items', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.catalog_actions, 'content_views')); } },
+  { key: 'shared_adds_to_cart', label: 'Adds to cart with shared items', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.catalog_actions, 'add_to_cart'); } },
+  { key: 'cost_per_shared_add_to_cart', label: 'Cost per add to cart with shared items', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.catalog_actions, 'add_to_cart')); } },
+  { key: 'shared_add_to_cart_rate', label: 'Add to cart rate with shared items', format: 'percent',
+    compute: function (r) { return pctOrNull_(pickAlertAction_(r.catalog_actions, 'add_to_cart'), pickAlertAction_(r.catalog_actions, 'content_views')); } },
+  { key: 'shared_purchases', label: 'Purchases with shared items', format: 'number', additive: true, zero: true,
+    compute: function (r) { return pickAlertAction_(r.catalog_actions, 'purchase'); } },
+  { key: 'cost_per_shared_purchase', label: 'Cost per purchase with shared items', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), pickAlertAction_(r.catalog_actions, 'purchase')); } },
+  { key: 'shared_purchase_rate', label: 'Purchase rate with shared items', format: 'percent',
+    compute: function (r) { return pctOrNull_(pickAlertAction_(r.catalog_actions, 'purchase'), pickAlertAction_(r.catalog_actions, 'add_to_cart')); } },
+  { key: 'shared_conversion_rate', label: 'Conversion rate with shared items', format: 'percent',
+    compute: function (r) { return pctOrNull_(pickAlertAction_(r.catalog_actions, 'purchase'), pickAlertAction_(r.catalog_actions, 'content_views')); } },
+  { key: 'shared_average_order_value', label: 'Average order value with shared items', format: 'currency',
+    compute: function (r) { return ratioOrNull_(pickAlertAction_(r.catalog_values, 'purchase'), pickAlertAction_(r.catalog_actions, 'purchase')); } }
+];
+
+CATALOG_ALERT_METRICS.forEach(function (m) {
+  METRIC_FIELDS[m.key] = { now: m.key + 'Now', prev: m.key + 'Prev', delta: m.key + 'Delta', format: m.format };
+  FIELD_LABELS[m.key] = m.label;
+});
+
+// Field lama yang namanya sama dengan kolom katalog ATLAS: label katalog.
+FIELD_LABELS.spend = 'Amount spent (IDR)';
+FIELD_LABELS.impressions = 'Impressions';
+FIELD_LABELS.cpm = 'CPM (cost per 1,000 impressions)';
+FIELD_LABELS.inlineLinkClicks = 'Link clicks';
+FIELD_LABELS.costPerInlineLinkClick = 'CPC (cost per link click)';
+
+/** Field yang boleh dipakai aturan "Berhenti (nol)" (Daily saja). */
+function isZeroRuleField_(field) {
+  if (field === 'spend' || field === 'results') return true;
+  return CATALOG_ALERT_METRICS.some(function (m) { return m.key === field && m.zero; });
+}
+
+/**
+ * Tambahkan Now/Prev/Delta metrik katalog ke objek perbandingan `c`.
+ * `a` = periode sekarang (boleh null: campaign tidak jalan), `b` =
+ * pembanding (boleh null). baselineDays (Daily) membagi metrik additive
+ * `b` jadi rata-rata harian; Weekly tidak mengirimnya. Rasio yang
+ * penyebutnya nol bernilai null, dan delta-nya null (bukan -100%).
+ */
+function addCatalogComparison_(c, a, b, baselineDays) {
+  CATALOG_ALERT_METRICS.forEach(function (m) {
+    var now = a ? m.compute(a) : (m.additive ? 0 : null);
+    var prev = b ? m.compute(b) : (m.additive ? 0 : null);
+    if (b && baselineDays && m.additive) prev = prev / baselineDays;
+    c[m.key + 'Now'] = now;
+    c[m.key + 'Prev'] = prev;
+    c[m.key + 'Delta'] = (now === null || prev === null) ? null : delta_(now, prev);
+  });
+  return c;
+}
+
 function formatFieldValue_(field, value) {
   var fmt = (METRIC_FIELDS[field] || {}).format;
   if (fmt === 'currency') return rupiah_(value);
@@ -474,7 +654,8 @@ function weeklyRun() {
         var until = new Date(); until.setDate(until.getDate() - 1);
         var since = new Date(until); since.setDate(since.getDate() - (2 * maxSpan - 1));
         var byDate = fetchDailyInsights_(token, acct.id, 'campaign',
-          Utilities.formatDate(since, tz, 'yyyy-MM-dd'), Utilities.formatDate(until, tz, 'yyyy-MM-dd'));
+          Utilities.formatDate(since, tz, 'yyyy-MM-dd'), Utilities.formatDate(until, tz, 'yyyy-MM-dd'),
+          { catalog: acct.type === 'CPAS' });
 
         brandSubs.forEach(function (s) {
           var r = evaluateBrandWeeklyForSub_(acct, token, meta, byDate, tz, s);
@@ -626,8 +807,8 @@ function evaluateBrandWeeklyForSub_(acct, token, meta, byDate, tz, sub) {
     Object.keys(windowsNeeded).forEach(function (w) {
       var per = periodsForRow[w];
       adsetData[w] = {
-        now:  fetchInsights_(token, acct.id, 'adset', per.current),
-        prev: fetchInsights_(token, acct.id, 'adset', per.previous)
+        now:  fetchInsights_(token, acct.id, 'adset', per.current, { catalog: acct.type === 'CPAS' }),
+        prev: fetchInsights_(token, acct.id, 'adset', per.previous, { catalog: acct.type === 'CPAS' })
       };
     });
 
@@ -735,7 +916,7 @@ function buildComparison_(a, b, resultKey) {
   var cprNow  = resNow  ? spendNow  / resNow  : null;
   var cprPrev = resPrev ? spendPrev / resPrev : null;
 
-  return {
+  return addCatalogComparison_({
     spendNow: spendNow,
     spendPrev: spendPrev,
     spendDelta: delta_(spendNow, spendPrev),
@@ -809,7 +990,7 @@ function buildComparison_(a, b, resultKey) {
     fullViewReachDelta: delta_(num_(a.full_view_reach), b ? num_(b.full_view_reach) : 0),
 
     status: a.effective_status || ''
-  };
+  }, a, b);
 }
 
 // ============================================================
@@ -924,39 +1105,80 @@ function candidatesFromAdset_(s) {
 }
 
 /** Satu range, satu request -- dipakai drill-down adset (per langganan, volume kecil) dan Daily Tracking (H-1). */
-function fetchInsights_(token, accountId, level, period) {
+function fetchInsights_(token, accountId, level, period, opts) {
+  var out = {};
+  fetchInsightPages_(token, accountId, level, opts,
+    '&time_range=' + encodeURIComponent(JSON.stringify({ since: period.since, until: period.until })),
+    25, function (d) { out[(level === 'adset') ? d.adset_id : d.campaign_id] = d; });
+  return out;
+}
+
+/**
+ * Field insights yang diminta Weekly/Daily. action_values + results
+ * untuk metrik katalog (purchase value, profile visits);
+ * catalog_segment_* (shared items) cuma untuk akun CPAS (opts.catalog).
+ */
+function insightFields_(level, withResults, withCatalog) {
   var fields = [
     'campaign_id', 'campaign_name', 'objective',
     'spend', 'impressions', 'reach', 'frequency',
-    'clicks', 'ctr', 'cpc', 'cpm', 'actions',
+    'clicks', 'ctr', 'cpc', 'cpm', 'actions', 'action_values',
     // Field angka datar tambahan (tanpa breakdown) -- lihat METRIC_FIELDS.
     'unique_clicks', 'inline_link_clicks', 'cost_per_inline_link_click',
     'unique_ctr', 'cost_per_unique_click', 'social_spend',
     'full_view_impressions', 'full_view_reach'
   ];
+  if (withResults) fields.push('results');
+  if (withCatalog) fields.push('catalog_segment_actions', 'catalog_segment_value');
   if (level === 'adset') fields.push('adset_id', 'adset_name');
+  return fields;
+}
 
-  var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' +
-    accountId + '/insights' +
-    '?fields=' + encodeURIComponent(fields.join(',')) +
-    '&level=' + level +
-    '&time_range=' + encodeURIComponent(JSON.stringify({
-      since: period.since, until: period.until })) +
-    '&limit=300&access_token=' + encodeURIComponent(token);
-
-  var out = {}, guard = 0;
-
-  while (url && guard < 25) {
-    guard++;
-    var body = fetchJson_(url);
-    (body.data || []).forEach(function (d) {
-      d.actions = mapActions_(d.actions);
-      out[(level === 'adset') ? d.adset_id : d.campaign_id] = d;
-    });
-    url = (body.paging && body.paging.next) ? body.paging.next : null;
+/**
+ * Tarik semua halaman insights, `onRow(d)` per baris yang sudah
+ * dirapikan (actions dkk. jadi map). Kalau Meta menolak field results
+ * atau catalog_segment_* di halaman pertama, diulang tanpa field itu
+ * (metrik katalog yang bergantung padanya jadi nol) daripada gagal total.
+ */
+function fetchInsightPages_(token, accountId, level, opts, rangeParams, maxPages, onRow) {
+  var withResults = true;
+  var withCatalog = !!(opts && opts.catalog);
+  for (var attempt = 0; ; attempt++) {
+    var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' +
+      accountId + '/insights' +
+      '?fields=' + encodeURIComponent(insightFields_(level, withResults, withCatalog).join(',')) +
+      '&level=' + level + rangeParams +
+      '&limit=300&access_token=' + encodeURIComponent(token);
+    var body;
+    try {
+      body = fetchJson_(url);
+    } catch (e) {
+      if (attempt < 2 && withCatalog && /catalog_segment/.test(e.message)) { withCatalog = false; continue; }
+      if (attempt < 2 && withResults && /results/.test(e.message)) { withResults = false; continue; }
+      throw e;
+    }
+    var guard = 0;
+    while (body) {
+      guard++;
+      (body.data || []).forEach(function (d) { onRow(prepareInsightRow_(d)); });
+      body = (body.paging && body.paging.next && guard < maxPages) ? fetchJson_(body.paging.next) : null;
+    }
+    return;
   }
+}
 
-  return out;
+function prepareInsightRow_(d) {
+  d.actions = mapActions_(d.actions);
+  d.action_values = mapActions_(d.action_values);
+  d.catalog_actions = mapActions_(d.catalog_segment_actions);
+  d.catalog_values = mapActions_(d.catalog_segment_value);
+  delete d.catalog_segment_actions;
+  delete d.catalog_segment_value;
+  var r = (d.results && d.results.length) ? d.results[0] : null;
+  d.result_indicator = r ? (r.indicator || '') : '';
+  d.result_value = (r && r.values && r.values.length) ? num_(r.values[0].value) : 0;
+  delete d.results;
+  return d;
 }
 
 /**
@@ -966,40 +1188,16 @@ function fetchInsights_(token, accountId, level, period) {
  * langganan minta panjang periode berbeda -- lihat sumDailyRange_
  * untuk menjumlahkan ulang jadi rentang yang dibutuhkan tiap langganan.
  */
-function fetchDailyInsights_(token, accountId, level, since, until) {
-  var fields = [
-    'campaign_id', 'campaign_name', 'objective',
-    'spend', 'impressions', 'reach', 'frequency',
-    'clicks', 'ctr', 'cpc', 'cpm', 'actions',
-    // Field angka datar tambahan (tanpa breakdown) -- lihat METRIC_FIELDS.
-    'unique_clicks', 'inline_link_clicks', 'cost_per_inline_link_click',
-    'unique_ctr', 'cost_per_unique_click', 'social_spend',
-    'full_view_impressions', 'full_view_reach'
-  ];
-  if (level === 'adset') fields.push('adset_id', 'adset_name');
-
-  var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' +
-    accountId + '/insights' +
-    '?fields=' + encodeURIComponent(fields.join(',')) +
-    '&level=' + level +
+function fetchDailyInsights_(token, accountId, level, since, until, opts) {
+  var byDate = {};
+  fetchInsightPages_(token, accountId, level, opts,
     '&time_increment=1' +
-    '&time_range=' + encodeURIComponent(JSON.stringify({ since: since, until: until })) +
-    '&limit=300&access_token=' + encodeURIComponent(token);
-
-  var byDate = {}, guard = 0;
-
-  while (url && guard < 60) {
-    guard++;
-    var body = fetchJson_(url);
-    (body.data || []).forEach(function (d) {
-      d.actions = mapActions_(d.actions);
+    '&time_range=' + encodeURIComponent(JSON.stringify({ since: since, until: until })),
+    60, function (d) {
       var date = d.date_start;
       if (!byDate[date]) byDate[date] = {};
       byDate[date][(level === 'adset') ? d.adset_id : d.campaign_id] = d;
     });
-    url = (body.paging && body.paging.next) ? body.paging.next : null;
-  }
-
   return byDate;
 }
 
@@ -1032,7 +1230,8 @@ function sumDailyRange_(byDate, sinceStr, untilStr) {
           spend: 0, impressions: 0, reach: 0, clicks: 0,
           unique_clicks: 0, inline_link_clicks: 0, social_spend: 0,
           full_view_impressions: 0, full_view_reach: 0,
-          actions: {}
+          result_indicator: '', result_value: 0,
+          actions: {}, action_values: {}, catalog_actions: {}, catalog_values: {}
         };
       }
       var acc = out[id];
@@ -1045,9 +1244,13 @@ function sumDailyRange_(byDate, sinceStr, untilStr) {
       acc.social_spend += num_(row.social_spend);
       acc.full_view_impressions += num_(row.full_view_impressions);
       acc.full_view_reach += num_(row.full_view_reach);
-      Object.keys(row.actions || {}).forEach(function (k) {
-        acc.actions[k] = (acc.actions[k] || 0) + row.actions[k];
+      ['actions', 'action_values', 'catalog_actions', 'catalog_values'].forEach(function (mapKey) {
+        Object.keys(row[mapKey] || {}).forEach(function (k) {
+          acc[mapKey][k] = (acc[mapKey][k] || 0) + row[mapKey][k];
+        });
       });
+      acc.result_value += num_(row.result_value);
+      if (!acc.result_indicator && row.result_indicator) acc.result_indicator = row.result_indicator;
     });
   });
 

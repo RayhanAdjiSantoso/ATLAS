@@ -57,6 +57,10 @@
 .atlas-menu-check { display: grid; place-items: center; flex: 0 0 auto; width: 16px; height: 16px; color: #fff; border: 1.5px solid var(--acc-300); border-radius: 5px; background: #fff; transition: background .14s ease, border-color .14s ease; }
 .atlas-menu li button.is-active .atlas-menu-check { border-color: var(--acc); background: var(--acc); }
 .atlas-menu-empty { padding: 1rem .7rem; color: var(--text-muted); font-size: .72rem; }
+.atlas-menu-search { padding: .45rem .45rem 0; }
+.atlas-menu-search .atlas-search-field { width: 100%; }
+.atlas-menu li.atlas-menu-group { padding: .55rem .6rem .2rem; color: var(--text-muted); font-size: .68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.atlas-menu li.atlas-menu-group:first-child { padding-top: .25rem; }
 
 /* Search bar shared by every workspace and picker. The repeated class selector
    deliberately outranks older page-local one-off search rules while those

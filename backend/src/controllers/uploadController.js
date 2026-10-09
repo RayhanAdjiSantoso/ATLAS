@@ -1,4 +1,3 @@
-import { isAdminRole } from '../services/access/permissions.js';
 import { v4 as uuidv4 } from 'uuid';
 import { validationResult } from 'express-validator';
 import { AppError, asyncHandler } from '../utils/errors.js';
@@ -11,11 +10,6 @@ function validate(req) {
   if (!errors.isEmpty()) {
     throw new AppError('Validasi gagal', 400, errors.array());
   }
-}
-
-function toArray(value) {
-  if (value == null || value === '') return [];
-  return Array.isArray(value) ? value : [value];
 }
 
 export const uploadFile = asyncHandler(async (req, res) => {
@@ -68,94 +62,4 @@ export const uploadFile = asyncHandler(async (req, res) => {
       error: err.message,
     });
   }
-});
-
-export const listUploads = asyncHandler(async (req, res) => {
-  validate(req);
-
-  const uploads = await uploadService.listUploads({
-    userId: req.user.userId,
-    role: req.user.role,
-    allowedBrandId: req.user.allowedBrandId,
-    filters: {
-      brand: toArray(req.query.brand),
-      fileType: toArray(req.query.fileType),
-      userId: toArray(req.query.userId),
-      periodStart: req.query.periodStart,
-      periodEnd: req.query.periodEnd,
-    },
-  });
-
-  res.json({ uploads });
-});
-
-export const getUpload = asyncHandler(async (req, res) => {
-  const upload = await uploadService.getUploadById(req.params.uploadId);
-  if (!upload) throw new AppError('Upload tidak ditemukan', 404);
-
-  if (!isAdminRole(req.user.role) && upload.user_id !== req.user.userId) {
-    throw new AppError('Akses ditolak', 403);
-  }
-  if (req.user.allowedBrandId && upload.brand_id !== req.user.allowedBrandId) {
-    throw new AppError('Akses ditolak untuk brand ini', 403);
-  }
-
-  res.json({ upload });
-});
-
-// Admin-only: stream the original uploaded Excel file back as-is (the
-// stored file already is the file the user uploaded, in whatever Excel
-// format -- .xlsx or .xls -- it was submitted in; multer's fileFilter only
-// ever accepts those two).
-export const downloadUpload = asyncHandler(async (req, res) => {
-  if (!isAdminRole(req.user.role)) {
-    throw new AppError('Akses ditolak', 403);
-  }
-
-  const upload = await uploadService.getUploadFileById(req.params.uploadId);
-  if (!upload) throw new AppError('Upload tidak ditemukan', 404);
-
-  // Report Generator rows have no stored_path -- their file lives as BYTEA
-  // in ads_reports.raw_uploads (raw_upload_id), never written to disk.
-  if (upload.source === 'report_generator') {
-    if (!upload.raw_upload_id) throw new AppError('File tidak ditemukan di server', 404);
-    const file = await uploadService.getReportGeneratorFile(upload.raw_upload_id);
-    if (!file?.raw_file) throw new AppError('File tidak ditemukan di server', 404);
-    res.setHeader('Content-Disposition', `attachment; filename="${(file.original_filename || upload.original_filename).replace(/"/g, '')}"`);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.send(file.raw_file);
-    return;
-  }
-
-  // Dashboard uploads: raw bytes archived in public.uploads.raw_file (BYTEA).
-  // Rows created before migration 013 have no raw_file and can't be re-served.
-  if (!upload.raw_file) throw new AppError('File tidak ditemukan di server', 404);
-  res.setHeader('Content-Disposition', `attachment; filename="${upload.original_filename.replace(/"/g, '')}"`);
-  res.setHeader('Content-Type', 'application/octet-stream');
-  res.send(upload.raw_file);
-});
-
-export const deleteUpload = asyncHandler(async (req, res) => {
-  const upload = await uploadService.getUploadById(req.params.uploadId);
-  if (!upload) throw new AppError('Upload tidak ditemukan', 404);
-
-  if (!isAdminRole(req.user.role) && upload.user_id !== req.user.userId) {
-    throw new AppError('Akses ditolak', 403);
-  }
-  if (req.user.allowedBrandId && upload.brand_id !== req.user.allowedBrandId) {
-    throw new AppError('Akses ditolak untuk brand ini', 403);
-  }
-
-  await uploadService.deleteUpload(req.params.uploadId);
-
-  res.json({ message: 'Upload berhasil dihapus' });
-});
-
-export const getFilterOptions = asyncHandler(async (req, res) => {
-  const brands = await uploadService.listBrandsForFilter(req.user.allowedBrandId);
-  const users = isAdminRole(req.user.role)
-    ? await uploadService.listUsersForFilter()
-    : [];
-
-  res.json({ brands, users });
 });

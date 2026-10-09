@@ -1,6 +1,7 @@
 import { validationResult } from 'express-validator';
 import { AppError, asyncHandler } from '../utils/errors.js';
 import * as service from '../services/metaAdsInsightsService.js';
+import { BREAKDOWNS, metricCatalog } from '../config/metaAdsMetrics.js';
 
 function validate(req) {
   const errors = validationResult(req);
@@ -8,6 +9,12 @@ function validate(req) {
 }
 
 // GET /api/meta-ads-insights/overview?brandId=
+// The fixed breakdowns and metric sections every Meta file carries. Static
+// definitions, no brand data — any signed-in user may read it.
+export const getCatalog = (req, res) => {
+  res.json({ breakdowns: BREAKDOWNS, catalog: metricCatalog() });
+};
+
 export const getOverview = asyncHandler(async (req, res) => {
   validate(req);
   res.json(await service.getOverview(Number(req.query.brandId)));

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, History, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
 import { BRAND_SETTING_SECTIONS } from '../brandSettings/sections.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import api from '../../api/client.js';
@@ -23,7 +23,6 @@ const NAV = [
   { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, group: 'Operasional', module: 'meta_automation' },
   { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, group: 'Operasional', module: 'internal_dashboard' },
   { to: '/pusat-kendali', label: 'Pusat Kendali', Icon: Radar, group: 'Operasional', module: 'control_center' },
-  { to: '/history', label: 'History Upload', Icon: History, group: 'Operasional', module: 'history' },
   // Account and permission management — superadmin and admin only.
   { to: '/pengaturan-akses', label: 'Pengaturan Akses', Icon: ShieldCheck, group: 'Operasional', adminOnly: true },
 ];

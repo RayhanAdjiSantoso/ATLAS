@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import usePopover from './usePopover.js';
+import SearchField from './SearchField.jsx';
 import './fieldControls.css';
 
 // The dropdown ATLAS draws everywhere else — brand picker trigger, result rows
 // with a tick, a portalled glass panel — packaged for short option lists that
 // were still native <select>s. `multiple` turns the rows into checkboxes and
 // keeps the panel open, which is what the MOM recap picker needs.
+// `searchable` adds a filter box above the rows for long lists; an option's
+// `group` draws a small heading wherever the group changes.
 export default function SelectMenu({
   value,
   onChange,
@@ -22,8 +25,12 @@ export default function SelectMenu({
   disabled = false,
   className = '',
   emptyText = 'Tidak ada pilihan.',
+  searchable = false,
+  searchPlaceholder = 'Cari…',
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef(null);
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
   const listId = useId();
@@ -41,12 +48,19 @@ export default function SelectMenu({
     ? (selectedOptions.length ? `${selectedOptions.length} dipilih` : placeholder)
     : (selectedOptions[0]?.label ?? placeholder));
 
-  // Land on the current choice, the way a native select opens.
+  const needle = query.trim().toLowerCase();
+  const visibleOptions = searchable && needle
+    ? options.filter((option) => `${option.label} ${option.group ?? ''} ${option.description ?? ''}`.toLowerCase().includes(needle))
+    : options;
+
+  // Land on the current choice, the way a native select opens. A searchable
+  // menu lands in its search box instead, ready to type.
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setQuery(''); return; }
+    if (searchable) { searchRef.current?.focus({ preventScroll: true }); return; }
     const panel = panelRef.current;
     (panel?.querySelector('[aria-selected="true"]') ?? panel?.querySelector('[role="option"]'))?.focus({ preventScroll: true });
-  }, [open]);
+  }, [open, searchable]);
 
   const pick = (candidate) => {
     if (!multiple) {
@@ -106,11 +120,30 @@ export default function SelectMenu({
               )}
             </div>
           )}
+          {searchable && (
+            <div className="atlas-menu-search">
+              <SearchField
+                ref={searchRef}
+                value={query}
+                placeholder={searchPlaceholder}
+                aria-label={`Cari ${label ?? 'pilihan'}`}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') { event.preventDefault(); panelRef.current?.querySelector('[role="option"]')?.focus(); }
+                  if (event.key === 'Enter' && visibleOptions.length) { event.preventDefault(); pick(visibleOptions[0].value); }
+                  if (event.key === 'Escape') close({ restoreFocus: true });
+                }}
+              />
+            </div>
+          )}
           <ul id={listId} role="listbox" aria-multiselectable={multiple || undefined} aria-label={label} onKeyDown={onListKey}>
-            {options.map((option) => {
+            {visibleOptions.map((option, index) => {
               const selected = isSelected(option.value);
+              const groupStarts = option.group && option.group !== visibleOptions[index - 1]?.group;
               return (
-                <li key={option.value} role="presentation">
+                <Fragment key={option.value}>
+                {groupStarts && <li role="presentation" className="atlas-menu-group">{option.group}</li>}
+                <li role="presentation">
                   <button type="button" role="option" aria-selected={selected} className={selected ? 'is-active' : ''} onClick={() => pick(option.value)}>
                     {multiple && <span className="atlas-menu-check" aria-hidden="true">{selected && <Check size={11} strokeWidth={3} />}</span>}
                     <span className="atlas-menu-copy">
@@ -120,9 +153,11 @@ export default function SelectMenu({
                     {!multiple && selected && <Check size={15} className="atlas-menu-tick" aria-hidden="true" />}
                   </button>
                 </li>
+                </Fragment>
               );
             })}
             {!options.length && <li className="atlas-menu-empty">{emptyText}</li>}
+            {!!options.length && !visibleOptions.length && <li className="atlas-menu-empty">Tidak ada hasil.</li>}
           </ul>
         </div>,
         document.body,
