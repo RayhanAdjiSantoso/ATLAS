@@ -45,6 +45,8 @@
 .maf-badge.is-running { background: var(--info-bg); color: var(--primary); }
 .maf-badge.is-success { background: var(--success-bg); color: var(--success); }
 .maf-badge.is-failed { background: var(--danger-bg); color: #991b1b; }
+.maf-badge.is-empty { background: var(--warning-bg); color: #92400e; }
+.maf-run-check { flex: 1 1 100%; color: #92400e; font-size: .72rem; font-weight: 600; }
 
 .maf-spin { animation: maf-spin .9s linear infinite; }
 @keyframes maf-spin { to { transform: rotate(360deg); } }
@@ -154,6 +156,7 @@
 .mx-h small { color: var(--soft-muted, var(--text-muted)); font-size: .74rem; font-weight: 600; }
 .mx-runs { margin: 0; padding: 0; }
 .mx-runs li { padding: 8px 12px; border-radius: 10px; background: var(--soft-secondary, #f5f8fd); }
+.mx-runs li.is-empty { background: #fffbeb; box-shadow: inset 3px 0 0 var(--warning); }
 
 .mx-specs { border: 1px solid var(--soft-border, var(--border)); border-radius: 14px; background: #fff; }
 .mx-specs > summary {

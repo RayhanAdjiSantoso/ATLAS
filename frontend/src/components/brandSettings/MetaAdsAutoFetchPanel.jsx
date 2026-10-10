@@ -53,6 +53,11 @@ function runState(run) {
   if (run.status === 'running' && Date.now() - new Date(run.startedAt).getTime() > STALE_RUN_MS) {
     return { key: 'failed', label: 'Tidak selesai' };
   }
+  // Meta answered, but with nothing: usually a wrong ad account id or an
+  // account with no ads running, so it is flagged rather than shown as fine.
+  if (run.status === 'success' && run.rowCount === 0) {
+    return { key: 'empty', label: 'Berhasil · 0 baris' };
+  }
   return {
     running: { key: 'running', label: 'Berjalan' },
     success: { key: 'success', label: 'Berhasil' },
@@ -320,7 +325,7 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
                 {overview.runs.slice(0, 5).map((run, index) => {
                   const state = runState(run);
                   return (
-                    <li key={`${run.startedAt}-${index}`}>
+                    <li key={`${run.startedAt}-${index}`} className={state.key === 'empty' ? 'is-empty' : undefined}>
                       <span className={`maf-badge is-${state.key}`}>
                         {state.key === 'running' ? <Loader2 size={12} className="maf-spin" /> : state.key === 'success' ? <Check size={12} /> : <CircleAlert size={12} />}
                         {state.label}
@@ -330,6 +335,11 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
                         {run.status === 'success' ? `${run.rowCount.toLocaleString('id-ID')} baris · ` : ''}{dateTime(run.startedAt)}
                         {run.note ? ` · ${run.note}` : ''}
                       </span>
+                      {state.key === 'empty' && (
+                        <span className="maf-run-check">
+                          Patut dicek: pastikan akun ini memang tidak beriklan pada rentang tersebut dan ID akun iklannya benar di Meta Automation.
+                        </span>
+                      )}
                     </li>
                   );
                 })}
