@@ -85,10 +85,10 @@ export function GeneratorShell(props: GeneratorShellProps) {
           }))}
           aside={(
             <div className="band-action-row">
-              <TourButton tourId="report-generator" />
               <NavLink to="/report-generator/reports" className={`band-action${activeTab === 'reports' ? ' is-on' : ''}`}>
                 <History size={15} aria-hidden="true" /> Riwayat laporan
               </NavLink>
+              <TourButton tourId="report-generator" />
             </div>
           )}
         />
