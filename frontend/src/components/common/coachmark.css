@@ -1,0 +1,91 @@
+/* Coachmark (Coachmark.jsx). Rendered into <body>, so it carries its own
+   tokens rather than borrowing a page's. */
+.cm-root {
+  --cm-accent: #2563eb;
+  --cm-accent-2: #38bdf8;
+  --cm-ink: #0f1a3a;
+  --cm-muted: #5a6a8a;
+  --cm-ease: cubic-bezier(.23, 1, .32, 1);
+  position: fixed; inset: 0; z-index: 4000;
+  font-family: inherit;
+}
+.cm-block { position: fixed; inset: 0; cursor: default; }
+
+/* The spotlight: everything but the hole is dimmed by the hole's own shadow,
+   so the hole can glide from step to step. */
+.cm-hole {
+  position: fixed; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(8, 15, 38, .58);
+  transition: left .42s var(--cm-ease), top .42s var(--cm-ease), width .42s var(--cm-ease), height .42s var(--cm-ease), border-radius .42s var(--cm-ease);
+  animation: cm-dim .3s ease-out;
+}
+.cm-ring {
+  position: absolute; inset: -2px;
+  border: 2px solid var(--cm-accent-2);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, .22), 0 0 28px 2px rgba(56, 189, 248, .45);
+  animation: cm-pulse 2.2s ease-in-out infinite;
+}
+
+/* The card */
+.cm-card {
+  position: fixed; width: 344px; max-width: calc(100vw - 32px);
+  padding: 16px 18px 16px;
+  border-radius: 16px;
+  background: #fff;
+  color: var(--cm-ink);
+  box-shadow: 0 24px 60px -18px rgba(8, 15, 38, .55), 0 0 0 1px rgba(15, 26, 58, .08);
+  transition: left .42s var(--cm-ease), top .42s var(--cm-ease);
+  animation: cm-card-in .32s var(--cm-ease);
+}
+.cm-card::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; border-radius: 16px 16px 0 0;
+  background: linear-gradient(90deg, var(--cm-accent), var(--cm-accent-2));
+}
+.cm-arrow { position: absolute; width: 14px; height: 14px; background: #fff; transform: rotate(45deg); box-shadow: -1px -1px 0 rgba(15, 26, 58, .06); }
+.cm-card.is-bottom .cm-arrow { top: -7px; margin-left: -7px; }
+.cm-card.is-top .cm-arrow { bottom: -7px; margin-left: -7px; box-shadow: 1px 1px 0 rgba(15, 26, 58, .06); }
+.cm-card.is-right .cm-arrow { left: -7px; margin-top: -7px; }
+.cm-card.is-left .cm-arrow { right: -7px; margin-top: -7px; box-shadow: 1px 1px 0 rgba(15, 26, 58, .06); }
+
+.cm-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cm-step { color: var(--cm-accent); font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.cm-step em { color: #9aa6bd; font-style: normal; }
+.cm-skip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--cm-muted); font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.cm-skip:hover { background: #f1f4fa; color: var(--cm-ink); }
+.cm-progress { display: flex; gap: 4px; margin: 10px 0 12px; }
+.cm-progress i { flex: 1; height: 3px; border-radius: 3px; background: #e6ebf4; transition: background-color .3s ease; }
+.cm-progress i.is-done { background: color-mix(in srgb, var(--cm-accent) 45%, #e6ebf4); }
+.cm-progress i.is-now { background: linear-gradient(90deg, var(--cm-accent), var(--cm-accent-2)); }
+.cm-kicker { display: block; margin-bottom: 3px; color: var(--cm-muted); font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.cm-card h3 { margin: 0; font-size: 1.02rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.3; }
+.cm-card p { margin: 6px 0 0; color: #3d4b68; font-size: .86rem; line-height: 1.58; text-wrap: pretty; }
+.cm-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.cm-hint { color: #9aa6bd; font-size: .72rem; }
+.cm-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px;
+  border: 1px solid #dbe2ee; border-radius: 10px; background: #fff; color: var(--cm-ink);
+  font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, transform .14s ease-out;
+}
+.cm-btn:hover { background: #f5f8fd; }
+.cm-btn:active { transform: scale(.97); }
+.cm-btn:focus-visible, .cm-skip:focus-visible { outline: 2px solid var(--cm-accent); outline-offset: 2px; }
+.cm-btn.is-primary { border-color: transparent; background: linear-gradient(115deg, #1e3eb8, var(--cm-accent)); color: #fff; box-shadow: 0 8px 18px -10px rgba(37, 99, 235, .9); }
+.cm-btn.is-primary:hover { filter: brightness(1.06); }
+
+/* The launch button on the page header band. */
+.band-action-row { display: flex; align-items: center; gap: 8px; }
+.tour-launch { display: inline-flex; align-items: center; gap: 6px; font: inherit; cursor: pointer; }
+.band-tools .tour-launch { height: 42px; align-self: flex-end; }
+
+@keyframes cm-pulse { 50% { box-shadow: 0 0 0 7px rgba(56, 189, 248, .12), 0 0 36px 4px rgba(56, 189, 248, .5); } }
+@keyframes cm-dim { from { box-shadow: 0 0 0 9999px rgba(8, 15, 38, 0); } }
+@keyframes cm-card-in { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) {
+  .cm-hole, .cm-card { transition: none; animation: none; }
+  .cm-ring { animation: none; }
+}

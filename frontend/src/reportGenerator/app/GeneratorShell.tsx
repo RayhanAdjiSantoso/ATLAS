@@ -10,6 +10,8 @@ import { SummaryTab } from '../features/summary/SummaryTab';
 import { ClientPicker } from '../features/reports/ClientPicker';
 import { ReportsTab } from '../features/reports/ReportsTab';
 import PageBand from '../../components/common/PageBand.jsx';
+import Coachmark, { TourButton } from '../../components/common/Coachmark.jsx';
+import { TOURS } from '../../components/common/tours.js';
 import { ReportIcon } from '../components/ReportIcon';
 import { BRAND_KEYS, BrandLogo, type BrandKey } from '../components/BrandLogo';
 import { DISABLED_REPORTS, ENABLED_NAV, REPORT_NAV, isReportKey, reportByKey, type ReportKey } from './reports';
@@ -82,12 +84,16 @@ export function GeneratorShell(props: GeneratorShellProps) {
             badge: props.badges[r.key] === '✓' ? '✓' : props.badges[r.key] && props.badges[r.key] !== '—' ? props.badges[r.key] : undefined,
           }))}
           aside={(
-            <NavLink to="/report-generator/reports" className={`band-action${activeTab === 'reports' ? ' is-on' : ''}`}>
-              <History size={15} aria-hidden="true" /> Riwayat laporan
-            </NavLink>
+            <div className="band-action-row">
+              <TourButton tourId="report-generator" />
+              <NavLink to="/report-generator/reports" className={`band-action${activeTab === 'reports' ? ' is-on' : ''}`}>
+                <History size={15} aria-hidden="true" /> Riwayat laporan
+              </NavLink>
+            </div>
           )}
         />
 
+        <Coachmark id="report-generator" steps={TOURS['report-generator']} />
         <section className="rgx-command" aria-label="Brand untuk laporan">
           <div className="rgx-field rgx-field-brand">
             <span className="rgx-field-label">Brand untuk laporan</span>

@@ -1,34 +1,27 @@
 import useSessionState, { sessionKey } from '../hooks/useSessionState.js';
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
-  ArrowUpRight, BarChart3, Brain, CalendarDays, Check, CheckCircle2, ChevronDown, Circle,
+  ArrowUpRight, Brain, CalendarDays, Check, CheckCircle2, ChevronDown, Circle,
   CircleAlert, Copy, Database, Download, FileText, ListChecks, Loader2, RefreshCw, Sparkles, UsersRound,
 } from 'lucide-react';
-import FilterPanel from '../components/dashboard/FilterPanel.jsx';
 import DashboardTab from '../components/dashboard/DashboardTab.jsx';
 import { useConsoleData } from '../components/dashboard/useConsoleData.js';
 import {
-  CHANNELS,
   CHANNEL_BY_ID,
   CHANNEL_DOMAINS,
   DOMAIN_BY_KEY,
   EXECUTIVE_VIEW,
-  STRIP_METRICS,
   VIEWS,
   VIEW_BY_ID,
-  formatStripValue,
 } from '../components/dashboard/domains.js';
-import { Delta, Figure, InfoTip, Spark } from '../components/dashboard/figures.jsx';
 import ExecutiveSummary from '../components/dashboard/ExecutiveSummary.jsx';
 import MetaOverview from '../components/dashboard/MetaOverview.jsx';
 import MetaAnalysis from '../components/dashboard/MetaAnalysis.jsx';
 import SoftShell from '../components/dashboard/SoftShell.jsx';
 import CrossChannelPanel from '../components/dashboard/CrossChannelPanel.jsx';
 import '../components/dashboard/console.css';
-import atlasIcon from '../assets/atlas-icon.png';
-import atlasWordmark from '../assets/atlas-wordmark.png';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
@@ -49,57 +42,6 @@ const DASH_EASE = [0.16, 1, 0.3, 1];
 // "Upload Data" is no longer one of these tabs. Ingest is not analysis, and it
 // now lives on its own page (Pengaturan Brand) so every module reads from one
 // place instead of each surface growing an uploader.
-
-// Figure, Delta and Spark now live in ./figures.jsx — Executive Snapshot needs
-// the same three signatures, and two implementations of "absent is not zero"
-// is one too many for a rule the product depends on.
-
-// "batal −Rp7.555.050 · retur −Rp1.885.150" — what separates the gross
-// headline from its net line.
-function netBreakdown(net, kind) {
-  const f = (v) => formatStripValue(v, kind);
-  return `Setelah dikurangi batal −${f(net.cancelled || 0)} dan retur −${f(net.returned || 0)}`;
-}
-
-// The Executive Snapshot KPI row, pinned. It stays whichever domain is
-// focused, which is what lets the snapshot panel below stop repeating it.
-function KpiStrip({ entry }) {
-  const loading = entry.status === 'loading' || entry.status === 'idle';
-  const kpis = entry.data?.kpis || {};
-  const trend = (entry.data?.trends || []).map((t) => Number(t.gmv || 0));
-
-  return (
-    <div className="con-kpis">
-      {STRIP_METRICS.map((m) => {
-        const metric = kpis[m.key];
-        const text = formatStripValue(metric?.value, m.kind);
-        return (
-          <div className="con-kpi" key={m.key}>
-            <div className="con-kpi-label">
-              {m.label}
-              <InfoTip text={m.note} />
-            </div>
-            <div className="con-kpi-val">
-              {loading ? <span className="con-skel is-wide" /> : <Figure text={text} absentReason={m.absent} />}
-            </div>
-            {!loading && m.net && metric?.net?.value != null && (
-              <div className="con-kpi-net" title={netBreakdown(metric.net, m.kind)}>
-                Net {formatStripValue(metric.net.value, m.kind)}
-                <Delta value={metric.net.growth} />
-              </div>
-            )}
-            <div className="con-kpi-foot">
-              {loading
-                ? <span className="con-skel is-narrow" style={{ height: '.7rem' }} />
-                : <Delta value={metric?.growth} invert={m.invert} />}
-              {!loading && m.spark && <Spark values={trend} />}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 const AI_SECTIONS = [
   ['diagnosis', 'Ringkasan eksekutif'], ['objective_alignment', 'Keputusan & kesepakatan'],
@@ -646,10 +588,6 @@ export default function DashboardPage() {
     if (!isSnapshot && domainKey !== activeKey) setActiveKey(domainKey);
   }, [isSnapshot, domainKey, activeKey, setActiveKey]);
 
-  // Layout under test: "soft" (the new frame) or "classic". Remembered per
-  // browser session so a comparison survives a reload.
-  const [look, setLook] = useSessionState('dashboard:look', 'soft');
-
   const analysis = (
     <>
     {isSnapshot ? (
@@ -667,7 +605,6 @@ export default function DashboardPage() {
       </>
     ) : (
       <>
-        {channel.ready && look !== 'soft' && <KpiStrip entry={read('Executive Snapshot')} />}
 
         <section className="con-focus channel-analysis" aria-labelledby="con-focus-title">
           <div className="con-focus-head">
@@ -733,160 +670,15 @@ export default function DashboardPage() {
     </>
   );
 
-  if (look === 'soft') {
-    return (
-      <SoftShell
-        filters={filters} setFilters={setFilters}
-        views={VIEWS} view={view} setViewId={selectView}
-        channel={channel} channelDomains={channelDomains} domainKey={domainKey} setActiveKey={setActiveKey}
-        question={isSnapshot ? EXECUTIVE_VIEW.question : active.pending ? channel.note : active.question}
-        kpiEntry={channel?.ready ? read('Executive Snapshot') : null}
-        onClassic={() => setLook('classic')}
-      >
-        {analysis}
-      </SoftShell>
-    );
-  }
-
   return (
-    <div className="con dashboard-console">
-      <header className="brand-hero dashboard-hero">
-        <span className="brand-hero-fx" aria-hidden="true"><i className="brand-hero-aurora" /><i className="brand-hero-grid" /></span>
-
-        <div className="brand-hero-main dashboard-hero-main">
-          <motion.div
-            className="brand-hero-copy"
-            initial={reduceMotion ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: .4, ease: DASH_EASE }}
-          >
-            <span className="brand-hero-eye"><Sparkles size={13} /> Business intelligence workspace</span>
-            <h1>Business Overview</h1>
-            <p>Executive Snapshot merangkum seluruh channel; tab di sebelahnya membuka pembacaan mendalam per channel — Meta Ads, Shopee, dan TikTok.</p>
-            <div className="brand-hero-stats">
-              <span><strong>{CHANNELS.length}</strong> channel</span>
-              <span><strong>{CHANNEL_DOMAINS.shopee.length}</strong> domain per channel</span>
-              <span><strong>{filters.compare ? '2' : '1'}</strong> periode dibaca</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="brand-hero-badge" aria-hidden="true"
-            initial={reduceMotion ? false : { opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: .45, ease: DASH_EASE, delay: .06 }}
-          >
-            <span className="brand-hero-ring" /><span className="brand-hero-ring brand-hero-ring-b" />
-            <img src={atlasIcon} alt="" className="brand-hero-mark" />
-            <img src={atlasWordmark} alt="" className="brand-hero-logo" />
-            <small>Business intelligence</small>
-          </motion.div>
-        </div>
-
-        <div className="brand-dock dashboard-dock">
-          <div className="dashboard-dock-copy">
-            <span><BarChart3 size={15} /> Ruang lingkup analisis
-              <button type="button" className="dashboard-look-btn" onClick={() => setLook('soft')}>Coba tampilan baru</button>
-            </span>
-            <small>Brand dan periode berikut menjadi dasar seluruh angka di bawah.</small>
-          </div>
-          <FilterPanel filters={filters} onChange={setFilters} />
-        </div>
-      </header>
-
-      <LayoutGroup id="dashboard-view-nav">
-        <div className="section-nav-shell is-four">
-        <nav className="brand-view-nav dashboard-channel-nav" aria-label="Tampilan" role="tablist">
-          {VIEWS.map((v) => {
-            const isActive = v.id === view.id;
-            const Icon = v.Icon;
-            return (
-              <button
-                type="button" role="tab" key={v.id}
-                className={`brand-view-tab${isActive ? ' is-active' : ''}`}
-                style={{ '--ch-accent': v.accent }}
-                onClick={() => selectView(v.id)}
-                aria-selected={isActive}
-              >
-                {isActive && (
-                  <motion.span
-                    className="brand-view-pill"
-                    layoutId="dashboard-active-view"
-                    transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 44, mass: .6 }}
-                  />
-                )}
-                <span className="brand-view-tab-ico" aria-hidden="true"><Icon size={16} /></span>
-                <span className="brand-view-tab-copy">
-                  <strong>{v.label}</strong>
-                  <small>{v.hint}{!v.ready && <span className="dashboard-channel-soon">belum ada data</span>}</small>
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-        </div>
-      </LayoutGroup>
-
-      <div className={isSnapshot ? undefined : "channel-workspace"} style={channel ? { '--ch-accent': channel.accent } : undefined}>
-      {!isSnapshot && (
-      <LayoutGroup id="dashboard-domain-nav">
-        <div className="section-nav-shell is-dashboard channel-domain-rail">
-        <h2 className="channel-rail-title">Analisis {channel.label}</h2>
-        <nav className="brand-view-nav dashboard-domain-nav" aria-label="Domain analisis" role="tablist">
-          {channelDomains.map((d) => {
-            const entry = channel.ready ? read(d.key) : { status: 'idle' };
-            const isActive = d.key === domainKey;
-            const stateLabel = !channel.ready ? (d.pending ? 'Belum ada data' : 'Siap dibaca')
-              : entry.status === 'ready' ? 'Siap dibaca'
-                : entry.status === 'loading' ? 'Memuat…'
-                  : entry.status === 'error' ? 'Gagal dimuat' : 'Belum dimuat';
-            return (
-              <button
-                type="button"
-                role="tab"
-                key={d.key}
-                className={`brand-view-tab dashboard-domain-tab${isActive ? ' is-active' : ''}`}
-                onClick={() => setActiveKey(d.key)}
-                aria-selected={isActive}
-                title={d.label}
-              >
-                {isActive && (
-                  <motion.span
-                    className="brand-view-pill"
-                    layoutId="dashboard-active-domain"
-                    transition={reduceMotion
-                      ? { duration: 0 }
-                      : { type: 'spring', stiffness: 520, damping: 44, mass: .6 }}
-                  />
-                )}
-                <span className="brand-view-tab-copy">
-                  <strong>{d.label}</strong>
-                  <small>
-                    <span
-                      className={`dashboard-domain-dot${entry.status === 'ready' ? ' is-ready' : ''}${entry.status === 'loading' ? ' is-loading' : ''}${entry.status === 'error' ? ' is-error' : ''}`}
-                      aria-hidden
-                    />
-                    {stateLabel}
-                  </small>
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-        </div>
-      </LayoutGroup>
-      )}
-
-      <div className="dashboard-domain-caption">
-        <span>{isSnapshot ? EXECUTIVE_VIEW.question : active.pending ? channel.note : active.question}</span>
-        <span className="brand-caption-rule" />
-        <Link to="/data-brand"><Database size={13} /> Data bersumber dari <strong>Data Collection Hub</strong></Link>
-      </div>
-
-      <div className="con-body dashboard-body">
-        <div className="con-canvas">
-          {analysis}
-        </div>
-      </div>
-      </div>
-    </div>
+    <SoftShell
+      filters={filters} setFilters={setFilters}
+      views={VIEWS} view={view} setViewId={selectView}
+      channel={channel} channelDomains={channelDomains} domainKey={domainKey} setActiveKey={setActiveKey}
+      question={isSnapshot ? EXECUTIVE_VIEW.question : active.pending ? channel.note : active.question}
+      kpiEntry={channel?.ready ? read('Executive Snapshot') : null}
+    >
+      {analysis}
+    </SoftShell>
   );
 }

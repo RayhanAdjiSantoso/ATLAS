@@ -2,6 +2,8 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { BRAND_SETTING_SECTIONS } from '../components/brandSettings/sections.js';
 import PageBand from '../components/common/PageBand.jsx';
+import Coachmark, { TourButton } from '../components/common/Coachmark.jsx';
+import { TOURS } from '../components/common/tours.js';
 import '../components/dashboard/console.css';
 import '../components/dashboard/softShell.css';
 import './brandPages.css';
@@ -27,6 +29,7 @@ export default function BrandSettingLayout() {
   // An account with one section (a client: Brand Tracking only) gets that
   // section as the page — no bar offering a single choice.
   const single = sections.length === 1;
+  const tourId = { '/pengaturan-brand': 'brand-context', '/data-brand': 'data-hub', '/brand-tracking': 'brand-tracking' }[current?.to] ?? 'brand-tracking';
 
   return (
     <div className="con brand-settings soft-shell bp bs">
@@ -39,9 +42,11 @@ export default function BrandSettingLayout() {
           activeKey={current?.to}
           layoutId="bs-tab-sheet"
           ariaLabel="Bagian Brand Setting"
+          aside={<TourButton tourId={tourId} />}
         />
 
         <Outlet />
+        <Coachmark key={tourId} id={tourId} steps={TOURS[tourId]} />
       </div>
     </div>
   );

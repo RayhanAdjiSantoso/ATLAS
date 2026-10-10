@@ -1,6 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Database, LayoutPanelLeft } from 'lucide-react';
+import { ArrowUpRight, Database } from 'lucide-react';
+import Coachmark, { TourButton } from '../common/Coachmark.jsx';
+import { TOURS } from '../common/tours.js';
 import FilterPanel from './FilterPanel.jsx';
 import ChannelRoasStrip from './ChannelRoasStrip.jsx';
 import { STRIP_METRICS, formatStripValue } from './domains.js';
@@ -67,7 +69,7 @@ function Tiles({ entry }) {
 
 export default function SoftShell({
   filters, setFilters, views, view, setViewId, channel, channelDomains, domainKey, setActiveKey,
-  question, kpiEntry, onClassic, children,
+  question, kpiEntry, children,
 }) {
   // One column. The app sidebar already is the navigation between modules,
   // so inside this page the channel and domain switches sit above the
@@ -92,9 +94,7 @@ export default function SoftShell({
           tools={(
             <>
               <FilterPanel filters={filters} onChange={setFilters} variant="band" />
-              <button type="button" className="band-icon-btn" onClick={onClassic} title="Kembali ke tampilan klasik" aria-label="Kembali ke tampilan klasik">
-                <LayoutPanelLeft size={17} aria-hidden="true" />
-              </button>
+              <TourButton tourId="business-overview" />
             </>
           )}
         />
@@ -130,6 +130,7 @@ export default function SoftShell({
 
         <div className="soft-content dashboard-body"><div className="con-canvas">{children}</div></div>
 
+        <Coachmark id="business-overview" steps={TOURS['business-overview']} />
         <p className="soft-source">
           <Database size={13} aria-hidden="true" /> Semua angka membaca file di <Link to="/data-brand">Data Collection Hub</Link> untuk brand dan periode di atas.
         </p>
