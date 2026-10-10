@@ -63,7 +63,7 @@ import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
-import { PeriodSourcePicker, type LibraryMonth, type PeriodSourceTab } from '../reports/PeriodSourcePicker';
+import { PeriodSourcePicker, type LibraryMonth, type PeriodSourceTab, type PickScopeOption } from '../reports/PeriodSourcePicker';
 import { RangeCalendar } from '../reports/RangeCalendar';
 import type { AutoRange } from '../reports/AutoRangePanel';
 import { getClients, getSavedPeriod } from '../reports/api';
@@ -111,7 +111,19 @@ const SOURCE_HINT: Record<PeriodSourceKind, string> = {
 interface MetaFileState {
   rows: SheetRow[];
   fileName: string;
+  // Where rows that did not come from a device upload were taken from.
+  origin?: 'hub' | 'archive';
 }
+
+// What one stored pick may fill: Meta Ads (Boost + Non Boost), CPAS, or
+// both — so a brand that only needs CPAS takes only CPAS from the hub.
+type PickTarget = 'meta' | 'cpas';
+const BOTH: PickTarget[] = ['meta', 'cpas'];
+const META_PICK_SCOPE: PickScopeOption[] = [
+  { key: 'meta', label: 'Meta Ads', hint: 'Boost & Non Boost', libraryChannels: ['boost', 'nonboost', 'meta'], archiveChannels: ['boost', 'nonboost'] },
+  { key: 'cpas', label: 'CPAS', hint: 'Shopee / Tokopedia', libraryChannels: ['cpas'], archiveChannels: ['cpas_overall'] },
+];
+const scopeNote = (include?: string[]) => (include && include.length === 1 ? (include[0] === 'cpas' ? ' · CPAS saja' : ' · Meta Ads saja') : '');
 const EMPTY_META_SIDES: Record<PeriodRole, MetaFileState | null> = { old: null, cur: null };
 
 interface LibraryFileMeta {
@@ -265,13 +277,13 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // below still overrides just that one file.
   const [oldSource, setOldSource] = useState<SlotSource>('upload');
   const [curSource, setCurSource] = useState<SlotSource>('upload');
-  const [oldPickedMonth, setOldPickedMonth] = useState<LibraryMonth | null>(null);
-  const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
+  const [oldPickedMonth, setOldPickedMonth] = useState<(LibraryMonth & { include?: string[] }) | null>(null);
+  const [curPickedMonth, setCurPickedMonth] = useState<(LibraryMonth & { include?: string[] }) | null>(null);
   // The other stored source: a period of a report already generated. Its rows
   // come back from the archive exactly as they were parsed, so a slot can be
   // filled without the original file.
-  const [oldPickedRun, setOldPickedRun] = useState<SavedPeriod | null>(null);
-  const [curPickedRun, setCurPickedRun] = useState<SavedPeriod | null>(null);
+  const [oldPickedRun, setOldPickedRun] = useState<(SavedPeriod & { include?: string[] }) | null>(null);
+  const [curPickedRun, setCurPickedRun] = useState<(SavedPeriod & { include?: string[] }) | null>(null);
   // The third stored source: any day range of the auto-fetched daily rows.
   const [oldPickedRange, setOldPickedRange] = useState<AutoRange | null>(null);
   const [curPickedRange, setCurPickedRange] = useState<AutoRange | null>(null);
@@ -280,6 +292,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // lands — and which list the dialog opens on.
   const [pendingKind, setPendingKind] = useState<Record<PeriodRole, PeriodSourceKind>>({ old: 'library', cur: 'library' });
   const [pickerTab, setPickerTab] = useState<PeriodSourceTab>('library');
+  // Which datasets the open dialog fills, and whether it fills one row only
+  // (opened from an upload slot) instead of switching the period's source.
+  const [pickerInclude, setPickerInclude] = useState<PickTarget[]>(BOTH);
+  const [pickerRowOnly, setPickerRowOnly] = useState(false);
   const [rangeAutoOpen, setRangeAutoOpen] = useState<PeriodRole | null>(null);
 
   function sourceKindOf(role: PeriodRole): PeriodSourceKind {
@@ -290,8 +306,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     return pendingKind[role];
   }
 
-  function openPicker(role: PeriodRole, kind: PeriodSourceKind) {
+  function openPicker(role: PeriodRole, kind: PeriodSourceKind, include: PickTarget[] = BOTH, rowOnly = false) {
     setPickerTab(kind === 'upload' ? 'library' : kind);
+    setPickerInclude(include);
+    setPickerRowOnly(rowOnly);
     setPickerRole(role);
   }
 
@@ -309,7 +327,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   }
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
 
-  async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
+  async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth, include: string[] = BOTH, rowOnly = false) {
     if (!clientId) return;
     setApplyingRole(targetRole);
     setUploadError(null);
@@ -327,72 +345,77 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         return alignRowKeys((await Promise.all(parts.map(readSpreadsheetFile))).flat());
       }
 
-      if (metaList.length) {
-        const rows = await downloadAndParse(metaList);
-        setMetaSides((prev) => ({ ...prev, [targetRole]: rows.length ? { rows, fileName: metaList.map((f) => f.original_filename).join(' · ') } : null }));
-      } else {
-        setMetaSides((prev) => ({ ...prev, [targetRole]: null }));
+      // Only the ticked datasets are filled; the other row keeps what it has.
+      if (include.includes('meta')) {
+        const rows = metaList.length ? await downloadAndParse(metaList) : [];
+        setMetaSides((prev) => ({ ...prev, [targetRole]: rows.length ? { rows, fileName: metaList.map((f) => f.original_filename).join(' · '), origin: 'hub' } : null }));
       }
-      if (cpasList.length) {
-        const rows = await downloadAndParse(cpasList);
-        setCpasSides((prev) => ({ ...prev, [targetRole]: rows.length ? { rows, fileName: cpasList.map((f) => f.original_filename).join(' · ') } : null }));
-      } else {
-        setCpasSides((prev) => ({ ...prev, [targetRole]: null }));
+      if (include.includes('cpas')) {
+        const rows = cpasList.length ? await downloadAndParse(cpasList) : [];
+        setCpasSides((prev) => ({ ...prev, [targetRole]: rows.length ? { rows, fileName: cpasList.map((f) => f.original_filename).join(' · '), origin: 'hub' } : null }));
       }
 
       setReport(null);
       onInvalidate();
     } catch (err) {
       setUploadError('Gagal memuat periode dari perpustakaan: ' + (err as Error).message);
-      (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
-      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+      if (!rowOnly) {
+        (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+        (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+      }
     } finally {
       setApplyingRole(null);
     }
   }
 
-  function handlePickMonth(month: LibraryMonth) {
+  function handlePickMonth(month: LibraryMonth, include: string[]) {
     const targetRole = pickerRole;
     if (!targetRole) return;
-    (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
-    (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(null);
-    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(month);
-    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
-    applyLibraryMonth(targetRole, month);
+    if (!pickerRowOnly) {
+      (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
+      (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(null);
+      (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)({ ...month, include });
+      (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    }
+    applyLibraryMonth(targetRole, month, include, pickerRowOnly);
   }
 
   // Boost and Non-Boost were stored as two channels of one Meta file; putting
   // them back together restores exactly what that report read.
-  async function applyArchivePeriod(targetRole: PeriodRole, period: SavedPeriod) {
+  async function applyArchivePeriod(targetRole: PeriodRole, period: SavedPeriod, include: string[] = BOTH, rowOnly = false) {
     setApplyingRole(targetRole);
     setUploadError(null);
     try {
       const detail = await getSavedPeriod(period.runId, period.role);
-      const metaRowsSaved = [...(detail.channels.boost ?? []), ...(detail.channels.nonboost ?? [])];
-      const cpasRowsSaved = detail.channels.cpas_overall ?? [];
-      if (!metaRowsSaved.length && !cpasRowsSaved.length) throw new Error('Periode ini tidak menyimpan baris data apa pun.');
+      const metaRowsSaved = include.includes('meta') ? [...(detail.channels.boost ?? []), ...(detail.channels.nonboost ?? [])] : [];
+      const cpasRowsSaved = include.includes('cpas') ? detail.channels.cpas_overall ?? [] : [];
+      if (!metaRowsSaved.length && !cpasRowsSaved.length) throw new Error('Periode ini tidak menyimpan baris data untuk pilihan tersebut.');
       const name = `Arsip · ${period.label || period.sourceComparison}`;
-      setMetaSides((prev) => ({ ...prev, [targetRole]: metaRowsSaved.length ? { rows: metaRowsSaved, fileName: name } : null }));
-      setCpasSides((prev) => ({ ...prev, [targetRole]: cpasRowsSaved.length ? { rows: cpasRowsSaved, fileName: name } : null }));
+      if (include.includes('meta')) setMetaSides((prev) => ({ ...prev, [targetRole]: metaRowsSaved.length ? { rows: metaRowsSaved, fileName: name, origin: 'archive' } : null }));
+      if (include.includes('cpas')) setCpasSides((prev) => ({ ...prev, [targetRole]: cpasRowsSaved.length ? { rows: cpasRowsSaved, fileName: name, origin: 'archive' } : null }));
       setReport(null);
       onInvalidate();
     } catch (err) {
       setUploadError('Gagal memuat periode dari arsip laporan: ' + (err as Error).message);
-      (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
-      (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+      if (!rowOnly) {
+        (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(null);
+        (targetRole === 'old' ? setOldSource : setCurSource)('upload');
+      }
     } finally {
       setApplyingRole(null);
     }
   }
 
-  function handlePickArchive(period: SavedPeriod) {
+  function handlePickArchive(period: SavedPeriod, include: string[]) {
     const targetRole = pickerRole;
     if (!targetRole) return;
-    (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
-    (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(null);
-    (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)(period);
-    (targetRole === 'old' ? setOldSource : setCurSource)('saved');
-    applyArchivePeriod(targetRole, period);
+    if (!pickerRowOnly) {
+      (targetRole === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+      (targetRole === 'old' ? setOldPickedRange : setCurPickedRange)(null);
+      (targetRole === 'old' ? setOldPickedRun : setCurPickedRun)({ ...period, include });
+      (targetRole === 'old' ? setOldSource : setCurSource)('saved');
+    }
+    applyArchivePeriod(targetRole, period, include, pickerRowOnly);
   }
 
   async function applyAutoRange(targetRole: PeriodRole, range: AutoRange) {
@@ -461,6 +484,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           infoText={infoText}
           onFiles={(files) => handleUpload(files, target, role)}
           onClear={() => setSides((prev) => ({ ...prev, [role]: null }))}
+          onPickStored={clientId ? () => openPicker(role, 'library', [target], true) : undefined}
+          pickStoredLabel={`Ambil ${target === 'meta' ? 'Meta Ads' : 'CPAS'} dari Data Collection Hub`}
+          loadedTitle={f?.origin === 'hub' ? 'Diambil dari Data Collection Hub' : f?.origin === 'archive' ? 'Diambil dari Arsip Laporan' : undefined}
         />
       );
     }
@@ -852,8 +878,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         <header className="setup-board-head">
           <h3>Sumber data</h3>
           <p>
-            Isi Meta Ads, CPAS, atau keduanya — cukup salah satu. Pilihan <strong>Perpustakaan</strong>, <strong>Arsip</strong>, atau <strong>Rentang tanggal</strong> mengisi Meta Ads
-            dan CPAS periode itu sekaligus; upload di satu baris hanya mengganti file baris itu.
+            Isi Meta Ads, CPAS, atau keduanya — cukup salah satu. <strong>Perpustakaan</strong> dan <strong>Arsip</strong> mengisi baris yang Anda centang
+            (Meta Ads, CPAS, atau keduanya); <strong>Rentang tanggal</strong> mengisi keduanya. Di mode Upload, tiap baris juga bisa diambil langsung dari Data Collection Hub.
           </p>
         </header>
         <div className="setup-grid">
@@ -870,7 +896,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             const pickedRun = role === 'old' ? oldPickedRun : curPickedRun;
             const pickedRange = role === 'old' ? oldPickedRange : curPickedRange;
             const picked = pickedMonth
-              ? { title: pickedMonth.label, summary: formatChannelCoverage(pickedMonth.channels), metaLine: 'Perpustakaan Brand' }
+              ? { title: pickedMonth.label, summary: formatChannelCoverage(pickedMonth.channels), metaLine: `Perpustakaan Brand${scopeNote(pickedMonth.include)}` }
               : pickedRange
                 ? {
                     title: pickedRange.label,
@@ -881,7 +907,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                 ? {
                     title: pickedRun.label || pickedRun.sourceComparison,
                     summary: formatChannelCoverage(pickedRun.channels),
-                    metaLine: `Arsip Laporan · ${pickedRun.sourceComparison}`,
+                    metaLine: `Arsip Laporan · ${pickedRun.sourceComparison}${scopeNote(pickedRun.include)}`,
                   }
                 : null;
             const source = role === 'old' ? oldSource : curSource;
@@ -1019,8 +1045,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           clientId={clientId}
           platform="meta"
           periodChannels={META_PERIOD_CHANNELS}
-          sideLabel={pickerRole === 'old' ? 'Periode Lalu' : 'Periode Ini'}
-          selectedMonth={(pickerRole === 'old' ? oldPickedMonth : curPickedMonth)?.month ?? null}
+          sideLabel={`${pickerRowOnly ? `${pickerInclude.map((k) => (k === 'cpas' ? 'CPAS' : 'Meta Ads')).join(' & ')} · ` : ''}${pickerRole === 'old' ? 'Periode Lalu' : 'Periode Ini'}`}
+          platformLabel="Meta Ads"
+          scope={{ options: META_PICK_SCOPE, initial: pickerInclude }}
+          selectedMonth={pickerRowOnly ? null : (pickerRole === 'old' ? oldPickedMonth : curPickedMonth)?.month ?? null}
           selectedRun={
             (pickerRole === 'old' ? oldPickedRun : curPickedRun)
               ? { runId: (pickerRole === 'old' ? oldPickedRun : curPickedRun)!.runId, role: (pickerRole === 'old' ? oldPickedRun : curPickedRun)!.role }

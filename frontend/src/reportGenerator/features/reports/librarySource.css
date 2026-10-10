@@ -66,6 +66,7 @@
    Same grid as .library-slot; the card is dashed and carries an amber
    "tidak disimpan" badge so a manual file is never read as a library pick. */
 .mil-ui .manual-slot-badge { display: inline-flex; align-items: center; flex-shrink: 0; padding: .14rem .45rem; color: #92400e; border-radius: 99px; background: #fdf3e0; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.mil-ui .manual-slot-badge.is-stored { color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, #fff); }
 .mil-ui .manual-slot-drop { position: relative; border-style: dashed; }
 .mil-ui .manual-slot-drop input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .mil-ui .manual-slot-drop input:disabled { cursor: progress; }
@@ -80,6 +81,18 @@
 .mil-ui .manual-slot p.manual-slot-warning { display: flex; align-items: flex-start; gap: .35rem; margin: 0; padding: .45rem .6rem; color: #92400e; border-radius: 8px; background: #fdf3e0; font-size: .72rem; line-height: 1.45; }
 .mil-ui .manual-slot p.manual-slot-warning svg { flex-shrink: 0; margin-top: .1rem; }
 /* Shown under the source tabs while a side is in manual mode. */
+.mil-ui .manual-slot-hub {
+  order: 3; grid-column: 1 / -1; justify-self: start; display: inline-flex; align-items: center; gap: .45rem;
+  padding: .4rem .7rem; border: 1px solid color-mix(in srgb, var(--acc) 22%, var(--border)); border-radius: 9px;
+  background: color-mix(in srgb, var(--acc) 4%, var(--surface, #fff)); color: var(--acc);
+  font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer;
+  transition: background .15s, border-color .15s, transform .14s ease-out;
+}
+.mil-ui .manual-slot-hub:hover:not(:disabled) { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 9%, var(--surface, #fff)); }
+.mil-ui .manual-slot-hub:active:not(:disabled) { transform: scale(.98); }
+.mil-ui .manual-slot-hub:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mil-ui .manual-slot-hub-go { transition: transform .18s; }
+.mil-ui .manual-slot-hub:hover .manual-slot-hub-go { transform: translateX(2px); }
 .mil-ui .manual-mode-note { margin-top: .55rem; padding: .6rem .75rem; color: var(--muted); border: 1px dashed var(--border); border-radius: 10px; background: var(--s2); font-size: .74rem; line-height: 1.5; }
 .mil-ui .manual-mode-note strong { color: var(--text); }
 @media (max-width: 860px) {

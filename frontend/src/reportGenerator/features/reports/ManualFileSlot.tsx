@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from 'react';
-import { Check, CircleAlert, Upload, X } from 'lucide-react';
+import { ArrowRight, Check, CircleAlert, Database, Upload, X } from 'lucide-react';
 import './librarySource.css';
 
 // The "Upload file baru" slot for Shopee and TikTok: files picked from the
@@ -17,9 +17,15 @@ interface ManualFileSlotProps {
   warning?: string | null;
   onFiles: (files: File[]) => Promise<void>;
   onClear?: () => void;
+  // Fill just this slot from stored data instead of a file from the device
+  // (Meta: one row from Data Collection Hub without touching the other).
+  onPickStored?: () => void;
+  pickStoredLabel?: string;
+  // Title for a loaded slot whose rows did not come from a manual file.
+  loadedTitle?: string;
 }
 
-export function ManualFileSlot({ tag, accept, loaded, fileName, infoText, warning, onFiles, onClear }: ManualFileSlotProps) {
+export function ManualFileSlot({ tag, accept, loaded, fileName, infoText, warning, onFiles, onClear, onPickStored, pickStoredLabel = 'Ambil dari Data Collection Hub', loadedTitle }: ManualFileSlotProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
@@ -48,7 +54,7 @@ export function ManualFileSlot({ tag, accept, loaded, fileName, infoText, warnin
     <section className={`library-slot manual-slot${loaded ? ' is-loaded' : ''}${dragging ? ' is-dragging' : ''}`} aria-label={`${tag} — upload manual`}>
       <div className="library-slot-head">
         <strong>{tag}</strong>
-        <span className="manual-slot-badge">Rentang khusus · tidak disimpan</span>
+        <span className={`manual-slot-badge${loadedTitle ? ' is-stored' : ''}`}>{loadedTitle ? 'Data tersimpan' : 'Rentang khusus · tidak disimpan'}</span>
       </div>
       <label
         className="library-source-trigger manual-slot-drop"
@@ -66,10 +72,17 @@ export function ManualFileSlot({ tag, accept, loaded, fileName, infoText, warnin
         />
         <span className="library-source-icon" aria-hidden="true">{loaded ? <Check size={19} /> : <Upload size={19} />}</span>
         <span className="library-source-copy">
-          <strong>{busy ? 'Membaca file…' : loaded ? 'File manual siap digunakan' : 'Pilih atau tarik file ke sini'}</strong>
+          <strong>{busy ? 'Membaca file…' : loaded ? loadedTitle ?? 'File manual siap digunakan' : 'Pilih atau tarik file ke sini'}</strong>
           <small>{loaded ? fileName : 'Boleh beberapa file sekaligus, mis. 1–7 dan 8–12 — dijumlahkan otomatis'}</small>
         </span>
       </label>
+      {onPickStored && (
+        <button type="button" className="manual-slot-hub" onClick={onPickStored} disabled={busy}>
+          <Database size={14} aria-hidden="true" />
+          <span>{loaded ? 'Ganti dari Data Collection Hub' : pickStoredLabel}</span>
+          <ArrowRight size={14} aria-hidden="true" className="manual-slot-hub-go" />
+        </button>
+      )}
       {loaded && (
         <p className="library-source-info">
           {infoText}

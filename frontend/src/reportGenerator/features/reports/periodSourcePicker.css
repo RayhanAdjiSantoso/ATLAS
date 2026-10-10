@@ -1,0 +1,164 @@
+/* ── Ambil data tersimpan (PeriodSourcePicker) ──────────────────────────
+   Sources down the side, the list on the right. Precise rather than busy:
+   one accent hairline and a faint grid in the header, tabular figures, and
+   cards that say exactly which datasets a month holds. --acc follows the
+   platform (Meta blue, Shopee orange, TikTok ink). */
+
+.mil-ui .lib-picker.sp {
+  width: min(1000px, 100%);
+  max-height: min(86vh, 820px);
+  border-radius: 18px;
+  border-color: color-mix(in srgb, var(--acc) 14%, #d6deee);
+}
+
+/* Header */
+.mil-ui .sp-head {
+  position: relative; display: flex; align-items: flex-start; gap: 1rem;
+  padding: 1.15rem 1.35rem 1rem; border-bottom: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--acc) 16%, transparent) 1px, transparent 0) 0 0 / 16px 16px,
+    linear-gradient(100deg, color-mix(in srgb, var(--acc) 6%, #fff), #fff 62%);
+}
+.mil-ui .sp-head::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+  background: linear-gradient(90deg, var(--acc), color-mix(in srgb, var(--acc) 35%, #38bdf8) 55%, transparent);
+}
+.mil-ui .sp-head::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent 0, transparent 40%, #fff 78%);
+}
+.mil-ui .sp-heading { position: relative; z-index: 1; flex: 1; min-width: 0; }
+.mil-ui .sp-eyebrow { display: block; color: var(--acc); font-size: .68rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.mil-ui .sp-heading h2 { margin: .3rem 0 0; color: var(--text); font-size: 1.22rem; font-weight: 800; letter-spacing: -.025em; }
+.mil-ui .sp-heading p { margin: .25rem 0 0; color: var(--muted); font-size: .78rem; }
+.mil-ui .sp-close {
+  position: relative; z-index: 1; display: grid; place-items: center; flex-shrink: 0; width: 34px; height: 34px;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 10px; background: #fff; cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s, transform .14s ease-out;
+}
+.mil-ui .sp-close:hover { color: var(--text); border-color: color-mix(in srgb, var(--acc) 35%, var(--border)); }
+.mil-ui .sp-close:active { transform: scale(.95); }
+
+/* Scope: which datasets the pick fills */
+.mil-ui .sp-scope {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .55rem .7rem;
+  padding: .75rem 1.35rem; border-bottom: 1px solid var(--border); background: #fbfcfe;
+}
+.mil-ui .sp-scope-label { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; margin-right: .2rem; }
+.mil-ui .sp-toggle {
+  display: inline-flex; align-items: center; gap: .55rem; padding: .45rem .8rem .45rem .55rem;
+  border: 1px solid var(--border); border-radius: 11px; background: #fff; color: var(--muted);
+  font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s, color .15s, transform .14s ease-out;
+}
+.mil-ui .sp-toggle:hover { border-color: color-mix(in srgb, var(--acc) 40%, var(--border)); color: var(--text); }
+.mil-ui .sp-toggle:active { transform: scale(.98); }
+.mil-ui .sp-toggle:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mil-ui .sp-toggle.is-on { border-color: color-mix(in srgb, var(--acc) 55%, var(--border)); background: color-mix(in srgb, var(--acc) 6%, #fff); color: var(--text); }
+.mil-ui .sp-toggle-box {
+  display: grid; place-items: center; width: 18px; height: 18px; flex-shrink: 0;
+  border: 1.5px solid color-mix(in srgb, var(--muted) 55%, transparent); border-radius: 5px; color: #fff; transition: background .15s, border-color .15s;
+}
+.mil-ui .sp-toggle.is-on .sp-toggle-box { border-color: var(--acc); background: var(--acc); }
+.mil-ui .sp-toggle-text { display: grid; line-height: 1.2; }
+.mil-ui .sp-toggle-text strong { font-size: .82rem; font-weight: 750; }
+.mil-ui .sp-toggle-text small { font-size: .7rem; color: var(--muted); }
+.mil-ui .sp-scope-note { margin-left: auto; color: var(--muted); font-size: .72rem; }
+
+/* Two columns: sources | list */
+.mil-ui .sp-main { display: grid; grid-template-columns: 252px minmax(0, 1fr); flex: 1; min-height: 0; }
+.mil-ui .sp-nav { display: flex; flex-direction: column; gap: .3rem; padding: .9rem .7rem; border-right: 1px solid var(--border); background: #f7f9fc; }
+.mil-ui .sp-nav-item {
+  position: relative; display: flex; align-items: center; gap: .6rem; padding: .62rem .65rem;
+  border: 1px solid transparent; border-radius: 11px; background: transparent; color: var(--muted);
+  font: inherit; text-align: left; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.mil-ui .sp-nav-item:hover { background: #fff; color: var(--text); }
+.mil-ui .sp-nav-item:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.mil-ui .sp-nav-item.is-active { background: #fff; color: var(--text); border-color: var(--border); box-shadow: 0 1px 2px rgba(15, 26, 58, .06), 0 6px 16px -10px rgba(15, 26, 58, .25); }
+.mil-ui .sp-nav-item.is-active::before { content: ''; position: absolute; left: -.7rem; top: 22%; bottom: 22%; width: 3px; border-radius: 0 3px 3px 0; background: var(--acc); }
+.mil-ui .sp-nav-ico { display: grid; place-items: center; flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; background: #eaeef6; color: var(--muted); transition: background .15s, color .15s; }
+.mil-ui .sp-nav-item.is-active .sp-nav-ico { background: var(--acc); color: #fff; }
+.mil-ui .sp-nav-text { display: grid; flex: 1; min-width: 0; gap: .08rem; }
+.mil-ui .sp-nav-text strong { font-size: .8rem; font-weight: 750; letter-spacing: -.01em; }
+.mil-ui .sp-nav-text small { font-size: .69rem; line-height: 1.3; color: var(--muted); }
+.mil-ui .sp-nav-count { flex-shrink: 0; min-width: 22px; padding: .08rem .38rem; border-radius: 7px; background: #eaeef6; color: var(--muted); font-size: .7rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.mil-ui .sp-nav-item.is-active .sp-nav-count { background: color-mix(in srgb, var(--acc) 12%, #fff); color: var(--acc); }
+
+.mil-ui .sp-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mil-ui .sp-tools { display: flex; align-items: center; gap: .75rem; padding: .85rem 1.2rem .7rem; }
+.mil-ui .sp-count { flex-shrink: 0; color: var(--muted); font-size: .74rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mil-ui .sp-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 1.2rem 1.2rem; scrollbar-width: thin; }
+.mil-ui .sp-body > .auto-range { padding-top: 1rem; }
+
+/* Library: months as tiles, grouped by year */
+.mil-ui .sp-year + .sp-year { margin-top: .6rem; }
+.mil-ui .sp-year h3 {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: .6rem;
+  margin: 0; padding: .55rem 0 .5rem; background: #fff;
+  color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .14em;
+}
+.mil-ui .sp-year h3 i { flex: 1; height: 1px; background: linear-gradient(90deg, var(--border), transparent); }
+.mil-ui .sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: .6rem; }
+.mil-ui .sp-month, .mil-ui .sp-side {
+  position: relative; display: flex; flex-direction: column; gap: .35rem; min-width: 0;
+  padding: .8rem .85rem .85rem; border: 1px solid var(--border); border-radius: 13px; background: #fff;
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  transition: border-color .15s, box-shadow .18s, transform .18s cubic-bezier(.23, 1, .32, 1), background .15s;
+}
+.mil-ui .sp-month:hover:not(:disabled), .mil-ui .sp-side:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--acc) 50%, var(--border));
+  box-shadow: 0 10px 26px -14px color-mix(in srgb, var(--acc) 55%, transparent), 0 0 0 3px color-mix(in srgb, var(--acc) 7%, transparent);
+  transform: translateY(-1px);
+}
+.mil-ui .sp-month:active:not(:disabled), .mil-ui .sp-side:active:not(:disabled) { transform: scale(.985); }
+.mil-ui .sp-month:focus-visible, .mil-ui .sp-side:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mil-ui .sp-month.is-selected, .mil-ui .sp-side.is-selected { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 4%, #fff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 12%, transparent); }
+.mil-ui .sp-month:disabled, .mil-ui .sp-side:disabled { cursor: not-allowed; opacity: .5; background: #fafbfd; }
+.mil-ui .sp-month-top, .mil-ui .sp-side-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.mil-ui .sp-month-top strong { font-size: 1rem; font-weight: 800; letter-spacing: -.02em; }
+.mil-ui .sp-go { color: var(--muted2, #94a3b8); transition: transform .18s, color .15s; }
+.mil-ui .sp-month:hover:not(:disabled) .sp-go, .mil-ui .sp-side:hover:not(:disabled) .sp-go { color: var(--acc); transform: translateX(2px); }
+.mil-ui .sp-current { display: inline-flex; align-items: center; gap: .2rem; padding: .1rem .45rem; border-radius: 99px; background: var(--acc); color: #fff; font-size: .68rem; font-weight: 800; }
+.mil-ui .sp-range { color: var(--muted); font-size: .74rem; font-variant-numeric: tabular-nums lining-nums; }
+
+/* What a month holds, per dataset */
+.mil-ui .sp-sets { display: grid; gap: .28rem; margin: .25rem 0 0; padding: .55rem 0 0; border-top: 1px dashed #e6ebf4; list-style: none; }
+.mil-ui .sp-sets li { display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: center; gap: .05rem .45rem; font-size: .74rem; }
+.mil-ui .sp-sets li i { width: 7px; height: 7px; border-radius: 2px; background: var(--acc); }
+.mil-ui .sp-sets li span { font-weight: 750; color: var(--text); }
+.mil-ui .sp-sets li small { grid-column: 2; color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.mil-ui .sp-sets li.is-none i { background: transparent; box-shadow: inset 0 0 0 1.5px #c9d2e2; }
+.mil-ui .sp-sets li.is-none span, .mil-ui .sp-sets li.is-none small { color: #9aa6ba; }
+.mil-ui .sp-sets li.is-off { opacity: .45; }
+.mil-ui .sp-chips { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .1rem; }
+.mil-ui .sp-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .12rem .45rem; border-radius: 6px; background: #f2f5fa; box-shadow: inset 0 0 0 1px #e3e9f3; color: var(--text); font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.mil-ui .sp-chip b { color: var(--muted); font-weight: 800; font-variant-numeric: tabular-nums; }
+.mil-ui .sp-warn { align-self: flex-start; padding: .1rem .45rem; border-radius: 6px; background: #fff6e8; color: #9a5a0c; font-size: .68rem; font-weight: 750; }
+
+/* Archive: one report per row, its two sides beside the title */
+.mil-ui .sp-runs { display: grid; gap: .65rem; padding-top: .2rem; }
+.mil-ui .sp-run { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: .9rem; padding: .85rem; border: 1px solid #e6ebf4; border-radius: 14px; background: #fbfcfe; }
+.mil-ui .sp-run-head { display: grid; align-content: start; gap: .2rem; padding-top: .15rem; }
+.mil-ui .sp-run-head h3 { margin: 0; color: var(--text); font-size: .86rem; font-weight: 800; letter-spacing: -.015em; }
+.mil-ui .sp-run-head span { color: var(--muted); font-size: .72rem; }
+.mil-ui .sp-run-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+.mil-ui .sp-side strong { font-size: .92rem; font-weight: 800; letter-spacing: -.015em; overflow-wrap: anywhere; }
+.mil-ui .sp-role { padding: .1rem .45rem; border-radius: 6px; font-size: .66rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.mil-ui .sp-role.role-old { background: #eef1f6; color: var(--muted); }
+.mil-ui .sp-role.role-cur { background: color-mix(in srgb, var(--acc) 10%, #fff); color: var(--acc); }
+
+/* Footer */
+.mil-ui .sp-foot { display: flex; align-items: center; gap: .45rem; padding: .65rem 1.35rem; border-top: 1px solid var(--border); background: #fbfcfe; color: var(--muted); font-size: .74rem; }
+.mil-ui .sp-foot svg { color: var(--acc); }
+.mil-ui .sp-foot kbd { margin-left: auto; padding: .08rem .38rem; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: #fff; color: var(--muted); font: inherit; font-size: .7rem; font-weight: 700; }
+
+@media (max-width: 760px) {
+  .mil-ui .sp-main { grid-template-columns: minmax(0, 1fr); }
+  .mil-ui .sp-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .mil-ui .sp-nav-item.is-active::before { display: none; }
+  .mil-ui .sp-run { grid-template-columns: minmax(0, 1fr); }
+  .mil-ui .sp-scope-note { margin-left: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mil-ui .sp-month, .mil-ui .sp-side, .mil-ui .sp-go { transition: none; }
+}
