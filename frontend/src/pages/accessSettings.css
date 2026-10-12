@@ -60,6 +60,7 @@
 .acc-role { display: inline-block; padding: 3px 9px; border-radius: 99px; font-size: .75rem; font-weight: 800; white-space: nowrap; }
 .acc-role-superadmin { background: #1e1b4b; color: #fff; }
 .acc-role-admin { background: var(--acc, #1e3eb8); color: #fff; }
+.acc-role-reviewer { background: #fdf0d9; color: #87560c; }
 .acc-role-user { background: var(--acc-100, #eef2ff); color: var(--acc, #1e3eb8); }
 .acc-role-client { background: #e6f7f4; color: #0f766e; }
 

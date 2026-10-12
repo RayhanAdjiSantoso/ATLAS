@@ -8,8 +8,9 @@ import { ROLES } from './permissions.js';
 //
 // Who may touch whom:
 //   • superadmin — any account, any role, including other superadmins;
-//   • admin      — only user and client accounts, and may not hand out admin
-//                  or superadmin (that would let an admin promote itself);
+//   • admin      — only user and client accounts, and may not hand out admin,
+//                  superadmin or reviewer (that would let an admin promote
+//                  itself, or open modules its own role was closed out of);
 //   • nobody deactivates, demotes or un-admins their own account, so the last
 //     person with access can never lock themselves out by a misclick.
 //
@@ -58,7 +59,7 @@ export async function listAccounts() {
     FROM users u
     LEFT JOIN brands b ON b.brand_id = u.allowed_brand_id
     LEFT JOIN users c ON c.user_id = u.created_by
-    ORDER BY CASE u.role::text WHEN 'superadmin' THEN 0 WHEN 'admin' THEN 1 WHEN 'user' THEN 2 ELSE 3 END, lower(u.full_name)`);
+    ORDER BY CASE u.role::text WHEN 'superadmin' THEN 0 WHEN 'admin' THEN 1 WHEN 'reviewer' THEN 2 WHEN 'user' THEN 3 ELSE 4 END, lower(u.full_name)`);
   return rows;
 }
 

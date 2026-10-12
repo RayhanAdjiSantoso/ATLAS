@@ -4,6 +4,7 @@ import { LayoutDashboard, Home, LogOut, Megaphone, FileBarChart, Building2, Slid
 import { BRAND_SETTING_SECTIONS } from '../brandSettings/sections.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import api from '../../api/client.js';
+import AnnotationLayer from '../annotations/AnnotationLayer.jsx';
 import atlasIcon from '../../assets/atlas-icon.png';
 
 const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
@@ -26,10 +27,10 @@ const NAV = [
   // Account and permission management — superadmin and admin only.
   { to: '/pengaturan-akses', label: 'Pengaturan Akses', Icon: ShieldCheck, group: 'Operasional', adminOnly: true },
 ];
-const ROLE_BADGE = { superadmin: 'Superadmin', admin: 'Admin', user: 'User', client: 'Client' };
+const ROLE_BADGE = { superadmin: 'Superadmin', admin: 'Admin', reviewer: 'Reviewer', user: 'User', client: 'Client' };
 
 export default function AppLayout() {
-  const { user, logout, isAdmin, isViewOnly, can } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin, isViewOnly, can } = useAuth();
   const navigate = useNavigate();
 
   // Remembered per browser: whoever collapses the sidebar means it, and having
@@ -236,6 +237,12 @@ export default function AppLayout() {
         </div>
         <Outlet />
       </main>
+
+      {/* Feedback pinned to parts of the page — only for roles Pengaturan
+          Akses gives the module to. Unlike `can`, an account whose module
+          list has not loaded yet gets nothing: the comments are not for it
+          to glimpse while the list arrives. */}
+      {(isSuperAdmin || user?.modules?.includes('annotations')) && <AnnotationLayer />}
     </div>
   );
 }

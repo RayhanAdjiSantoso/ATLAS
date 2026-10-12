@@ -15,6 +15,7 @@ import dailyTrackingRoutes from './routes/dailyTrackingRoutes.js';
 import metaAdsInsightsRoutes from './routes/metaAdsInsightsRoutes.js';
 import metaAdsInsightsIngestRoutes from './routes/metaAdsInsightsIngestRoutes.js';
 import accessRoutes from './routes/accessRoutes.js';
+import annotationRoutes from './routes/annotationRoutes.js';
 import googleAdsRoutes from './routes/googleAdsRoutes.js';
 import { homepageAdminRouter, publicHomepageRouter } from './routes/homepageRoutes.js';
 import googleAdsIngestRoutes from './routes/googleAdsIngestRoutes.js';
@@ -45,6 +46,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/access', accessRoutes);
+app.use('/api/annotations', annotationRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/brands', brandRoutes);

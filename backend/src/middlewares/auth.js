@@ -33,12 +33,15 @@ export function forgetAccount(userId) {
 const PASSWORD_CHANGE_PATHS = ['/api/auth/me', '/api/auth/change-password', '/api/auth/logout'];
 
 // View-only holds across all of ATLAS, not only the routers that remember to
-// check it. Two exceptions: changing one's own password, and a client
-// entering its own brand's daily sales in Daily Tracking (brand-locked by that
-// router). A view-only account of any other role changes nothing at all.
+// check it. Three exceptions: changing one's own password, a client entering
+// its own brand's daily sales in Daily Tracking (brand-locked by that
+// router), and leaving feedback (annotations — a comment about a page changes
+// no data on it, and that router still checks the module). A view-only
+// account changes nothing else at all.
 const isWrite = (method) => !['GET', 'HEAD', 'OPTIONS'].includes(method);
 function viewOnlyMayWrite(account, path) {
   if (PASSWORD_CHANGE_PATHS.includes(path)) return true;
+  if (path.startsWith('/api/annotations')) return true;
   return account.role === 'client' && path.startsWith('/api/daily-tracking');
 }
 

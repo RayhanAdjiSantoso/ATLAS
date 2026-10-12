@@ -19,10 +19,11 @@ import './accessSettings.css';
 // on this page; the page only mirrors it so that a button which would be
 // refused is disabled up front instead of failing after a click.
 
-const ROLE_ORDER = ['superadmin', 'admin', 'user', 'client'];
+const ROLE_ORDER = ['superadmin', 'admin', 'reviewer', 'user', 'client'];
 const ROLE_NOTE = {
   superadmin: 'Semua fitur, termasuk mengatur hak akses setiap role.',
   admin: 'Semua fitur. Bisa membuat dan mengelola akun user & client.',
+  reviewer: 'Membuka semua menu seperti admin dan memberi komentar langsung pada bagian halaman. Tidak mengelola akun.',
   user: 'Tim internal yang mengerjakan ads. Fiturnya diatur di tab Hak Akses Role.',
   client: 'Akun klien. Hanya melihat brand miliknya sendiri.',
 };
