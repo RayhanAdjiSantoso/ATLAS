@@ -10,7 +10,7 @@
 //
 // Flags:
 //   --email, --password, --fullName   required
-//   --role=admin|user                 optional, default "user"
+//   --role=admin|user|reviewer        optional, default "user"
 //   --brand="Brand Name"              optional — locks the account to this
 //                                      brand (migration 023's allowed_brand_id).
 //                                      Matched case-insensitively/trimmed.
@@ -45,8 +45,8 @@ async function main() {
     console.error('Wajib: --email --password --fullName');
     process.exit(1);
   }
-  if (!['admin', 'user'].includes(args.role)) {
-    console.error('--role harus "admin" atau "user"');
+  if (!['admin', 'user', 'reviewer'].includes(args.role)) {
+    console.error('--role harus "admin", "user" atau "reviewer"');
     process.exit(1);
   }
   if (args.password.length < 8) {

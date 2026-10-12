@@ -20,10 +20,12 @@ api.interceptors.request.use((config) => {
   // allowed to write their own brand's daily sales + ad spend there (the
   // server enforces the brand lock via requireBrandAccess, not
   // blockWriteIfViewOnly — see backend/src/routes/dailyTrackingRoutes.js).
+  // Annotations are the other: feedback about a page changes no data on it.
   const method = (config.method || 'get').toLowerCase();
   const isDailyTracking = /^\/daily-tracking(\/|\?|$)/.test(config.url || '');
   const isOwnPassword = /^\/auth\/(change-password|logout)$/.test(config.url || '');
-  if (method !== 'get' && method !== 'head' && !isOwnPassword) {
+  const isAnnotation = /^\/annotations(\/|\?|$)/.test(config.url || '');
+  if (method !== 'get' && method !== 'head' && !isOwnPassword && !isAnnotation) {
     try {
       const stored = localStorage.getItem('atlas_user');
       const storedUser = stored ? JSON.parse(stored) : null;

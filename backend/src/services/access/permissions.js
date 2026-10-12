@@ -2,7 +2,7 @@ import pool from '../../config/db.js';
 
 // Who may open which part of ATLAS.
 //
-// Roles are fixed in code (superadmin, admin, user, client); what each role may
+// Roles are fixed in code (superadmin, admin, reviewer, user, client); what each role may
 // open is not. The superadmin edits it in Pengaturan Akses, and only the
 // changes are stored (role_permissions). A role/module pair with no stored row
 // uses DEFAULTS below, so a fresh install behaves sensibly with an empty table.
@@ -12,11 +12,12 @@ import pool from '../../config/db.js';
 //   • superadmin always has every module;
 //   • Pengaturan Akses itself belongs to superadmin and admin only.
 
-export const ROLES = ['superadmin', 'admin', 'user', 'client'];
+export const ROLES = ['superadmin', 'admin', 'reviewer', 'user', 'client'];
 
 export const ROLE_LABELS = {
   superadmin: 'Superadmin',
   admin: 'Admin',
+  reviewer: 'Reviewer',
   user: 'User (internal)',
   client: 'Client',
 };
@@ -32,6 +33,7 @@ export const MODULES = [
   { key: 'internal_dashboard', label: 'Internal Dashboard' },
   { key: 'control_center', label: 'Pusat Kendali' },
   { key: 'homepage_content', label: 'Kelola Homepage' },
+  { key: 'annotations', label: 'Anotasi & Feedback' },
 ];
 const MODULE_KEYS = new Set(MODULES.map((m) => m.key));
 
@@ -42,21 +44,31 @@ const MODULE_KEYS = new Set(MODULES.map((m) => m.key));
 // performance there. Business Overview is the team's analysis room on the
 // marketplace files, so it is off for clients unless Pengaturan Akses turns
 // it back on.
+//
+// reviewer opens everything an admin does, so it can leave feedback on any
+// page (the `annotations` module: comments pinned to a part of a page).
+// Admin holds that module too, to read the feedback and move its status;
+// user and client neither leave nor see it.
 export const DEFAULTS = {
   admin: {
     dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
     meta_automation: true, internal_dashboard: true, control_center: true,
-    homepage_content: true,
+    homepage_content: true, annotations: true,
+  },
+  reviewer: {
+    dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
+    meta_automation: true, internal_dashboard: true, control_center: true,
+    homepage_content: true, annotations: true,
   },
   user: {
     dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
     meta_automation: false, internal_dashboard: false, control_center: false,
-    homepage_content: false,
+    homepage_content: false, annotations: false,
   },
   client: {
     dashboard: false, daily_tracking: true, brand_settings: false, report_generator: false,
     meta_automation: false, internal_dashboard: false, control_center: false,
-    homepage_content: false,
+    homepage_content: false, annotations: false,
   },
 };
 
