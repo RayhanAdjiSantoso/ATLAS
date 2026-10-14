@@ -1,10 +1,11 @@
 import pool from '../config/db.js';
 
-export async function listBrands(allowedBrandId) {
-  if (allowedBrandId) {
+// allowedBrandIds: the brands a restricted account may open (null = all).
+export async function listBrands(allowedBrandIds) {
+  if (allowedBrandIds) {
     const result = await pool.query(
-      'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands WHERE brand_id = $1 ORDER BY brand_name',
-      [allowedBrandId],
+      'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands WHERE brand_id = ANY($1::int[]) ORDER BY brand_name',
+      [allowedBrandIds],
     );
     return result.rows;
   }
@@ -177,7 +178,7 @@ export async function deleteBrand(brandId) {
 // is placed correctly without touching this. A savepoint retry stays as the
 // safety net for anything the ordering cannot see. A login account
 // bound to the brand is never removed with it: deleting the brand would
-// leave that client account unrestricted, so it blocks until the account is
+// leave that account unrestricted (or short a brand), so it blocks until it is
 // moved or removed in Pengaturan Akses.
 export async function deleteBrandWithData(brandId) {
   const client = await pool.connect();
@@ -188,7 +189,7 @@ export async function deleteBrandWithData(brandId) {
       await client.query('ROLLBACK');
       return { deleted: false, notFound: true };
     }
-    const bound = await client.query('SELECT count(*)::int AS n FROM public.users WHERE allowed_brand_id = $1', [brandId]);
+    const bound = await client.query('SELECT count(*)::int AS n FROM public.user_brand_access WHERE brand_id = $1', [brandId]);
     if (bound.rows[0].n) {
       await client.query('ROLLBACK');
       return { deleted: false, boundAccounts: bound.rows[0].n };
@@ -263,8 +264,9 @@ async function orderChildrenFirst(db, tables) {
   return out;
 }
 
-// Login accounts restricted to this brand (client accounts).
+// Login accounts restricted to brands that include this one (clients, and
+// internal users given a brand list).
 export async function countBoundAccounts(brandId) {
-  const { rows } = await pool.query('SELECT count(*)::int AS n FROM public.users WHERE allowed_brand_id = $1', [brandId]);
+  const { rows } = await pool.query('SELECT count(*)::int AS n FROM public.user_brand_access WHERE brand_id = $1', [brandId]);
   return rows[0].n;
 }

@@ -20,9 +20,33 @@ export async function registerUser({ email, password, fullName, role = 'user' })
   return result.rows[0];
 }
 
+const ACCOUNT_COLUMNS = `u.user_id, u.email, u.full_name, u.role::text AS role, u.is_active, u.is_view_only,
+  u.must_change_password, u.tours_seen,
+  ARRAY(SELECT a.brand_id FROM user_brand_access a WHERE a.user_id = u.user_id ORDER BY a.brand_id) AS allowed_brand_ids`;
+
+// The account as the app sees it. allowedBrandIds is the brand list (null =
+// every brand); allowedBrandId is set only when that list is a single brand,
+// which is what pins a page to one brand. toursSeen is null for accounts
+// older than auto-playing tours, which never auto-play.
+async function publicAccount(user) {
+  const brandIds = (user.allowed_brand_ids ?? []).map(Number);
+  return {
+    userId: user.user_id,
+    email: user.email,
+    fullName: user.full_name,
+    role: user.role,
+    allowedBrandIds: brandIds.length ? brandIds : null,
+    allowedBrandId: brandIds.length === 1 ? brandIds[0] : null,
+    isViewOnly: user.is_view_only,
+    mustChangePassword: user.must_change_password,
+    toursSeen: user.tours_seen,
+    modules: await modulesFor(user.role),
+  };
+}
+
 export async function loginUser({ email, password }) {
   const result = await pool.query(
-    'SELECT user_id, email, password_hash, full_name, role::text AS role, is_active, allowed_brand_id, is_view_only, must_change_password FROM users WHERE LOWER(email) = LOWER($1)',
+    `SELECT ${ACCOUNT_COLUMNS}, u.password_hash FROM users u WHERE LOWER(u.email) = LOWER($1)`,
     [email],
   );
 
@@ -45,24 +69,11 @@ export async function loginUser({ email, password }) {
     email: user.email,
     role: user.role,
     fullName: user.full_name,
-    allowedBrandId: user.allowed_brand_id,
     isViewOnly: user.is_view_only,
   });
   await pool.query('UPDATE users SET last_login_at = now() WHERE user_id = $1', [user.user_id]);
 
-  return {
-    token,
-    user: {
-      userId: user.user_id,
-      email: user.email,
-      fullName: user.full_name,
-      role: user.role,
-      allowedBrandId: user.allowed_brand_id,
-      isViewOnly: user.is_view_only,
-      mustChangePassword: user.must_change_password,
-      modules: await modulesFor(user.role),
-    },
-  };
+  return { token, user: await publicAccount(user) };
 }
 
 // The account replaces its temporary (or current) password. The current one
@@ -86,21 +97,21 @@ export async function changePassword(userId, currentPassword, newPassword) {
 }
 
 export async function getUserById(userId) {
-  const result = await pool.query(
-    'SELECT user_id, email, full_name, role::text AS role, created_at, allowed_brand_id, is_view_only, must_change_password FROM users WHERE user_id = $1 AND is_active = TRUE',
-    [userId],
-  );
+  const result = await pool.query(`SELECT ${ACCOUNT_COLUMNS} FROM users u WHERE u.user_id = $1 AND u.is_active = TRUE`, [userId]);
   if (result.rows.length === 0) return null;
-  const user = result.rows[0];
-  return {
-    userId: user.user_id,
-    email: user.email,
-    fullName: user.full_name,
-    role: user.role,
-    createdAt: user.created_at,
-    allowedBrandId: user.allowed_brand_id,
-    isViewOnly: user.is_view_only,
-    mustChangePassword: user.must_change_password,
-    modules: await modulesFor(user.role),
-  };
+  return publicAccount(result.rows[0]);
+}
+
+// A page tour has been shown to this account; it will not play by itself
+// again. Accounts older than auto-play (tours_seen NULL) stay NULL.
+export async function markTourSeen(userId, tourId) {
+  const id = String(tourId || '').trim();
+  if (!/^[a-z0-9-]{1,64}$/.test(id)) throw new AppError('Panduan tidak dikenal.', 400);
+  const { rows } = await pool.query(
+    `UPDATE users SET tours_seen = CASE WHEN $2 = ANY(tours_seen) THEN tours_seen ELSE array_append(tours_seen, $2) END
+     WHERE user_id = $1 AND tours_seen IS NOT NULL
+     RETURNING tours_seen`,
+    [userId, id],
+  );
+  return rows[0]?.tours_seen ?? null;
 }

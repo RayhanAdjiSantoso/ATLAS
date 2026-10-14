@@ -16,15 +16,15 @@ export const BRAND_SETTING_SECTIONS = [
   {
     to: '/data-brand',
     label: 'Data Collection Hub',
-    hint: 'File, meeting & akun iklan',
+    hint: 'File & akun iklan',
     Icon: FolderOpen,
     module: 'brand_settings',
-    desc: 'File bulanan, catatan meeting, dan akun iklan setiap brand — sumber yang dibaca Business Overview dan Report Generator.',
+    desc: 'File bulanan dan akun iklan setiap brand — sumber yang dibaca Business Overview dan Report Generator.',
   },
   {
     to: '/brand-tracking',
     label: 'Brand Tracking',
-    hint: 'Revenue & spend harian',
+    hint: 'Harian, target & meeting',
     Icon: Activity,
     module: 'daily_tracking',
     desc: 'Revenue per channel dan belanja iklan setiap hari — sumber angka Executive Snapshot dan laporan bulanan.',

@@ -9,7 +9,7 @@ import api from '../api/client';
 import useSessionState from '../hooks/useSessionState.js';
 import SelectMenu from '../components/common/SelectMenu.jsx';
 import SearchField from '../components/common/SearchField.jsx';
-import { presetBrandSettings } from '../components/common/brandSettingsLink.js';
+import { presetBrandSettings, presetBrandTracking } from '../components/common/brandSettingsLink.js';
 import { MOM_TYPE_LABELS, OVERDUE_DAYS, dateLabel, daysSince, taskGroups } from '../components/mom/momModel.js';
 import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
@@ -259,7 +259,7 @@ function TasksView({ state, items, busyMinute, onToggle, undo, onUndo, error, on
               <strong>{group.name}</strong>
               <span className="cc-count">{group.tasks.length}</span>
               {groupBy === 'brand' && (
-                <Link to="/data-brand" className="mom-head-link" onClick={() => presetBrandSettings({ brandId: group.brandId, view: 'mom' })}>
+                <Link to="/brand-tracking" className="mom-head-link" onClick={() => presetBrandTracking({ brandId: group.brandId, view: 'mom' })}>
                   Buka catatan <ArrowUpRight size={13} />
                 </Link>
               )}

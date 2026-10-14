@@ -15,8 +15,9 @@ async function loadAccount(userId) {
   const hit = accountCache.get(userId);
   if (hit && Date.now() - hit.at < ACCOUNT_CACHE_MS) return hit.row;
   const { rows } = await pool.query(
-    `SELECT user_id, email, full_name, role::text AS role, is_active, allowed_brand_id, is_view_only, must_change_password
-     FROM users WHERE user_id = $1`,
+    `SELECT u.user_id, u.email, u.full_name, u.role::text AS role, u.is_active, u.is_view_only, u.must_change_password,
+            ARRAY(SELECT a.brand_id FROM user_brand_access a WHERE a.user_id = u.user_id ORDER BY a.brand_id) AS allowed_brand_ids
+     FROM users u WHERE u.user_id = $1`,
     [userId],
   );
   const row = rows[0] ?? null;
@@ -33,14 +34,16 @@ export function forgetAccount(userId) {
 const PASSWORD_CHANGE_PATHS = ['/api/auth/me', '/api/auth/change-password', '/api/auth/logout'];
 
 // View-only holds across all of ATLAS, not only the routers that remember to
-// check it. Three exceptions: changing one's own password, a client entering
-// its own brand's daily sales in Daily Tracking (brand-locked by that
-// router), and leaving feedback (annotations — a comment about a page changes
-// no data on it, and that router still checks the module). A view-only
-// account changes nothing else at all.
+// check it. Four exceptions: changing one's own password, marking a page
+// tour as seen (it changes no data), a client entering its own brand's daily
+// sales in Daily Tracking (brand-locked by that router), and leaving
+// feedback (annotations — a comment about a page changes no data on it, and
+// that router still checks the module). A view-only account changes nothing
+// else at all.
 const isWrite = (method) => !['GET', 'HEAD', 'OPTIONS'].includes(method);
 function viewOnlyMayWrite(account, path) {
   if (PASSWORD_CHANGE_PATHS.includes(path)) return true;
+  if (path.startsWith('/api/auth/tours/')) return true;
   if (path.startsWith('/api/annotations')) return true;
   return account.role === 'client' && path.startsWith('/api/daily-tracking');
 }
@@ -62,12 +65,15 @@ export async function authenticate(req, res, next) {
     const account = await loadAccount(claims.userId);
     if (!account) return next(new AppError('Akun tidak ditemukan', 401));
     if (!account.is_active) return next(new AppError('Akun ini dinonaktifkan. Hubungi admin.', 401));
+    // allowedBrandIds: the brands this account may open, or null for every
+    // brand. Check it with canAccessBrand (middlewares/brandAccess.js).
+    const brandIds = (account.allowed_brand_ids ?? []).map(Number);
     req.user = {
       ...claims,
       email: account.email,
       fullName: account.full_name,
       role: account.role,
-      allowedBrandId: account.allowed_brand_id,
+      allowedBrandIds: brandIds.length ? brandIds : null,
       isViewOnly: account.is_view_only,
       mustChangePassword: account.must_change_password,
     };

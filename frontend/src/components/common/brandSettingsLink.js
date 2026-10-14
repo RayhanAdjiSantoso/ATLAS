@@ -17,3 +17,14 @@ export function presetBrandSettings({ brandId, view, platform } = {}) {
     /* storage blocked — the link still navigates, just without the preset */
   }
 }
+
+// The same for Brand Tracking (brand + view), e.g. a link straight to a
+// brand's Minutes of Meeting.
+export function presetBrandTracking({ brandId, view } = {}) {
+  try {
+    if (view) sessionStorage.setItem(sessionKey('daily-tracking:view'), JSON.stringify(view));
+    if (brandId) sessionStorage.setItem(sessionKey('daily-tracking:client'), JSON.stringify(Number(brandId)));
+  } catch {
+    /* storage blocked — the link still navigates, just without the preset */
+  }
+}

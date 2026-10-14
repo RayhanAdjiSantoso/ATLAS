@@ -1,6 +1,7 @@
 import { asyncHandler, AppError } from '../utils/errors.js';
 import * as dashboardService from '../services/dashboardService.js';
 import pool from '../config/db.js';
+import { brandScope } from '../middlewares/brandAccess.js';
 
 // Runs a dashboard service fn for the main period, and again for the compare
 // period (if provided), bundling the latter under `compare` in the response.
@@ -28,11 +29,11 @@ export const getExecutiveSummary = asyncHandler(async (req, res) => {
 
 // Get list of brands for dropdown
 export const getDashboardFilters = asyncHandler(async (req, res) => {
-  const allowedBrandId = req.user.allowedBrandId;
-  const result = allowedBrandId
+  const allowedBrandIds = brandScope(req.user);
+  const result = allowedBrandIds
     ? await pool.query(
-        'SELECT brand_id, brand_name, status::text AS status FROM public.brands WHERE brand_id = $1 ORDER BY brand_name',
-        [allowedBrandId],
+        'SELECT brand_id, brand_name, status::text AS status FROM public.brands WHERE brand_id = ANY($1::int[]) ORDER BY brand_name',
+        [allowedBrandIds],
       )
     : await pool.query(
         'SELECT brand_id, brand_name, status::text AS status FROM public.brands ORDER BY brand_name'

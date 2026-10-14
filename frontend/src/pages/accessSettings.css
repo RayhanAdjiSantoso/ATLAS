@@ -112,10 +112,14 @@
 
 .acc-form { display: flex; flex-direction: column; gap: 14px; }
 .acc-field { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
-.acc-field > span { color: #0f1a3a; font-size: .74rem; font-weight: 750; }
-.acc-field > span em { margin-left: 6px; color: #5a6a90; font-size: .75rem; font-style: normal; font-weight: 600; }
+.acc-field > span, .acc-field > label { color: #0f1a3a; font-size: .74rem; font-weight: 750; }
+.acc-field > span em, .acc-field > label em { margin-left: 6px; color: #5a6a90; font-size: .75rem; font-style: normal; font-weight: 600; }
 .acc-field input, .acc-field select { padding: 10px 12px; border: 1px solid #d5dcea; border-radius: 10px; background: #fff; color: #0f1a3a; font: inherit; font-size: .84rem; }
 .acc-field input:focus, .acc-field select:focus { outline: 0; border-color: #1e3eb8; box-shadow: 0 0 0 3px rgba(30, 62, 184, .12); }
+.acc-field-hint { color: #5a6a90; font-size: .75rem; line-height: 1.45; }
+.acc-link { padding: 0; border: 0; background: none; color: #1e3eb8; font: inherit; font-weight: 700; cursor: pointer; }
+.acc-link:hover { text-decoration: underline; }
+.acc-brands { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .acc-role-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .acc-role-option { display: grid; gap: 5px; padding: 10px 12px; border: 1px solid #d5dcea; border-radius: 12px; cursor: pointer; transition: border-color .15s, background .15s; }
 .acc-role-option input { position: absolute; opacity: 0; pointer-events: none; }

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import SearchField from '../components/common/SearchField.jsx';
+import DashboardBrandPicker from '../components/dashboard/DashboardBrandPicker.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import atlasIcon from '../assets/atlas-icon.png';
 import atlasWordmark from '../assets/atlas-wordmark.png';
@@ -49,7 +50,8 @@ function RoleBadge({ role, label }) {
 
 function Modal({ title, icon: Icon, onClose, children, footer, wide = false }) {
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    // An open dropdown inside the modal takes Esc first (and marks it handled).
+    const onKey = (e) => e.key === 'Escape' && !e.defaultPrevented && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
@@ -108,20 +110,28 @@ function AccountForm({ mode, initial, roles, brands, actorRole, onCancel, onSave
   const [email, setEmail] = useState(initial?.email ?? '');
   const [fullName, setFullName] = useState(initial?.full_name ?? '');
   const [role, setRole] = useState(initial?.role ?? (actorRole === 'superadmin' ? 'user' : 'client'));
-  const [brandId, setBrandId] = useState(initial?.allowed_brand_id ?? '');
+  // A client is one brand's; everyone else may be given several (one person
+  // often handles more than one brand) or none, which means every brand.
+  const [brandIds, setBrandIds] = useState(initial?.allowed_brand_ids ?? []);
+  const [brandStatus, setBrandStatus] = useState('all');
   const [viewOnly, setViewOnly] = useState(Boolean(initial?.is_view_only ?? false));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const allowedRoles = roles.filter((r) => canManage(actorRole, r.key));
   const needsBrand = role === 'client';
+  const pickRole = (next) => {
+    setRole(next);
+    // Switching to client keeps at most one of the brands picked so far.
+    if (next === 'client') setBrandIds((ids) => ids.slice(0, 1));
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
-    if (needsBrand && !brandId) return setError('Akun client wajib dibatasi ke satu brand.');
+    if (needsBrand && brandIds.length !== 1) return setError('Akun client wajib dibatasi ke tepat satu brand.');
     setSaving(true);
     try {
-      const body = { fullName, role, allowedBrandId: brandId || null, isViewOnly: viewOnly };
+      const body = { fullName, role, allowedBrandIds: brandIds.map(Number), isViewOnly: viewOnly };
       if (mode === 'create') {
         const { data } = await api.post('/access/users', { ...body, email });
         onSaved({ created: true, tempPassword: data.tempPassword, account: { email: email.trim().toLowerCase(), full_name: fullName } });
@@ -167,7 +177,7 @@ function AccountForm({ mode, initial, roles, brands, actorRole, onCancel, onSave
           <div className="acc-role-pick">
             {allowedRoles.map((r) => (
               <label key={r.key} className={`acc-role-option${role === r.key ? ' is-active' : ''}`}>
-                <input type="radio" name="role" value={r.key} checked={role === r.key} onChange={() => setRole(r.key)} />
+                <input type="radio" name="role" value={r.key} checked={role === r.key} onChange={() => pickRole(r.key)} />
                 <RoleBadge role={r.key} label={r.label} />
                 <small>{ROLE_NOTE[r.key]}</small>
               </label>
@@ -175,13 +185,31 @@ function AccountForm({ mode, initial, roles, brands, actorRole, onCancel, onSave
           </div>
         </fieldset>
 
-        <label className="acc-field">
-          <span>Brand yang boleh dilihat {needsBrand ? <em>wajib untuk client</em> : <em>opsional</em>}</span>
-          <select value={brandId ?? ''} onChange={(e) => setBrandId(e.target.value)}>
-            <option value="">{needsBrand ? '— pilih brand —' : 'Semua brand'}</option>
-            {brands.map((b) => <option key={b.brand_id} value={b.brand_id}>{b.brand_name}</option>)}
-          </select>
-        </label>
+        <div className="acc-field">
+          <label htmlFor="acc-brands">
+            Brand yang boleh dilihat {needsBrand ? <em>wajib, satu brand</em> : <em>opsional, bisa lebih dari satu</em>}
+          </label>
+          {needsBrand ? (
+            <DashboardBrandPicker
+              id="acc-brands" brands={brands} value={brandIds[0] ?? ''} onChange={(id) => setBrandIds([id])}
+              status={brandStatus} onStatusChange={setBrandStatus}
+              placeholder="Pilih brand klien…" resultHint="Pilih brand milik klien ini"
+            />
+          ) : (
+            <DashboardBrandPicker
+              multiple id="acc-brands" brands={brands} value={brandIds} onChange={setBrandIds}
+              status={brandStatus} onStatusChange={setBrandStatus}
+              placeholder="Semua brand" resultHint="Centang brand yang ditangani akun ini"
+            />
+          )}
+          {!needsBrand && (
+            <small className="acc-field-hint">
+              {brandIds.length
+                ? <>Akun hanya bisa membuka {brandIds.length} brand ini. <button type="button" className="acc-link" onClick={() => setBrandIds([])}>Buka semua brand</button></>
+                : 'Tidak ada yang dicentang: akun bisa membuka semua brand.'}
+            </small>
+          )}
+        </div>
 
         <label className="acc-check">
           <input type="checkbox" checked={viewOnly} onChange={(e) => setViewOnly(e.target.checked)} />
@@ -221,7 +249,7 @@ function AccountsTab({ meta, me, onChanged }) {
     if (!users) return [];
     const needle = query.trim().toLowerCase();
     return users.filter((u) => (roleFilter === 'all' || u.role === roleFilter)
-      && (!needle || `${u.full_name} ${u.email} ${u.allowed_brand_name ?? ''}`.toLowerCase().includes(needle)));
+      && (!needle || `${u.full_name} ${u.email} ${(u.allowed_brand_names ?? []).join(' ')}`.toLowerCase().includes(needle)));
   }, [users, query, roleFilter]);
   const counts = useMemo(() => {
     const c = { all: users?.length ?? 0 };
@@ -299,7 +327,12 @@ function AccountsTab({ meta, me, onChanged }) {
                       </div>
                     </td>
                     <td><RoleBadge role={u.role} label={roleLabel(u.role)} /></td>
-                    <td>{u.allowed_brand_name ?? <span className="acc-muted">Semua brand</span>}{u.is_view_only && <span className="acc-tag">view-only</span>}</td>
+                    <td>
+                      {u.allowed_brand_names?.length
+                        ? <span className="acc-brands" title={u.allowed_brand_names.join(', ')}>{u.allowed_brand_names.length <= 2 ? u.allowed_brand_names.join(', ') : `${u.allowed_brand_names[0]} +${u.allowed_brand_names.length - 1} brand`}</span>
+                        : <span className="acc-muted">Semua brand</span>}
+                      {u.is_view_only && <span className="acc-tag">view-only</span>}
+                    </td>
                     <td>
                       {u.is_active ? <span className="acc-status is-on">Aktif</span> : <span className="acc-status is-off">Nonaktif</span>}
                       {u.must_change_password && <span className="acc-tag is-warn">belum ganti password</span>}
@@ -457,20 +490,23 @@ function PermissionsTab({ meta, onChanged }) {
   );
 }
 
-function AuditTab() {
+function AuditTab({ meta }) {
   const [entries, setEntries] = useState(null);
   const [error, setError] = useState('');
   useEffect(() => {
     api.get('/access/audit').then(({ data }) => setEntries(data.entries)).catch((e) => setError(e.response?.data?.message || 'Catatan aktivitas gagal dimuat.'));
   }, []);
+  const brandName = (id) => meta.brands.find((b) => b.brand_id === Number(id))?.brand_name ?? `brand #${id}`;
+  const brandText = (ids) => (ids.length ? ids.map(brandName).join(', ') : null);
   const describe = (e) => {
     const d = e.detail || {};
     if (e.action === 'permission') return `${d.role} · ${d.module} → ${d.allowed ? 'diizinkan' : 'ditutup'}`;
-    if (e.action === 'create') return [d.role, d.allowedBrandId ? `brand #${d.allowedBrandId}` : null, d.isViewOnly ? 'view-only' : null].filter(Boolean).join(' · ');
+    if (e.action === 'create') return [d.role, brandText(d.allowedBrandIds ?? (d.allowedBrandId ? [d.allowedBrandId] : [])), d.isViewOnly ? 'view-only' : null].filter(Boolean).join(' · ');
     if (e.action === 'update') {
       return Object.entries(d).map(([k, v]) => {
-        const label = { full_name: 'nama', role: 'role', allowed_brand_id: 'brand', is_view_only: 'view-only', is_active: 'status' }[k] ?? k;
-        const val = k === 'is_active' ? (v ? 'aktif' : 'nonaktif') : k === 'is_view_only' ? (v ? 'ya' : 'tidak') : v ?? 'semua';
+        const label = { full_name: 'nama', role: 'role', allowed_brand_id: 'brand', allowed_brand_ids: 'brand', is_view_only: 'view-only', is_active: 'status' }[k] ?? k;
+        const val = k === 'is_active' ? (v ? 'aktif' : 'nonaktif') : k === 'is_view_only' ? (v ? 'ya' : 'tidak')
+          : k === 'allowed_brand_ids' ? (v.length ? brandText(v) : 'semua') : v ?? 'semua';
         return `${label}: ${val}`;
       }).join(' · ');
     }
@@ -568,7 +604,7 @@ export default function AccessSettingsPage() {
       {error && <div className="acc-error" role="alert">{error}</div>}
       {meta && tab === 'accounts' && <AccountsTab meta={meta} me={me} onChanged={onChanged} />}
       {meta && tab === 'permissions' && <PermissionsTab meta={meta} onChanged={onChanged} />}
-      {meta && tab === 'audit' && <AuditTab />}
+      {meta && tab === 'audit' && <AuditTab meta={meta} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../../config/db.js';
 import { buildBulkInsert } from '../../utils/sqlHelpers.js';
+import { canAccessBrand } from '../../middlewares/brandAccess.js';
 
 // Ported from the standalone report generator (src/routes/productMaster.ts).
 // Logic unchanged from the original — TypeScript types stripped, and the
@@ -20,7 +21,7 @@ productMasterRouter.get('/', async (req, res) => {
     res.status(400).json({ error: 'brandId is required' });
     return;
   }
-  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) {
+  if (!canAccessBrand(req.user, brandId)) {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
@@ -42,7 +43,7 @@ productMasterRouter.put('/', async (req, res) => {
     res.status(400).json({ error: 'brandId (number) and entries (array) are required' });
     return;
   }
-  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) {
+  if (!canAccessBrand(req.user, brandId)) {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
@@ -92,7 +93,7 @@ productMasterRouter.post('/', async (req, res) => {
     res.status(400).json({ error: 'brandId, namaProdukClean, and category are required' });
     return;
   }
-  if (req.user.allowedBrandId && brandId !== req.user.allowedBrandId) {
+  if (!canAccessBrand(req.user, brandId)) {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }

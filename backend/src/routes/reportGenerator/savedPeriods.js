@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../../config/db.js';
+import { canAccessBrand } from '../../middlewares/brandAccess.js';
 
 // Ported from the standalone report generator (src/routes/savedPeriods.ts).
 // Logic unchanged — TypeScript types stripped, shared ATLAS pool used, and
@@ -38,7 +39,7 @@ savedPeriodsRouter.get('/', async (req, res) => {
     res.status(400).json({ error: 'platform must be one of: meta, shopee, tiktok' });
     return;
   }
-  if (req.user.allowedBrandId && clientId !== req.user.allowedBrandId) {
+  if (!canAccessBrand(req.user, clientId)) {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }

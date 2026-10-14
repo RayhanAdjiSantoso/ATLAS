@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import api from '../api/client.js';
 
 const AuthContext = createContext(null);
@@ -77,6 +77,19 @@ export function AuthProvider({ children }) {
     return res.data.user;
   };
 
+  // A page tour has played for this account, so it will not start by itself
+  // again. Recorded locally first so a second page in the same session does
+  // not wait on the request.
+  const markTourSeen = useCallback((tourId) => {
+    setUser((current) => {
+      if (!current || !Array.isArray(current.toursSeen) || current.toursSeen.includes(tourId)) return current;
+      const next = { ...current, toursSeen: [...current.toursSeen, tourId] };
+      localStorage.setItem('atlas_user', JSON.stringify(next));
+      return next;
+    });
+    api.post(`/auth/tours/${encodeURIComponent(tourId)}/seen`).catch(() => {});
+  }, []);
+
   const logout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
     clearSession();
@@ -129,6 +142,11 @@ export function AuthProvider({ children }) {
       isClient: user?.role === 'client',
       isViewOnly: !!user?.isViewOnly,
       allowedBrandId: user?.allowedBrandId ?? null,
+      allowedBrandIds: user?.allowedBrandIds ?? null,
+      // Tours already seen; null for accounts that predate auto-playing tours
+      // (they never auto-play).
+      toursSeen: Array.isArray(user?.toursSeen) ? user.toursSeen : null,
+      markTourSeen,
       mustChangePassword: !!user?.mustChangePassword,
       // What Pengaturan Akses lets this role open. An account loaded from an
       // older session without the list falls back to "everything the server

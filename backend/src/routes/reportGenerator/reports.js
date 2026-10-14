@@ -3,6 +3,7 @@ import multer from 'multer';
 import zlib from 'zlib';
 import pool from '../../config/db.js';
 import { buildBulkInsert, buildBulkInserts } from '../../utils/sqlHelpers.js';
+import { canAccessBrand, brandScope } from '../../middlewares/brandAccess.js';
 
 // Ported from the standalone report generator (src/routes/reports.ts).
 // Logic is unchanged from the original — see git history of the standalone
@@ -204,7 +205,7 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
     res.status(400).json({ error: 'Payload missing required fields: brandId, platform, period, rows.' });
     return;
   }
-  if (req.user.allowedBrandId && payload.brandId !== req.user.allowedBrandId) {
+  if (!canAccessBrand(req.user, payload.brandId)) {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
@@ -345,7 +346,7 @@ reportsRouter.get('/', async (req, res) => {
     res.status(400).json({ error: 'client_id is required' });
     return;
   }
-  if (req.user.allowedBrandId && clientId !== req.user.allowedBrandId) {
+  if (!canAccessBrand(req.user, clientId)) {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
@@ -408,7 +409,7 @@ reportsRouter.get('/:id/period/:role', async (req, res) => {
     res.status(404).json({ error: 'Report not found' });
     return;
   }
-  if (req.user.allowedBrandId && run.brand_id !== req.user.allowedBrandId) {
+  if (!canAccessBrand(req.user, run.brand_id)) {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
@@ -465,7 +466,7 @@ reportsRouter.get('/:id', async (req, res) => {
     res.status(404).json({ error: 'Report not found' });
     return;
   }
-  if (req.user.allowedBrandId && run.brand_id !== req.user.allowedBrandId) {
+  if (!canAccessBrand(req.user, run.brand_id)) {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
@@ -516,13 +517,13 @@ reportsRouter.delete('/:id', async (req, res) => {
     res.status(400).json({ error: 'Invalid id' });
     return;
   }
-  if (req.user.allowedBrandId) {
+  if (brandScope(req.user)) {
     const runResult = await pool.query('SELECT brand_id FROM ads_reports.report_runs WHERE id = $1', [id]);
     if (!runResult.rows[0]) {
       res.status(404).json({ error: 'Report not found' });
       return;
     }
-    if (runResult.rows[0].brand_id !== req.user.allowedBrandId) {
+    if (!canAccessBrand(req.user, runResult.rows[0].brand_id)) {
       res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
       return;
     }

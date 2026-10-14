@@ -13,7 +13,7 @@ const SECTIONS = {
   target: '.bs .band-tabs',
   kicker: 'Brand Setting',
   title: 'Tiga bagian dalam satu tempat',
-  body: 'Brand Context untuk profil dan arah brand, Data Collection Hub untuk semua file data, dan Brand Tracking untuk penjualan serta belanja iklan harian. Pindah bagian kapan saja dari tab ini.',
+  body: 'Brand Context untuk profil dan arah brand, Data Collection Hub untuk semua file data, dan Brand Tracking untuk penjualan, belanja iklan harian, serta catatan meeting. Pindah bagian kapan saja dari tab ini.',
 };
 
 export const TOURS = {
@@ -50,11 +50,6 @@ export const TOURS = {
       body: 'Semua file di halaman ini milik brand yang dipilih di sini. Di sampingnya: rentang data, jumlah file, dan dataset yang sudah aktif.',
     },
     {
-      target: '.bp-tabs',
-      title: 'Performance Database & Minutes of Meeting',
-      body: 'Performance Database menyimpan file performa per platform. Minutes of Meeting menyimpan catatan dan keputusan meeting brand.',
-    },
-    {
       target: '.bp-platforms',
       title: 'Pilih platform',
       body: 'Meta Ads, Shopee, TikTok, dan Google Ads. Persentase menunjukkan kelengkapan dataset inti untuk bulan yang tampil.',
@@ -86,8 +81,8 @@ export const TOURS = {
     },
     {
       target: '.bt-views',
-      title: 'Tiga tampilan',
-      body: 'Performance Overview untuk membaca hasil, Target & Budget untuk target bulanan dan alokasi channel, dan Input untuk mengisi penjualan serta belanja iklan harian.',
+      title: 'Tampilan Brand Tracking',
+      body: 'Performance Overview untuk membaca hasil, Target & Budget untuk target bulanan dan alokasi channel, Input Daily Tracking untuk mengisi penjualan serta belanja iklan harian, dan (khusus tim internal) Minutes of Meeting untuk recap serta to do list tiap meeting.',
     },
     {
       target: '.bt-kpis',

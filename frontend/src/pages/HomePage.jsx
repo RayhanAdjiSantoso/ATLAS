@@ -29,12 +29,12 @@ const MODULES = [
   {
     key: 'brand-data', to: '/data-brand', group: 'input', module: 'brand_settings',
     label: 'Data Collection Hub', tagline: 'File & akun iklan', Icon: FolderOpen,
-    desc: 'File bulanan tiap marketplace, Minutes of Meeting, dan otomasi Meta & Google Ads.',
+    desc: 'File bulanan tiap marketplace dan otomasi Meta & Google Ads.',
   },
   {
     key: 'daily-tracking', to: '/brand-tracking', group: 'input', module: 'daily_tracking',
     label: 'Brand Tracking', tagline: 'Harian & target', Icon: Activity,
-    desc: 'Revenue dan belanja iklan harian, target bulanan, dan alokasi budget per channel.',
+    desc: 'Revenue dan belanja iklan harian, target bulanan, alokasi budget per channel, dan Minutes of Meeting.',
   },
   {
     key: 'dashboard', to: '/dashboard', group: 'read', module: 'dashboard',

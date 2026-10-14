@@ -24,16 +24,12 @@ export const logout = asyncHandler(async (req, res) => {
 export const me = asyncHandler(async (req, res) => {
   const user = await authService.getUserById(req.user.userId);
   if (!user) throw new AppError('User tidak ditemukan', 404);
-  res.json({ user: {
-    userId: user.userId,
-    email: user.email,
-    fullName: user.fullName,
-    role: user.role,
-    allowedBrandId: user.allowedBrandId,
-    isViewOnly: user.isViewOnly,
-    mustChangePassword: user.mustChangePassword,
-    modules: user.modules,
-  } });
+  res.json({ user });
+});
+
+export const markTourSeen = asyncHandler(async (req, res) => {
+  const toursSeen = await authService.markTourSeen(req.user.userId, req.params.tourId);
+  res.json({ toursSeen });
 });
 
 export const changePassword = asyncHandler(async (req, res) => {

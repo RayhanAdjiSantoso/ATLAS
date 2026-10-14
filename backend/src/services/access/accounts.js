@@ -48,42 +48,84 @@ async function audit(client, actorId, targetId, action, detail) {
   );
 }
 
+// allowed_brand_ids / allowed_brand_names: the account's brand list
+// (user_brand_access), empty for an account that may open every brand.
 const ACCOUNT_COLUMNS = `
-  u.user_id, u.email, u.full_name, u.role::text AS role, u.is_active, u.allowed_brand_id,
-  b.brand_name AS allowed_brand_name, u.is_view_only, u.must_change_password,
+  u.user_id, u.email, u.full_name, u.role::text AS role, u.is_active,
+  ARRAY(SELECT a.brand_id FROM user_brand_access a JOIN brands b ON b.brand_id = a.brand_id
+        WHERE a.user_id = u.user_id ORDER BY lower(b.brand_name)) AS allowed_brand_ids,
+  ARRAY(SELECT b.brand_name FROM user_brand_access a JOIN brands b ON b.brand_id = a.brand_id
+        WHERE a.user_id = u.user_id ORDER BY lower(b.brand_name)) AS allowed_brand_names,
+  u.is_view_only, u.must_change_password,
   u.created_at, u.last_login_at, c.full_name AS created_by_name`;
 
 export async function listAccounts() {
   const { rows } = await pool.query(`
     SELECT ${ACCOUNT_COLUMNS}
     FROM users u
-    LEFT JOIN brands b ON b.brand_id = u.allowed_brand_id
     LEFT JOIN users c ON c.user_id = u.created_by
     ORDER BY CASE u.role::text WHEN 'superadmin' THEN 0 WHEN 'admin' THEN 1 WHEN 'reviewer' THEN 2 WHEN 'user' THEN 3 ELSE 4 END, lower(u.full_name)`);
   return rows;
 }
 
 async function getAccount(client, id) {
-  const { rows } = await client.query(`SELECT user_id, email, role::text AS role, is_active, allowed_brand_id, is_view_only FROM users WHERE user_id = $1`, [id]);
+  const { rows } = await client.query(
+    `SELECT u.user_id, u.email, u.role::text AS role, u.is_active, u.is_view_only,
+            ARRAY(SELECT a.brand_id FROM user_brand_access a WHERE a.user_id = u.user_id ORDER BY a.brand_id) AS allowed_brand_ids
+     FROM users u WHERE u.user_id = $1`,
+    [id],
+  );
   if (!rows.length) throw new AppError('Akun tidak ditemukan', 404);
-  return rows[0];
+  return { ...rows[0], allowed_brand_ids: rows[0].allowed_brand_ids.map(Number) };
 }
 
-function validateBrandRule(role, allowedBrandId) {
+// The brand list from a request: allowedBrandIds (an array), or the older
+// single allowedBrandId. undefined = not sent (leave as is); [] = every brand.
+function readBrandIds(body) {
+  if (body.allowedBrandIds !== undefined) {
+    if (body.allowedBrandIds !== null && !Array.isArray(body.allowedBrandIds)) throw new AppError('Daftar brand tidak valid.', 400);
+    const ids = (body.allowedBrandIds ?? []).map(Number);
+    if (ids.some((id) => !Number.isInteger(id) || id <= 0)) throw new AppError('Daftar brand tidak valid.', 400);
+    return [...new Set(ids)].sort((a, b) => a - b);
+  }
+  if (body.allowedBrandId !== undefined) return body.allowedBrandId ? [Number(body.allowedBrandId)] : [];
+  return undefined;
+}
+
+function validateBrandRule(role, brandIds) {
   // A client account without a brand would see every brand — the exact leak
-  // this page exists to prevent.
-  if (role === 'client' && !allowedBrandId) throw new AppError('Akun client wajib dibatasi ke satu brand.', 400);
+  // this page exists to prevent. One client account is one brand's; an
+  // internal user may be given several (one person often handles more than
+  // one brand).
+  if (role === 'client' && brandIds.length !== 1) throw new AppError('Akun client wajib dibatasi ke tepat satu brand.', 400);
 }
 
-export async function createAccount(actor, { email, fullName, role, allowedBrandId, isViewOnly }) {
+async function setBrandIds(client, userId, brandIds) {
+  if (brandIds.length) {
+    const { rows } = await client.query('SELECT count(*)::int AS n FROM brands WHERE brand_id = ANY($1::int[])', [brandIds]);
+    if (rows[0].n !== brandIds.length) throw new AppError('Ada brand yang tidak ditemukan.', 400);
+  }
+  await client.query('DELETE FROM user_brand_access WHERE user_id = $1', [userId]);
+  if (brandIds.length) {
+    await client.query(
+      'INSERT INTO user_brand_access (user_id, brand_id) SELECT $1, unnest($2::int[])',
+      [userId, brandIds],
+    );
+  }
+}
+
+const sameIds = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
+
+export async function createAccount(actor, body) {
+  const { email, fullName, role, isViewOnly } = body;
   const cleanEmail = String(email || '').trim().toLowerCase();
   const name = String(fullName || '').trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) throw new AppError('Format email tidak valid.', 400);
   if (!name) throw new AppError('Nama lengkap wajib diisi.', 400);
   if (!ROLES.includes(role)) throw new AppError('Role tidak dikenal.', 400);
   if (!canManage(actor, role)) throw new AppError('Anda tidak berwenang membuat akun dengan role ini.', 403);
-  const brandId = allowedBrandId ? Number(allowedBrandId) : null;
-  validateBrandRule(role, brandId);
+  const brandIds = readBrandIds(body) ?? [];
+  validateBrandRule(role, brandIds);
 
   const tempPassword = generateTempPassword();
   const hash = await bcrypt.hash(tempPassword, 12);
@@ -93,12 +135,13 @@ export async function createAccount(actor, { email, fullName, role, allowedBrand
     const exists = await client.query('SELECT 1 FROM users WHERE lower(email) = $1', [cleanEmail]);
     if (exists.rowCount) throw new AppError('Email ini sudah dipakai akun lain.', 409);
     const { rows } = await client.query(
-      `INSERT INTO users (email, password_hash, full_name, role, allowed_brand_id, is_view_only, must_change_password, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7) RETURNING user_id`,
-      [cleanEmail, hash, name, role, brandId, Boolean(isViewOnly), actor.userId],
+      `INSERT INTO users (email, password_hash, full_name, role, is_view_only, must_change_password, created_by)
+       VALUES ($1, $2, $3, $4, $5, TRUE, $6) RETURNING user_id`,
+      [cleanEmail, hash, name, role, Boolean(isViewOnly), actor.userId],
     );
     const id = rows[0].user_id;
-    await audit(client, actor.userId, id, 'create', { email: cleanEmail, role, allowedBrandId: brandId, isViewOnly: Boolean(isViewOnly) });
+    await setBrandIds(client, id, brandIds);
+    await audit(client, actor.userId, id, 'create', { email: cleanEmail, role, allowedBrandIds: brandIds, isViewOnly: Boolean(isViewOnly) });
     await client.query('COMMIT');
     return { userId: id, tempPassword };
   } catch (err) {
@@ -119,7 +162,6 @@ export async function updateAccount(actor, id, changes) {
     const next = {
       full_name: changes.fullName !== undefined ? String(changes.fullName).trim() : undefined,
       role: changes.role,
-      allowed_brand_id: changes.allowedBrandId !== undefined ? (changes.allowedBrandId ? Number(changes.allowedBrandId) : null) : undefined,
       is_view_only: changes.isViewOnly !== undefined ? Boolean(changes.isViewOnly) : undefined,
       is_active: changes.isActive !== undefined ? Boolean(changes.isActive) : undefined,
     };
@@ -131,7 +173,8 @@ export async function updateAccount(actor, id, changes) {
     if (self && next.is_active === false) throw new AppError('Anda tidak bisa menonaktifkan akun sendiri.', 400);
     if (self && next.role !== undefined && next.role !== target.role) throw new AppError('Anda tidak bisa mengubah role akun sendiri.', 400);
     if (next.full_name === '') throw new AppError('Nama lengkap wajib diisi.', 400);
-    validateBrandRule(next.role ?? target.role, next.allowed_brand_id !== undefined ? next.allowed_brand_id : target.allowed_brand_id);
+    const brandIds = readBrandIds(changes);
+    validateBrandRule(next.role ?? target.role, brandIds ?? target.allowed_brand_ids);
 
     const sets = [];
     const values = [];
@@ -142,12 +185,15 @@ export async function updateAccount(actor, id, changes) {
       sets.push(`${col} = $${values.length}`);
       diff[col] = val;
     }
-    if (!sets.length) {
+    const brandsChanged = brandIds !== undefined && !sameIds(brandIds, target.allowed_brand_ids);
+    if (brandsChanged) diff.allowed_brand_ids = brandIds;
+    if (!sets.length && !brandsChanged) {
       await client.query('ROLLBACK');
       return;
     }
+    if (brandsChanged) await setBrandIds(client, id, brandIds);
     values.push(id);
-    await client.query(`UPDATE users SET ${sets.join(', ')}, updated_at = now() WHERE user_id = $${values.length}`, values);
+    await client.query(`UPDATE users SET ${sets.length ? `${sets.join(', ')}, ` : ''}updated_at = now() WHERE user_id = $${values.length}`, values);
     await audit(client, actor.userId, id, 'update', diff);
     await client.query('COMMIT');
   } catch (err) {
