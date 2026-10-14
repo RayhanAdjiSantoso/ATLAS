@@ -21,7 +21,7 @@ export async function registerUser({ email, password, fullName, role = 'user' })
 }
 
 const ACCOUNT_COLUMNS = `u.user_id, u.email, u.full_name, u.role::text AS role, u.is_active, u.is_view_only,
-  u.must_change_password, u.tours_seen,
+  u.must_change_password, u.tours_seen, u.features_seen, u.created_at,
   ARRAY(SELECT a.brand_id FROM user_brand_access a WHERE a.user_id = u.user_id ORDER BY a.brand_id) AS allowed_brand_ids`;
 
 // The account as the app sees it. allowedBrandIds is the brand list (null =
@@ -40,6 +40,8 @@ async function publicAccount(user) {
     isViewOnly: user.is_view_only,
     mustChangePassword: user.must_change_password,
     toursSeen: user.tours_seen,
+    featuresSeen: user.features_seen ?? [],
+    createdAt: user.created_at,
     modules: await modulesFor(user.role),
   };
 }
@@ -100,6 +102,20 @@ export async function getUserById(userId) {
   const result = await pool.query(`SELECT ${ACCOUNT_COLUMNS} FROM users u WHERE u.user_id = $1 AND u.is_active = TRUE`, [userId]);
   if (result.rows.length === 0) return null;
   return publicAccount(result.rows[0]);
+}
+
+// A "fitur baru" spotlight (frontend whatsNew.js) has been shown to this
+// account; it will not be shown again.
+export async function markFeatureSeen(userId, featureId) {
+  const id = String(featureId || '').trim();
+  if (!/^[a-z0-9-]{1,80}$/.test(id)) throw new AppError('Fitur tidak dikenal.', 400);
+  const { rows } = await pool.query(
+    `UPDATE users SET features_seen = CASE WHEN $2 = ANY(features_seen) THEN features_seen ELSE array_append(features_seen, $2) END
+     WHERE user_id = $1
+     RETURNING features_seen`,
+    [userId, id],
+  );
+  return rows[0]?.features_seen ?? [];
 }
 
 // A page tour has been shown to this account; it will not play by itself

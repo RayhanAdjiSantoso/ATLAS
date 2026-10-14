@@ -42,11 +42,13 @@ const visibleRect = (el) => {
   const r = el.getBoundingClientRect();
   return r.width > 0 && r.height > 0 ? r : null;
 };
-const find = (selector) => {
+// The first element matching `selector` that is laid out on screen.
+export const findVisible = (selector) => {
   if (!selector) return null;
   for (const el of document.querySelectorAll(selector)) if (visibleRect(el)) return el;
   return null;
 };
+const find = findVisible;
 
 // Where the card goes: below, above, right, left of the target — the first
 // that fits — else pinned to the lower right of the screen.
@@ -67,7 +69,10 @@ function placeCard(hole, card) {
   return { left: vw - w - 24, top: vh - h - 24, side: 'none' };
 }
 
-export default function Coachmark({ id, steps: allSteps }) {
+// `autoStart` / `onAutoStart` override the page-tour rule below (the "fitur
+// baru" spotlights use them); `onClose` runs when the guide ends, or when an
+// auto-start gives up because nothing it points at appeared.
+export default function Coachmark({ id, steps: allSteps, autoStart, onAutoStart, onClose }) {
   const { toursSeen, markTourSeen, mustChangePassword } = useAuth();
   const [index, setIndex] = useState(-1);
   // The steps whose element is on the page when the tour starts, so the
@@ -99,9 +104,17 @@ export default function Coachmark({ id, steps: allSteps }) {
     return () => window.removeEventListener(START_EVENT, onStart);
   }, [id, begin]);
 
+  const wasOpen = useRef(false);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (wasOpen.current && !open) closeRef.current?.();
+    wasOpen.current = open;
+  }, [open]);
+
   // First visit of a new account: play once the page's own steps are on
   // screen, and record it as seen the moment it starts.
-  const autoPlay = Boolean(toursSeen) && !toursSeen.includes(id) && !mustChangePassword;
+  const autoPlay = autoStart ?? (Boolean(toursSeen) && !toursSeen.includes(id) && !mustChangePassword);
   useEffect(() => {
     if (!autoPlay) return undefined;
     const own = allSteps.filter((s) => s.target !== '[data-tour-launch]');
@@ -111,11 +124,12 @@ export default function Coachmark({ id, steps: allSteps }) {
     const check = () => {
       const present = own.filter((s) => find(s.target)).length;
       if (present >= needed || (present > 0 && Date.now() - started > AUTO_WAIT)) {
-        markTourSeen(id);
+        if (onAutoStart) onAutoStart(); else markTourSeen(id);
         begin();
         return;
       }
       if (Date.now() - started <= AUTO_WAIT) timer = setTimeout(check, AUTO_POLL);
+      else closeRef.current?.();
     };
     timer = setTimeout(check, AUTO_POLL);
     return () => clearTimeout(timer);
@@ -228,23 +242,25 @@ export default function Coachmark({ id, steps: allSteps }) {
       >
         {arrowStyle && <span className="cm-arrow" style={arrowStyle} aria-hidden="true" />}
         <div className="cm-top">
-          <span className="cm-step">Langkah {index + 1}<em>/{steps.length}</em></span>
+          {steps.length > 1 ? <span className="cm-step">Langkah {index + 1}<em>/{steps.length}</em></span> : <span className="cm-step">Panduan singkat</span>}
           <button type="button" className="cm-skip" onClick={finish} aria-label="Lewati panduan">
             Lewati <X size={13} aria-hidden="true" />
           </button>
         </div>
-        <div className="cm-progress" aria-hidden="true">
-          {steps.map((_, i) => <i key={i} className={i < index ? 'is-done' : i === index ? 'is-now' : ''} />)}
-        </div>
+        {steps.length > 1 && (
+          <div className="cm-progress" aria-hidden="true">
+            {steps.map((_, i) => <i key={i} className={i < index ? 'is-done' : i === index ? 'is-now' : ''} />)}
+          </div>
+        )}
         {step.kicker && <span className="cm-kicker">{step.kicker}</span>}
         <h3 id="cm-title">{step.title}</h3>
         <p id="cm-body">{step.body}</p>
         <div className="cm-actions">
           {index > 0 ? (
             <button type="button" className="cm-btn" onClick={() => go(-1)}><ArrowLeft size={14} aria-hidden="true" /> Kembali</button>
-          ) : <span className="cm-hint">Tekan → untuk lanjut</span>}
+          ) : <span className="cm-hint">{steps.length > 1 ? 'Tekan → untuk lanjut' : ''}</span>}
           <button ref={primaryRef} type="button" className="cm-btn is-primary" onClick={() => go(1)}>
-            {last ? <><Check size={14} aria-hidden="true" /> Selesai</> : <>Lanjut <ArrowRight size={14} aria-hidden="true" /></>}
+            {last ? <><Check size={14} aria-hidden="true" /> {steps.length > 1 ? 'Selesai' : 'Mengerti'}</> : <>Lanjut <ArrowRight size={14} aria-hidden="true" /></>}
           </button>
         </div>
       </div>

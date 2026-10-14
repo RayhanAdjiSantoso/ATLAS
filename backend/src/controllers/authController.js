@@ -27,6 +27,11 @@ export const me = asyncHandler(async (req, res) => {
   res.json({ user });
 });
 
+export const markFeatureSeen = asyncHandler(async (req, res) => {
+  const featuresSeen = await authService.markFeatureSeen(req.user.userId, req.params.featureId);
+  res.json({ featuresSeen });
+});
+
 export const markTourSeen = asyncHandler(async (req, res) => {
   const toursSeen = await authService.markTourSeen(req.user.userId, req.params.tourId);
   res.json({ toursSeen });

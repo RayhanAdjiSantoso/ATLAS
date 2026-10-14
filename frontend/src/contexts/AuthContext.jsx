@@ -90,6 +90,20 @@ export function AuthProvider({ children }) {
     api.post(`/auth/tours/${encodeURIComponent(tourId)}/seen`).catch(() => {});
   }, []);
 
+  // "Fitur baru" spotlights shown to this account (FeatureSpotlight).
+  const markFeaturesSeen = useCallback((ids) => {
+    setUser((current) => {
+      if (!current) return current;
+      const seen = current.featuresSeen ?? [];
+      const fresh = ids.filter((id) => !seen.includes(id));
+      if (!fresh.length) return current;
+      const next = { ...current, featuresSeen: [...seen, ...fresh] };
+      localStorage.setItem('atlas_user', JSON.stringify(next));
+      return next;
+    });
+    ids.forEach((id) => api.post(`/auth/features/${encodeURIComponent(id)}/seen`).catch(() => {}));
+  }, []);
+
   const logout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
     clearSession();
@@ -147,6 +161,9 @@ export function AuthProvider({ children }) {
       // (they never auto-play).
       toursSeen: Array.isArray(user?.toursSeen) ? user.toursSeen : null,
       markTourSeen,
+      // null until the account has loaded from the server (no spotlight before).
+      featuresSeen: Array.isArray(user?.featuresSeen) ? user.featuresSeen : null,
+      markFeaturesSeen,
       mustChangePassword: !!user?.mustChangePassword,
       // What Pengaturan Akses lets this role open. An account loaded from an
       // older session without the list falls back to "everything the server

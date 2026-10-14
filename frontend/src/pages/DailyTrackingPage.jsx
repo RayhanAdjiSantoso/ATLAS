@@ -285,7 +285,7 @@ export default function DailyTrackingPage() {
         {views.map(({ id, label, hint, Icon }) => {
           const on = view === id;
           return (
-            <button type="button" role="tab" key={id} aria-selected={on} className={`soft-tab${on ? ' is-on' : ''}`} onClick={() => setView(id)}>
+            <button type="button" role="tab" key={id} data-view={id} aria-selected={on} className={`soft-tab${on ? ' is-on' : ''}`} onClick={() => setView(id)}>
               {on && (
                 <motion.span
                   layoutId="bt-view-pill" className="soft-tab-pill" aria-hidden="true"

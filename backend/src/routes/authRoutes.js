@@ -15,5 +15,6 @@ router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.me);
 router.post('/change-password', authenticate, loginRateLimit, authController.changePassword);
 router.post('/tours/:tourId/seen', authenticate, authController.markTourSeen);
+router.post('/features/:featureId/seen', authenticate, authController.markFeatureSeen);
 
 export default router;
