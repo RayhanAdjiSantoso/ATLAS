@@ -1,8 +1,9 @@
 import { AppError, asyncHandler } from '../utils/errors.js';
 import * as brandService from '../services/brandService.js';
+import { brandScope } from '../middlewares/brandAccess.js';
 
 export const listBrands = asyncHandler(async (req, res) => {
-  const brands = await brandService.listBrands(req.user.allowedBrandId);
+  const brands = await brandService.listBrands(brandScope(req.user));
   res.json({ brands });
 });
 
@@ -68,7 +69,7 @@ export const deleteBrand = asyncHandler(async (req, res) => {
     const forced = await brandService.deleteBrandWithData(brandId);
     if (forced.notFound) throw new AppError('Brand tidak ditemukan', 404);
     if (forced.boundAccounts) {
-      throw new AppError(`Ada ${forced.boundAccounts} akun login klien yang terikat ke brand ini. Pindahkan atau hapus akun tersebut di Pengaturan Akses terlebih dahulu.`, 409);
+      throw new AppError(`Ada ${forced.boundAccounts} akun login yang dibatasi ke brand ini. Pindahkan atau hapus akun tersebut di Pengaturan Akses terlebih dahulu.`, 409);
     }
     return res.json({ deleted: true, brand: forced.brand, removed: forced.removed });
   }

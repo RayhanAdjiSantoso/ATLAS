@@ -12,7 +12,7 @@
 //   --email, --password, --fullName   required
 //   --role=admin|user|reviewer        optional, default "user"
 //   --brand="Brand Name"              optional — locks the account to this
-//                                      brand (migration 023's allowed_brand_id).
+//                                      brand (migration 048's user_brand_access).
 //                                      Matched case-insensitively/trimmed.
 //   --view-only                       optional — account can read but never
 //                                      write anywhere (migration 023's is_view_only).
@@ -74,12 +74,15 @@ async function main() {
     const passwordHash = await bcrypt.hash(args.password, 12);
 
     const result = await client.query(
-      `INSERT INTO users (email, password_hash, full_name, role, allowed_brand_id, is_view_only)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO users (email, password_hash, full_name, role, is_view_only)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (email) DO NOTHING
-       RETURNING user_id, email, full_name, role, allowed_brand_id, is_view_only`,
-      [args.email.toLowerCase(), passwordHash, args.fullName, args.role, brandId, args.viewOnly],
+       RETURNING user_id, email, full_name, role, is_view_only`,
+      [args.email.toLowerCase(), passwordHash, args.fullName, args.role, args.viewOnly],
     );
+    if (result.rows[0] && brandId) {
+      await client.query('INSERT INTO user_brand_access (user_id, brand_id) VALUES ($1, $2)', [result.rows[0].user_id, brandId]);
+    }
 
     if (!result.rows[0]) {
       console.warn(`Email "${args.email}" sudah terdaftar — tidak ada perubahan.`);

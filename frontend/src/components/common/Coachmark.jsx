@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, Check, Compass, X } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 import './coachmark.css';
 
 // Coachmark — a guided tour over a live page. Each step names an element (a
@@ -9,14 +10,20 @@ import './coachmark.css';
 // now (a view that is closed, a role that cannot see it) are skipped, so one
 // tour fits every state of the page.
 //
-// A tour never opens by itself: it plays when its TourButton (Panduan, top
-// right of the page) is pressed.
+// A tour plays by itself once: the first time its page opens for a new
+// account (one whose toursSeen list does not name it yet — accounts older
+// than this behaviour have no list and never auto-play). After that it plays
+// only when its TourButton (Panduan, top right of the page) is pressed.
 // Esc or "Lewati" ends it; → / Enter and ← move through it.
 
 const START_EVENT = 'atlas:tour-start';
 const PAD = 8;
 const GAP = 14;
 const CARD_W = 344;
+// Auto-play waits for the page to render what the tour points at (data
+// loads after the frame), checking every AUTO_POLL ms for up to AUTO_WAIT.
+const AUTO_POLL = 250;
+const AUTO_WAIT = 8000;
 
 export function startTour(id) {
   window.dispatchEvent(new CustomEvent(START_EVENT, { detail: { id } }));
@@ -61,6 +68,7 @@ function placeCard(hole, card) {
 }
 
 export default function Coachmark({ id, steps: allSteps }) {
+  const { toursSeen, markTourSeen, mustChangePassword } = useAuth();
   const [index, setIndex] = useState(-1);
   // The steps whose element is on the page when the tour starts, so the
   // count reads true ("Langkah 3/6", not a jump from 6 to 8).
@@ -90,6 +98,29 @@ export default function Coachmark({ id, steps: allSteps }) {
     window.addEventListener(START_EVENT, onStart);
     return () => window.removeEventListener(START_EVENT, onStart);
   }, [id, begin]);
+
+  // First visit of a new account: play once the page's own steps are on
+  // screen, and record it as seen the moment it starts.
+  const autoPlay = Boolean(toursSeen) && !toursSeen.includes(id) && !mustChangePassword;
+  useEffect(() => {
+    if (!autoPlay) return undefined;
+    const own = allSteps.filter((s) => s.target !== '[data-tour-launch]');
+    const needed = Math.min(2, own.length);
+    const started = Date.now();
+    let timer = 0;
+    const check = () => {
+      const present = own.filter((s) => find(s.target)).length;
+      if (present >= needed || (present > 0 && Date.now() - started > AUTO_WAIT)) {
+        markTourSeen(id);
+        begin();
+        return;
+      }
+      if (Date.now() - started <= AUTO_WAIT) timer = setTimeout(check, AUTO_POLL);
+    };
+    timer = setTimeout(check, AUTO_POLL);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlay, id]);
 
   const go = useCallback((delta) => {
     dir.current = delta;

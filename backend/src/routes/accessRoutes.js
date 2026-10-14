@@ -17,7 +17,7 @@ router.use(authenticate, authorize('admin'), (req, res, next) => {
 });
 
 router.get('/meta', asyncHandler(async (req, res) => {
-  const { rows: brands } = await pool.query('SELECT brand_id, brand_name FROM brands ORDER BY lower(brand_name)');
+  const { rows: brands } = await pool.query('SELECT brand_id, brand_name, status::text AS status FROM brands ORDER BY lower(brand_name)');
   res.json({ roles: ROLES.map((r) => ({ key: r, label: ROLE_LABELS[r] })), modules: MODULES, brands });
 }));
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { BadgeDollarSign, CheckCircle2, Eye, Loader2, PencilLine, PieChart, Receipt, Target, TriangleAlert } from 'lucide-react';
+import { BadgeDollarSign, CheckCircle2, Eye, Loader2, PencilLine, PieChart, Receipt, Target, TriangleAlert, UsersRound } from 'lucide-react';
 import api from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
@@ -20,6 +20,7 @@ import MetaSyncButton from '../components/dailyTracking/MetaSyncButton.jsx';
 import ImportFileButton from '../components/dailyTracking/ImportFileButton.jsx';
 import DeleteMonthButton from '../components/dailyTracking/DeleteMonthButton.jsx';
 import ChannelActions from '../components/dailyTracking/ChannelActions.jsx';
+import MinutesOfMeeting from '../components/mom/MinutesOfMeeting.jsx';
 import useAutoSave from '../dailyTracking/lib/useAutoSave.js';
 import { coverage, monthName, shiftMonth, sliceGrid, todayIso } from '../dailyTracking/lib/daily.js';
 import { channelTotal, fmtNum, fmtRp, fmtRpShort, totalForKind } from '../dailyTracking/lib/summary.js';
@@ -33,11 +34,13 @@ function currentMonth() {
 }
 
 // Brand Tracking — Brand Setting's third section, and a client's whole ATLAS:
-// what a brand sold and spent, per channel, per day. Two views under one
-// brand and month: Performance Overview reads the month (six numbers against
-// last month, any two periods side by side, the daily chart, pace, weekday
-// pattern, channel mix); Input Brand Tracking is
-// where the days are typed in, led by the map of which days are still empty.
+// what a brand sold and spent, per channel, per day. Views under one brand
+// and month: Performance Overview reads the month (six numbers against last
+// month, any two periods side by side, the daily chart, pace, weekday
+// pattern, channel mix); Input Daily Tracking is where the days are typed in,
+// led by the map of which days are still empty; Minutes of Meeting keeps the
+// brand's meeting notes beside those numbers. MoM carries MIL's internal to
+// do list, so client accounts never get that view.
 // The frame and masthead are BrandSettingLayout's.
 // Session keys keep their old "daily-tracking:" names so nobody's open brand
 // and month are lost by the rename.
@@ -45,7 +48,8 @@ function currentMonth() {
 const VIEWS = [
   { id: 'overview', label: 'Performance Overview', hint: 'Grafik & pembacaan bulan ini', Icon: PieChart },
   { id: 'target', label: 'Target & Budget', hint: 'Target, alokasi & pencapaian', Icon: Target },
-  { id: 'input', label: 'Input Brand Tracking', hint: 'Isi revenue & spend harian', Icon: PencilLine },
+  { id: 'input', label: 'Input Daily Tracking', hint: 'Isi revenue & spend harian', Icon: PencilLine },
+  { id: 'mom', label: 'Minutes of Meeting', hint: 'Recap & to do list', Icon: UsersRound, internal: true },
 ];
 
 function SaveState({ status, readOnly }) {
@@ -65,7 +69,9 @@ export default function DailyTrackingPage() {
   const locked = !!allowedBrandId;
 
   const reduced = useReducedMotion();
-  const [view, setView] = useSessionState('daily-tracking:view', 'overview');
+  const views = VIEWS.filter((v) => !v.internal || !isClient);
+  const [storedView, setView] = useSessionState('daily-tracking:view', 'overview');
+  const view = views.some((v) => v.id === storedView) ? storedView : 'overview';
   const [activeTab, setActiveTab] = useSessionState('daily-tracking:tab', 'sales');
   const [brands, setBrands] = useState([]);
   const [storedBrandId, setBrandId] = useSessionState('daily-tracking:client', null);
@@ -94,7 +100,9 @@ export default function DailyTrackingPage() {
       if (locked) {
         setBrandId(allowedBrandId);
       } else {
-        setBrandId((prev) => prev ?? (list.find((b) => b.status === 'active') ?? list[0])?.brand_id ?? null);
+        // A brand remembered from an earlier session that this account may no
+        // longer open (its brand list changed) falls back like a first visit.
+        setBrandId((prev) => (list.some((b) => b.brand_id === prev) ? prev : (list.find((b) => b.status === 'active') ?? list[0])?.brand_id ?? null));
       }
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -274,7 +282,7 @@ export default function DailyTrackingPage() {
       {loadError && <div className="alert alert-error">{loadError}</div>}
 
       <nav className="soft-tabs bt-views" aria-label="Tampilan Brand Tracking" role="tablist">
-        {VIEWS.map(({ id, label, hint, Icon }) => {
+        {views.map(({ id, label, hint, Icon }) => {
           const on = view === id;
           return (
             <button type="button" role="tab" key={id} aria-selected={on} className={`soft-tab${on ? ' is-on' : ''}`} onClick={() => setView(id)}>
@@ -291,7 +299,11 @@ export default function DailyTrackingPage() {
         })}
       </nav>
 
-      {view === 'target' ? (
+      {view === 'mom' ? (
+        <div className="bt-view" key="mom">
+          <MinutesOfMeeting brand={brands.find((b) => b.brand_id === brandId) ?? { brand_id: brandId }} />
+        </div>
+      ) : view === 'target' ? (
         <div className="bt-view" key="target">
           <TargetBudget brandId={brandId} month={month} grid={grid} channels={channels} canEdit={canEditSpend} />
         </div>

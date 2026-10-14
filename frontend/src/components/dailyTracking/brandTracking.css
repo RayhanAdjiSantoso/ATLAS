@@ -122,7 +122,7 @@
 .bt-page .dt-skel { display: inline-block; width: 60%; height: 1em; border-radius: 5px; background: linear-gradient(90deg, #eaeefa 25%, #f4f6fc 50%, #eaeefa 75%) 0 0 / 240% 100%; animation: bt-shimmer 1.5s ease infinite; }
 @keyframes bt-shimmer { to { background-position: -240% 0; } }
 
-/* ── Views: Performance Overview / Input Brand Tracking ──────────────────── */
+/* ── Views: Performance Overview / Input Daily Tracking ──────────────────── */
 .bt-views { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bt-view { display: flex; flex-direction: column; gap: 14px; animation: bt-view-in .32s var(--bt-ease); }
 @keyframes bt-view-in { from { opacity: 0; transform: translateY(6px); } }

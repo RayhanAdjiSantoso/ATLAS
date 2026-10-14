@@ -142,7 +142,7 @@ function DeleteBrand({ brand, onDeleted }) {
           <div className="bp-danger-actions is-split">
             <button type="button" className="bp-ghost" onClick={() => setState({ phase: 'idle' })}>Tutup</button>
             {state.boundAccounts ? (
-              <small className="bp-danger-note">Ada {state.boundAccounts} akun login klien yang terikat ke brand ini — pindahkan atau hapus di Pengaturan Akses dulu sebelum menghapus beserta data.</small>
+              <small className="bp-danger-note">Ada {state.boundAccounts} akun login yang dibatasi ke brand ini — pindahkan atau hapus di Pengaturan Akses dulu sebelum menghapus beserta data.</small>
             ) : (
               <button type="button" className="bp-danger-btn is-ghost" onClick={() => { setTyped(''); setState((s) => ({ ...s, phase: 'force', error: null })); }}>
                 <Trash2 size={15} aria-hidden="true" /> Hapus beserta semua data…
@@ -593,7 +593,7 @@ export default function BrandSettingsPage() {
         )}
       </div>
       <p className="bp-foot-note">
-        File bulanan, Minutes of Meeting, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Collection Hub</Link>.
+        File bulanan, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Collection Hub</Link>; Minutes of Meeting ada di <Link to="/brand-tracking">Brand Tracking</Link>.
       </p>
     </>
   );

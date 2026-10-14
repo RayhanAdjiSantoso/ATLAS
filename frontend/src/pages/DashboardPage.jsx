@@ -1,4 +1,4 @@
-import useSessionState, { sessionKey } from '../hooks/useSessionState.js';
+import useSessionState from '../hooks/useSessionState.js';
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -25,6 +25,7 @@ import '../components/dashboard/console.css';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
+import { presetBrandTracking } from '../components/common/brandSettingsLink.js';
 import { MOM_TYPE_LABELS, OVERDUE_DAYS, dateLabel, daysSince, longDateLabel, parseISO, recapPreview, taskGroups, taskStats } from '../components/mom/momModel.js';
 
 const DASH_EASE = [0.16, 1, 0.3, 1];
@@ -339,14 +340,9 @@ function MinutesOverview({ filters }) {
     }
   };
 
-  // Hands the brand and the MOM tab to Pengaturan Brand, so "Kelola catatan"
+  // Hands the brand and the MOM view to Brand Tracking, so "Kelola catatan"
   // lands on this brand's meetings rather than wherever that page was last left.
-  const openInSettings = () => {
-    try {
-      sessionStorage.setItem(sessionKey('brand-settings:view'), JSON.stringify('mom'));
-      if (filters.brandId) sessionStorage.setItem(sessionKey('brand-settings:brand'), JSON.stringify(Number(filters.brandId)));
-    } catch { /* storage blocked — the link still navigates */ }
-  };
+  const openInSettings = () => presetBrandTracking({ brandId: filters.brandId, view: 'mom' });
 
   const collapsedLine = !filters.brandId
     ? 'Pilih brand untuk melihat catatan meeting'
@@ -371,7 +367,7 @@ function MinutesOverview({ filters }) {
           {status === 'ready' && allMinutes.length > 0 && <span className="brand-section-meta"><CalendarDays size={12} /> Terbaru {dateLabel(allMinutes[0].meeting_date)}</span>}
           {status === 'ready' && <span className="brand-section-meta">{periodMinutes.length} meeting di periode</span>}
           {status === 'ready' && activeTasks > 0 && <span className="brand-section-meta is-tasks">{activeTasks} tugas aktif</span>}
-          <Link to="/data-brand" className="mom-head-link" onClick={openInSettings}>Kelola catatan <ArrowUpRight size={13} /></Link>
+          <Link to="/brand-tracking" className="mom-head-link" onClick={openInSettings}>Kelola catatan <ArrowUpRight size={13} /></Link>
         </div>
       </header>
 
@@ -397,7 +393,7 @@ function MinutesOverview({ filters }) {
               <div className="mom-dash-state is-empty">
                 <FileText size={18} />
                 <span>Belum ada catatan meeting untuk brand ini.</span>
-                <Link to="/data-brand" onClick={openInSettings}>Tambah di Data Collection Hub <ArrowUpRight size={13} /></Link>
+                <Link to="/brand-tracking" onClick={openInSettings}>Tambah di Brand Tracking <ArrowUpRight size={13} /></Link>
               </div>
             )}
 
