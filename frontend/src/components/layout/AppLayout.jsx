@@ -5,6 +5,7 @@ import { BRAND_SETTING_SECTIONS } from '../brandSettings/sections.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import api from '../../api/client.js';
 import AnnotationLayer from '../annotations/AnnotationLayer.jsx';
+import FeatureSpotlight from '../common/FeatureSpotlight.jsx';
 import atlasIcon from '../../assets/atlas-icon.png';
 
 const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
@@ -243,6 +244,8 @@ export default function AppLayout() {
           list has not loaded yet gets nothing: the comments are not for it
           to glimpse while the list arrives. */}
       {(isSuperAdmin || user?.modules?.includes('annotations')) && <AnnotationLayer />}
+      {/* "Fitur baru": points at a newly shipped feature once (whatsNew.js). */}
+      <FeatureSpotlight />
     </div>
   );
 }

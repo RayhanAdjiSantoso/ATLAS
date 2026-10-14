@@ -63,11 +63,11 @@ export default function PageBand({
             );
             const cls = `band-tab${on ? ' is-on' : ''}`;
             return t.to ? (
-              <NavLink key={t.key} to={t.to} className={cls} aria-current={on ? 'page' : undefined} title={compact ? t.hint : undefined}>
+              <NavLink key={t.key} to={t.to} data-tab={t.key} className={cls} aria-current={on ? 'page' : undefined} title={compact ? t.hint : undefined}>
                 {inner}
               </NavLink>
             ) : (
-              <button key={t.key} type="button" className={cls} aria-pressed={on} onClick={t.onSelect} title={compact ? t.hint : undefined}>
+              <button key={t.key} type="button" data-tab={t.key} className={cls} aria-pressed={on} onClick={t.onSelect} title={compact ? t.hint : undefined}>
                 {inner}
               </button>
             );

@@ -185,7 +185,7 @@ function AccountForm({ mode, initial, roles, brands, actorRole, onCancel, onSave
           </div>
         </fieldset>
 
-        <div className="acc-field">
+        <div className="acc-field" data-feature="akses-brand">
           <label htmlFor="acc-brands">
             Brand yang boleh dilihat {needsBrand ? <em>wajib, satu brand</em> : <em>opsional, bisa lebih dari satu</em>}
           </label>
