@@ -23,8 +23,8 @@ import './beranda.css';
 const MODULES = [
   {
     key: 'brand-settings', to: '/pengaturan-brand', group: 'input', module: 'brand_settings',
-    label: 'Brand Context', tagline: 'Langkah pertama', Icon: NotebookPen,
-    desc: 'Status klien, brand context, dan current direction yang dibaca seluruh analisis ATLAS.',
+    label: 'Setup Context & Brand Direction', tagline: 'Langkah pertama', Icon: NotebookPen,
+    desc: "Client's Status, Brand Context, dan Brand Direction yang dibaca seluruh analisis ATLAS.",
   },
   {
     key: 'brand-data', to: '/data-brand', group: 'input', module: 'brand_settings',

@@ -239,7 +239,7 @@ export function AiSummarySection({ clientId, platform, period, periodDates, kpis
       </header>
 
       <div className="cb-context" aria-label="Konteks yang dibaca">
-        {['Brand context', 'Current direction', 'Brand Tracking', 'Target bulanan', 'Minutes of Meeting', 'Brief periode lalu'].map((c) => <span key={c}><Database size={12} aria-hidden="true" /> {c}</span>)}
+        {['Brand Context', 'Brand Direction', 'Brand Tracking', 'Target bulanan', 'Minutes of Meeting', 'Brief periode lalu'].map((c) => <span key={c}><Database size={12} aria-hidden="true" /> {c}</span>)}
       </div>
 
       {!content && !error && !busy && (

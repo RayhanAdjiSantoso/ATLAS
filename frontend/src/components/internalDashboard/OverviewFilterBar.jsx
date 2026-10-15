@@ -17,9 +17,9 @@ const FIELDS = [
     ],
   },
   {
-    key: 'status', label: 'Status client', options: [
-      ['active', 'Aktif saja'],
-      ['all', 'Semua status'],
+    key: 'status', label: "Client's Status", options: [
+      ['active', 'Active only'],
+      ['all', 'All statuses'],
     ],
   },
   {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
-  Archive, ArrowUpRight, Check, CircleAlert, Compass, Loader2, NotebookPen, Plus, Save, Settings2, Trash2, X,
+  ArrowUpRight, Check, CircleAlert, Compass, FolderOpen, Loader2, NotebookPen, Plus, Save, Trash2, X,
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -25,7 +25,7 @@ import './brandPages.css';
 // accounts live in Data Collection Hub; the setting links straight there.
 
 const CONTEXT_FIELDS = [
-  ['brand_products_customer', 'Brand, Produk & Customer', 'Apa yang dijual brand dan siapa customer utamanya?'],
+  ['brand_products_customer', 'Product & Customer Context', 'Apa yang dijual brand dan siapa customer utamanya?'],
   ['positioning_driver', 'Positioning & Purchase Driver', 'Bagaimana positioning dan alasan utama customer memilih brand?'],
   ['key_products_channels', 'Key Products & Channels', 'Produk dan channel apa yang paling penting bagi bisnis?'],
   ['business_characteristics', 'Business Characteristics', 'Pola bisnis apa yang perlu diketahui saat membaca data?'],
@@ -40,11 +40,10 @@ const DIRECTION_FIELDS = [
 
 const SECTIONS = [
   {
-    id: 'context', label: 'Brand context', Icon: NotebookPen, fields: CONTEXT_FIELDS,
-    note: 'Fakta yang tidak dapat disimpulkan dari angka. Perbarui hanya saat ada perubahan material pada bisnis.',
+    id: 'context', label: 'Brand Context', Icon: NotebookPen, fields: CONTEXT_FIELDS,
   },
   {
-    id: 'direction', label: 'Current direction', Icon: Compass, fields: DIRECTION_FIELDS,
+    id: 'direction', label: 'Brand Direction', Icon: Compass, fields: DIRECTION_FIELDS,
     note: 'Objective, prioritas, dan constraint yang menghubungkan data dengan keputusan. Review setiap kuartal.',
   },
 ];
@@ -79,10 +78,9 @@ function Field({ label, guidance, value, onChange, disabled }) {
 
 const STATUS_CHOICES = ['active', 'off', 'freeze'];
 const FILTERS = ['all', 'active', 'off', 'freeze', 'unknown'];
-
 // Deleting a brand, at the foot of Brand Setting (admins only). An empty
 // brand (a duplicate, a typo) is deleted after its name is typed back. A
-// brand that still holds data shows that data first and suggests "Nonaktif";
+// brand that still holds data shows that data first and suggests "Inactive";
 // deleting it anyway is a separate, deliberate step that wipes everything the
 // brand holds and asks for "HAPUS <nama brand>". The server checks the same
 // phrase, and refuses while a client login account is bound to the brand.
@@ -137,7 +135,7 @@ function DeleteBrand({ brand, onDeleted }) {
       {state.phase === 'error' && <p className="bp-drawer-msg is-error" role="alert"><CircleAlert size={15} /> {state.text}</p>}
       {state.phase === 'blocked' && (
         <div className="bp-danger-body">
-          <p>{brand.brand_name} masih punya data, jadi tidak bisa dihapus. Ubah statusnya menjadi <b>Nonaktif</b> — data dan laporannya tetap aman.</p>
+          <p>{brand.brand_name} masih punya data, jadi tidak bisa dihapus. Ubah statusnya menjadi <b>Inactive</b> — data dan laporannya tetap aman.</p>
           <ul>{state.blocking.map((b) => <li key={b.label}><span>{b.label}</span><b>{b.count.toLocaleString('id-ID')}</b></li>)}</ul>
           <div className="bp-danger-actions is-split">
             <button type="button" className="bp-ghost" onClick={() => setState({ phase: 'idle' })}>Tutup</button>
@@ -253,21 +251,19 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
     >
       <header className="bp-setting-head">
         <div>
-          <span className="bp-setting-kicker"><Settings2 size={14} aria-hidden="true" /> Profil brand</span>
           <h2 id="bp-setting-title">{brand.brand_name}</h2>
           {profile?.sector && <p>{profile.sector}</p>}
         </div>
         <button type="button" className="bp-ghost" onClick={() => { if (!dirty || window.confirm('Perubahan belum disimpan. Pindah ke Data Collection Hub tanpa menyimpan?')) onOpenData(brand); }}>
-          <Archive size={15} aria-hidden="true" /> Performance Database <ArrowUpRight size={14} aria-hidden="true" />
+          <FolderOpen size={15} aria-hidden="true" /> Data Collection Hub <ArrowUpRight size={14} aria-hidden="true" />
         </button>
       </header>
 
-      <section className="bp-status-block" aria-label="Status klien">
+      <section className="bp-status-block" aria-label="Client's Status">
         <div className="bp-status-copy">
-          <strong>Status klien</strong>
-          <small>Dipakai bersama oleh seluruh modul. Menonaktifkan tidak menghapus data dan laporan.</small>
+          <strong>Client's Status</strong>
         </div>
-        <div className="bp-status-seg" role="radiogroup" aria-label="Status klien">
+        <div className="bp-status-seg" role="radiogroup" aria-label="Client's Status">
           {STATUS_CHOICES.map((status) => {
             const on = brand.status === status;
             return (
@@ -286,15 +282,14 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
       </section>
 
       <div className="bp-industry-field">
-        <span>Kategori Industri</span>
-        <small>Dipakai juga oleh Internal Dashboard untuk mengelompokkan performa klien.</small>
+        <span>Client's Industry</span>
         <SelectMenu
           value={draft.industry ?? ''}
           onChange={(industry) => setDraft((current) => ({ ...current, industry }))}
           options={INDUSTRY_CHOICES.map(({ value }) => ({ value, label: value }))}
           placeholder="Pilih kategori industri"
-          label="Kategori Industri"
-          menuTitle="Kategori Industri"
+          label="Client's Industry"
+          menuTitle="Client's Industry"
           className="bp-industry-menu"
           disabled={isViewOnly || loading}
         />
@@ -320,7 +315,7 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
             {message.tone === 'ok' ? <Check size={15} /> : <CircleAlert size={15} />} {message.text}
           </p>
         )}
-        <p className="bp-drawer-note">{active.note}</p>
+        {active.note && <p className="bp-drawer-note">{active.note}</p>}
         {loading ? (
           <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat brand…</p>
         ) : (
@@ -483,10 +478,10 @@ export default function BrandSettingsPage() {
     // with the other two Brand Setting sections.
     <>
 
-      <section className="soft-card bp-command bp-portfolio" aria-label="Portofolio klien">
+      <section className="soft-card bp-command bp-portfolio" aria-label="MIL Digital Portofolio">
         <header className="bp-portfolio-head">
           <div>
-            <h2>Portofolio klien</h2>
+            <h2>MIL Digital Portofolio</h2>
             <p>Status setiap brand dipakai bersama oleh seluruh modul ATLAS.</p>
           </div>
           {!isViewOnly && (creating ? (
@@ -508,9 +503,9 @@ export default function BrandSettingsPage() {
         </header>
         <div className="bp-stats bp-overview-stats">
           <div className="bp-stat"><span>Total Brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
-          <div className="bp-stat"><span>Brand Aktif</span><strong>{loaded ? counts.active : '…'}</strong></div>
-          <div className="bp-stat"><span>Nonaktif</span><strong>{loaded ? counts.off : '…'}</strong></div>
-          <div className="bp-stat"><span>Dibekukan</span><strong>{loaded ? counts.freeze : '…'}</strong></div>
+          <div className="bp-stat"><span>Active Brand</span><strong>{loaded ? counts.active : '…'}</strong></div>
+          <div className="bp-stat"><span>Inactive</span><strong>{loaded ? counts.off : '…'}</strong></div>
+          <div className="bp-stat"><span>On Hold</span><strong>{loaded ? counts.freeze : '…'}</strong></div>
           <div className="bp-industry-summary">
             <div className="bp-industry-summary-copy">
               <span>Industri Brand Aktif</span>
@@ -549,7 +544,7 @@ export default function BrandSettingsPage() {
       <div className="bp-master">
         <aside className="soft-card bp-list" aria-label="Daftar brand">
           <div className="bp-list-head">
-            <SearchField className="bp-search" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
+            <SearchField className="bp-search" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Search" aria-label="Cari brand" />
             {/* Status filter without count badges, matching the compact list control. */}
             <div className="bp-filter" role="radiogroup" aria-label="Filter status klien">
               {FILTERS.map((key) => {
@@ -557,7 +552,7 @@ export default function BrandSettingsPage() {
                 return (
                   <button key={key} type="button" role="radio" aria-checked={on} className={`is-${key}${on ? ' is-on' : ''}`} onClick={() => setListStatus(key)}>
                     {key !== 'all' && <i aria-hidden="true" />}
-                    <span>{key === 'all' ? 'Semua' : BRAND_STATUS_LABELS[key]}</span>
+                    <span>{key === 'all' ? 'All' : BRAND_STATUS_LABELS[key]}</span>
                   </button>
                 );
               })}

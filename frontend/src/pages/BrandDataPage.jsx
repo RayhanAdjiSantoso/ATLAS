@@ -352,7 +352,7 @@ function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
             </div>
             <div className="brand-picker-menu-body">
               <aside className="brand-picker-filters">
-                <span className="brand-picker-section-label">Status klien</span>
+                <span className="brand-picker-section-label">Client&apos;s Status</span>
                 <BrandStatusFilter value={status} onChange={setStatus} />
               </aside>
               <div className="brand-picker-results">
@@ -1112,7 +1112,7 @@ export default function BrandDataPage() {
           </div>
         </div>
         {brand && (
-          <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand context dan current direction diatur di Brand Setting">
+          <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand Context dan Brand Direction diatur di Brand Setting">
             <NotebookPen size={15} aria-hidden="true" /> Context &amp; direction
           </Link>
         )}
