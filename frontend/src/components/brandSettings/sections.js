@@ -1,9 +1,13 @@
 import { Activity, FolderOpen, NotebookPen } from 'lucide-react';
 
-// Brand Setting's three sections — everything a brand puts INTO ATLAS. One
-// list so the sidebar entry, the page's section bar and the masthead copy
-// can never disagree. URLs predate the grouping and are linked from all over
-// ATLAS, so they stay as they are.
+// Brand Setting's two sections — how a brand is set up in ATLAS: its context,
+// direction and annual target, and its files and ad accounts. One list so
+// the sidebar entry, the page's section bar and the masthead copy can never
+// disagree. URLs predate the grouping and are linked from all over ATLAS, so
+// they stay as they are.
+//
+// Brand Tracking (the brand's daily figures, targets and meetings) is its
+// own sidebar page: BRAND_TRACKING below.
 export const BRAND_SETTING_SECTIONS = [
   {
     to: '/pengaturan-brand',
@@ -21,12 +25,13 @@ export const BRAND_SETTING_SECTIONS = [
     module: 'brand_settings',
     desc: 'File bulanan dan akun iklan setiap brand — sumber yang dibaca Business Overview dan Report Generator.',
   },
-  {
-    to: '/brand-tracking',
-    label: 'Brand Tracking',
-    hint: 'Harian, target & meeting',
-    Icon: Activity,
-    module: 'daily_tracking',
-    desc: 'Revenue per channel dan belanja iklan setiap hari — sumber angka Executive Snapshot dan laporan bulanan.',
-  },
 ];
+
+export const BRAND_TRACKING = {
+  to: '/brand-tracking',
+  label: 'Brand Tracking',
+  hint: 'Harian, target & meeting',
+  Icon: Activity,
+  module: 'daily_tracking',
+  desc: 'Revenue per channel dan belanja iklan setiap hari, target bulanan dan tahunan, serta catatan meeting — sumber angka Executive Snapshot dan laporan bulanan.',
+};

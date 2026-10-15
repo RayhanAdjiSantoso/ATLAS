@@ -863,3 +863,7 @@
   .tb-goals { grid-template-columns: minmax(0, 1fr); }
   .tb-form-goals { grid-template-columns: 1fr 1fr; }
 }
+
+/* A month whose sales/budget come from the annual plan (AnnualPlan). */
+.tb-from-plan { color: var(--soft-muted); font-size: .72rem; font-weight: 600; }
+.tb-money input:disabled { color: var(--soft-muted); cursor: not-allowed; }

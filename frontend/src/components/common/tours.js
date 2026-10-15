@@ -12,8 +12,8 @@ const LAUNCH = {
 const SECTIONS = {
   target: '.bs .band-tabs',
   kicker: 'Brand Setting',
-  title: 'Tiga bagian dalam satu tempat',
-  body: 'Brand Context untuk profil dan arah brand, Data Collection Hub untuk semua file data, dan Brand Tracking untuk penjualan, belanja iklan harian, serta catatan meeting. Pindah bagian kapan saja dari tab ini.',
+  title: 'Dua bagian dalam satu tempat',
+  body: 'Brand Context untuk profil, arah, dan target tahunan brand; Data Collection Hub untuk semua file data dan akun iklan. Brand Tracking (angka harian, target, dan meeting) ada di menu tersendiri di sidebar.',
 };
 
 export const TOURS = {
@@ -73,7 +73,6 @@ export const TOURS = {
   ],
 
   'brand-tracking': [
-    SECTIONS,
     {
       target: '.bt-command',
       title: 'Brand dan bulan',
@@ -82,7 +81,7 @@ export const TOURS = {
     {
       target: '.bt-views',
       title: 'Tampilan Brand Tracking',
-      body: 'Performance Overview untuk membaca hasil, Target & Budget untuk target bulanan dan alokasi channel, Input Daily Tracking untuk mengisi penjualan serta belanja iklan harian, dan (khusus tim internal) Minutes of Meeting untuk recap serta to do list tiap meeting.',
+      body: 'Performance Overview untuk membaca hasil, Target & Budget untuk rencana tahunan, target bulanan, dan alokasi channel, Input Daily Tracking untuk mengisi penjualan serta belanja iklan harian, dan (khusus tim internal) Minutes of Meeting untuk recap serta to do list tiap meeting.',
     },
     {
       target: '.bt-kpis',

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
-import { BRAND_SETTING_SECTIONS } from '../brandSettings/sections.js';
+import { BRAND_SETTING_SECTIONS, BRAND_TRACKING } from '../brandSettings/sections.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import api from '../../api/client.js';
 import AnnotationLayer from '../annotations/AnnotationLayer.jsx';
@@ -20,6 +20,7 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
   { id: 'brand-setting', label: 'Brand Setting', Icon: SlidersHorizontal, group: 'Workspace', sections: BRAND_SETTING_SECTIONS },
+  { to: BRAND_TRACKING.to, label: BRAND_TRACKING.label, Icon: BRAND_TRACKING.Icon, group: 'Workspace', module: BRAND_TRACKING.module },
   { to: '/dashboard', label: 'Business Overview', Icon: LayoutDashboard, group: 'Workspace', module: 'dashboard' },
   { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace', module: 'report_generator' },
   { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, group: 'Operasional', module: 'meta_automation' },
@@ -106,8 +107,7 @@ export default function AppLayout() {
       if (!n.sections) return n;
       const sections = n.sections.filter(allowed);
       if (!sections.length) return null;
-      // One section left (a client account: Brand Tracking only) is named for
-      // what it is, not for a group of one.
+      // One section left is named for what it is, not for a group of one.
       if (sections.length === 1) return { ...n, to: sections[0].to, label: sections[0].label, Icon: sections[0].Icon, sections };
       return { ...n, to: sections[0].to, sections };
     })
@@ -130,6 +130,7 @@ export default function AppLayout() {
       to={to}
       end={end}
       onClick={() => setMobileOpen(false)}
+      data-nav={to}
       // Brand Setting stays lit on every one of its sections, not only the
       // first one it links to.
       className={({ isActive }) => `sidebar-link${isActive || sections?.some((x) => location.pathname.startsWith(x.to)) ? ' active' : ''}`}

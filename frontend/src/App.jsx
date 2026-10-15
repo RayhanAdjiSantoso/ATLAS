@@ -11,6 +11,7 @@ import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
 import BrandSettingsPage from './pages/BrandSettingsPage.jsx';
 import BrandDataPage from './pages/BrandDataPage.jsx';
 import BrandSettingLayout from './pages/BrandSettingLayout.jsx';
+import BrandTrackingLayout from './pages/BrandTrackingLayout.jsx';
 import ControlCenterPage from './pages/ControlCenterPage.jsx';
 import AccessSettingsPage from './pages/AccessSettingsPage.jsx';
 import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
@@ -41,15 +42,17 @@ export default function App() {
           <Route element={<ProtectedRoute module="dashboard" />}>
             <Route path="/dashboard" element={<DashboardPage />} />
           </Route>
-          {/* Brand Setting: one page whose three sections share a frame and
-              a section bar (BrandSettingLayout); each keeps its own
-              permission. */}
+          {/* Brand Setting: one page whose two sections share a frame and
+              a section bar (BrandSettingLayout). */}
           <Route element={<BrandSettingLayout />}>
             <Route element={<ProtectedRoute module="brand_settings" />}>
               <Route path="/pengaturan-brand" element={<BrandSettingsPage />} />
               <Route path="/data-brand" element={<BrandDataPage />} />
             </Route>
-            <Route element={<ProtectedRoute module="daily_tracking" />}>
+          </Route>
+          {/* Brand Tracking: its own sidebar page. */}
+          <Route element={<ProtectedRoute module="daily_tracking" />}>
+            <Route element={<BrandTrackingLayout />}>
               <Route path="/brand-tracking" element={<DailyTrackingPage />} />
             </Route>
           </Route>

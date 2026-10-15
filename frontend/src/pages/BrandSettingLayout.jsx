@@ -29,7 +29,7 @@ export default function BrandSettingLayout() {
   // An account with one section (a client: Brand Tracking only) gets that
   // section as the page — no bar offering a single choice.
   const single = sections.length === 1;
-  const tourId = { '/pengaturan-brand': 'brand-context', '/data-brand': 'data-hub', '/brand-tracking': 'brand-tracking' }[current?.to] ?? 'brand-tracking';
+  const tourId = { '/pengaturan-brand': 'brand-context', '/data-brand': 'data-hub' }[current?.to] ?? 'brand-context';
 
   return (
     <div className="con brand-settings soft-shell bp bs">

@@ -12,6 +12,7 @@ import CoverageMap from '../components/dailyTracking/CoverageMap.jsx';
 import { ChannelMix, PaceChart, WeekdayChart, defaultMetric } from '../components/dailyTracking/TrackingInsights.jsx';
 import TrackingCompare from '../components/dailyTracking/TrackingCompare.jsx';
 import TargetBudget from '../components/dailyTracking/TargetBudget.jsx';
+import AnnualPlan from '../components/annualTarget/AnnualPlan.jsx';
 import ChannelRail from '../components/dailyTracking/ChannelRail.jsx';
 import ChannelInsight from '../components/dailyTracking/ChannelInsight.jsx';
 import DailyEntryTable from '../components/dailyTracking/DailyEntryTable.jsx';
@@ -66,6 +67,8 @@ export default function DailyTrackingPage() {
   // stay with the team. Any other view-only account only reads.
   const canEditSales = isClient || !isViewOnly;
   const canEditSpend = !isClient && !isViewOnly;
+  // A saved annual split changes this month's target: the monthly view reloads.
+  const [targetRefresh, setTargetRefresh] = useState(0);
   const locked = !!allowedBrandId;
 
   const reduced = useReducedMotion();
@@ -305,7 +308,8 @@ export default function DailyTrackingPage() {
         </div>
       ) : view === 'target' ? (
         <div className="bt-view" key="target">
-          <TargetBudget brandId={brandId} month={month} grid={grid} channels={channels} canEdit={canEditSpend} />
+          <AnnualPlan brandId={brandId} month={month} canEdit={canEditSpend} onSaved={() => setTargetRefresh((n) => n + 1)} />
+          <TargetBudget brandId={brandId} month={month} grid={grid} channels={channels} canEdit={canEditSpend} refreshKey={targetRefresh} />
         </div>
       ) : view === 'overview' ? (
         <div className="bt-view" key="overview">

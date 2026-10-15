@@ -84,8 +84,8 @@ function GoalCard({ title, target, real, projected, format, status, expected, su
   );
 }
 
-export default function TargetBudget({ brandId, month, grid, channels, canEdit }) {
-  const [state, setState] = useState({ status: 'loading', target: null, previous: null });
+export default function TargetBudget({ brandId, month, grid, channels, canEdit, refreshKey = 0 }) {
+  const [state, setState] = useState({ status: 'loading', target: null, previous: null, annualManaged: null });
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -98,10 +98,10 @@ export default function TargetBudget({ brandId, month, grid, channels, canEdit }
     setEditing(false);
     setMessage(null);
     api.get('/daily-tracking/targets', { params: { brandId, month } })
-      .then(({ data }) => alive && setState({ status: 'ready', target: data.target, previous: data.previous }))
+      .then(({ data }) => alive && setState({ status: 'ready', target: data.target, previous: data.previous, annualManaged: data.annualManaged ?? null }))
       .catch((err) => alive && setState({ status: 'error', error: err.response?.data?.message || 'Target tidak dapat dimuat' }));
     return () => { alive = false; };
-  }, [brandId, month]);
+  }, [brandId, month, refreshKey]);
 
   const spendChannels = channels.spend || [];
   const days = grid.days?.length || 0;
@@ -141,7 +141,7 @@ export default function TargetBudget({ brandId, month, grid, channels, canEdit }
         targetSpend: form.targetSpend === '' ? null : Number(form.targetSpend),
         allocation, notes: form.notes,
       });
-      setState({ status: 'ready', target: data.target, previous: null });
+      setState((s) => ({ ...s, status: 'ready', target: data.target, previous: null }));
       setEditing(false);
       setMessage({ tone: 'ok', text: `Target ${monthName(month)} tersimpan.` });
     } catch (err) {
@@ -188,6 +188,10 @@ export default function TargetBudget({ brandId, month, grid, channels, canEdit }
   if (state.status === 'loading') return <p className="tb-state"><Loader2 size={15} className="dt-spin" /> Memuat target…</p>;
   if (state.status === 'error') return <p className="tb-state is-error">{state.error}</p>;
 
+  // Months of a year with an annual target take sales/budget from that plan;
+  // only the channel split and notes are set here.
+  const fromPlan = state.annualManaged ?? { sales: false, spend: false };
+
   // ── Edit form ──────────────────────────────────────────────────────────
   if (editing && form) {
     const ts = Number(form.targetSales) || 0;
@@ -203,11 +207,13 @@ export default function TargetBudget({ brandId, month, grid, channels, canEdit }
         <div className="tb-form-goals">
           <label>
             <span>Target sales</span>
-            <div className="tb-money"><b>Rp</b><input inputMode="numeric" value={thousands(form.targetSales)} onChange={(e) => setForm({ ...form, targetSales: digits(e.target.value) })} placeholder="350.000.000" /></div>
+            <div className="tb-money"><b>Rp</b><input inputMode="numeric" value={thousands(form.targetSales)} disabled={fromPlan.sales} onChange={(e) => setForm({ ...form, targetSales: digits(e.target.value) })} placeholder="350.000.000" /></div>
+            {fromPlan.sales && <small className="tb-from-plan">Dari rencana tahunan — ubah di Rencana tahunan di atas</small>}
           </label>
           <label>
             <span>Budget ads spend</span>
-            <div className="tb-money"><b>Rp</b><input inputMode="numeric" value={thousands(form.targetSpend)} onChange={(e) => setForm({ ...form, targetSpend: digits(e.target.value) })} placeholder="63.000.000" /></div>
+            <div className="tb-money"><b>Rp</b><input inputMode="numeric" value={thousands(form.targetSpend)} disabled={fromPlan.spend} onChange={(e) => setForm({ ...form, targetSpend: digits(e.target.value) })} placeholder="63.000.000" /></div>
+            {fromPlan.spend && <small className="tb-from-plan">Dari rencana tahunan — ubah di Rencana tahunan di atas</small>}
           </label>
           <div className="tb-form-roas">
             <span>Target ROAS</span>
@@ -304,6 +310,7 @@ export default function TargetBudget({ brandId, month, grid, channels, canEdit }
             <p>
               {elapsed >= days ? 'Bulan selesai' : elapsed === 0 ? 'Bulan belum berjalan' : `Data s.d. tanggal ${elapsed} dari ${days} · ${daysLeft} hari tersisa`}
               {t.updatedAt && <> · diatur {new Date(t.updatedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}{t.updatedByName ? ` oleh ${t.updatedByName}` : ''}</>}
+              {fromPlan.sales && <> · target dari rencana tahunan</>}
             </p>
           </div>
           {canEdit && <button type="button" className="bp-ghost" onClick={() => startEdit(null)}><PencilLine size={15} aria-hidden="true" /> Ubah target</button>}
