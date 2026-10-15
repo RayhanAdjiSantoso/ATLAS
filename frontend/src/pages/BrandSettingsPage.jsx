@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowUpRight, Check, CircleAlert, Compass, FolderOpen, Loader2, NotebookPen, Plus, Save, Trash2, X,
@@ -324,7 +324,7 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
               <Field key={key} label={label} guidance={guidance} value={draft[key]} disabled={isViewOnly} onChange={(value) => setDraft((current) => ({ ...current, [key]: value }))} />
             ))}
             {section === 'context' && (
-              <p className="bp-drawer-hint"><CircleAlert size={14} /><span>Jangan menulis ulang metrics dashboard di sini — berikan konteks yang menjelaskan <em>mengapa</em> angka dapat berubah.</span></p>
+              <p className="bp-drawer-hint"><CircleAlert size={14} /><span>Don’t just list the dashboard metrics, provide context that explains <em>why</em>!</span></p>
             )}
           </div>
         )}
@@ -502,20 +502,20 @@ export default function BrandSettingsPage() {
           ))}
         </header>
         <div className="bp-stats bp-overview-stats">
-          <div className="bp-stat"><span>Total Brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
-          <div className="bp-stat"><span>Active Brand</span><strong>{loaded ? counts.active : '…'}</strong></div>
-          <div className="bp-stat"><span>Inactive</span><strong>{loaded ? counts.off : '…'}</strong></div>
-          <div className="bp-stat"><span>On Hold</span><strong>{loaded ? counts.freeze : '…'}</strong></div>
+          <div className="bp-stat"><span>Total Brands</span><strong>{loaded ? brands.length : '…'}</strong></div>
+          <div className="bp-stat"><span>Active Brands</span><strong>{loaded ? counts.active : '…'}</strong></div>
+          <div className="bp-stat"><span>Inactive Brands</span><strong>{loaded ? counts.off : '…'}</strong></div>
+          <div className="bp-stat"><span>On Hold Brands</span><strong>{loaded ? counts.freeze : '…'}</strong></div>
           <div className="bp-industry-summary">
             <div className="bp-industry-summary-copy">
-              <span>Industri Brand Aktif</span>
-              <small>{loaded ? `${industryComposition.total} brand berkategori` : 'Memuat komposisi…'}</small>
+              <span>Active Brands by Industry</span>
+              <small>{loaded ? `${industryComposition.total} categorized brands` : 'Loading breakdown…'}</small>
             </div>
             <div
               className="bp-industry-pie"
               style={{ background: industryComposition.gradient }}
               role="img"
-              aria-label={`Komposisi industri brand aktif: ${industryComposition.items.map((item) => `${item.value} ${item.count}`).join(', ')}`}
+              aria-label={`Active brands by industry: ${industryComposition.items.map((item) => `${item.value} ${item.count}`).join(', ')}`}
             />
             <ul className="bp-industry-legend">
               {industryComposition.items.map((item) => (
@@ -587,9 +587,6 @@ export default function BrandSettingsPage() {
           <div className="soft-card bp-setting bp-setting-empty">{loaded ? 'Pilih brand di daftar untuk membuka Brand Setting.' : 'Memuat…'}</div>
         )}
       </div>
-      <p className="bp-foot-note">
-        File bulanan, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Collection Hub</Link>; Minutes of Meeting ada di <Link to="/brand-tracking">Brand Tracking</Link>.
-      </p>
     </>
   );
 }

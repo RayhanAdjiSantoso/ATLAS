@@ -178,8 +178,6 @@
 .bp-row-btn:hover { border-color: #b8c5f5; color: var(--soft-accent); }
 .bp-row-btn.is-primary { border-color: transparent; background: #eef1fc; color: var(--soft-accent); }
 .bp-row-btn.is-primary:hover { background: var(--soft-accent); color: #fff; }
-.bp-foot-note { margin: 14px 2px 0; color: var(--soft-muted); font-size: .8rem; }
-.bp-foot-note a { color: var(--soft-accent); font-weight: 700; }
 
 /* ── Detail drawer: context and direction beside the list ───────────────── */
 .bp-scrim { position: fixed; inset: 0; z-index: 80; background: rgba(15, 26, 58, .28); }
@@ -416,8 +414,7 @@
   margin: 0 24px 14px; padding: 14px 16px; border: 1px solid var(--bp-line); border-radius: 14px; background: #fbfcfe;
 }
 .bp-industry-field > span { color: var(--soft-ink); font-size: .9rem; font-weight: 700; }
-.bp-industry-field small { color: var(--soft-muted); font-size: .76rem; line-height: 1.45; }
-.bp-industry-field .atlas-field-trigger { grid-column: 2; grid-row: 1 / span 2; min-height: 40px; font-size: .82rem; }
+.bp-industry-field .atlas-field-trigger { grid-column: 2; grid-row: 1; min-height: 40px; font-size: .82rem; }
 .bp-setting .bp-segment { margin: 0 24px; }
 .bp-setting-body { padding: 16px 24px 8px; }
 .bp-setting-foot {
