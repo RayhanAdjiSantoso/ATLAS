@@ -360,10 +360,14 @@ function searchTermRows_(job) {
     }));
 }
 
-// Where the users physically were, per city — Looker's "City" table.
+// Per city as Google's geographic report and Looker's "City" table count it:
+// a user who searched for a city (area of interest) counts there, wherever
+// they physically were, so a Singapore search for a KL florist is KL. Only
+// users with no such intent fall back to where they were (location of
+// presence). user_location_view would count them all by physical location.
 function cityRows_(job) {
   var rows = search_('SELECT segments.date, campaign.id, campaign.name, campaign.advertising_channel_type, ' +
-    'segments.geo_target_city, ' + METRICS + ' FROM user_location_view' + during_(job));
+    'segments.geo_target_city, ' + METRICS + ' FROM geographic_view' + during_(job));
   var names = geoNames_(rows.map(function (row) { return row.segments.geoTargetCity; }));
   return sumByKey_(rows
     .filter(function (row) { return row.segments.geoTargetCity; })
