@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
-  Archive, ArrowUpRight, Check, CircleAlert, Compass, Loader2, NotebookPen, Plus, Save, Settings2, Trash2, X,
+  ArrowUpRight, Check, CircleAlert, Compass, FolderOpen, Lightbulb, Loader2, NotebookPen, Plus, RotateCcw, Save, Target, Trash2, X,
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -10,22 +10,29 @@ import useSessionState from '../hooks/useSessionState.js';
 import { matchesBrandStatus, BRAND_STATUS_LABELS } from '../components/common/BrandStatusFilter.jsx';
 import { presetBrandSettings } from '../components/common/brandSettingsLink.js';
 import { describeError } from '../components/brandSettings/describeError.js';
+import AnnualTargetCard from '../components/annualTarget/AnnualTargetCard.jsx';
 import SearchField from '../components/common/SearchField.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
 import '../components/dashboard/console.css';
 import '../components/dashboard/softShell.css';
 import './brandPages.css';
+import './brandContext.css';
 
-// Pengaturan Brand — the first stop in ATLAS. A quiet list of every client
-// MIL runs on the left (a status dot and a name, nothing repeated per row),
-// and on the right the selected brand's Brand Setting: status (shared by
-// every module), brand context, current direction, and for admins deleting
-// an empty brand. Moving between brands is one click and the page never
-// covers itself with a popup. The brand's files, meeting notes and ad
-// accounts live in Data Collection Hub; the setting links straight there.
+// Brand Context — the first stop in ATLAS.
+//
+// Top: the portfolio in two meters (client status, industry of the active
+// brands); the status meter's legend doubles as the list filter.
+// Left: every client, searchable, with its monogram, industry and status.
+// Right: the selected brand's workspace — status and industry (shared by
+// every module), then three tabs: brand context, current direction and the
+// annual target. The narrative fields carry an index beside them (what is
+// filled, what changed) and a save bar that says how many changes are
+// unsaved. Moving between brands is one click and asks first when a draft
+// would be lost. Files, meeting notes and ad accounts live in Data
+// Collection Hub; the workspace links straight there.
 
 const CONTEXT_FIELDS = [
-  ['brand_products_customer', 'Brand, Produk & Customer', 'Apa yang dijual brand dan siapa customer utamanya?'],
+  ['brand_products_customer', 'Product & Customer Context', 'Apa yang dijual brand dan siapa customer utamanya?'],
   ['positioning_driver', 'Positioning & Purchase Driver', 'Bagaimana positioning dan alasan utama customer memilih brand?'],
   ['key_products_channels', 'Key Products & Channels', 'Produk dan channel apa yang paling penting bagi bisnis?'],
   ['business_characteristics', 'Business Characteristics', 'Pola bisnis apa yang perlu diketahui saat membaca data?'],
@@ -40,16 +47,15 @@ const DIRECTION_FIELDS = [
 
 const SECTIONS = [
   {
-    id: 'context', label: 'Brand context', Icon: NotebookPen, fields: CONTEXT_FIELDS,
-    note: 'Fakta yang tidak dapat disimpulkan dari angka. Perbarui hanya saat ada perubahan material pada bisnis.',
+    id: 'context', label: 'Brand Context', Icon: NotebookPen, fields: CONTEXT_FIELDS,
   },
   {
-    id: 'direction', label: 'Current direction', Icon: Compass, fields: DIRECTION_FIELDS,
+    id: 'direction', label: 'Brand Direction', Icon: Compass, fields: DIRECTION_FIELDS,
     note: 'Objective, prioritas, dan constraint yang menghubungkan data dengan keputusan. Review setiap kuartal.',
   },
 ];
 const ALL_FIELDS = [...CONTEXT_FIELDS, ...DIRECTION_FIELDS];
-const EASE = [0.16, 1, 0.3, 1];
+const EASE = [0.23, 1, 0.32, 1];
 
 const INDUSTRY_CHOICES = [
   { value: 'Retail Fashion', color: '#315fca' },
@@ -65,24 +71,51 @@ const INDUSTRY_ALIASES = {
 };
 const canonicalIndustry = (value) => INDUSTRY_ALIASES[value] ?? value ?? '';
 
-const filled = (profile, fields) => fields.filter(([key]) => (profile?.[key] ?? '').trim()).length;
+const STATUS_CHOICES = ['active', 'off', 'freeze'];
+const FILTERS = ['all', 'active', 'off', 'freeze', 'unknown'];
+const FILTER_LABELS = { all: 'All', ...BRAND_STATUS_LABELS };
 
-function Field({ label, guidance, value, onChange, disabled }) {
+const isFilled = (v) => Boolean((v ?? '').trim());
+const filled = (profile, fields) => fields.filter(([key]) => isFilled(profile?.[key])).length;
+const words = (v) => ((v ?? '').trim() ? v.trim().split(/\s+/).length : 0);
+const initials = (name) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.trim().slice(0, 2)).toUpperCase();
+};
+const statusOf = (brand) => brand.status || 'unknown';
+
+// A small completeness ring: share of a section's fields that are filled.
+function Ring({ value, size = 18 }) {
+  const r = (size - 4) / 2;
+  const c = 2 * Math.PI * r;
   return (
-    <label className="brand-field bp-field">
-      <span>{label}</span>
+    <svg className="bc-ring" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+      <circle cx={size / 2} cy={size / 2} r={r} className="bc-ring-track" />
+      <circle cx={size / 2} cy={size / 2} r={r} className="bc-ring-fill" strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(Math.max(value, 0), 1))} />
+    </svg>
+  );
+}
+
+function Field({ id, index, label, guidance, value, original, onChange, disabled }) {
+  const changed = (value ?? '') !== (original ?? '');
+  const full = isFilled(value);
+  return (
+    <label className={`bc-field${full ? ' is-filled' : ''}${changed ? ' is-changed' : ''}`} id={id} data-annotate={id}>
+      <span className="bc-field-head">
+        <span className="bc-field-num">{String(index + 1).padStart(2, '0')}</span>
+        <b>{label}</b>
+        <span className="bc-field-state">{changed ? 'Diubah' : full ? 'Terisi' : 'Belum diisi'}</span>
+      </span>
       <small>{guidance}</small>
-      <textarea value={value ?? ''} rows="4" onChange={(event) => onChange(event.target.value)} placeholder="Belum diisi" disabled={disabled} />
+      <textarea value={value ?? ''} rows="4" onChange={(event) => onChange(event.target.value)} placeholder="Belum diisi — tulis konteks yang tidak terlihat dari angka." disabled={disabled} />
+      {full && <span className="bc-field-count">{words(value)} kata</span>}
     </label>
   );
 }
 
-const STATUS_CHOICES = ['active', 'off', 'freeze'];
-const FILTERS = ['all', 'active', 'off', 'freeze', 'unknown'];
-
 // Deleting a brand, at the foot of Brand Setting (admins only). An empty
 // brand (a duplicate, a typo) is deleted after its name is typed back. A
-// brand that still holds data shows that data first and suggests "Nonaktif";
+// brand that still holds data shows that data first and suggests "Inactive";
 // deleting it anyway is a separate, deliberate step that wipes everything the
 // brand holds and asks for "HAPUS <nama brand>". The server checks the same
 // phrase, and refuses while a client login account is bound to the brand.
@@ -134,10 +167,10 @@ function DeleteBrand({ brand, onDeleted }) {
         )}
         {state.phase === 'checking' && <span className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memeriksa data…</span>}
       </div>
-      {state.phase === 'error' && <p className="bp-drawer-msg is-error" role="alert"><CircleAlert size={15} /> {state.text}</p>}
+      {state.phase === 'error' && <p className="bc-msg is-error" role="alert"><CircleAlert size={15} /> {state.text}</p>}
       {state.phase === 'blocked' && (
         <div className="bp-danger-body">
-          <p>{brand.brand_name} masih punya data, jadi tidak bisa dihapus. Ubah statusnya menjadi <b>Nonaktif</b> — data dan laporannya tetap aman.</p>
+          <p>{brand.brand_name} masih punya data, jadi tidak bisa dihapus. Ubah statusnya menjadi <b>Inactive</b> — data dan laporannya tetap aman.</p>
           <ul>{state.blocking.map((b) => <li key={b.label}><span>{b.label}</span><b>{b.count.toLocaleString('id-ID')}</b></li>)}</ul>
           <div className="bp-danger-actions is-split">
             <button type="button" className="bp-ghost" onClick={() => setState({ phase: 'idle' })}>Tutup</button>
@@ -158,7 +191,7 @@ function DeleteBrand({ brand, onDeleted }) {
             file Data Collection Hub, laporan tersimpan, data Shopee, Brand Tracking, Google &amp; Meta Ads, catatan meeting, dan lainnya.
           </p>
           <ul>{state.blocking.map((b) => <li key={b.label}><span>{b.label}</span><b>{b.count.toLocaleString('id-ID')}</b></li>)}</ul>
-          {state.error && <p className="bp-drawer-msg is-error" role="alert"><CircleAlert size={15} /> {state.error}</p>}
+          {state.error && <p className="bc-msg is-error" role="alert"><CircleAlert size={15} /> {state.error}</p>}
           <p>Ketik <b>{phrase}</b> untuk konfirmasi.</p>
           <input value={typed} onChange={(event) => setTyped(event.target.value)} placeholder={phrase} aria-label="Ketik konfirmasi hapus beserta data" autoFocus />
           <div className="bp-danger-actions">
@@ -190,10 +223,10 @@ function DeleteBrand({ brand, onDeleted }) {
   );
 }
 
-// Brand Setting: the selected brand's status, context and direction, shown
-// beside the list in the page itself. Status saves on the spot (it is shared
-// by every module); the narrative fields keep an unsaved draft, which the
-// page asks about before switching to another brand (see onDirtyChange).
+// The selected brand's workspace. Status saves on the spot (it is shared by
+// every module); industry and the narrative fields keep an unsaved draft,
+// which the page asks about before switching to another brand (see
+// onDirtyChange).
 function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDeleted, onOpenData, onDirtyChange, onIndustrySaved }) {
   const reduced = useReducedMotion();
   const [profile, setProfile] = useState(null);
@@ -219,11 +252,12 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
     return () => { alive = false; };
   }, [brand.brand_id]);
 
-  const dirty = useMemo(
-    () => ALL_FIELDS.some(([key]) => (draft[key] ?? '') !== (profile?.[key] ?? ''))
-      || (draft.industry ?? '') !== (profile?.industry ?? ''),
+  const changes = useMemo(
+    () => ALL_FIELDS.filter(([key]) => (draft[key] ?? '') !== (profile?.[key] ?? '')).length
+      + ((draft.industry ?? '') !== (profile?.industry ?? '') ? 1 : 0),
     [draft, profile],
   );
+  const dirty = changes > 0;
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   const save = async () => {
@@ -242,118 +276,220 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
       setSaving(false);
     }
   };
+  const discard = () => { setDraft(profile ?? {}); setMessage(null); };
 
-  const active = SECTIONS.find((s) => s.id === section);
-  const spring = reduced ? { duration: 0 } : { type: 'spring', stiffness: 480, damping: 40, mass: .6 };
+  // Jump from the index to a field: scroll it into view and put the caret in it.
+  const focusField = (key) => {
+    const box = document.getElementById(`bc-f-${key}`);
+    if (!box) return;
+    box.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+    box.querySelector('textarea')?.focus({ preventScroll: true });
+  };
+
+  // "target" is the annual target tab: its own data and saves, not profile fields.
+  const onTarget = section === 'target';
+  const active = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0];
+  const spring = reduced ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 42, mass: 0.6 };
+  const status = statusOf(brand);
+  const filledAll = filled(draft, ALL_FIELDS);
+  const updated = profile?.updated_at
+    ? `Terakhir diperbarui ${new Date(profile.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}${profile.updated_by_name ? ` oleh ${profile.updated_by_name}` : ''}`
+    : 'Belum pernah disimpan untuk brand ini';
+  const tabs = [
+    ...SECTIONS.map(({ id, label, Icon, fields }) => ({ id, label, Icon, done: filled(draft, fields), total: fields.length })),
+    { id: 'target', label: 'Target tahunan', Icon: Target, year: new Date().getFullYear() },
+  ];
 
   return (
     <motion.section
-      key={brand.brand_id} className="soft-card bp-setting" aria-labelledby="bp-setting-title"
-      initial={reduced ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .22, ease: EASE }}
+      key={brand.brand_id} className="soft-card bc-ws bp-setting" aria-labelledby="bc-ws-title" data-annotate="brand-workspace"
+      initial={reduced ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: EASE }}
     >
-      <header className="bp-setting-head">
-        <div>
-          <span className="bp-setting-kicker"><Settings2 size={14} aria-hidden="true" /> Profil brand</span>
-          <h2 id="bp-setting-title">{brand.brand_name}</h2>
-          {profile?.sector && <p>{profile.sector}</p>}
+      <header className="bc-ws-head">
+        <span className={`bc-mono is-lg is-${status}`} aria-hidden="true">{initials(brand.brand_name)}</span>
+        <div className="bc-ws-title">
+          <h2 id="bc-ws-title">{brand.brand_name}</h2>
+          <div className="bc-ws-meta">
+            <span className={`bc-pill is-${status}`}><i aria-hidden="true" />{BRAND_STATUS_LABELS[status]}</span>
+            <span className="bc-pill is-plain">{draft.industry || 'Industri belum diatur'}</span>
+            {!loading && (
+              <span className="bc-ws-complete" title="Kolom brand context dan current direction yang terisi">
+                <Ring value={filledAll / ALL_FIELDS.length} /> {filledAll}/{ALL_FIELDS.length} kolom profil terisi
+              </span>
+            )}
+          </div>
         </div>
-        <button type="button" className="bp-ghost" onClick={() => { if (!dirty || window.confirm('Perubahan belum disimpan. Pindah ke Data Collection Hub tanpa menyimpan?')) onOpenData(brand); }}>
-          <Archive size={15} aria-hidden="true" /> Performance Database <ArrowUpRight size={14} aria-hidden="true" />
+        <button type="button" className="bp-ghost bc-ws-link" onClick={() => { if (!dirty || window.confirm('Perubahan belum disimpan. Pindah ke Data Collection Hub tanpa menyimpan?')) onOpenData(brand); }}>
+          <FolderOpen size={15} aria-hidden="true" /> Data Collection Hub <ArrowUpRight size={14} aria-hidden="true" />
         </button>
       </header>
 
-      <section className="bp-status-block" aria-label="Status klien">
-        <div className="bp-status-copy">
-          <strong>Status klien</strong>
-          <small>Dipakai bersama oleh seluruh modul. Menonaktifkan tidak menghapus data dan laporan.</small>
+      <div className="bc-controls">
+        <div className="bc-control">
+          <span className="bc-control-label" id="bc-status-label">Client&apos;s Status</span>
+          <div className="bc-status" role="radiogroup" aria-labelledby="bc-status-label">
+            {STATUS_CHOICES.map((s) => {
+              const on = brand.status === s;
+              return (
+                <button
+                  key={s} type="button" role="radio" aria-checked={on}
+                  className={`is-${s}${on ? ' is-on' : ''}`}
+                  disabled={isViewOnly || statusBusy}
+                  onClick={() => !on && onStatus(brand, s)}
+                >
+                  {on && <motion.span layoutId={`bc-status-pill-${brand.brand_id}`} className="bc-status-pill" transition={spring} aria-hidden="true" />}
+                  <i aria-hidden="true" /><span>{BRAND_STATUS_LABELS[s]}</span>
+                </button>
+              );
+            })}
+            {statusBusy && <Loader2 size={15} className="brand-spin" aria-label="Menyimpan status" />}
+          </div>
         </div>
-        <div className="bp-status-seg" role="radiogroup" aria-label="Status klien">
-          {STATUS_CHOICES.map((status) => {
-            const on = brand.status === status;
-            return (
-              <button
-                key={status} type="button" role="radio" aria-checked={on}
-                className={`is-${status}${on ? ' is-on' : ''}`}
-                disabled={isViewOnly || statusBusy}
-                onClick={() => !on && onStatus(brand, status)}
-              >
-                <i aria-hidden="true" />{BRAND_STATUS_LABELS[status]}
-              </button>
-            );
-          })}
-          {statusBusy && <Loader2 size={15} className="brand-spin" aria-label="Menyimpan status" />}
+        <div className="bc-control">
+          <span className="bc-control-label">Client&apos;s Industry</span>
+          <SelectMenu
+            value={draft.industry ?? ''}
+            onChange={(industry) => setDraft((current) => ({ ...current, industry }))}
+            options={INDUSTRY_CHOICES.map(({ value }) => ({ value, label: value }))}
+            placeholder="Pilih kategori industri"
+            label="Client's Industry"
+            menuTitle="Client's Industry"
+            className="bc-industry-menu"
+            disabled={isViewOnly || loading}
+          />
         </div>
-      </section>
-
-      <div className="bp-industry-field">
-        <span>Kategori Industri</span>
-        <small>Dipakai juga oleh Internal Dashboard untuk mengelompokkan performa klien.</small>
-        <SelectMenu
-          value={draft.industry ?? ''}
-          onChange={(industry) => setDraft((current) => ({ ...current, industry }))}
-          options={INDUSTRY_CHOICES.map(({ value }) => ({ value, label: value }))}
-          placeholder="Pilih kategori industri"
-          label="Kategori Industri"
-          menuTitle="Kategori Industri"
-          className="bp-industry-menu"
-          disabled={isViewOnly || loading}
-        />
       </div>
 
-      <nav className="bp-segment" role="tablist" aria-label="Bagian Brand Setting">
-        {SECTIONS.map(({ id, label, Icon, fields }) => {
+      {/* The open tab's pill is placed by CSS (translateX by index), not a
+          shared-layout animation: the bar is sticky, and layout animations
+          measured mid-scroll made the pill rise from below instead of
+          sliding across. */}
+      <nav className="bc-tabs" role="tablist" aria-label="Bagian profil brand" style={{ '--bc-tab': Math.max(tabs.findIndex((t) => t.id === section), 0) }}>
+        <span className="bc-tab-pill" aria-hidden="true" />
+        {tabs.map(({ id, label, Icon, done, total, year }) => {
           const on = id === section;
           return (
             <button key={id} type="button" role="tab" aria-selected={on} className={on ? 'is-on' : ''} onClick={() => setSection(id)}>
-              {on && <motion.span layoutId="bp-segment-pill" className="bp-segment-pill" transition={spring} aria-hidden="true" />}
-              <Icon size={15} aria-hidden="true" />
-              <span>{label}</span>
-              <small>{loading ? '…' : `${filled(draft, fields)}/${fields.length}`}</small>
+              <Icon size={16} aria-hidden="true" />
+              <span className="bc-tab-label">{label}</span>
+              {year ? <small>{year}</small> : (
+                <small className={done === total ? 'is-full' : ''}>
+                  {!loading && <Ring value={done / total} size={14} />}{loading ? '…' : `${done}/${total}`}
+                </small>
+              )}
             </button>
           );
         })}
       </nav>
 
-      <div className="bp-setting-body">
+      <AnimatePresence initial={false}>
         {message && (
-          <p className={`bp-drawer-msg is-${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>
+          <motion.p
+            key={message.text} className={`bc-msg is-${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}
+            initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
+          >
             {message.tone === 'ok' ? <Check size={15} /> : <CircleAlert size={15} />} {message.text}
-          </p>
+          </motion.p>
         )}
-        <p className="bp-drawer-note">{active.note}</p>
-        {loading ? (
-          <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat brand…</p>
-        ) : (
-          <div className="bp-fields" key={section}>
-            {active.fields.map(([key, label, guidance]) => (
-              <Field key={key} label={label} guidance={guidance} value={draft[key]} disabled={isViewOnly} onChange={(value) => setDraft((current) => ({ ...current, [key]: value }))} />
-            ))}
-            {section === 'context' && (
-              <p className="bp-drawer-hint"><CircleAlert size={14} /><span>Jangan menulis ulang metrics dashboard di sini — berikan konteks yang menjelaskan <em>mengapa</em> angka dapat berubah.</span></p>
-            )}
-          </div>
-        )}
-      </div>
+      </AnimatePresence>
 
-      <footer className="bp-setting-foot">
-        <span>
-          {profile?.updated_at
-            ? `Terakhir diperbarui ${new Date(profile.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}${profile.updated_by_name ? ` oleh ${profile.updated_by_name}` : ''}`
-            : 'Belum pernah disimpan untuk brand ini'}
-        </span>
-        <button type="button" className="bp-primary" onClick={save} disabled={isViewOnly || saving || !dirty || loading}>
-          {saving ? <Loader2 size={16} className="brand-spin" /> : <Save size={16} />}
-          {isViewOnly ? 'Lihat saja' : saving ? 'Menyimpan…' : dirty ? 'Simpan perubahan' : 'Tersimpan'}
-        </button>
-      </footer>
+      {onTarget ? (
+        <div className="bc-body is-target">
+          <AnnualTargetCard brandId={brand.brand_id} canEdit={!isViewOnly} />
+        </div>
+      ) : loading ? (
+        <div className="bc-body"><div className="bc-skeleton" aria-label="Memuat brand" role="status"><i /><i /><i /></div></div>
+      ) : (
+        <motion.div
+          key={section} className="bc-body"
+          initial={reduced ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: EASE }}
+        >
+          <aside className="bc-index" aria-label={`Isi ${active.label}`}>
+            {active.note && <p className="bc-index-note">{active.note}</p>}
+            <ol>
+              {active.fields.map(([key, label], i) => {
+                const changed = (draft[key] ?? '') !== (profile?.[key] ?? '');
+                return (
+                  <li key={key}>
+                    <button type="button" className={`${isFilled(draft[key]) ? 'is-filled' : ''}${changed ? ' is-changed' : ''}`} onClick={() => focusField(key)}>
+                      <span className="bc-index-num">{isFilled(draft[key]) ? <Check size={11} strokeWidth={3} /> : i + 1}</span>
+                      <span>{label}</span>
+                      {changed && <i aria-label="diubah" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            {section === 'context' && (
+              <p className="bc-tip"><Lightbulb size={14} aria-hidden="true" /><span>Don’t just list the dashboard metrics, provide context that explains <em>why</em>!</span></p>
+            )}
+          </aside>
+          <div className="bc-fields">
+            {active.fields.map(([key, label, guidance], i) => (
+              <Field
+                key={key} id={`bc-f-${key}`} index={i} label={label} guidance={guidance}
+                value={draft[key]} original={profile?.[key]} disabled={isViewOnly}
+                onChange={(value) => setDraft((current) => ({ ...current, [key]: value }))}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {!onTarget && (
+        <footer className={`bc-savebar${dirty ? ' is-dirty' : ''}`}>
+          <span className="bc-save-state"><i aria-hidden="true" />{dirty ? `${changes} perubahan belum disimpan` : updated}</span>
+          <div>
+            {dirty && !isViewOnly && (
+              <button type="button" className="bp-ghost" onClick={discard} disabled={saving}><RotateCcw size={14} aria-hidden="true" /> Batalkan</button>
+            )}
+            <button type="button" className="bp-primary" onClick={save} disabled={isViewOnly || saving || !dirty || loading}>
+              {saving ? <Loader2 size={16} className="brand-spin" /> : dirty ? <Save size={16} /> : <Check size={16} />}
+              {isViewOnly ? 'Lihat saja' : saving ? 'Menyimpan…' : dirty ? 'Simpan perubahan' : 'Tersimpan'}
+            </button>
+          </div>
+        </footer>
+      )}
 
       {canDelete && !loading && <DeleteBrand brand={brand} onDeleted={onDeleted} />}
     </motion.section>
   );
 }
 
+// One horizontal meter: segments sized by count, a legend under it.
+function Meter({ title, note, items, onPick, picked }) {
+  const total = items.reduce((a, it) => a + it.count, 0);
+  return (
+    <div className="bc-meter">
+      <header><span>{title}</span>{note && <small>{note}</small>}</header>
+      <div className="bc-meter-bar" role="img" aria-label={`${title}: ${items.map((it) => `${it.label} ${it.count}`).join(', ')}`}>
+        {total ? items.filter((it) => it.count).map((it) => (
+          <span key={it.key} className={`is-${it.key}`} style={{ flexGrow: it.count, background: it.color }} title={`${it.label} · ${it.count}`} />
+        )) : <span className="is-empty" style={{ flexGrow: 1 }} />}
+      </div>
+      <div className="bc-meter-legend">
+        {items.map((it) => {
+          const content = (
+            <>
+              <i style={{ background: it.color }} className={`is-${it.key}`} aria-hidden="true" />
+              <span>{it.label}</span>
+              <b>{it.count}</b>
+            </>
+          );
+          return onPick ? (
+            <button key={it.key} type="button" aria-pressed={picked === it.key} className={picked === it.key ? 'is-on' : ''} onClick={() => onPick(picked === it.key ? 'all' : it.key)} title={picked === it.key ? 'Tampilkan semua brand' : `Saring daftar: ${it.label}`}>
+              {content}
+            </button>
+          ) : <span key={it.key}>{content}</span>;
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function BrandSettingsPage() {
   const { isViewOnly, isAdmin } = useAuth();
+  const reduced = useReducedMotion();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [brands, setBrands] = useState([]);
@@ -409,27 +545,27 @@ export default function BrandSettingsPage() {
   };
 
   const counts = useMemo(() => ({
+    all: brands.length,
     active: brands.filter((b) => b.status === 'active').length,
     off: brands.filter((b) => b.status === 'off').length,
     freeze: brands.filter((b) => b.status === 'freeze').length,
+    unknown: brands.filter((b) => !b.status).length,
   }), [brands]);
 
-  const industryComposition = useMemo(() => {
+  const statusItems = [
+    { key: 'active', label: BRAND_STATUS_LABELS.active, count: counts.active, color: '#22a06b' },
+    { key: 'off', label: BRAND_STATUS_LABELS.off, count: counts.off, color: '#a3afc2' },
+    { key: 'freeze', label: BRAND_STATUS_LABELS.freeze, count: counts.freeze, color: '#e2a03f' },
+    { key: 'unknown', label: BRAND_STATUS_LABELS.unknown, count: counts.unknown, color: '#dfe5ef' },
+  ];
+  const industryItems = useMemo(() => {
     const active = brands.filter((brand) => brand.status === 'active');
     const items = INDUSTRY_CHOICES.map((item) => ({
-      ...item,
+      key: item.value, label: item.value, color: item.color,
       count: active.filter((brand) => canonicalIndustry(brand.industry) === item.value).length,
     }));
-    const total = items.reduce((sum, item) => sum + item.count, 0);
-    let cursor = 0;
-    const stops = [];
-    items.forEach((item) => {
-      if (!item.count || !total) return;
-      const end = cursor + (item.count / total) * 100;
-      stops.push(`${item.color} ${cursor}% ${end}%`);
-      cursor = end;
-    });
-    return { items, total, gradient: total ? `conic-gradient(${stops.join(', ')})` : '#e9edf6' };
+    const categorized = items.reduce((a, it) => a + it.count, 0);
+    return { items, categorized, active: active.length };
   }, [brands]);
 
   async function changeStatus(item, status) {
@@ -480,55 +616,42 @@ export default function BrandSettingsPage() {
 
   return (
     // The page's frame and masthead belong to BrandSettingLayout, shared
-    // with the other two Brand Setting sections.
+    // with Data Collection Hub.
     <>
-
-      <section className="soft-card bp-command bp-portfolio" aria-label="Portofolio klien">
-        <header className="bp-portfolio-head">
-          <div>
-            <h2>Portofolio klien</h2>
-            <p>Status setiap brand dipakai bersama oleh seluruh modul ATLAS.</p>
-          </div>
-          {!isViewOnly && (creating ? (
-            <form className="bp-new-form" onSubmit={createBrand}>
-              <input
-                value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Nama brand baru" autoFocus
-                onKeyDown={(event) => { if (event.key === 'Escape') setCreating(false); }} aria-label="Nama brand baru"
-              />
-              <button type="submit" className="bp-primary" disabled={creatingBusy || !newName.trim()}>
-                {creatingBusy ? <Loader2 size={15} className="brand-spin" /> : <Check size={15} />} Simpan
-              </button>
-              <button type="button" className="bp-icon-btn" onClick={() => setCreating(false)} aria-label="Batal"><X size={16} /></button>
-            </form>
-          ) : (
-            <button type="button" className="bp-primary" onClick={() => { setNewName(''); setCreating(true); }}>
-              <Plus size={16} /> Brand baru
-            </button>
-          ))}
-        </header>
-        <div className="bp-stats bp-overview-stats">
-          <div className="bp-stat"><span>Total Brand</span><strong>{loaded ? brands.length : '…'}</strong></div>
-          <div className="bp-stat"><span>Brand Aktif</span><strong>{loaded ? counts.active : '…'}</strong></div>
-          <div className="bp-stat"><span>Nonaktif</span><strong>{loaded ? counts.off : '…'}</strong></div>
-          <div className="bp-stat"><span>Dibekukan</span><strong>{loaded ? counts.freeze : '…'}</strong></div>
-          <div className="bp-industry-summary">
-            <div className="bp-industry-summary-copy">
-              <span>Industri Brand Aktif</span>
-              <small>{loaded ? `${industryComposition.total} brand berkategori` : 'Memuat komposisi…'}</small>
-            </div>
-            <div
-              className="bp-industry-pie"
-              style={{ background: industryComposition.gradient }}
-              role="img"
-              aria-label={`Komposisi industri brand aktif: ${industryComposition.items.map((item) => `${item.value} ${item.count}`).join(', ')}`}
-            />
-            <ul className="bp-industry-legend">
-              {industryComposition.items.map((item) => (
-                <li key={item.value}><i style={{ background: item.color }} /><span>{item.value}</span><b>{item.count}</b></li>
-              ))}
-            </ul>
-          </div>
+      <section className="soft-card bc-portfolio bp-portfolio" aria-label="MIL Digital Portofolio" data-annotate="portfolio">
+        <div className="bc-port-total">
+          <span className="bc-eyebrow">MIL Digital Portofolio</span>
+          <strong>{loaded ? brands.length : '…'}</strong>
+          <small>Total Brands · {counts.active} active</small>
         </div>
+        <Meter title="Brands by Status" note="Click to filter the list" items={statusItems} onPick={setListStatus} picked={listStatus} />
+        <Meter
+          title="Active Brands by Industry"
+          note={loaded ? `${industryItems.categorized} of ${industryItems.active} categorized` : 'Loading breakdown…'}
+          items={industryItems.items}
+        />
+        {!isViewOnly && (
+          <div className="bc-port-actions">
+            {creating ? (
+              <form className="bc-new-form" onSubmit={createBrand}>
+                <input
+                  value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Nama brand baru" autoFocus
+                  onKeyDown={(event) => { if (event.key === 'Escape') setCreating(false); }} aria-label="Nama brand baru"
+                />
+                <div>
+                  <button type="button" className="bp-ghost" onClick={() => setCreating(false)}>Batal</button>
+                  <button type="submit" className="bp-primary" disabled={creatingBusy || !newName.trim()}>
+                    {creatingBusy ? <Loader2 size={15} className="brand-spin" /> : <Check size={15} />} Simpan
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button type="button" className="bp-primary" onClick={() => { setNewName(''); setCreating(true); }}>
+                <Plus size={16} /> Brand baru
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       {error && (
@@ -546,38 +669,46 @@ export default function BrandSettingsPage() {
         </div>
       )}
 
-      <div className="bp-master">
-        <aside className="soft-card bp-list" aria-label="Daftar brand">
-          <div className="bp-list-head">
-            <SearchField className="bp-search" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Cari nama brand…" aria-label="Cari brand" />
-            {/* Status filter without count badges, matching the compact list control. */}
-            <div className="bp-filter" role="radiogroup" aria-label="Filter status klien">
+      <div className="bc-master">
+        <aside className="soft-card bc-list" aria-label="Daftar brand" data-annotate="brand-list">
+          <div className="bc-list-head bp-list-head">
+            <SearchField className="bc-search" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Search" aria-label="Cari brand" />
+            <div className="bc-chips" role="radiogroup" aria-label="Filter client's status">
               {FILTERS.map((key) => {
                 const on = listStatus === key;
                 return (
                   <button key={key} type="button" role="radio" aria-checked={on} className={`is-${key}${on ? ' is-on' : ''}`} onClick={() => setListStatus(key)}>
                     {key !== 'all' && <i aria-hidden="true" />}
-                    <span>{key === 'all' ? 'Semua' : BRAND_STATUS_LABELS[key]}</span>
+                    <span>{FILTER_LABELS[key]}</span>
+                    <b>{loaded ? counts[key] : '·'}</b>
                   </button>
                 );
               })}
             </div>
           </div>
-          <ul className="bp-list-items">
+          <p className="bc-list-count" aria-live="polite">
+            {loaded ? `${shown.length} brand${listStatus !== 'all' ? ` · ${FILTER_LABELS[listStatus].toLowerCase()}` : ''}${listQuery.trim() ? ` · “${listQuery.trim()}”` : ''}` : 'Memuat daftar brand…'}
+          </p>
+          <motion.ul layoutScroll className="bc-list-items bp-list-items">
             {shown.map((b) => {
-              const status = b.status || 'unknown';
+              const status = statusOf(b);
               const on = b.brand_id === selected?.brand_id;
               return (
                 <li key={b.brand_id}>
-                  <button type="button" className={`bp-list-item${on ? ' is-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => select(b)}>
-                    <span className="bp-list-name">{b.brand_name}</span>
-                    <span className={`bp-status-chip is-${status}`}><i aria-hidden="true" />{BRAND_STATUS_LABELS[status]}</span>
+                  <button type="button" className={`bc-item${on ? ' is-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => select(b)}>
+                    {on && <motion.span layoutId="bc-item-sheet" className="bc-item-sheet" transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 44, mass: 0.6 }} aria-hidden="true" />}
+                    <span className={`bc-mono is-${status}`} aria-hidden="true">{initials(b.brand_name)}</span>
+                    <span className="bc-item-text">
+                      <b>{b.brand_name}</b>
+                      <small className={b.industry ? '' : 'is-missing'}>{canonicalIndustry(b.industry) || 'Industri belum diatur'}</small>
+                    </span>
+                    <span className={`bc-dot is-${status}`} title={BRAND_STATUS_LABELS[status]}><span className="bc-sr">{BRAND_STATUS_LABELS[status]}</span></span>
                   </button>
                 </li>
               );
             })}
-          </ul>
-          {loaded && !shown.length && <p className="brand-picker-empty">Tidak ada brand yang cocok. Ubah pencarian atau filter status.</p>}
+          </motion.ul>
+          {loaded && !shown.length && <p className="bc-list-empty">Tidak ada brand yang cocok. Ubah pencarian atau filter status.</p>}
           {!loaded && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat daftar brand…</p>}
         </aside>
 
@@ -589,12 +720,9 @@ export default function BrandSettingsPage() {
             onIndustrySaved={industrySaved}
           />
         ) : (
-          <div className="soft-card bp-setting bp-setting-empty">{loaded ? 'Pilih brand di daftar untuk membuka Brand Setting.' : 'Memuat…'}</div>
+          <div className="soft-card bc-ws bc-ws-empty">{loaded ? 'Pilih brand di daftar untuk membuka profilnya.' : 'Memuat…'}</div>
         )}
       </div>
-      <p className="bp-foot-note">
-        File bulanan, Meta Automation, dan Google Ads setiap brand ada di <Link to="/data-brand">Data Collection Hub</Link>; Minutes of Meeting ada di <Link to="/brand-tracking">Brand Tracking</Link>.
-      </p>
     </>
   );
 }

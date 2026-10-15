@@ -20,12 +20,6 @@
 /* Level 2 (a section's own views) is styled with the other pages' in
    components/common/pageBand.css. */
 
-/* ── Brand Context: portfolio card ─────────────────────────────────────── */
-.bp-portfolio { display: grid; gap: 14px; }
-.bp-portfolio-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
-.bp-portfolio-head h2 { margin: 0; color: var(--soft-ink); font-size: 1.05rem; font-weight: 800; letter-spacing: -.015em; }
-.bp-portfolio-head p { margin: 3px 0 0; color: var(--soft-muted); font-size: .8rem; }
-.bp-portfolio .bp-overview-stats { width: 100%; }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
 .bp-primary,
@@ -81,35 +75,7 @@
 .bp-stat strong.is-text { font-size: .92rem; letter-spacing: -.01em; }
 .bp-stat strong small { color: var(--soft-muted); font-size: .8rem; font-weight: 650; }
 
-.bp-overview-stats { display: grid; grid-template-columns: repeat(4, minmax(112px, 1fr)) minmax(330px, 1.8fr); align-items: stretch; }
-.bp-overview-stats .bp-stat { min-width: 0; align-content: center; justify-items: center; text-align: center; }
-.bp-industry-summary {
-  display: grid; grid-template-columns: auto 66px minmax(180px, 1fr); align-items: center; gap: 12px; padding: 10px 14px;
-  border: 1px solid var(--bp-rule); border-radius: 14px; background: #f8f9fd;
-}
-.bp-industry-summary-copy { display: grid; gap: 4px; align-self: start; }
-.bp-industry-summary-copy > span { color: var(--soft-muted); font-size: .75rem; font-weight: 650; }
-.bp-industry-summary-copy small { color: var(--soft-muted); font-size: .68rem; line-height: 1.35; }
-.bp-industry-pie { display: grid; place-items: center; width: 62px; height: 62px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(15, 26, 58, .06); }
-.bp-industry-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 10px; margin: 0; padding: 0; list-style: none; }
-.bp-industry-legend li { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 5px; min-width: 0; color: var(--soft-muted); font-size: .68rem; }
-.bp-industry-legend li i { width: 7px; height: 7px; border-radius: 50%; }
-.bp-industry-legend li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bp-industry-legend li b { color: var(--soft-ink); font-variant-numeric: tabular-nums; }
 
-.bp-search {
-  display: flex; flex: 0 1 340px; align-items: center; gap: 9px; min-width: 240px; min-height: 46px; padding: 0 14px;
-  border: 1px solid var(--bp-line); border-radius: 12px; background: #fff; color: var(--soft-muted);
-  transition: border-color 160ms ease, box-shadow 160ms ease;
-}
-.bp-search:focus-within { border-color: var(--soft-accent); box-shadow: 0 0 0 3px rgba(30, 62, 184, .12); }
-.bp .bp-search input { flex: 1; min-width: 0; height: auto; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; color: var(--soft-ink); font: inherit; font-size: .88rem; }
-.bp-new-form { display: flex; align-items: center; gap: 8px; }
-.bp-new-form input {
-  width: 210px; min-height: 42px; padding: 0 12px; border: 1px solid #b8c5f5; border-radius: 12px;
-  color: var(--soft-ink); font: inherit; font-size: .84rem;
-}
-.bp-new-form input:focus { outline: 0; border-color: var(--soft-accent); box-shadow: 0 0 0 3px rgba(30, 62, 184, .12); }
 
 /* Data Brand's four destinations on the blue rail. */
 .bp-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -178,68 +144,8 @@
 .bp-row-btn:hover { border-color: #b8c5f5; color: var(--soft-accent); }
 .bp-row-btn.is-primary { border-color: transparent; background: #eef1fc; color: var(--soft-accent); }
 .bp-row-btn.is-primary:hover { background: var(--soft-accent); color: #fff; }
-.bp-foot-note { margin: 14px 2px 0; color: var(--soft-muted); font-size: .8rem; }
-.bp-foot-note a { color: var(--soft-accent); font-weight: 700; }
 
-/* ── Detail drawer: context and direction beside the list ───────────────── */
-.bp-scrim { position: fixed; inset: 0; z-index: 80; background: rgba(15, 26, 58, .28); }
-/* Never block the page while sliding away. */
-.bp-scrim.is-leaving { pointer-events: none; }
-.bp-drawer {
-  position: absolute; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column;
-  width: min(760px, 100vw); background: #fff; outline: none;
-  box-shadow: -30px 0 70px -30px rgba(15, 26, 58, .45);
-}
-.bp-drawer-head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 28px 18px;
-  background:
-    radial-gradient(ellipse at 10% 0%, rgba(111, 154, 245, .2), transparent 65%),
-    linear-gradient(180deg, #edf3ff, #fff);
-}
-.bp-drawer-head h2 { margin: 10px 0 0; color: var(--soft-ink); font-size: 1.6rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
-.bp-drawer-head p { margin: 4px 0 0; color: var(--soft-muted); font-size: .84rem; }
-.bp-drawer-head-actions { display: flex; flex: 0 0 auto; gap: 8px; }
-.bp-status-chip {
-  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px;
-  background: #fff; color: var(--soft-muted); font-size: .72rem; font-weight: 700; box-shadow: inset 0 0 0 1px var(--bp-line);
-}
-.bp-status-chip i { width: 7px; height: 7px; border-radius: 50%; background: #9aa5b8; }
-.bp-status-chip.is-active { color: #18794e; }
-.bp-status-chip.is-active i { background: #22a06b; }
-.bp-status-chip.is-freeze { color: #b45309; }
-.bp-status-chip.is-freeze i { background: #d97706; }
-
-.bp-segment { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 0 28px; padding: 4px; border-radius: 14px; background: #f1f4fa; }
-.bp-segment button {
-  position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px;
-  border: 0; border-radius: 11px; background: transparent; color: var(--soft-muted);
-  font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; transition: color 180ms ease;
-}
-.bp-segment button > :not(.bp-segment-pill) { position: relative; z-index: 1; }
-.bp-segment button.is-on { color: var(--soft-accent); }
-.bp-segment button small { padding: 1px 7px; border-radius: 99px; background: rgba(15, 26, 58, .06); font-size: .75rem; font-variant-numeric: tabular-nums; }
-.bp-segment button.is-on small { background: #eef1fc; }
-.bp-segment-pill { position: absolute; inset: 0; z-index: 0; border-radius: 11px; background: #fff; box-shadow: 0 1px 3px rgba(15, 26, 58, .12); }
-
-.bp-drawer-body { flex: 1; overflow-y: auto; padding: 18px 28px 24px; }
 .bp-drawer-note { margin: 0 0 14px; color: var(--soft-muted); font-size: .84rem; line-height: 1.5; }
-.bp-drawer-msg { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; font-size: .84rem; }
-.bp-drawer-msg.is-ok { background: #ecfdf3; color: #18794e; }
-.bp-drawer-msg.is-error { background: #fef1f0; color: #c81e1e; }
-.bp-fields { display: grid; gap: 14px; }
-.bp .bp-field,
-.bp .bp-field:nth-child(odd),
-.bp .bp-field:last-child:nth-child(odd) { grid-column: auto; gap: 4px; padding: 0; border: 0; background: none; }
-.bp .bp-field:hover { background: none; }
-.bp .bp-field > span { font-size: .86rem; }
-.bp .bp-field small { min-height: 0; font-size: .76rem; }
-.bp .bp-field textarea { min-height: 104px; margin-top: 4px; padding: .7rem .8rem; border-radius: 12px; font-size: .84rem; }
-.bp-drawer-hint { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 0; color: var(--soft-muted); font-size: .8rem; line-height: 1.5; }
-.bp-drawer-hint svg { flex: 0 0 auto; margin-top: 2px; }
-.bp-drawer-foot {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 28px;
-  border-top: 1px solid var(--bp-rule); background: #fbfcfe; color: var(--soft-muted); font-size: .78rem;
-}
 
 /* ── Data & file ────────────────────────────────────────────────────────── */
 .bp-platforms { margin: 0 0 4px; padding-left: 2px; }
@@ -288,61 +194,7 @@
   .bp-primary, .bp-ghost, .bp-row-btn, .bp-icon-btn, .bp-help-chev { transition: none; }
 }
 
-/* ── Brand cards: status is read here, set in Brand Setting ─────────────── */
-.bp-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px;
-  margin: 0; padding: 0; list-style: none;
-}
-.bp-card {
-  display: grid; gap: 12px; padding: 14px; border: 1px solid var(--bp-line); border-radius: 16px; background: #fff;
-  transition: border-color 180ms ease, box-shadow 220ms ease, transform 220ms var(--bp-ease);
-}
-@media (hover: hover) and (pointer: fine) {
-  .bp-card:hover { border-color: #c9d4f2; box-shadow: 0 12px 26px -20px rgba(15, 26, 58, .45); transform: translateY(-2px); }
-}
-.bp-card.is-open { border-color: var(--soft-accent); box-shadow: 0 0 0 3px rgba(30, 62, 184, .12); }
-.bp-card-main { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.bp-avatar {
-  display: grid; flex: 0 0 auto; place-items: center; width: 42px; height: 42px; border-radius: 12px;
-  background: #eef1f7; color: #52617c; font-size: 1rem; font-weight: 800;
-}
-.bp-card.is-active .bp-avatar { background: #e7f7ee; color: #166534; }
-.bp-card.is-freeze .bp-avatar { background: #fef3c7; color: #92400e; }
-.bp-card-text { display: grid; gap: 5px; min-width: 0; }
-.bp-card-text strong { overflow: hidden; color: var(--soft-ink); font-size: .95rem; font-weight: 750; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
-.bp-card-main:hover strong { color: var(--soft-accent); }
-.bp-card-text .bp-status-chip { justify-self: start; padding: 2px 9px; font-size: .75rem; }
-.bp-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.bp-card-actions .bp-row-btn { min-height: 34px; }
-.bp-status-chip.is-off { color: #52617c; }
-.bp-status-chip.is-off i { background: #8693ab; }
-.bp-status-chip.is-unknown i { background: #fff; box-shadow: inset 0 0 0 1.5px #9aa5b8; }
 
-/* ── Brand Setting: status control ──────────────────────────────────────── */
-.bp-status-block {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px;
-  margin: 0 28px 14px; padding: 14px 16px; border: 1px solid var(--bp-line); border-radius: 14px; background: #fbfcfe;
-}
-.bp-status-copy { display: grid; gap: 3px; min-width: 220px; flex: 1; }
-.bp-status-copy strong { color: var(--soft-ink); font-size: .9rem; }
-.bp-status-copy small { color: var(--soft-muted); font-size: .76rem; line-height: 1.45; }
-.bp-status-seg { display: flex; align-items: center; gap: 6px; }
-.bp-status-seg button {
-  display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 13px;
-  border: 1px solid var(--bp-line); border-radius: 99px; background: #fff; color: var(--soft-muted);
-  font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
-  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 160ms var(--bp-ease);
-}
-.bp-status-seg button:active:not(:disabled) { transform: scale(0.97); }
-.bp-status-seg button:disabled { cursor: not-allowed; opacity: .6; }
-.bp-status-seg button i { width: 8px; height: 8px; border-radius: 50%; background: #8693ab; }
-.bp-status-seg button.is-active i { background: #22a06b; }
-.bp-status-seg button.is-freeze i { background: #d97706; }
-.bp-status-seg button:hover:not(:disabled):not(.is-on) { border-color: #b8c5f5; color: var(--soft-ink); }
-.bp-status-seg button.is-on.is-active { border-color: #a7e3c4; background: #e7f7ee; color: #166534; }
-.bp-status-seg button.is-on.is-off { border-color: #cfd6e4; background: #eef1f7; color: #3b4a66; }
-.bp-status-seg button.is-on.is-freeze { border-color: #f5d48a; background: #fef3c7; color: #92400e; }
-.bp-status-seg button.is-on:disabled { opacity: 1; }
 
 /* ── Brand Setting: delete ──────────────────────────────────────────────── */
 .bp-danger { margin-top: 26px; padding: 14px 16px; border: 1px solid #f3d0cc; border-radius: 14px; background: #fffafa; }
@@ -372,122 +224,18 @@
 .bp-danger-btn.is-ghost { border: 1px solid #f0b8b1; background: #fff; color: #c81e1e; }
 .bp-danger-btn.is-ghost:hover:not(:disabled) { background: #fef1f0; }
 
-/* ── Master/detail: brand list left, Brand Setting right ────────────────── */
 .bp-stats.is-start { justify-content: flex-start; }
-.bp-master { display: grid; grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); gap: 16px; align-items: start; }
-.bp-list {
-  position: sticky; top: 14px; display: flex; flex-direction: column;
-  max-height: calc(100vh - 28px); border: 1px solid var(--bp-line);
-  /* clip, not hidden: a hidden box can still be scrolled by focus, which
-     pushed the search and filter out of the card. */
-  overflow: clip;
-}
-.bp-list-head { display: grid; gap: 10px; padding: 14px 14px 10px; border-bottom: 1px solid var(--bp-rule); }
-.bp-list-head .bp-search { min-width: 0; min-height: 42px; }
-.bp-list-head .brand-status-filter { flex-wrap: wrap; gap: 4px; }
-.bp-list-head small { color: var(--soft-muted); font-size: .75rem; }
-.bp-list-items { flex: 1; margin: 0; padding: 6px; overflow-y: auto; list-style: none; scrollbar-width: thin; }
-.bp-list-item {
-  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 0 12px;
-  border: 0; border-radius: 10px; background: transparent; color: var(--soft-ink);
-  font: inherit; font-size: .88rem; font-weight: 600; text-align: left; cursor: pointer;
-  transition: background-color 140ms ease, color 140ms ease;
-}
-.bp-list-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bp-list-item small { flex: 0 0 auto; color: var(--soft-muted); font-size: .72rem; font-weight: 600; }
-.bp-list-item:hover { background: #f3f6fc; }
-.bp-list-item.is-on { background: #eef1fc; color: var(--soft-accent); font-weight: 750; box-shadow: inset 3px 0 0 var(--soft-accent); }
-.bp-list-item:focus-visible { outline: 2px solid var(--soft-accent); outline-offset: -2px; }
-
-/* clip, not hidden: hidden makes this a scroll container and quietly
-   disables the sticky save bar at its foot. */
-.bp-setting { display: grid; gap: 0; border: 1px solid var(--bp-line); overflow: clip; }
-.bp-setting-empty { place-items: center; min-height: 320px; color: var(--soft-muted); font-size: .9rem; }
-.bp-setting-head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px 16px;
-  background: radial-gradient(ellipse at 8% 0%, rgba(111, 154, 245, .16), transparent 65%), linear-gradient(180deg, #f2f6ff, #fff);
-}
-.bp-setting-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--soft-accent); font-size: .76rem; font-weight: 700; }
-.bp-setting-head h2 { margin: 6px 0 0; color: var(--soft-ink); font-size: 1.55rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.15; }
-.bp-setting-head p { margin: 4px 0 0; color: var(--soft-muted); font-size: .84rem; }
-.bp-setting .bp-status-block { margin: 0 24px 14px; }
-.bp-industry-field {
-  display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 300px); align-items: center; gap: 3px 20px;
-  margin: 0 24px 14px; padding: 14px 16px; border: 1px solid var(--bp-line); border-radius: 14px; background: #fbfcfe;
-}
-.bp-industry-field > span { color: var(--soft-ink); font-size: .9rem; font-weight: 700; }
-.bp-industry-field small { color: var(--soft-muted); font-size: .76rem; line-height: 1.45; }
-.bp-industry-field .atlas-field-trigger { grid-column: 2; grid-row: 1 / span 2; min-height: 40px; font-size: .82rem; }
-.bp-setting .bp-segment { margin: 0 24px; }
-.bp-setting-body { padding: 16px 24px 8px; }
-.bp-setting-foot {
-  position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 12px 24px; border-top: 1px solid var(--bp-rule); background: rgba(251, 252, 254, .96);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--soft-muted); font-size: .78rem;
-}
-.bp-setting > .bp-danger { margin: 16px 24px 22px; }
-
-@media (max-width: 1000px) {
-  .bp-master { grid-template-columns: minmax(0, 1fr); }
-  .bp-list { position: static; max-height: 360px; }
-}
 /* The app's main column is overflow:auto but never scrolls (the window
    does), which silently disables position:sticky inside it. clip keeps the
    same edge clipping without being a scroll container, so the brand list
-   can stay in view beside a long Brand Setting. */
-main.main-content:has(.bp-master) { overflow: clip; }
+   and the workspace tabs can stay in view (brandContext.css). */
+main.main-content:has(.bc-master) { overflow: clip; }
 
-/* ── Brand list v2: room to breathe, a status chip per brand ────────────── */
-.bp-list-head { gap: 12px; padding: 16px 16px 14px; }
-.bp-list-item { gap: 12px; min-height: 48px; padding: 0 12px 0 14px; font-size: .9rem; }
-.bp-list-items { padding: 8px; }
-.bp-list-items li + li { margin-top: 2px; }
-.bp-list-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bp-list-item .bp-status-chip {
-  flex: 0 0 auto; gap: 5px; padding: 3px 9px; font-size: .72rem; font-weight: 700;
-  box-shadow: none; background: #eef1f7; color: #52617c;
-}
-.bp-list-item .bp-status-chip.is-active { background: #e7f7ee; color: #166534; }
-.bp-list-item .bp-status-chip.is-freeze { background: #fef3c7; color: #92400e; }
-.bp-list-item .bp-status-chip.is-unknown { background: #fff; color: var(--soft-muted); box-shadow: inset 0 0 0 1px var(--bp-line); }
-.bp-list-item .bp-status-chip i { width: 6px; height: 6px; }
-.bp-list-item.is-on .bp-status-chip { box-shadow: inset 0 0 0 1px rgba(30, 62, 184, .12); }
-
-/* Status filter: five compact segments without count badges. */
-.bp-filter { display: flex; flex-wrap: wrap; gap: 6px; }
-.bp-filter button {
-  display: flex; flex: 1 1 auto; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 11px;
-  border: 1px solid var(--bp-line); border-radius: 11px; background: #fff; color: var(--soft-muted);
-  font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms var(--bp-ease);
-}
-.bp-filter button:active { transform: scale(0.97); }
-.bp-filter button span { white-space: nowrap; }
-.bp-filter button i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #8693ab; }
-.bp-filter button.is-active i { background: #22a06b; }
-.bp-filter button.is-freeze i { background: #d97706; }
-.bp-filter button.is-unknown i { background: #fff; box-shadow: inset 0 0 0 1.5px #9aa5b8; }
-.bp-filter button:hover:not(.is-on) { border-color: #b8c5f5; color: var(--soft-ink); }
-.bp-filter button.is-on { border-color: var(--soft-accent); background: var(--soft-accent); color: #fff; box-shadow: 0 6px 14px -10px var(--soft-accent); }
-.bp-filter button.is-on i { box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
-.bp-filter button:focus-visible { outline: 2px solid var(--soft-accent); outline-offset: 2px; }
 .bp-danger-actions.is-split { justify-content: space-between; align-items: center; }
 .bp-danger-note { max-width: 46ch; color: #9b1c1c; font-size: .76rem; line-height: 1.45; text-align: right; }
 .bp-danger-body.is-force { border-top-color: #c81e1e; }
 .bp-danger-body.is-force > p:first-child { color: #9b1c1c; }
 
-@media (max-width: 1320px) {
-  .bp-overview-stats { grid-template-columns: repeat(4, minmax(112px, 1fr)); }
-  .bp-industry-summary { grid-column: 1 / -1; }
-}
-
-@media (max-width: 720px) {
-  .bp-overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .bp-industry-summary { grid-template-columns: 1fr 62px; }
-  .bp-industry-legend { grid-column: 1 / -1; }
-  .bp-industry-field { grid-template-columns: 1fr; }
-  .bp-industry-field .atlas-field-trigger { grid-column: 1; grid-row: auto; margin-top: 6px; }
-}
 
 /* The platform banner lost its month chips (the cells below show each
    month); its readiness figure keeps the right edge on its own. */
