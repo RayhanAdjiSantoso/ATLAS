@@ -26,6 +26,14 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'panduan-google-ads-script',
+    released: '2026-10-15',
+    path: '/data-brand',
+    target: '[data-feature="google-ads-script-guide"]',
+    title: 'Panduan setup Google Ads Script',
+    body: 'Langkah memasang script di akun Google Ads klien kini ada di sini, lengkap dengan kode yang tinggal disalin. INGEST_KEY tetap diminta ke superadmin via Slack.',
+  },
+  {
     id: 'mom-di-brand-tracking',
     released: '2026-10-14',
     path: '/brand-tracking',

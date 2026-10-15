@@ -145,6 +145,10 @@ export async function requestResync({ brandId, accountId, from, to }) {
   const account = await accountOfBrand(brandId, accountId);
   if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) throw new AppError('Rentang tanggal tidak valid', 400);
   const yesterday = addDays(todayJakarta(), -1);
+  // Months before "Tarik data sejak" are never planned, so a range reaching
+  // further back moves that date back with it — otherwise those months would
+  // be skipped without a word.
+  if (from < account.backfill_from) await repo.updateAccount(account.id, { backfillFrom: from });
   await repo.requestResync(account.id, { from, to: minDate(to, yesterday) });
   return getOverview(brandId);
 }
@@ -427,9 +431,7 @@ export async function finishRun({ runId, status, rowCount, note, datasets }) {
     }
     for (const month of monthsBetween(run.start_date, run.end_date)) {
       try {
-        result.library = run.end_date >= monthEnd(`${month}-01`)
-          ? await syncLibraryMonth(run.brand_id, month)
-          : await dropPartialAutoFiles(run.brand_id, month);
+        result.library = await syncLibraryMonth(run.brand_id, month);
       } catch (err) {
         console.warn('[google-ads] gagal mengisi Performance Database', { brandId: run.brand_id, month, reason: err.message });
       }
@@ -859,7 +861,7 @@ function monthsBetween(start, end) {
   return out;
 }
 
-async function fileAutoMonth(brand, channel, month, rowCount, buffer) {
+async function fileAutoMonth(brand, channel, month, end, rowCount, buffer) {
   const parts = await library.listSlotParts(brand.brand_id, 'google', channel, `${month}-01`);
   const manual = parts.filter((p) => !p.original_filename.startsWith(AUTO_FILE_PREFIX));
   const auto = parts.find((p) => p.original_filename.startsWith(AUTO_FILE_PREFIX));
@@ -869,7 +871,7 @@ async function fileAutoMonth(brand, channel, month, rowCount, buffer) {
     if (auto) await library.deleteLibraryFile(brand.brand_id, auto.id);
     return { channel, filed: false, reason: 'file manual sudah ada' };
   }
-  const coverage = library.summariseRange({ start: `${month}-01`, end: monthEnd(`${month}-01`) }, month);
+  const coverage = library.summariseRange({ start: `${month}-01`, end }, month);
   const slug = String(brand.brand_name).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'brand';
   await library.upsertLibraryFile({
     brandId: brand.brand_id, platform: 'google', channel,
@@ -878,21 +880,6 @@ async function fileAutoMonth(brand, channel, month, rowCount, buffer) {
     partIndex: auto?.part_index ?? 1, filename: `${AUTO_FILE_PREFIX}${channel}_${slug}_${month}.xlsx`, buffer, userId: null,
   });
   return { channel, filed: true, rowCount };
-}
-
-// A month still in progress has no file yet. Auto files written for one
-// before this rule (they used to be refreshed daily) are removed so the grid
-// does not show a half month as filed; uploads are left alone.
-async function dropPartialAutoFiles(brandId, month) {
-  const removed = [];
-  for (const channel of ['search_terms', 'change_history', ...Object.keys(ARCHIVES)]) {
-    const parts = await library.listSlotParts(brandId, 'google', channel, `${month}-01`);
-    for (const p of parts.filter((x) => x.original_filename.startsWith(AUTO_FILE_PREFIX))) {
-      await library.deleteLibraryFile(brandId, p.id);
-      removed.push(channel);
-    }
-  }
-  return { month, inProgress: true, removed };
 }
 
 // Archive slots (auto-only, see brandLibraryService.AUTO_ONLY_CHANNELS):
@@ -914,32 +901,34 @@ const ARCHIVES = {
   landing_pages: (b, s, e) => datasetsRepo.archiveLandingPages(b, s, e),
 };
 
+// The month in progress is filed too, up to yesterday (as Meta's files are),
+// and refiled by every run until it is complete.
 export async function syncLibraryMonth(brandId, month) {
   const brand = await assertBrand(brandId);
   const start = `${month}-01`;
-  const end = monthEnd(start);
+  const end = minDate(monthEnd(start), addDays(todayJakarta(), -1));
   const out = [];
+  if (end < start) return out;
   const terms = await repo.searchTermsForFile(brandId, start, end);
-  if (terms.length) out.push(await fileAutoMonth(brand, 'search_terms', month, terms.length, buildSearchTermsWorkbook(month, terms)));
+  if (terms.length) out.push(await fileAutoMonth(brand, 'search_terms', month, end, terms.length, buildSearchTermsWorkbook(month, terms)));
   const changes = await repo.listChangeEvents(brandId, start, end);
-  if (changes.length) out.push(await fileAutoMonth(brand, 'change_history', month, changes.length, buildChangeHistoryWorkbook(month, changes)));
+  if (changes.length) out.push(await fileAutoMonth(brand, 'change_history', month, end, changes.length, buildChangeHistoryWorkbook(month, changes)));
   for (const [channel, read] of Object.entries(ARCHIVES)) {
     const rows = await read(brandId, start, end);
-    if (rows.length) out.push(await fileAutoMonth(brand, channel, month, rows.length, buildArchiveWorkbook(channel, month, rows)));
+    if (rows.length) out.push(await fileAutoMonth(brand, channel, month, end, rows.length, buildArchiveWorkbook(channel, month, rows)));
   }
   return out;
 }
 
-// Files every finished month the brand holds data for — the archive slots
-// for months synced before they existed, or after a re-fetch. Months are
-// filed one by one; the current month is never filed (it is not complete).
+// Files every month the brand holds data for, the one in progress up to
+// yesterday — the archive slots for months synced before they existed, or
+// after a re-fetch. Months are filed one by one.
 export async function rebuildLibrary(brandId) {
   await assertBrand(brandId);
   const coverage = await repo.coverage(brandId);
   if (!coverage.length) return { months: [] };
   const first = coverage.map((c) => c.first_date).sort()[0];
-  const lastFinished = addDays(monthStart(todayJakarta()), -1);
-  const months = monthsBetween(first, lastFinished);
+  const months = monthsBetween(first, addDays(todayJakarta(), -1));
   const filed = [];
   for (const month of months) {
     const res = await syncLibraryMonth(brandId, month);

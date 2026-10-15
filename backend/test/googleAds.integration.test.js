@@ -336,6 +336,34 @@ test('Google Ads ingest and report against the database', { skip: !ENABLED && 's
       assert.ok(ops.runs.some((r) => r.duration_ms != null));
     });
 
+    await t.test('the month in progress is filed up to yesterday', async (st) => {
+      const yesterday = new Date(`${today}T00:00:00Z`);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const yDay = yesterday.toISOString().slice(0, 10);
+      if (yDay.slice(0, 7) !== today.slice(0, 7)) return st.skip('the 1st: the new month has no day yet');
+      const curStart = `${today.slice(0, 7)}-01`;
+      const start = await call('POST', '/start', { customerId: CUSTOMER, startDate: curStart, endDate: yDay, source: 'ads_script' });
+      await call('POST', '/rows', { runId: start.body.runId, rows: [{ ...coreRow(curStart, 10, 1), level: 'search_term', adGroupId: 'g1', item: 'mawar kl', matchType: 'EXACT' }] });
+      await call('POST', '/finish', { runId: start.body.runId, status: 'success', rowCount: 1 });
+      const library = await import('../src/services/brandLibraryService.js');
+      const file = (await library.listLibrary(brandId))
+        .find((f) => f.platform === 'google' && f.channel === 'search_terms' && String(f.period_month).startsWith(today.slice(0, 7)));
+      assert.ok(file, 'search terms filed for the month in progress');
+      assert.equal(file.covered_days, Number(yDay.slice(8, 10)));
+    });
+
+    await t.test('a re-fetch reaching before "Tarik data sejak" moves that date back', async () => {
+      const { rows: [acc] } = await pool.query(`SELECT google_ads_account_id AS id FROM google_ads_accounts WHERE customer_id = $1`, [CUSTOMER]);
+      const earlier = new Date(`${mStart}T00:00:00Z`);
+      earlier.setUTCMonth(earlier.getUTCMonth() - 1);
+      const from = earlier.toISOString().slice(0, 10);
+      await service.requestResync({ brandId, accountId: acc.id, from, to: mEnd });
+      const after = (await pool.query(`SELECT to_char(backfill_from, 'YYYY-MM-DD') AS b FROM google_ads_accounts WHERE google_ads_account_id = $1`, [acc.id])).rows[0];
+      assert.equal(after.b, from);
+      const jobs = await call('GET', '/jobs');
+      assert.ok(jobs.body.jobs.some((j) => j.customerId === CUSTOMER && j.startDate === from), 'the earlier month is planned');
+    });
+
     await t.test('removing the account removes every dataset', async () => {
       const { rows: [acc] } = await pool.query(`SELECT google_ads_account_id AS id FROM google_ads_accounts WHERE customer_id = $1`, [CUSTOMER]);
       await service.removeAccount({ brandId, accountId: acc.id });

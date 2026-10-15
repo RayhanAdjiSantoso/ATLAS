@@ -69,7 +69,7 @@ export default function DashboardBrandPicker({
       </div>
       <div className="dashboard-brand-menu-body">
         <aside className="dashboard-brand-filters">
-          <span className="dashboard-brand-section-label">Status klien</span>
+          <span className="dashboard-brand-section-label">Client&apos;s Status</span>
           <BrandStatusFilter value={status} onChange={onStatusChange} />
         </aside>
         <section className="dashboard-brand-list" aria-label="Daftar brand">

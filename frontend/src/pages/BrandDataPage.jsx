@@ -145,8 +145,8 @@ const PLATFORMS = [
     tint: 'rgba(26,115,232,.13)',
     datasets: [
       { channel: 'auction_insights', name: 'Auction Insights', hint: 'Unggah manual · Google Ads › Insights & reports › Auction insights', kind: 'core' },
-      { channel: 'search_terms', name: 'Search Terms', hint: 'Otomatis tiap tanggal 1 untuk bulan lalu · bisa diganti file Search terms report', kind: 'core' },
-      { channel: 'change_history', name: 'Change History', hint: 'Otomatis tiap tanggal 1 untuk bulan lalu · bulan sebelum akun terhubung unggah manual', kind: 'core' },
+      { channel: 'search_terms', name: 'Search Terms', hint: 'Otomatis tiap hari, bulan berjalan s.d. kemarin · bisa diganti file Search terms report', kind: 'core' },
+      { channel: 'change_history', name: 'Change History', hint: 'Otomatis tiap hari, bulan berjalan s.d. kemarin · bulan sebelum akun terhubung unggah manual', kind: 'core' },
       { channel: 'ads', name: 'Performa Iklan', hint: 'Arsip otomatis · performa per iklan + headline & description', kind: 'extra', autoOnly: true },
       { channel: 'conversions', name: 'Konversi per Action', hint: 'Arsip otomatis · konversi per conversion action per campaign', kind: 'extra', autoOnly: true },
       { channel: 'impression_share', name: 'Impression Share', hint: 'Arsip otomatis · Search IS, Lost IS budget/rank per campaign, ad group, keyword', kind: 'extra', autoOnly: true },
@@ -352,7 +352,7 @@ function BrandPicker({ brands, brand, sector, onSelect, reduced }) {
             </div>
             <div className="brand-picker-menu-body">
               <aside className="brand-picker-filters">
-                <span className="brand-picker-section-label">Status klien</span>
+                <span className="brand-picker-section-label">Client&apos;s Status</span>
                 <BrandStatusFilter value={status} onChange={setStatus} />
               </aside>
               <div className="brand-picker-results">
@@ -816,7 +816,7 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
             <>
               <span>
                 <strong>Sebagian terisi otomatis</strong>
-                <small>Search Terms dan Change History diisi otomatis setiap tanggal 1 untuk bulan sebelumnya, untuk akun di <button type="button" className="brand-inline-link" onClick={openAccounts}>pengaturan Google Ads</button> pada channel ini. File yang Anda unggah untuk suatu bulan selalu menggantikan hasil otomatis.</small>
+                <small>Search Terms, Change History, dan arsip lainnya diisi otomatis setiap hari setelah Google Ads Script berjalan (bulan berjalan sampai kemarin), untuk akun di <button type="button" className="brand-inline-link" onClick={openAccounts}>pengaturan Google Ads</button> pada channel ini. File yang Anda unggah untuk suatu bulan selalu menggantikan hasil otomatis.</small>
               </span>
               <span>
                 <strong>Auction Insights</strong>
@@ -1112,7 +1112,7 @@ export default function BrandDataPage() {
           </div>
         </div>
         {brand && (
-          <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand context dan current direction diatur di Brand Setting">
+          <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand Context dan Brand Direction diatur di Brand Setting">
             <NotebookPen size={15} aria-hidden="true" /> Context &amp; direction
           </Link>
         )}

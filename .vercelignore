@@ -1,7 +1,10 @@
 # Sample data / one-off scripts — not needed by the deployed app
 *.xlsx
 import_shopee_data.py
-apps-script/
+apps-script/*
+# …except the Google Ads Script: Data Collection Hub shows it for copy-paste
+# (imported with ?raw by GoogleAdsScriptGuide.jsx at build time).
+!apps-script/GoogleAdsReport.js
 backend/standalone/
 backend/test_api_local.js
 backend/scripts/out/
