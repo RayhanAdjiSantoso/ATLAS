@@ -2,6 +2,7 @@ import pool from '../config/db.js';
 import { AppError } from '../utils/errors.js';
 import * as brandService from './brandService.js';
 import * as repo from '../repositories/dailyTrackingRepository.js';
+import * as annualTargets from './annualTargetService.js';
 import { callAppsScript } from './metaAutomationService.js';
 import {
   FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS,
@@ -578,7 +579,9 @@ export async function getTarget(brandId, month) {
   const monthStart = `${month}-01`;
   const target = await repo.getTarget(brandId, monthStart);
   const previous = target ? null : await repo.getPreviousTarget(brandId, monthStart);
-  return { target: shapeTarget(target), previous: shapeTarget(previous) };
+  // Months of a year with an annual target take sales/budget from that plan.
+  const annualManaged = await annualTargets.isAnnualManaged(brandId, Number(month.slice(0, 4)));
+  return { target: shapeTarget(target), previous: shapeTarget(previous), annualManaged };
 }
 
 // Allocation keys must be this brand's spend channels; percentages 0–100.
@@ -597,6 +600,14 @@ export async function saveTarget({ brandId, month, targetSales, targetSpend, all
   }
   const total = Object.values(clean).reduce((a, b) => a + b, 0);
   if (total > 100.01) throw new AppError(`Total alokasi ${total.toLocaleString('id-ID')}% melebihi 100%`, 400);
+  // The annual plan owns a month's sales/budget so the 12 months keep adding
+  // up to the year; here only allocation and notes change for those months.
+  const managed = await annualTargets.isAnnualManaged(brandId, Number(month.slice(0, 4)));
+  if (managed.sales || managed.spend) {
+    const existing = await repo.getTarget(brandId, `${month}-01`);
+    if (managed.sales) targetSales = existing?.target_sales ?? null;
+    if (managed.spend) targetSpend = existing?.target_spend ?? null;
+  }
   const row = await repo.upsertTarget({
     brandId, monthStart: `${month}-01`, userId,
     targetSales: numOrNull(targetSales), targetSpend: numOrNull(targetSpend),

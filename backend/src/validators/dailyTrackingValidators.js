@@ -79,6 +79,32 @@ export const targetQueryValidation = [
   query('month').matches(MONTH_RE).withMessage('month harus format YYYY-MM'),
 ];
 
+const YEAR_RE = /^\d{4}$/;
+
+export const annualQueryValidation = [
+  query('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+  query('year').matches(YEAR_RE).withMessage('year harus format YYYY'),
+];
+
+export const annualBodyValidation = [
+  body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+  body('year').isInt({ min: 2000, max: 2100 }).withMessage('year tidak valid'),
+  body('targetSales').isFloat({ gt: 0 }).withMessage('Target sales tahunan wajib diisi dan lebih dari 0'),
+  body('targetSpend').optional({ values: 'null' }).isFloat({ min: 0 }).withMessage('Budget iklan harus angka ≥ 0'),
+  body('note').optional({ values: 'null' }).isString().isLength({ max: 1000 }),
+  body('split').optional({ values: 'null' }).isIn(['even', 'remaining']).withMessage('split harus even atau remaining'),
+  body('correction').optional({ values: 'null' }).isBoolean().withMessage('correction harus boolean'),
+];
+
+export const annualSplitBodyValidation = [
+  body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+  body('year').isInt({ min: 2000, max: 2100 }).withMessage('year tidak valid'),
+  body('months').isArray({ min: 12, max: 12 }).withMessage('months harus berisi 12 bulan'),
+  body('months.*.month').matches(MONTH_RE).withMessage('month harus format YYYY-MM'),
+  body('months.*.targetSales').isFloat({ min: 0 }).withMessage('Target sales per bulan harus angka ≥ 0'),
+  body('months.*.targetSpend').optional({ values: 'null' }).isFloat({ min: 0 }).withMessage('Budget per bulan harus angka ≥ 0'),
+];
+
 export const targetBodyValidation = [
   body('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
   body('month').matches(MONTH_RE).withMessage('month harus format YYYY-MM'),

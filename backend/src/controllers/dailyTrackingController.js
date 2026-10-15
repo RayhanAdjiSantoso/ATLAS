@@ -1,4 +1,5 @@
 import { validationResult } from 'express-validator';
+import * as annual from '../services/annualTargetService.js';
 import { AppError, asyncHandler } from '../utils/errors.js';
 import * as service from '../services/dailyTrackingService.js';
 
@@ -149,6 +150,41 @@ export const ingestFromAppsScript = asyncHandler(async (req, res) => {
 export const getTarget = asyncHandler(async (req, res) => {
   validate(req);
   res.json(await service.getTarget(Number(req.query.brandId), req.query.month));
+});
+
+// GET /api/daily-tracking/annual-targets?brandId=&year=
+export const getAnnualTargets = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await annual.getAnnualTargets(Number(req.query.brandId), Number(req.query.year)));
+});
+
+// PUT /api/daily-tracking/annual-targets  { brandId, year, targetSales, targetSpend, note?, split?, correction? }
+// The first time sets the original target; afterwards it adds an update —
+// split 'even' (12 months) or 'remaining' (running month on), and with
+// correction it replaces a wrongly entered target awal.
+export const setAnnualTarget = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await annual.setAnnualTarget({
+    brandId: Number(req.body.brandId),
+    year: Number(req.body.year),
+    targetSales: req.body.targetSales,
+    targetSpend: req.body.targetSpend,
+    note: req.body.note,
+    split: req.body.split,
+    correction: req.body.correction === true,
+    userId: req.user.userId,
+  }));
+});
+
+// PUT /api/daily-tracking/annual-targets/split  { brandId, year, months: [{ month, targetSales, targetSpend }] }
+export const saveAnnualSplit = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json(await annual.saveAnnualSplit({
+    brandId: Number(req.body.brandId),
+    year: Number(req.body.year),
+    months: req.body.months,
+    userId: req.user.userId,
+  }));
 });
 
 // PUT /api/daily-tracking/targets  { brandId, month, targetSales, targetSpend, allocation, notes }

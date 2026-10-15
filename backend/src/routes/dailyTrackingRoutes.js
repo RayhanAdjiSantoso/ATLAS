@@ -6,6 +6,9 @@ import { verifyIngestKey } from '../middlewares/dailyTrackingIngestAuth.js';
 import { uploadDataFile } from '../middlewares/upload.js';
 import * as ctrl from '../controllers/dailyTrackingController.js';
 import {
+  annualBodyValidation,
+  annualQueryValidation,
+  annualSplitBodyValidation,
   channelsQueryValidation,
   addChannelBodyValidation,
   entriesQueryValidation,
@@ -38,6 +41,7 @@ function clientRevenueOnly(req, res, next) {
     req.method === 'DELETE'
     || req.path.startsWith('/import')
     || req.path === '/targets'
+    || req.path.startsWith('/annual-targets')
     || req.path === '/channels/move'
     || (req.path === '/channels' && req.body?.kind !== 'sales')
     || (req.path === '/entries' && Array.isArray(req.body?.spend) && req.body.spend.length > 0);
@@ -103,6 +107,24 @@ router.put(
   '/targets',
   authenticate, dailyTracking, clientRevenueOnly, blockWriteIfViewOnly, requireBrandAccess((req) => req.body.brandId),
   targetBodyValidation, ctrl.saveTarget,
+);
+// Annual target: read by everyone with the module (a client sees its year);
+// set and updated in Brand Setting (brand_settings module), split across
+// the months in Brand Tracking — both by the team only.
+router.get(
+  '/annual-targets',
+  authenticate, dailyTracking, requireBrandAccess((req) => req.query.brandId),
+  annualQueryValidation, ctrl.getAnnualTargets,
+);
+router.put(
+  '/annual-targets',
+  authenticate, requireModule('brand_settings'), clientRevenueOnly, blockWriteIfViewOnly, requireBrandAccess((req) => req.body.brandId),
+  annualBodyValidation, ctrl.setAnnualTarget,
+);
+router.put(
+  '/annual-targets/split',
+  authenticate, dailyTracking, clientRevenueOnly, blockWriteIfViewOnly, requireBrandAccess((req) => req.body.brandId),
+  annualSplitBodyValidation, ctrl.saveAnnualSplit,
 );
 router.post(
   '/meta-sync',
