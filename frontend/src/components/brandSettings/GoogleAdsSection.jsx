@@ -383,7 +383,7 @@ export default function GoogleAdsSection({ brand }) {
                   <label className="maf-option">sampai
                     <input type="date" className="form-input" value={resync.to} min={resync.from} onChange={(e) => setResync((r) => ({ ...r, to: e.target.value }))} />
                   </label>
-                  <small className="maf-hint">Pilih rentang, lalu tekan <RefreshCw size={11} /> pada akunnya. Bulan berjalan dan bulan lalu sudah diperbarui otomatis setiap hari.</small>
+                  <small className="maf-hint">Pilih rentang, lalu tekan <RefreshCw size={11} /> pada akunnya. Bulan berjalan dan bulan lalu sudah diperbarui otomatis setiap hari. Rentang yang dimulai sebelum "Tarik data sejak" ikut memundurkan tanggal itu.</small>
                 </div>
               )}
               {accounts.length > 0 && !isViewOnly && (
@@ -391,7 +391,7 @@ export default function GoogleAdsSection({ brand }) {
                   <button type="button" className="btn btn-ghost dt-btn-sm" onClick={rebuildArchive} disabled={busy === 'archive'}>
                     {busy === 'archive' ? <Loader2 size={14} className="maf-spin" /> : <RefreshCw size={14} />} Isi arsip Performance Database
                   </button>
-                  <small className="maf-hint">Membuat ulang file bulanan Google Ads di Performance Database untuk setiap bulan yang sudah selesai dan tersinkron. Bulan baru terisi otomatis tiap tanggal 1.</small>
+                  <small className="maf-hint">Membuat ulang file bulanan Google Ads di Performance Database untuk setiap bulan yang tersinkron, bulan berjalan sampai kemarin. Biasanya tidak perlu: file terisi otomatis setiap kali script berjalan.</small>
                 </div>
               )}
             </div>
