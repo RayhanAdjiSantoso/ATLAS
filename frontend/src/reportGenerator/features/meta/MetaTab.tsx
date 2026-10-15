@@ -9,6 +9,7 @@ import { ReportPages } from '../../components/ReportPages';
 import { SectionAccordion, SectionGroup } from '../../components/SectionAccordion';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { HowTo, HowToStep } from '../../components/HowTo';
+import MetaDatasetSpecs, { SPEC_INTRO, SPEC_NOTES } from '../../../components/brandSettings/MetaDatasetSpecs.jsx';
 import { InlineNotice } from '../../components/InlineNotice';
 import { SearchSelect } from '../../components/SearchSelect';
 import {
@@ -824,43 +825,11 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
       <HowTo>
-        <HowToStep num={1} title="Download file dari Meta Ads Reporting — satu bulan per periode">
-          Download <strong>dua file terpisah</strong> dari Meta Ads Reporting, masing-masing mencakup satu bulan/periode saja — satu untuk periode lalu, satu untuk periode ini. Gunakan kolom-kolom berikut sesuai jenis akun:
+        <HowToStep num={1} title="Kolom yang ditarik — tarik otomatis & Data Collection Hub">
+          File Meta Ads dan CPAS di Data Collection Hub memakai breakdown dan metrik berikut, sama seperti panel Tarik otomatis di Brand Setting:
+          <MetaDatasetSpecs sections={['boost', 'ecom', 'b2b', 'cpas']} />
           <div className="empty-note" style={{ padding: '.4rem 0 0' }}>
-            Meta Ads Reporting dapat memakai breakdown "Month" atau "Day". Jika memilih "Month", satu file = satu bulan penuh. Jika memilih "Day", tanggalnya bebas asal tidak melewati bulan yang dimaksud.
-          </div>
-          <div className="empty-note" style={{ padding: '.4rem 0 0' }}>
-            <strong>Penting untuk hasil yang presisi:</strong> saat export, pilih format <strong>"Formatted data table (.xlsx)"</strong> (bukan "Raw data").
-          </div>
-          <div className="howto-cols">
-            <div className="howto-col-block">
-              <div className="howto-col-title">
-                Main Ad Account <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '.62rem', textTransform: 'none', letterSpacing: 0 }}>· breakdown month, age, gender</span>
-              </div>
-              <ul className="howto-col-list">
-                {['Campaign Name', 'Objective', 'Amount Spent', 'CTR', 'Cost per Click', 'Profile Visits', 'Cost per Profile Visit', 'View Content', 'Cost per View Content', 'View Content to ATC Ratio', 'Cost per ATC', 'ATC to Purchase Ratio', 'Purchase', 'Purchase Value', 'Cost per Purchase', 'ROAS', 'Custom conversions lain yang applicable'].map((c) => (
-                  <li key={c} className={c === 'Objective' ? 'howto-col-req' : undefined}>
-                    {c}
-                    {c === 'Objective' && <span className="howto-col-note"> — dipakai untuk memecah Amount Spent per objective</span>}
-                  </li>
-                ))}
-              </ul>
-              <div className="empty-note" style={{ padding: '.35rem 0 0', fontSize: '.66rem' }}>
-                Kolom <strong>Objective</strong> &amp; <strong>Campaign Name</strong> adalah kolom identitas (bukan metrik angka) — <strong>Objective</strong>{' '}
-                sangat disarankan: dipakai untuk memecah Non-Boost per objective (Sales / Leads / Engagement / Traffic). Tanpa kolom ini, objective
-                dibaca dari nama campaign (format MIL: <em>NV | Sales - VC | …</em>), lalu dari metrik hasilnya.
-              </div>
-            </div>
-            <div className="howto-col-block">
-              <div className="howto-col-title">
-                CPAS Shopee <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '.62rem', textTransform: 'none', letterSpacing: 0 }}>· breakdown month, age, gender</span>
-              </div>
-              <ul className="howto-col-list">
-                {['Campaign Name', 'Amount Spent', 'CTR', 'Cost per Click', 'View Content with Shared Items', 'Cost per View Content', 'View Content to ATC Ratio', 'ATC with Shared Items', 'Cost per ATC', 'ATC to Purchase Ratio', 'Purchase with Shared Items', 'Purchase Value with Shared Items', 'ROAS', 'Cost per Purchase'].map((c) => (
-                  <li key={c}>{c}</li>
-                ))}
-              </ul>
-            </div>
+            {SPEC_INTRO} <strong>Meta Ads:</strong> {SPEC_NOTES.MAIN} <strong>CPAS:</strong> {SPEC_NOTES.CPAS}
           </div>
         </HowToStep>
         <HowToStep num={2} title="Pilih sumber & buat laporan">

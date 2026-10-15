@@ -10,6 +10,14 @@ const loadCatalog = () => {
   return catalogRequest;
 };
 
+// How the metrics above are read, per account type — shown under the column
+// list in Data Collection Hub and in Report Generator › Meta Ads.
+export const SPEC_INTRO = 'Setiap file (unggah manual maupun tarik otomatis) memakai breakdown dan metrik di atas.';
+export const SPEC_NOTES = {
+  MAIN: 'Boost Post dan Non Boost Post dipisah dari Kata Kunci Boost Post akun (campaign yang namanya mengandung kata itu = Boost Post). Non Boost Post menyimpan metrik E-commerce dan B2B sekaligus. Profile visit diambil dari Results campaign profile visit; Post interactions = Facebook likes + post comments + post saves + post shares.',
+  CPAS: 'Metrik "with shared items" adalah angka produk katalog yang dibagikan (CPAS).',
+};
+
 // The breakdowns and metrics a Meta dataset's file holds, per campaign type —
 // the same list Automate Input with API shows, for users who cannot open that
 // panel. `sections` are catalog keys (boost, ecom, b2b, cpas).

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, CircleAlert, Link2, Loader2, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import GoogleAdsScriptGuide from './GoogleAdsScriptGuide.jsx';
 import './metaAdsAutoFetch.css';
 
 const dateTime = (iso) => (iso ? new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -412,11 +413,12 @@ export default function GoogleAdsSection({ brand }) {
                   </button>
                 </div>
                 <p className="maf-hint">
-                  Setelah menghubungkan, pasang Google Ads Script (apps-script/GoogleAdsReport.js) di akun Google Ads itu sendiri:
-                  Tools › Bulk actions › Scripts, lalu jadwalkan Daily jam 01.00. Tanpa script itu, data akun ini tidak akan masuk.
+                  Setelah menghubungkan, pasang Google Ads Script di akun Google Ads itu sendiri — ikuti panduan di bawah. Tanpa script itu, data akun ini tidak akan masuk.
                 </p>
               </form>
             )}
+
+            <GoogleAdsScriptGuide />
 
             {accounts.length > 0 && <ConversionGoals brandId={brandId} isViewOnly={isViewOnly} />}
 

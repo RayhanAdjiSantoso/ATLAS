@@ -196,3 +196,16 @@
 
 /* Google Ads card: its inner blocks sit flush in the card now. */
 .maf.mx-card.is-google { margin-top: 0; }
+
+/* Data Collection Hub › Google Ads: the script setup guide + code to paste. */
+.gads-guide .maf-block > .maf-hint:first-child { margin-top: 12px; }
+.gads-steps { margin: .8rem 0 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: .55rem; font-size: .8rem; color: var(--text); line-height: 1.5; }
+.gads-steps ul { margin: .3rem 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .2rem; color: var(--text-muted); }
+.gads-steps code, .gads-guide .maf-hint code { font-size: .74rem; padding: .05rem .3rem; border-radius: 5px; background: var(--bg-elevated); border: 1px solid var(--border); overflow-wrap: anywhere; }
+.gads-steps a { color: var(--primary); }
+.gads-code { margin-top: .9rem; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.gads-code-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .5rem .7rem; background: var(--bg-elevated); border-bottom: 1px solid var(--border); font-size: .75rem; color: var(--text-muted); }
+.gads-code-bar span { margin-right: auto; }
+/* width 0 + min-width 100%: the long code lines scroll inside the box
+   instead of widening the card (a pre's min-content is its longest line). */
+.gads-code pre { width: 0; min-width: 100%; box-sizing: border-box; margin: 0; max-height: 320px; overflow: auto; padding: .7rem .8rem; font-size: .7rem; line-height: 1.45; background: var(--bg-card); color: var(--text); }

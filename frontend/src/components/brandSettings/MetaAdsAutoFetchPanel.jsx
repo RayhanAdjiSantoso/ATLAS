@@ -3,6 +3,7 @@ import { CalendarClock, Check, CircleAlert, FolderInput, Loader2, RefreshCw, Tra
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import SelectMenu from '../common/SelectMenu.jsx';
+import { SPEC_INTRO, SPEC_NOTES } from './MetaDatasetSpecs.jsx';
 import './metaAdsAutoFetch.css';
 
 // The breakdown every file carries, in this order (BREAKDOWNS in
@@ -366,12 +367,7 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
                   </div>
                 </div>
               ))}
-              <p className="maf-hint">
-                Setiap file (unggah manual maupun tarik otomatis) memakai breakdown dan metrik di atas.
-                {type === 'MAIN'
-                  ? ' Boost Post dan Non Boost Post dipisah dari Kata Kunci Boost Post akun (campaign yang namanya mengandung kata itu = Boost Post). Non Boost Post menyimpan metrik E-commerce dan B2B sekaligus. Profile visit diambil dari Results campaign profile visit; Post interactions = Facebook likes + post comments + post saves + post shares.'
-                  : ' Metrik "with shared items" adalah angka produk katalog yang dibagikan (CPAS).'}
-              </p>
+              <p className="maf-hint">{SPEC_INTRO} {SPEC_NOTES[type]}</p>
             </div>
           </details>
         </>
