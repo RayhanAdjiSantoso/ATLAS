@@ -12,7 +12,7 @@ interface ClientPickerProps {
 // Brand/client dropdown shown above the platform tabs. "Clients" here map
 // 1:1 to ATLAS's public.brands table (GET /api/clients). Brands are created
 // and managed in Pengaturan Brand, so this picker only selects; the status
-// filter (Aktif / Nonaktif / …) sits inside the dropdown, with the list it
+// filter (Active / Inactive / …) sits inside the dropdown, with the list it
 // narrows.
 export function ClientPicker({ clientId, onChange }: ClientPickerProps) {
   const [status, setStatus] = useSessionState('generator:client-status', 'active');

@@ -7,7 +7,7 @@ import { Activity, FolderOpen, NotebookPen } from 'lucide-react';
 export const BRAND_SETTING_SECTIONS = [
   {
     to: '/pengaturan-brand',
-    label: 'Brand Context',
+    label: 'Setup Context & Brand Direction',
     hint: 'Status, context & direction',
     Icon: NotebookPen,
     module: 'brand_settings',

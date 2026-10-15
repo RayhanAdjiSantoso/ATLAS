@@ -32,7 +32,7 @@ const PINS_KEY = 'atlas_annotation_pins';
 const PAGES = {
   '/': 'Beranda',
   '/dashboard': 'Business Overview',
-  '/pengaturan-brand': 'Brand Context',
+  '/pengaturan-brand': 'Setup Context & Brand Direction',
   '/data-brand': 'Data Collection Hub',
   '/brand-tracking': 'Brand Tracking',
   '/meta-automation': 'Meta Ads Automation',

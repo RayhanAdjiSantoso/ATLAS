@@ -6,8 +6,8 @@ import SearchField from '../common/SearchField.jsx';
 // "freeze" is bucketed with "off" (and so is any null/other status); only
 // an explicit 'active' counts as active.
 const STATUS_FILTERS = [
-  { key: 'all', label: 'Semua' },
-  { key: 'active', label: 'Aktif' },
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
   { key: 'off', label: 'Off' },
 ];
 

@@ -13,7 +13,7 @@ const SECTIONS = {
   target: '.bs .band-tabs',
   kicker: 'Brand Setting',
   title: 'Tiga bagian dalam satu tempat',
-  body: 'Brand Context untuk profil dan arah brand, Data Collection Hub untuk semua file data, dan Brand Tracking untuk penjualan, belanja iklan harian, serta catatan meeting. Pindah bagian kapan saja dari tab ini.',
+  body: 'Setup Context & Brand Direction untuk profil dan arah brand, Data Collection Hub untuk semua file data, dan Brand Tracking untuk penjualan, belanja iklan harian, serta catatan meeting. Pindah bagian kapan saja dari tab ini.',
 };
 
 export const TOURS = {
