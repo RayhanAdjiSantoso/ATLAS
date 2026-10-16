@@ -3,6 +3,7 @@ import multer from 'multer';
 import zlib from 'zlib';
 import pool from '../../config/db.js';
 import * as fileStore from '../../services/fileStore.js';
+import * as rowsets from '../../services/reportRowsets.js';
 import { buildBulkInsert, buildBulkInserts } from '../../utils/sqlHelpers.js';
 import { canAccessBrand, brandScope } from '../../middlewares/brandAccess.js';
 
@@ -226,7 +227,7 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
   // Archived files go to R2 (fileStore) when it is on: the new objects are
   // removed if the save rolls back, the replaced ones once it commits.
   const newKeys = [];
-  let oldKeys = [];
+  const oldKeys = [];
   try {
     await client.query('BEGIN');
 
@@ -256,10 +257,21 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
     );
     const runId = upsert.rows[0].id;
 
+    // The parsed rows: one gzipped set per (period, channel) in R2
+    // (reportRowsets, migration 052) — or, when R2 is off or refuses the
+    // write, the platform's row table as before. A re-save replaces both.
+    const rowTable = rowsets.ROW_TABLES[payload.platform];
+    if (rowTable) await client.query(`DELETE FROM ${rowTable} WHERE report_run_id = $1`, [runId]);
+    oldKeys.push(...await rowsets.clearRowsets(client, runId));
+    const setKeys = await rowsets.writeRowsets(client, runId, payload.platform, payload.rows[payload.platform] ?? []);
+    if (setKeys) newKeys.push(...setKeys);
+    const rowsInTable = !setKeys;
+
     if (payload.platform === 'shopee') {
-      await client.query('DELETE FROM ads_reports.shopee_ad_rows WHERE report_run_id = $1', [runId]);
-      for (const insert of buildBulkInserts('ads_reports.shopee_ad_rows', SHOPEE_COLUMNS, (payload.rows.shopee ?? []).map((r) => shopeeRowValues(runId, r)))) {
-        await client.query(insert.text, insert.values);
+      if (rowsInTable) {
+        for (const insert of buildBulkInserts('ads_reports.shopee_ad_rows', SHOPEE_COLUMNS, (payload.rows.shopee ?? []).map((r) => shopeeRowValues(runId, r)))) {
+          await client.query(insert.text, insert.values);
+        }
       }
 
       // Product Overview daily rows — brand-scoped, upserted by date (not
@@ -276,13 +288,11 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
           [payload.brandId, iso, toJsonb(row)],
         );
       }
-    } else if (payload.platform === 'meta') {
-      await client.query('DELETE FROM ads_reports.meta_ad_rows WHERE report_run_id = $1', [runId]);
+    } else if (payload.platform === 'meta' && rowsInTable) {
       for (const insert of buildBulkInserts('ads_reports.meta_ad_rows', META_COLUMNS, (payload.rows.meta ?? []).map((r) => metaRowValues(runId, r)))) {
         await client.query(insert.text, insert.values);
       }
-    } else if (payload.platform === 'tiktok') {
-      await client.query('DELETE FROM ads_reports.tiktok_ad_rows WHERE report_run_id = $1', [runId]);
+    } else if (payload.platform === 'tiktok' && rowsInTable) {
       for (const insert of buildBulkInserts('ads_reports.tiktok_ad_rows', TIKTOK_COLUMNS, (payload.rows.tiktok ?? []).map((r) => tiktokRowValues(runId, r)))) {
         await client.query(insert.text, insert.values);
       }
@@ -293,7 +303,7 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
     // 007_uploads_report_generator_source.sql — so re-saving never leaves
     // stale/duplicate History Upload entries behind.
     const removed = await client.query('DELETE FROM ads_reports.raw_uploads WHERE report_run_id = $1 RETURNING storage_key', [runId]);
-    oldKeys = removed.rows.map((r) => r.storage_key).filter(Boolean);
+    oldKeys.push(...removed.rows.map((r) => r.storage_key).filter(Boolean));
     for (let i = 0; i < files.length; i++) {
       const meta = fileMeta[i];
       if (!meta) continue;
@@ -423,13 +433,7 @@ reportsRouter.get('/:id/period/:role', async (req, res) => {
     res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
     return;
   }
-  let table = null;
-  if (run.platform === 'shopee') table = 'ads_reports.shopee_ad_rows';
-  else if (run.platform === 'meta') table = 'ads_reports.meta_ad_rows';
-  else if (run.platform === 'tiktok') table = 'ads_reports.tiktok_ad_rows';
-  const rowsResult = table
-    ? await pool.query(`SELECT * FROM ${table} WHERE report_run_id = $1 AND period_role = $2 ORDER BY id`, [id, role])
-    : { rows: [] };
+  const rowsResult = { rows: await rowsets.loadRows(pool, id, run.platform, role) };
 
   // TikTok's fact table has no `channel` column (campaign-level only) — bucket
   // it under a single synthetic key so the response shape stays uniform.
@@ -481,12 +485,8 @@ reportsRouter.get('/:id', async (req, res) => {
     return;
   }
 
-  let table = null;
-  if (run.platform === 'shopee') table = 'ads_reports.shopee_ad_rows';
-  else if (run.platform === 'meta') table = 'ads_reports.meta_ad_rows';
-  else if (run.platform === 'tiktok') table = 'ads_reports.tiktok_ad_rows';
-
-  const rowsResult = table ? await pool.query(`SELECT * FROM ${table} WHERE report_run_id = $1 ORDER BY id`, [id]) : { rows: [] };
+  // { period_role, channel, extra } per row — all reconstruct.ts reads.
+  const rowsResult = { rows: await rowsets.loadRows(pool, id, run.platform) };
 
   // Shopee Product Overview is brand-scoped daily data — pull the rows
   // falling inside each of this run's two periods so reconstruct.ts can
@@ -541,7 +541,11 @@ reportsRouter.delete('/:id', async (req, res) => {
   // Child tables (raw_uploads/shopee_ad_rows/meta_ad_rows/tiktok_ad_rows) all
   // reference report_runs with ON DELETE CASCADE — see 004_ads_reports_schema.sql.
   // The archived files' objects in R2 are not rows, so they go by hand after.
-  const { rows: archived } = await pool.query('SELECT storage_key FROM ads_reports.raw_uploads WHERE report_run_id = $1 AND storage_key IS NOT NULL', [id]);
+  const { rows: archived } = await pool.query(
+    `SELECT storage_key FROM ads_reports.raw_uploads WHERE report_run_id = $1 AND storage_key IS NOT NULL
+     UNION ALL SELECT storage_key FROM ads_reports.report_run_rowsets WHERE report_run_id = $1`,
+    [id],
+  );
   const result = await pool.query('DELETE FROM ads_reports.report_runs WHERE id = $1', [id]);
   if (result.rowCount === 0) {
     res.status(404).json({ error: 'Report not found' });

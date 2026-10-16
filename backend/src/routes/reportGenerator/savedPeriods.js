@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../../config/db.js';
 import { canAccessBrand } from '../../middlewares/brandAccess.js';
+import * as rowsets from '../../services/reportRowsets.js';
 
 // Ported from the standalone report generator (src/routes/savedPeriods.ts).
 // Logic unchanged — TypeScript types stripped, shared ATLAS pool used, and
@@ -9,15 +10,6 @@ import { canAccessBrand } from '../../middlewares/brandAccess.js';
 export const savedPeriodsRouter = Router();
 
 const PLATFORMS = ['meta', 'shopee', 'tiktok'];
-
-// Fact table + whether it carries a `channel` column, per platform. Values
-// are literals from this map only — never request input — so interpolating
-// them into the SQL below is safe.
-const FACT_TABLE = {
-  shopee: { table: 'ads_reports.shopee_ad_rows', hasChannel: true },
-  meta: { table: 'ads_reports.meta_ad_rows', hasChannel: true },
-  tiktok: { table: 'ads_reports.tiktok_ad_rows', hasChannel: false },
-};
 
 // GET /api/report-generator/saved-periods?client_id=<id>&platform=<meta|shopee|tiktok>
 //
@@ -60,15 +52,8 @@ savedPeriodsRouter.get('/', async (req, res) => {
   }
 
   const ids = runs.rows.map((r) => r.id);
-  const { table, hasChannel } = FACT_TABLE[platform];
-  const coverage = await pool.query(
-    hasChannel
-      ? `SELECT report_run_id, period_role, channel, count(*)::int AS n
-         FROM ${table} WHERE report_run_id = ANY($1) GROUP BY report_run_id, period_role, channel`
-      : `SELECT report_run_id, period_role, 'tiktok'::text AS channel, count(*)::int AS n
-         FROM ${table} WHERE report_run_id = ANY($1) GROUP BY report_run_id, period_role`,
-    [ids],
-  );
+  // Row sets in R2 (report_run_rowsets) plus rows saved before the move.
+  const coverage = { rows: await rowsets.countRows(pool, ids, platform) };
 
   const covByRunRole = new Map();
   for (const c of coverage.rows) {

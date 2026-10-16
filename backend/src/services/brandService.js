@@ -205,7 +205,9 @@ export async function deleteBrandWithData(brandId) {
       `SELECT storage_key FROM ads_reports.brand_library_files WHERE brand_id = $1 AND storage_key IS NOT NULL
        UNION ALL SELECT storage_key FROM public.uploads WHERE brand_id = $1 AND storage_key IS NOT NULL
        UNION ALL SELECT r.storage_key FROM ads_reports.raw_uploads r JOIN ads_reports.report_runs rr ON rr.id = r.report_run_id
-                 WHERE rr.brand_id = $1 AND r.storage_key IS NOT NULL`,
+                 WHERE rr.brand_id = $1 AND r.storage_key IS NOT NULL
+       UNION ALL SELECT s.storage_key FROM ads_reports.report_run_rowsets s JOIN ads_reports.report_runs rr ON rr.id = s.report_run_id
+                 WHERE rr.brand_id = $1`,
       [brandId],
     );
     const unordered = (await listReferenceTables(client))
