@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import zlib from 'zlib';
 import pool from '../../config/db.js';
+import * as fileStore from '../../services/fileStore.js';
 import { buildBulkInsert, buildBulkInserts } from '../../utils/sqlHelpers.js';
 import { canAccessBrand, brandScope } from '../../middlewares/brandAccess.js';
 
@@ -222,6 +223,10 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
   const files = req.files?.files ?? [];
 
   const client = await pool.connect();
+  // Archived files go to R2 (fileStore) when it is on: the new objects are
+  // removed if the save rolls back, the replaced ones once it commits.
+  const newKeys = [];
+  let oldKeys = [];
   try {
     await client.query('BEGIN');
 
@@ -287,15 +292,18 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
     // rows a previous save of this same report already created — see
     // 007_uploads_report_generator_source.sql — so re-saving never leaves
     // stale/duplicate History Upload entries behind.
-    await client.query('DELETE FROM ads_reports.raw_uploads WHERE report_run_id = $1', [runId]);
+    const removed = await client.query('DELETE FROM ads_reports.raw_uploads WHERE report_run_id = $1 RETURNING storage_key', [runId]);
+    oldKeys = removed.rows.map((r) => r.storage_key).filter(Boolean);
     for (let i = 0; i < files.length; i++) {
       const meta = fileMeta[i];
       if (!meta) continue;
+      const stored = await fileStore.storeBytes(fileStore.keys.reportRun(runId, meta.originalFilename), files[i].buffer);
+      if (stored.storageKey) newKeys.push(stored.storageKey);
       const rawUpload = await client.query(
-        `INSERT INTO ads_reports.raw_uploads (report_run_id, channel, period_role, original_filename, raw_file)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO ads_reports.raw_uploads (report_run_id, channel, period_role, original_filename, raw_file, storage_key)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id`,
-        [runId, meta.channel, meta.periodRole, meta.originalFilename, files[i].buffer],
+        [runId, meta.channel, meta.periodRole, meta.originalFilename, stored.rawFile, stored.storageKey],
       );
 
       // Mirror into public.uploads so this file also shows up in History
@@ -325,9 +333,11 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
     }
 
     await client.query('COMMIT');
+    for (const key of oldKeys) await fileStore.deleteBytes(key).catch(() => {});
     res.json({ id: runId });
   } catch (err) {
     await client.query('ROLLBACK');
+    for (const key of newKeys) await fileStore.deleteBytes(key).catch(() => {});
     const pgErr = err;
     if (pgErr.code === '23503') {
       res.status(400).json({ error: 'brandId does not reference an existing brand.' });
@@ -530,10 +540,13 @@ reportsRouter.delete('/:id', async (req, res) => {
   }
   // Child tables (raw_uploads/shopee_ad_rows/meta_ad_rows/tiktok_ad_rows) all
   // reference report_runs with ON DELETE CASCADE — see 004_ads_reports_schema.sql.
+  // The archived files' objects in R2 are not rows, so they go by hand after.
+  const { rows: archived } = await pool.query('SELECT storage_key FROM ads_reports.raw_uploads WHERE report_run_id = $1 AND storage_key IS NOT NULL', [id]);
   const result = await pool.query('DELETE FROM ads_reports.report_runs WHERE id = $1', [id]);
   if (result.rowCount === 0) {
     res.status(404).json({ error: 'Report not found' });
     return;
   }
+  for (const { storage_key: key } of archived) await fileStore.deleteBytes(key).catch(() => {});
   res.status(204).end();
 });

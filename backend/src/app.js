@@ -21,6 +21,7 @@ import { homepageAdminRouter, publicHomepageRouter } from './routes/homepageRout
 import googleAdsIngestRoutes from './routes/googleAdsIngestRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 import { securityHeaders } from './middlewares/security.js';
+import { isEnabled as fileStoreEnabled } from './services/fileStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -41,7 +42,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  // fileStore: where new uploads' bytes go ('r2' once R2_* is set, else
+  // 'database') — a yes/no, nothing about the credentials themselves.
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), fileStore: fileStoreEnabled() ? 'r2' : 'database' });
 });
 
 app.use('/api/auth', authRoutes);

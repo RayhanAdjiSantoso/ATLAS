@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import pool from '../config/db.js';
+import * as fileStore from '../services/fileStore.js';
 import { authenticate, requireModule } from '../middlewares/auth.js';
 import { AppError } from '../utils/errors.js';
 
@@ -86,7 +87,7 @@ publicHomepageRouter.get(
   wrap(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) throw new AppError('Gambar tidak ditemukan', 404);
-    const { rows } = await pool.query('SELECT mime, data, updated_at FROM homepage_media WHERE id = $1', [id]);
+    const { rows } = await pool.query('SELECT mime, storage_key, updated_at FROM homepage_media WHERE id = $1', [id]);
     const row = rows[0];
     // Hidden items still load (the manage panel previews them); they are only
     // left out of the public list above.
@@ -99,7 +100,13 @@ publicHomepageRouter.get(
     res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     res.set('X-Content-Type-Options', 'nosniff');
     if (req.headers['if-none-match'] === etag) return res.status(304).end();
-    res.type(row.mime).send(row.data);
+    // The bytes: in R2 (storage_key) or, before the move, in the row — read
+    // only now, so a revalidation (304 above) costs neither.
+    const data = row.storage_key
+      ? await fileStore.readBytes({ storageKey: row.storage_key })
+      : (await pool.query('SELECT data FROM homepage_media WHERE id = $1', [id])).rows[0]?.data;
+    if (!data) throw new AppError('Gambar tidak ditemukan', 404);
+    res.type(row.mime).send(data);
   }),
 );
 
@@ -126,12 +133,19 @@ homepageAdminRouter.post(
     const width = Number(req.body.width) || null;
     const height = Number(req.body.height) || null;
     const { rows: order } = await pool.query('SELECT COALESCE(MAX(sort_order), 0) + 1 AS next FROM homepage_media WHERE kind = $1', [kind]);
-    const { rows } = await pool.query(
-      `INSERT INTO homepage_media (kind, title, caption, mime, data, byte_size, width, height, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING id, kind, title, caption, width, height, is_active, sort_order, byte_size, updated_at`,
-      [kind, (req.body.title || '').slice(0, 120) || null, (req.body.caption || '').slice(0, 240) || null, req.file.mimetype, req.file.buffer, req.file.size, width, height, order[0].next, req.user.userId],
-    );
+    const stored = await fileStore.storeBytes(fileStore.keys.homepage(req.file.mimetype), req.file.buffer, req.file.mimetype);
+    let rows;
+    try {
+      ({ rows } = await pool.query(
+        `INSERT INTO homepage_media (kind, title, caption, mime, data, storage_key, byte_size, width, height, sort_order, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, kind, title, caption, width, height, is_active, sort_order, byte_size, updated_at`,
+        [kind, (req.body.title || '').slice(0, 120) || null, (req.body.caption || '').slice(0, 240) || null, req.file.mimetype, stored.rawFile, stored.storageKey, req.file.size, width, height, order[0].next, req.user.userId],
+      ));
+    } catch (err) {
+      await fileStore.deleteBytes(stored.storageKey).catch(() => {});
+      throw err;
+    }
     res.status(201).json({ ...publicMedia(rows[0]), byteSize: rows[0].byte_size });
   }),
 );
@@ -187,8 +201,9 @@ homepageAdminRouter.put(
 homepageAdminRouter.delete(
   '/media/:id',
   wrap(async (req, res) => {
-    const { rowCount } = await pool.query('DELETE FROM homepage_media WHERE id = $1', [Number(req.params.id)]);
-    if (!rowCount) throw new AppError('Gambar tidak ditemukan', 404);
+    const { rows } = await pool.query('DELETE FROM homepage_media WHERE id = $1 RETURNING storage_key', [Number(req.params.id)]);
+    if (!rows.length) throw new AppError('Gambar tidak ditemukan', 404);
+    if (rows[0].storage_key) await fileStore.deleteBytes(rows[0].storage_key).catch(() => {});
     res.json({ ok: true });
   }),
 );

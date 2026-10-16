@@ -320,7 +320,9 @@ async function storeOnePart({ req, brandId, platform, channel, month, isReferenc
         brandId,
         fileType,
         filename: file.originalname,
-        rawFile: file.buffer,
+        // The library row holds these bytes; no second copy (monthlyShopStats
+        // reads them through dashboard_upload_id).
+        rawFile: null,
       });
       const result = await processUpload({
         uploadId, fileType, filepath: file.buffer, brandId, filename: file.originalname,
@@ -392,7 +394,7 @@ export const reimportLibraryFile = asyncHandler(async (req, res) => {
       brandId,
       fileType,
       filename: file.original_filename,
-      rawFile: file.raw_file,
+      rawFile: null, // already in the library row
     });
     const result = await processUpload({ uploadId, fileType, filepath: file.raw_file, brandId });
     await library.setDashboardUpload(fileId, uploadId);

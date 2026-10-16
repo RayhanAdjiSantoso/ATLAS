@@ -1,5 +1,6 @@
 import pool from '../../config/db.js';
 import { parseIdr, parsePct, readSheetRaw, readWorkbook } from '../import/parsers.js';
+import * as fileStore from '../fileStore.js';
 
 // Shopee's own monthly figures, read from the shop-stats export the brand
 // uploaded (Pengaturan Brand > Data > Performance Overview).
@@ -210,15 +211,20 @@ async function findMonthUpload(brandId, month) {
   return { uploads: res.rows, start, end };
 }
 
+// The upload's own copy first, else the brand library file it was imported
+// from — each either in its row or in R2 (fileStore).
 async function loadRawFile(uploadId) {
   const res = await pool.query(`
-    SELECT COALESCE(u.raw_file, l.raw_file) AS raw_file
+    SELECT u.raw_file AS u_raw, u.storage_key AS u_key, l.raw_file AS l_raw, l.storage_key AS l_key
     FROM public.uploads u
     LEFT JOIN ads_reports.brand_library_files l ON l.dashboard_upload_id = u.upload_id
     WHERE u.upload_id = $1
     LIMIT 1
   `, [uploadId]);
-  return res.rows[0]?.raw_file || null;
+  const row = res.rows[0];
+  if (!row) return null;
+  return (await fileStore.readBytes({ rawFile: row.u_raw, storageKey: row.u_key }))
+    || (await fileStore.readBytes({ rawFile: row.l_raw, storageKey: row.l_key }));
 }
 
 // Returns null when there is no single stored file for the month (nothing

@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import * as fileStore from './fileStore.js';
 
 // allowedBrandIds: the brands a restricted account may open (null = all).
 export async function listBrands(allowedBrandIds) {
@@ -198,6 +199,15 @@ export async function deleteBrandWithData(brandId) {
     // What the brand holds, for the summary shown afterwards (rows that go
     // by cascade are not counted by the deletes themselves).
     const before = await getBrandReferences(brandId, client);
+    // The brand's files in R2 are not rows; their keys are collected now and
+    // the objects removed once the delete has committed.
+    const { rows: objects } = await client.query(
+      `SELECT storage_key FROM ads_reports.brand_library_files WHERE brand_id = $1 AND storage_key IS NOT NULL
+       UNION ALL SELECT storage_key FROM public.uploads WHERE brand_id = $1 AND storage_key IS NOT NULL
+       UNION ALL SELECT r.storage_key FROM ads_reports.raw_uploads r JOIN ads_reports.report_runs rr ON rr.id = r.report_run_id
+                 WHERE rr.brand_id = $1 AND r.storage_key IS NOT NULL`,
+      [brandId],
+    );
     const unordered = (await listReferenceTables(client))
       .filter(({ s, t, rule }) => rule === 'NO ACTION' && `${s}.${t}` !== 'public.users');
     const tables = await orderChildrenFirst(client, unordered);
@@ -224,6 +234,7 @@ export async function deleteBrandWithData(brandId) {
 
     await client.query('DELETE FROM public.brands WHERE brand_id = $1', [brandId]);
     await client.query('COMMIT');
+    for (const { storage_key: key } of objects) await fileStore.deleteBytes(key).catch(() => {});
     return { deleted: true, brand: found.rows[0], removed: [...before.blocking, ...before.cleared] };
   } catch (err) {
     await client.query('ROLLBACK');

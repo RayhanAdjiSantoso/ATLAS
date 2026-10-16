@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 // utils but NOT SSF — that only exists on the default export.
 import XLSXDefault from 'xlsx';
 import pool from '../config/db.js';
+import * as fileStore from './fileStore.js';
 
 // Pengaturan Brand's data layer: the brand's narrative profile, and the
 // file library every other module reads instead of asking for its own
@@ -248,11 +249,15 @@ export async function upsertLibraryFile({
     ? '(brand_id, platform, channel, period_month, part_index) WHERE period_month IS NOT NULL'
     : '(brand_id, platform, channel) WHERE period_month IS NULL';
 
-  const result = await pool.query(
+  // The bytes go to R2 when it is configured (fileStore), else into the row.
+  const stored = await fileStore.storeBytes(fileStore.keys.library(brandId, filename), buffer ?? null);
+  let result;
+  try {
+    result = await pool.query(
     `INSERT INTO ads_reports.brand_library_files
        (brand_id, platform, channel, period_month, period_start, period_end,
-        covered_days, day_bitmap, row_count, period_source, part_index, original_filename, byte_size, raw_file, uploaded_by)
-     VALUES ($1, $2::ads_reports.platform_enum, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        covered_days, day_bitmap, row_count, period_source, part_index, original_filename, byte_size, raw_file, uploaded_by, storage_key)
+     VALUES ($1, $2::ads_reports.platform_enum, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      ON CONFLICT ${conflict} DO UPDATE SET
        period_start = EXCLUDED.period_start,
        period_end = EXCLUDED.period_end,
@@ -264,14 +269,23 @@ export async function upsertLibraryFile({
        original_filename = EXCLUDED.original_filename,
        byte_size = EXCLUDED.byte_size,
        raw_file = EXCLUDED.raw_file,
+       storage_key = EXCLUDED.storage_key,
        uploaded_by = EXCLUDED.uploaded_by,
        updated_at = now()
-     RETURNING id`,
+     -- The subquery reads the statement's starting snapshot: the replaced
+     -- file's object key, removed below once the new row is in.
+     RETURNING id, (SELECT prev.storage_key FROM ads_reports.brand_library_files prev WHERE prev.id = brand_library_files.id) AS previous_key`,
     [
       brandId, platform, channel, periodMonth, periodStart, periodEnd,
-      coveredDays, dayBitmap, rowCount, periodSource ?? null, partIndex, filename, buffer?.length ?? null, buffer ?? null, userId ?? null,
+      coveredDays, dayBitmap, rowCount, periodSource ?? null, partIndex, filename, buffer?.length ?? null, stored.rawFile, userId ?? null, stored.storageKey,
     ],
   );
+  } catch (err) {
+    await fileStore.deleteBytes(stored.storageKey).catch(() => {});
+    throw err;
+  }
+  const previousKey = result.rows[0].previous_key;
+  if (previousKey && previousKey !== stored.storageKey) await fileStore.deleteBytes(previousKey).catch(() => {});
 
   const saved = await pool.query(
     `SELECT ${LIBRARY_COLUMNS}
@@ -342,12 +356,20 @@ export async function setImportResult(fileId, { status, error = null, rows = nul
 export async function getFileForImport(brandId, fileId) {
   const result = await pool.query(
     `SELECT id, brand_id, platform, channel, period_month::text AS period_month,
-            original_filename, raw_file, dashboard_upload_id, uploaded_by
+            original_filename, raw_file, storage_key, dashboard_upload_id, uploaded_by
      FROM ads_reports.brand_library_files
      WHERE brand_id = $1 AND id = $2`,
     [brandId, fileId],
   );
-  return result.rows[0] ?? null;
+  return withBytes(result.rows[0]);
+}
+
+// A row as callers have always had it: raw_file holds the bytes, wherever
+// they are kept (the row itself, or R2 under storage_key).
+async function withBytes(row) {
+  if (!row) return null;
+  const rawFile = await fileStore.readBytes({ rawFile: row.raw_file, storageKey: row.storage_key });
+  return { ...row, raw_file: rawFile };
 }
 
 // Every part already filed under one month slot, oldest part first.
@@ -385,18 +407,20 @@ export function placePart(existingParts, filename, replaceFileId = null) {
 
 export async function deleteLibraryFile(brandId, fileId) {
   const result = await pool.query(
-    'DELETE FROM ads_reports.brand_library_files WHERE brand_id = $1 AND id = $2 RETURNING id, dashboard_upload_id',
+    'DELETE FROM ads_reports.brand_library_files WHERE brand_id = $1 AND id = $2 RETURNING id, dashboard_upload_id, storage_key',
     [brandId, fileId],
   );
-  return result.rows[0] ?? null;
+  const row = result.rows[0];
+  if (row?.storage_key) await fileStore.deleteBytes(row.storage_key).catch(() => {});
+  return row ?? null;
 }
 
 export async function getLibraryFileBytes(brandId, fileId) {
   const result = await pool.query(
-    'SELECT original_filename, raw_file FROM ads_reports.brand_library_files WHERE brand_id = $1 AND id = $2',
+    'SELECT original_filename, raw_file, storage_key FROM ads_reports.brand_library_files WHERE brand_id = $1 AND id = $2',
     [brandId, fileId],
   );
-  return result.rows[0] ?? null;
+  return withBytes(result.rows[0]);
 }
 
 /* ── Period detection ───────────────────────────────────────────────── */
