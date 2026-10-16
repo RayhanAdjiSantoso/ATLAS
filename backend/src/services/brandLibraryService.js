@@ -415,6 +415,16 @@ export async function deleteLibraryFile(brandId, fileId) {
   return row ?? null;
 }
 
+// A file's identity without its bytes: enough to answer a revalidation.
+export async function getLibraryFileHead(brandId, fileId) {
+  const result = await pool.query(
+    `SELECT original_filename, storage_key, updated_at, (raw_file IS NOT NULL OR storage_key IS NOT NULL) AS has_bytes
+     FROM ads_reports.brand_library_files WHERE brand_id = $1 AND id = $2`,
+    [brandId, fileId],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function getLibraryFileBytes(brandId, fileId) {
   const result = await pool.query(
     'SELECT original_filename, raw_file, storage_key FROM ads_reports.brand_library_files WHERE brand_id = $1 AND id = $2',

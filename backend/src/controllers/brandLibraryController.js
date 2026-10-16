@@ -431,6 +431,16 @@ export const downloadLibraryFile = asyncHandler(async (req, res) => {
   const brandId = parseBrandId(req);
   const fileId = Number(req.params.fileId);
   if (!Number.isInteger(fileId)) throw new AppError('fileId tidak valid', 400);
+  // Business Overview's Meta tabs fetch the month's files on every open. The
+  // ETag (a replaced file gets a new object key and updated_at) lets the
+  // browser keep its copy: an unchanged file is answered 304 without the
+  // bytes being read from storage at all.
+  const head = await library.getLibraryFileHead(brandId, fileId);
+  if (!head?.has_bytes) throw new AppError('File tidak ditemukan di server', 404);
+  const etag = `"lib-${fileId}-${new Date(head.updated_at).getTime()}-${(head.storage_key ?? 'db').slice(-12)}"`;
+  res.setHeader('ETag', etag);
+  res.setHeader('Cache-Control', 'private, no-cache');
+  if (req.headers['if-none-match'] === etag) return res.status(304).end();
   const file = await library.getLibraryFileBytes(brandId, fileId);
   if (!file?.raw_file) throw new AppError('File tidak ditemukan di server', 404);
   res.setHeader('Content-Type', 'application/octet-stream');
