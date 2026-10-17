@@ -11,6 +11,7 @@ import {
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
 import MetaDatasetSpecs from '../components/brandSettings/MetaDatasetSpecs.jsx';
 import GoogleAdsSection from '../components/brandSettings/GoogleAdsSection.jsx';
+import PlannedApiSection from '../components/brandSettings/PlannedApiSection.jsx';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import SearchField from '../components/common/SearchField.jsx';
@@ -63,8 +64,10 @@ async function downloadLibraryFile(file) {
 //      into one disclosure, so the matrix is the first thing read.
 
 const MONTH_WINDOW = 6;
-const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+// Month names in English, as the platforms' own exports and the rest of the
+// hub's labels read.
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const EASE = [0.16, 1, 0.3, 1];
 
 // Channel ids are the Report Generator's own vocabulary (the values it writes
@@ -186,6 +189,7 @@ function buildMonth(key) {
     year,
     month,
     label: MONTH_SHORT[month - 1],
+    name: MONTH_NAMES[month - 1],
     full: `${MONTH_NAMES[month - 1]} ${year}`,
     days: daysInMonth(year, month),
   };
@@ -639,8 +643,8 @@ function MonthRail({ windowMonths, windowEnd, setWindowEnd, focus, setFocus, loo
                   />
                 )}
                 <i aria-hidden="true" />
-                <span>{month.label}</span>
-                <small>{String(month.year).slice(2)}</small>
+                <span>{month.name}</span>
+                <small>{month.year}</small>
               </button>
             );
           })}
@@ -672,7 +676,8 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
     >
       <div className="brand-market-banner">
         <span className="brand-market-banner-glow" aria-hidden="true" />
-        <span className="brand-market-mark" aria-hidden="true">{platform.label.slice(0, 1)}</span>
+        {/* The platform's own mark (BrandLogo, on a white tile), not its initial. */}
+        <span className="brand-market-mark" aria-hidden="true"><BrandLogo name={PLATFORM_LOGO[platform.id]} size={22} /></span>
         <span className="brand-market-headline">
           <strong>{platform.label}</strong>
           <small>{platform.role}</small>
@@ -865,6 +870,7 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
           <GoogleAdsSection key={brand?.brand_id ?? 'none'} brand={brand} />
         </section>
       )}
+      {(platform.id === 'shopee' || platform.id === 'tiktok') && <PlannedApiSection platformId={platform.id} />}
     </div>
   );
 }
