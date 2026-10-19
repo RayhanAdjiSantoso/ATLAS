@@ -153,7 +153,7 @@ export function GoalOverviewSection({ report, f, p1, p2 }: { report: GadsReport;
         )}
         {unverified > 0 && (
           <p className="gads-footnote is-inline">
-            {unverified} conversion action masih memakai pemetaan bawaan dari kategori Google dan perlu diverifikasi di Data Collection Hub › Performance Database › Input Performance Data › Google Ads › Conversion goals.
+            {unverified} conversion action masih memakai pemetaan bawaan dari kategori Google dan perlu diverifikasi di Data Collection Hub › Performance Database › Input Monthly Performance Data › Google Ads › Conversion goals.
           </p>
         )}
       </div>

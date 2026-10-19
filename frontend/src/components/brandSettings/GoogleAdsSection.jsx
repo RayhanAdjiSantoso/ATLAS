@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, CircleAlert, Link2, Loader2, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, CircleAlert, Loader2, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { BrandLogo } from '../../reportGenerator/components/BrandLogo';
 import api from '../../api/client.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import GoogleAdsScriptGuide from './GoogleAdsScriptGuide.jsx';
@@ -308,11 +309,11 @@ export default function GoogleAdsSection({ brand }) {
   const accounts = overview?.accounts ?? [];
 
   return (
-    <section className="maf mx-card is-google" aria-label="Akun Google Ads">
+    <section className="maf mx-card is-google" aria-label="Google Ads API">
       <header className="mx-head">
-        <span className="mx-head-ico" aria-hidden="true"><Link2 size={18} /></span>
+        <span className="mx-head-ico is-logo" aria-hidden="true"><BrandLogo name="google" size={22} /></span>
         <div className="mx-head-copy">
-          <h3>Google Ads</h3>
+          <h3>Google Ads API</h3>
           <p>Hubungkan Customer ID brand ini. Setiap hari jam 01.00 ATLAS menarik data harian; cost kemarin masuk ke Brand Tracking, sisanya ke Report Generator › Google Ads.</p>
         </div>
         <span className={'mx-pill' + (accounts.length ? ' is-on' : '')}>{accounts.length ? `${accounts.length} akun terhubung` : 'Belum terhubung'}</span>

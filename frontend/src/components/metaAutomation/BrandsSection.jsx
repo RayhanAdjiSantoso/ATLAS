@@ -210,7 +210,7 @@ export default function BrandsSection() {
       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
         Tambahkan akun baru melalui{' '}
         <Link to="/data-brand" onClick={() => presetBrandSettings({ view: 'data', platform: 'meta' })}>
-          Data Collection Hub › Input Performance Data › Meta Ads
+          Data Collection Hub › Input Monthly Performance Data › Meta Ads
         </Link>.
       </p>
 

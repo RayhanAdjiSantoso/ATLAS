@@ -591,7 +591,7 @@ function DatasetRow({ platform, dataset, months, lookup, index, reduced, onPick,
                   <p className="brand-ds-note">
                     <CircleAlert size={14} />
                     Arsip bulanan yang dibuat ATLAS dari data sinkron Google Ads Script, terisi setelah bulannya selesai. Report membaca data sinkron langsung,
-                    jadi slot ini tidak menerima unggahan. Bulan yang sudah tersinkron sebelum slot ini ada bisa diisi lewat Data Collection Hub › Performance Database › Input Performance Data › Google Ads › Isi arsip.
+                    jadi slot ini tidak menerima unggahan. Bulan yang sudah tersinkron sebelum slot ini ada bisa diisi lewat Data Collection Hub › Performance Database › Input Monthly Performance Data › Google Ads › Isi arsip.
                   </p>
                 )}
                 {!isReference && !dataset.autoOnly && (
@@ -746,7 +746,7 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
     <div className="soft-card bp-panel bp-data" style={{ '--mk-accent': platform.accent, '--mk-wash': platform.wash, '--mk-tint': platform.tint }}>
       <div className="bp-panel-head">
         <div>
-          <h2>Input Performance Data</h2>
+          <h2>Input Monthly Performance Data</h2>
           <p>Perpustakaan data {brand?.brand_name ?? 'brand ini'}. Report Generator, Business Overview, dan Meta Automation membaca dari sini — tidak ada upload ulang di halaman lain.</p>
         </div>
       </div>
@@ -837,11 +837,11 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
       </details>
 
       {platform.id === 'meta' && (
-        <section ref={accountsRef} className="bp-channel-accounts mx-group" tabIndex={-1} aria-label="Otomasi Meta Ads">
+        <section ref={accountsRef} className="bp-channel-accounts mx-group" tabIndex={-1} aria-label="Meta Ads API">
           <div className="mx-group-head">
-            <h3>Otomasi Meta Ads</h3>
+            <h3 className="mx-group-title"><span className="mx-head-ico is-logo" aria-hidden="true"><BrandLogo name="meta" size={22} /></span>Meta Ads API</h3>
             {isAdmin && (
-              <div className="mx-switch" role="tablist" aria-label="Otomasi Meta Ads">
+              <div className="mx-switch" role="tablist" aria-label="Meta Ads API">
                 {[
                   { id: 'api', label: 'Tarik data API', Icon: CalendarClock },
                   { id: 'accounts', label: 'Akun & langganan', Icon: BadgeCheck },

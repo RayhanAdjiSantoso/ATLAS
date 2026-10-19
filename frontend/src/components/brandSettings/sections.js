@@ -20,7 +20,7 @@ export const BRAND_SETTING_SECTIONS = [
   {
     to: '/data-brand',
     label: 'Data Collection Hub',
-    hint: 'File & akun iklan',
+    hint: 'Input Monthly Performance Data',
     Icon: FolderOpen,
     module: 'brand_settings',
     desc: 'File bulanan dan akun iklan setiap brand — sumber yang dibaca Business Overview dan Report Generator.',

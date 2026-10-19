@@ -178,6 +178,9 @@
 .mx-group { display: grid; gap: 14px; }
 .mx-group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .mx-group-head h3 { margin: 0; color: var(--soft-ink, var(--text)); font-size: 1.1rem; font-weight: 800; letter-spacing: -.015em; }
+.mx-group-title { display: flex; align-items: center; gap: 12px; }
+/* A platform's own logo instead of a generic icon: on a white tile. */
+.mx-head-ico.is-logo { background: #fff; box-shadow: inset 0 0 0 1px var(--soft-border, #d9e2ef), 0 6px 14px -10px rgba(15, 26, 58, .4); }
 .mx-switch { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--soft-border, var(--border)); border-radius: 13px; background: var(--soft-secondary, #f5f8fd); }
 .mx-switch button {
   display: inline-flex; align-items: center; gap: 7px;

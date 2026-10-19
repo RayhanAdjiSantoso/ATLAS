@@ -73,7 +73,7 @@ export function AuctionInsightsSection({ data, p1, p2 }: { data: { old: GadsAuct
     return (
       <EmptyCard title="Auction Insights">
         Belum ada file Auction insights untuk {p2}. Unduh dari Google Ads › Insights &amp; reports › Auction insights (rentang satu bulan), lalu unggah di
-        Data Collection Hub › Performance Database › Input Performance Data › Google Ads.
+        Data Collection Hub › Performance Database › Input Monthly Performance Data › Google Ads.
       </EmptyCard>
     );
   }
@@ -165,7 +165,7 @@ export function ChangeHistorySection({ data, settingChanges = [], p2 }: { data: 
     return (
       <EmptyCard title="Change History">
         Tidak ada perubahan tercatat untuk {p2}. Google Ads Script hanya bisa menarik 30 hari terakhir — untuk bulan yang lebih lama, unduh dari Google
-        Ads › Change history lalu unggah di Data Collection Hub › Performance Database › Input Performance Data › Google Ads.
+        Ads › Change history lalu unggah di Data Collection Hub › Performance Database › Input Monthly Performance Data › Google Ads.
       </EmptyCard>
     );
   }

@@ -209,7 +209,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
     <div className={`panel${isActive ? ' active' : ''}`}>
       <HowTo>
         <HowToStep num={1} numClassName="google-num" title="Hubungkan akun di Data Collection Hub">
-          Buka <strong>Data Collection Hub › Performance Database › Input Performance Data › Google Ads</strong>, tambahkan Customer ID akun Google Ads brand ini. Data harian ditarik otomatis setiap hari
+          Buka <strong>Data Collection Hub › Performance Database › Input Monthly Performance Data › Google Ads</strong>, tambahkan Customer ID akun Google Ads brand ini. Data harian ditarik otomatis setiap hari
           oleh Google Ads Script yang dipasang di akun Google Ads klien — tidak ada file yang perlu diunduh atau diunggah.
         </HowToStep>
         <HowToStep num={2} numClassName="google-num" title="Pilih periode & buat laporan">
@@ -228,7 +228,7 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
         <div className="empty-note"><Loader2 size={13} className="rg-spin" aria-hidden /> Memeriksa koneksi Google Ads…</div>
       ) : !connected ? (
         <InlineNotice title="Brand ini belum terhubung ke Google Ads" tone="info">
-          Tambahkan Customer ID di <Link to="/data-brand">Data Collection Hub › Performance Database › Input Performance Data › Google Ads</Link>. Data mulai tersedia setelah Google Ads Script jalan berikutnya.
+          Tambahkan Customer ID di <Link to="/data-brand">Data Collection Hub › Performance Database › Input Monthly Performance Data › Google Ads</Link>. Data mulai tersedia setelah Google Ads Script jalan berikutnya.
         </InlineNotice>
       ) : (
         <>
@@ -379,7 +379,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
         )}
         {empty && (
           <InlineNotice title="Tidak ada data Google Ads pada Periode Ini" tone="info">
-            Periksa rentang tanggal, atau tunggu sinkron berikutnya bila akun baru saja dihubungkan. Status sinkron ada di Data Collection Hub › Performance Database › Input Performance Data › Google Ads.
+            Periksa rentang tanggal, atau tunggu sinkron berikutnya bila akun baru saja dihubungkan. Status sinkron ada di Data Collection Hub › Performance Database › Input Monthly Performance Data › Google Ads.
           </InlineNotice>
         )}
         <ReportPages
