@@ -1,12 +1,11 @@
 import useSessionState from '../hooks/useSessionState.js';
 import BrandStatusFilter, { matchesBrandStatus, BRAND_STATUS_LABELS } from '../components/common/BrandStatusFilter.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
   Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
   Database, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
-  Trash2, Upload, NotebookPen, CalendarRange, HelpCircle, BadgeCheck, CalendarClock,
+  Trash2, Upload, CalendarRange, HelpCircle, BadgeCheck, CalendarClock,
 } from 'lucide-react';
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
 import MetaDatasetSpecs from '../components/brandSettings/MetaDatasetSpecs.jsx';
@@ -1117,11 +1116,6 @@ export default function BrandDataPage() {
             <strong>{loading ? '…' : totals.active}<small>/{totals.all}</small></strong>
           </div>
         </div>
-        {brand && (
-          <Link to={`/pengaturan-brand?detail=${brand.brand_id}`} className="bp-ghost" title="Brand Context dan Brand Direction diatur di Brand Setting">
-            <NotebookPen size={15} aria-hidden="true" /> Context &amp; direction
-          </Link>
-        )}
       </section>
 
       {loading && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat data {brand?.brand_name ?? 'brand'}…</p>}
