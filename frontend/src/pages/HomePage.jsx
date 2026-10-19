@@ -326,7 +326,7 @@ export default function HomePage() {
       {!isClient && (
         <section className="hb-section hb-flow" aria-labelledby="hb-flow-title" data-hb-reveal>
           <header className="hb-section-head">
-            <span className="hb-eyebrow"><Target size={14} aria-hidden="true" /> Cara kerja ATLAS</span>
+            <span className="hb-eyebrow"><Target size={14} aria-hidden="true" /> WORKSPACE </span>
             <h2 id="hb-flow-title">Raw Data Jadi Laporan Klien.</h2>
           </header>
           <ol className="hb-steps">
