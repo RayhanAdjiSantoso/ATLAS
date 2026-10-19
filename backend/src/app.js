@@ -18,6 +18,7 @@ import accessRoutes from './routes/accessRoutes.js';
 import annotationRoutes from './routes/annotationRoutes.js';
 import googleAdsRoutes from './routes/googleAdsRoutes.js';
 import { homepageAdminRouter, publicHomepageRouter } from './routes/homepageRoutes.js';
+import { publicBrandLogoRouter } from './routes/brandLogoRoutes.js';
 import googleAdsIngestRoutes from './routes/googleAdsIngestRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 import { securityHeaders } from './middlewares/security.js';
@@ -61,6 +62,7 @@ app.use('/api/daily-tracking', dailyTrackingRoutes);
 app.use('/api/meta-ads-insights', metaAdsInsightsRoutes);
 app.use('/api/google-ads', googleAdsRoutes);
 app.use('/api/public/homepage', publicHomepageRouter);
+app.use('/api/public/brand-logo', publicBrandLogoRouter);
 app.use('/api/homepage', homepageAdminRouter);
 
 app.use(notFoundHandler);

@@ -5,20 +5,20 @@ import * as fileStore from './fileStore.js';
 export async function listBrands(allowedBrandIds) {
   if (allowedBrandIds) {
     const result = await pool.query(
-      'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands WHERE brand_id = ANY($1::int[]) ORDER BY brand_name',
+      'SELECT brand_id, brand_name, status::text AS status, industry, (extract(epoch FROM logo_updated_at) * 1000)::bigint AS logo_version FROM public.brands WHERE brand_id = ANY($1::int[]) ORDER BY brand_name',
       [allowedBrandIds],
     );
     return result.rows;
   }
   const result = await pool.query(
-    'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands ORDER BY brand_name',
+    'SELECT brand_id, brand_name, status::text AS status, industry, (extract(epoch FROM logo_updated_at) * 1000)::bigint AS logo_version FROM public.brands ORDER BY brand_name',
   );
   return result.rows;
 }
 
 export async function findBrandByName(brandName) {
   const result = await pool.query(
-    'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands WHERE LOWER(TRIM(brand_name)) = LOWER($1)',
+    'SELECT brand_id, brand_name, status::text AS status, industry, (extract(epoch FROM logo_updated_at) * 1000)::bigint AS logo_version FROM public.brands WHERE LOWER(TRIM(brand_name)) = LOWER($1)',
     [brandName.trim()],
   );
   return result.rows[0] ?? null;
@@ -59,7 +59,7 @@ export async function updateBrandStatus(brandId, status) {
 
 export async function getBrandById(brandId) {
   const result = await pool.query(
-    'SELECT brand_id, brand_name, status::text AS status, industry FROM public.brands WHERE brand_id = $1',
+    'SELECT brand_id, brand_name, status::text AS status, industry, (extract(epoch FROM logo_updated_at) * 1000)::bigint AS logo_version FROM public.brands WHERE brand_id = $1',
     [brandId],
   );
   return result.rows[0] ?? null;
@@ -147,7 +147,7 @@ export async function deleteBrand(brandId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const found = await client.query('SELECT brand_id, brand_name FROM public.brands WHERE brand_id = $1 FOR UPDATE', [brandId]);
+    const found = await client.query('SELECT brand_id, brand_name, logo_key FROM public.brands WHERE brand_id = $1 FOR UPDATE', [brandId]);
     if (!found.rowCount) {
       await client.query('ROLLBACK');
       return { deleted: false, notFound: true };
@@ -159,7 +159,9 @@ export async function deleteBrand(brandId) {
     }
     await client.query('DELETE FROM public.brands WHERE brand_id = $1', [brandId]);
     await client.query('COMMIT');
-    return { deleted: true, brand: found.rows[0], ...refs };
+    await fileStore.deleteBytes(found.rows[0].logo_key).catch(() => {});
+    const { logo_key: _logo, ...brand } = found.rows[0];
+    return { deleted: true, brand, ...refs };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -185,7 +187,7 @@ export async function deleteBrandWithData(brandId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const found = await client.query('SELECT brand_id, brand_name FROM public.brands WHERE brand_id = $1 FOR UPDATE', [brandId]);
+    const found = await client.query('SELECT brand_id, brand_name, logo_key FROM public.brands WHERE brand_id = $1 FOR UPDATE', [brandId]);
     if (!found.rowCount) {
       await client.query('ROLLBACK');
       return { deleted: false, notFound: true };
@@ -236,8 +238,9 @@ export async function deleteBrandWithData(brandId) {
 
     await client.query('DELETE FROM public.brands WHERE brand_id = $1', [brandId]);
     await client.query('COMMIT');
-    for (const { storage_key: key } of objects) await fileStore.deleteBytes(key).catch(() => {});
-    return { deleted: true, brand: found.rows[0], removed: [...before.blocking, ...before.cleared] };
+    for (const key of [...objects.map((o) => o.storage_key), found.rows[0].logo_key]) if (key) await fileStore.deleteBytes(key).catch(() => {});
+    const { logo_key: _logo, ...brand } = found.rows[0];
+    return { deleted: true, brand, removed: [...before.blocking, ...before.cleared] };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -282,4 +285,52 @@ async function orderChildrenFirst(db, tables) {
 export async function countBoundAccounts(brandId) {
   const { rows } = await pool.query('SELECT count(*)::int AS n FROM public.user_brand_access WHERE brand_id = $1', [brandId]);
   return rows[0].n;
+}
+
+// A brand's logo (migration 053): the image goes to R2, the row keeps its
+// key, type and change time. Replacing removes the old object once the row
+// points at the new one. Returns the brand as listBrands shows it.
+export async function setBrandLogo(brandId, bytes, mime) {
+  if (!fileStore.isEnabled()) throw new Error('FILE_STORE_OFF');
+  const key = fileStore.keys.brandLogo(brandId, mime);
+  await fileStore.putBytes(key, bytes, mime);
+  let previous = null;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE public.brands b SET logo_key = $2, logo_mime = $3, logo_updated_at = now()
+         FROM (SELECT brand_id, logo_key AS old_key FROM public.brands WHERE brand_id = $1 FOR UPDATE) o
+        WHERE b.brand_id = o.brand_id
+        RETURNING o.old_key, b.brand_id, b.brand_name, b.status::text AS status, b.industry,
+                  (extract(epoch FROM b.logo_updated_at) * 1000)::bigint AS logo_version`,
+      [brandId, key, mime],
+    );
+    if (!rows.length) { await fileStore.deleteBytes(key).catch(() => {}); return null; }
+    previous = rows[0].old_key;
+    const { old_key: _old, ...brand } = rows[0];
+    return brand;
+  } catch (err) {
+    await fileStore.deleteBytes(key).catch(() => {});
+    throw err;
+  } finally {
+    if (previous && previous !== key) await fileStore.deleteBytes(previous).catch(() => {});
+  }
+}
+
+export async function removeBrandLogo(brandId) {
+  const { rows } = await pool.query(
+    `UPDATE public.brands b SET logo_key = NULL, logo_mime = NULL, logo_updated_at = NULL
+       FROM (SELECT brand_id, logo_key AS old_key FROM public.brands WHERE brand_id = $1 FOR UPDATE) o
+      WHERE b.brand_id = o.brand_id
+      RETURNING o.old_key, b.brand_id, b.brand_name, b.status::text AS status, b.industry, NULL::bigint AS logo_version`,
+    [brandId],
+  );
+  if (!rows.length) return null;
+  if (rows[0].old_key) await fileStore.deleteBytes(rows[0].old_key).catch(() => {});
+  const { old_key: _old, ...brand } = rows[0];
+  return brand;
+}
+
+export async function getBrandLogo(brandId) {
+  const { rows } = await pool.query('SELECT logo_key, logo_mime, logo_updated_at FROM public.brands WHERE brand_id = $1', [brandId]);
+  return rows[0]?.logo_key ? rows[0] : null;
 }

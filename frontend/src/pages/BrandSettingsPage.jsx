@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
-  ArrowUpRight, Check, CircleAlert, Compass, FolderOpen, Lightbulb, Loader2, NotebookPen, Plus, RotateCcw, Save, Target, Trash2, X,
+  ArrowUpRight, Camera, Check, CircleAlert, Compass, FolderOpen, Lightbulb, Loader2, NotebookPen, Plus, RotateCcw, Save, Target, Trash2, X,
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -13,6 +13,7 @@ import { describeError } from '../components/brandSettings/describeError.js';
 import AnnualTargetCard from '../components/annualTarget/AnnualTargetCard.jsx';
 import SearchField from '../components/common/SearchField.jsx';
 import SelectMenu from '../components/common/SelectMenu.jsx';
+import { compressImage } from '../utils/compressImage.js';
 import '../components/dashboard/console.css';
 import '../components/dashboard/softShell.css';
 import './brandPages.css';
@@ -83,6 +84,88 @@ const initials = (name) => {
   return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.trim().slice(0, 2)).toUpperCase();
 };
 const statusOf = (brand) => brand.status || 'unknown';
+// The logo's URL is versioned by its change time, so a replaced logo is a new
+// URL and the old one stays cacheable (routes/brandLogoRoutes.js).
+const logoUrl = (brand) => (brand?.logo_version ? `/api/public/brand-logo/${brand.brand_id}?v=${brand.logo_version}` : null);
+
+// The brand's mark: its uploaded logo, or its initials tinted by status.
+function BrandMark({ brand, large = false }) {
+  const url = logoUrl(brand);
+  return (
+    <span className={`bc-mono${large ? ' is-lg' : ''} is-${statusOf(brand)}${url ? ' has-logo' : ''}`} aria-hidden="true">
+      {url ? <img src={url} alt="" loading="lazy" /> : initials(brand.brand_name)}
+    </span>
+  );
+}
+
+// The workspace header's mark, with upload / replace / remove for accounts
+// that may edit. The image is shrunk in the browser (≤ 480px WebP; SVG as is)
+// before it is sent.
+function LogoEditor({ brand, canEdit, onChanged, onMessage }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const has = Boolean(brand.logo_version);
+
+  const upload = async (file) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp|svg\+xml|avif)$/.test(file.type)) {
+      onMessage({ tone: 'error', text: 'Logo harus berupa gambar PNG, JPG, WebP, atau SVG.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const { blob, type } = await compressImage(file, 'logo');
+      if (blob.size > 2 * 1024 * 1024) throw new Error('Logo terlalu besar — maksimal 2 MB.');
+      const form = new FormData();
+      form.append('file', blob, `logo.${(type || file.type).split('/')[1]?.replace('svg+xml', 'svg') || 'png'}`);
+      const { data } = await api.put(`/brands/${brand.brand_id}/logo`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      onChanged(data.brand);
+      onMessage({ tone: 'ok', text: `Logo ${brand.brand_name} tersimpan.` });
+    } catch (err) {
+      onMessage({ tone: 'error', text: describeError(err, err.message || 'Logo gagal diunggah') });
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(`Hapus logo ${brand.brand_name}? Inisial brand akan ditampilkan lagi.`)) return;
+    setBusy(true);
+    try {
+      const { data } = await api.delete(`/brands/${brand.brand_id}/logo`);
+      onChanged(data.brand);
+      onMessage({ tone: 'ok', text: 'Logo dihapus.' });
+    } catch (err) {
+      onMessage({ tone: 'error', text: describeError(err, 'Logo gagal dihapus') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!canEdit) return <BrandMark brand={brand} large />;
+  return (
+    <div className={`bc-logo${busy ? ' is-busy' : ''}`}>
+      <button
+        type="button" className="bc-logo-pick" onClick={() => inputRef.current?.click()} disabled={busy}
+        title={has ? 'Ganti logo brand' : 'Upload logo brand'} aria-label={has ? `Ganti logo ${brand.brand_name}` : `Upload logo ${brand.brand_name}`}
+      >
+        <BrandMark brand={brand} large />
+        <span className="bc-logo-veil" aria-hidden="true">
+          {busy ? <Loader2 size={18} className="brand-spin" /> : <Camera size={18} />}
+          <small>{has ? 'Ganti' : 'Upload'}</small>
+        </span>
+        {!has && !busy && <span className="bc-logo-badge" aria-hidden="true"><Camera size={11} /></span>}
+      </button>
+      {has && !busy && (
+        <button type="button" className="bc-logo-remove" onClick={remove} title="Hapus logo" aria-label={`Hapus logo ${brand.brand_name}`}>
+          <X size={12} />
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(e) => upload(e.target.files?.[0])} />
+    </div>
+  );
+}
 
 // A small completeness ring: share of a section's fields that are filled.
 function Ring({ value, size = 18 }) {
@@ -227,7 +310,7 @@ function DeleteBrand({ brand, onDeleted }) {
 // every module); industry and the narrative fields keep an unsaved draft,
 // which the page asks about before switching to another brand (see
 // onDirtyChange).
-function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDeleted, onOpenData, onDirtyChange, onIndustrySaved }) {
+function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDeleted, onOpenData, onDirtyChange, onIndustrySaved, onBrandUpdated }) {
   const reduced = useReducedMotion();
   const [profile, setProfile] = useState(null);
   const [draft, setDraft] = useState({});
@@ -306,7 +389,7 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
       initial={reduced ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: EASE }}
     >
       <header className="bc-ws-head">
-        <span className={`bc-mono is-lg is-${status}`} aria-hidden="true">{initials(brand.brand_name)}</span>
+        <LogoEditor brand={brand} canEdit={!isViewOnly} onChanged={onBrandUpdated} onMessage={setMessage} />
         <div className="bc-ws-title">
           <h2 id="bc-ws-title">{brand.brand_name}</h2>
           <div className="bc-ws-meta">
@@ -591,6 +674,10 @@ export default function BrandSettingsPage() {
     }
   }
 
+  const brandUpdated = (next) => {
+    setBrands((list) => list.map((brand) => (brand.brand_id === next.brand_id ? { ...brand, ...next } : brand)));
+  };
+
   const industrySaved = (brandId, industry) => {
     setBrands((list) => list.map((brand) => (brand.brand_id === brandId ? { ...brand, industry } : brand)));
   };
@@ -705,7 +792,7 @@ export default function BrandSettingsPage() {
                 <li key={b.brand_id}>
                   <button type="button" className={`bc-item${on ? ' is-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => select(b)}>
                     {on && <motion.span layoutId="bc-item-sheet" className="bc-item-sheet" transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 44, mass: 0.6 }} aria-hidden="true" />}
-                    <span className={`bc-mono is-${status}`} aria-hidden="true">{initials(b.brand_name)}</span>
+                    <BrandMark brand={b} />
                     <span className="bc-item-text">
                       <b>{b.brand_name}</b>
                       <small className={b.industry ? '' : 'is-missing'}>{canonicalIndustry(b.industry) || 'Industri belum diatur'}</small>
@@ -725,7 +812,7 @@ export default function BrandSettingsPage() {
             key={selected.brand_id} brand={selected} isViewOnly={isViewOnly}
             canDelete={isAdmin && !isViewOnly} statusBusy={statusBusy === selected.brand_id}
             onStatus={changeStatus} onDeleted={brandDeleted} onOpenData={navigateToData} onDirtyChange={onDirtyChange}
-            onIndustrySaved={industrySaved}
+            onIndustrySaved={industrySaved} onBrandUpdated={brandUpdated}
           />
         ) : (
           <div className="soft-card bc-ws bc-ws-empty">{loaded ? 'Pilih brand di daftar untuk membuka profilnya.' : 'Memuat…'}</div>

@@ -40,6 +40,7 @@ export const keys = {
   library: (brandId, name) => `library/${brandId}/${randomUUID()}-${safe(name)}`,
   upload: (uploadId, name) => `uploads/${uploadId}-${safe(name)}`,
   reportRun: (runId, name) => `report-runs/${runId}/${randomUUID()}-${safe(name)}`,
+  brandLogo: (brandId, mime) => `brand-logos/${brandId}/${randomUUID()}.${String(mime || '').split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'bin'}`,
   homepage: (mime) => `homepage/${randomUUID()}.${String(mime || '').split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'bin'}`,
 };
 

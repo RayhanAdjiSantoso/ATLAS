@@ -136,6 +136,35 @@
   box-shadow: inset 0 0 0 1px rgba(15, 26, 58, .05), 0 10px 22px -16px rgba(30, 62, 184, .7);
 }
 .bc-mono.is-lg.is-active { background: linear-gradient(145deg, var(--bc-accent), color-mix(in srgb, var(--bc-accent) 65%, #6aa0ff)); color: #fff; }
+/* An uploaded logo: on white, contained, whatever its shape. */
+.bc-mono.has-logo, .bc-mono.is-lg.has-logo { overflow: hidden; padding: 3px; background: #fff; box-shadow: inset 0 0 0 1px var(--bc-line); }
+.bc-mono.is-lg.has-logo { padding: 6px; box-shadow: inset 0 0 0 1px var(--bc-line), 0 10px 22px -16px rgba(30, 62, 184, .5); }
+.bc-mono img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+/* Logo editor (workspace header) */
+.bc-logo { position: relative; }
+.bc-logo-pick { position: relative; display: block; padding: 0; border: 0; border-radius: 16px; background: none; cursor: pointer; }
+.bc-logo-pick:disabled { cursor: progress; }
+.bc-logo-pick:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 3px; }
+.bc-logo-veil {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 1px;
+  border-radius: 16px; background: rgba(15, 26, 58, .62); color: #fff;
+  opacity: 0; transition: opacity .16s ease;
+}
+.bc-logo-veil small { font-size: .62rem; font-weight: 800; letter-spacing: .04em; }
+.bc-logo-pick:hover .bc-logo-veil, .bc-logo-pick:focus-visible .bc-logo-veil, .bc-logo.is-busy .bc-logo-veil { opacity: 1; }
+.bc-logo-badge {
+  position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--bc-accent); color: #fff; box-shadow: 0 0 0 2px #fff;
+}
+.bc-logo-remove {
+  position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 20px; height: 20px; padding: 0;
+  border: 0; border-radius: 50%; background: #fff; color: var(--bc-muted); cursor: pointer;
+  box-shadow: 0 0 0 1px var(--bc-line), 0 2px 6px rgba(15, 26, 58, .15);
+  opacity: 0; transition: opacity .16s ease, color .16s ease;
+}
+.bc-logo:hover .bc-logo-remove, .bc-logo-remove:focus-visible { opacity: 1; }
+.bc-logo-remove:hover { color: #c81e1e; }
 
 /* ── Workspace ─────────────────────────────────────────────────────────── */
 .bc-ws { display: grid; gap: 0; padding: 0; border: 1px solid var(--bc-line); overflow: clip; }

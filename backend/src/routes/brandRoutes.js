@@ -4,6 +4,7 @@ import { uploadDataFile } from '../middlewares/upload.js';
 import { requireBrandAccess, blockWriteIfViewOnly } from '../middlewares/brandAccess.js';
 import * as brandController from '../controllers/brandController.js';
 import * as brandLibraryController from '../controllers/brandLibraryController.js';
+import { deleteLogo, logoUpload, uploadLogo } from './brandLogoRoutes.js';
 
 const router = Router();
 
@@ -19,6 +20,9 @@ router.patch('/:brandId/status', brandController.updateBrandStatus);
 // Deleting is admin-only and only for a brand with no data (see brandService).
 router.get('/:brandId/delete-check', authorize('admin'), brandController.getBrandDeleteCheck);
 router.delete('/:brandId', authorize('admin'), brandController.deleteBrand);
+// The brand's logo, set in Setup Context & Brand Direction.
+router.put('/:brandId/logo', requireModule('brand_settings'), logoUpload.single('file'), uploadLogo);
+router.delete('/:brandId/logo', requireModule('brand_settings'), deleteLogo);
 
 // Pengaturan Brand: the brand's narrative profile, and the file library the
 // other modules read instead of asking for their own upload.
