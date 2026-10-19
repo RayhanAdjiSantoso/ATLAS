@@ -14,11 +14,15 @@ import atlasWordmark from '../assets/atlas-wordmark.png';
 import './beranda.css';
 
 // Beranda — the first screen after sign-in, for the team and for clients.
-// It opens on who you are and what today looks like (a greeting, the date,
-// and three live numbers), then where to go (the workspace, grouped the way
-// work flows: put data in, read it, report it), how ATLAS fits together, and
-// the brands MIL Digital runs. Every number is live; every card is a link;
-// a card shows only if the account may open it (same rule as the sidebar).
+// It opens on who you are (a greeting and the date; a client also sees its
+// own month in three live numbers), then where to go (the workspace, grouped
+// the way work flows: put data in, read it, report it), how ATLAS fits
+// together, and the brands MIL Digital runs. Every card is a link; a card
+// shows only if the account may open it (same rule as the sidebar).
+//
+// Proportions follow the golden ratio (beranda.css): the hero splits its
+// copy and the orbit 1.618 : 1, and spacing steps along the Fibonacci
+// scale (8 · 13 · 21 · 34 · 55 · 89).
 
 const MODULES = [
   {
@@ -75,10 +79,10 @@ const GROUPS = [
 ];
 
 const FLOW = [
-  { title: 'Kenali brand', hint: 'Context & direction', Icon: NotebookPen },
-  { title: 'Kumpulkan data', hint: 'File, API, angka harian', Icon: FolderOpen },
-  { title: 'Baca performa', hint: 'ROAS, funnel, produk', Icon: LayoutDashboard },
-  { title: 'Susun laporan', hint: 'PDF · PNG · Excel', Icon: FileBarChart },
+  { title: 'Kenali Brand Lebih Jauh', hint: 'Input Context & Direction', Icon: NotebookPen },
+  { title: 'Kumpulkan Data', hint: 'Input File Manual ataupun Otomatis', Icon: FolderOpen },
+  { title: 'Baca Performa', hint: 'Generating Data Keseluruhan', Icon: LayoutDashboard },
+  { title: 'Susun Laporan', hint: 'PDF · PNG · Excel', Icon: FileBarChart },
 ];
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -180,17 +184,14 @@ export default function HomePage() {
   const dateLabel = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const [brands, setBrands] = useState(null);
-  const [summary, setSummary] = useState(null);
   const [clientStats, setClientStats] = useState(null);
   const [logos, setLogos] = useState([]);
   const [activeClients, setActiveClients] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    api.get('/brands').then(({ data }) => alive && setBrands(data.brands ?? [])).catch(() => alive && setBrands([]));
-    if (can('control_center')) {
-      api.get('/control-center/summary').then(({ data }) => alive && setSummary(data)).catch(() => {});
-    }
+    // The brand list only names a client's own brand here.
+    if (allowedBrandId) api.get('/brands').then(({ data }) => alive && setBrands(data.brands ?? [])).catch(() => alive && setBrands([]));
     api.get('/public/homepage').then(({ data }) => {
       if (!alive) return;
       setLogos((data.logos ?? []).map((m) => ({ ...m, url: `/api/public/homepage/media/${m.id}?v=${m.version}` })));
@@ -222,9 +223,10 @@ export default function HomePage() {
   }, [allowedBrandId]);
 
   const myBrand = useMemo(() => (isClient ? brands?.find((b) => b.brand_id === allowedBrandId) : null), [brands, isClient, allowedBrandId]);
-  const activeCount = brands ? brands.filter((b) => b.status === 'active').length : null;
   const monthName = now.toLocaleDateString('id-ID', { month: 'long' });
 
+  // A client's own month at a glance. The team's Beranda leaves numbers to
+  // Business Overview and Pusat Kendali.
   const pulse = isClient
     ? [
       {
@@ -242,24 +244,16 @@ export default function HomePage() {
         hint: clientStats?.target ? `dari target ${rpShort(clientStats.target)}` : 'Target bulan ini belum diatur',
       },
     ]
-    : [
-      { label: 'Brand aktif', value: activeCount, ready: brands != null, hint: brands ? `${brands.length} brand terdaftar` : 'Memuat…', to: can('brand_settings') ? '/pengaturan-brand' : null },
-      ...(summary ? [
-        { label: 'To do tertunda', value: summary.overdueTasks ?? 0, hint: 'Dari Minutes of Meeting', to: '/pusat-kendali', tone: summary.overdueTasks ? 'warn' : null },
-        { label: 'Perlu tindakan data', value: summary.dataAttention ?? 0, hint: 'Brand bulan ini', to: '/pusat-kendali', tone: summary.dataAttention ? 'warn' : null },
-      ] : [
-        { label: 'Modul untuk Anda', value: modules.length, hint: 'Sesuai hak akses akun', to: null },
-      ]),
-    ];
+    : [];
 
   const primary = isClient
     ? { to: '/brand-tracking', label: 'Buka Brand Tracking' }
-    : can('dashboard') ? { to: '/dashboard', label: 'Buka Business Overview' } : { to: modules[0]?.to ?? '/', label: `Buka ${modules[0]?.label ?? 'ATLAS'}` };
-  const secondary = !isClient && can('report_generator') ? { to: '/report-generator/meta', label: 'Buat laporan' } : null;
+    : can('dashboard') ? { to: '/dashboard', label: 'Brand Overview' } : { to: modules[0]?.to ?? '/', label: `Buka ${modules[0]?.label ?? 'ATLAS'}` };
+  const secondary = !isClient && can('report_generator') ? { to: '/report-generator/meta', label: 'Business Insight' } : null;
 
   return (
     <div className="hb" ref={rootRef}>
-      <section className="hb-hero" aria-label="Selamat datang">
+      <section className={`hb-hero${pulse.length ? ' has-pulse' : ''}`} aria-label="Selamat datang">
         <div className="hb-aurora" aria-hidden="true"><i /><i /><i /></div>
         <div className="hb-grid" aria-hidden="true" />
         <div className="hb-hero-copy">
@@ -275,16 +269,14 @@ export default function HomePage() {
           </p>
           <div className="hb-actions">
             <Link to={primary.to} className="hb-btn is-primary">{primary.label} <ArrowRight size={17} aria-hidden="true" /></Link>
-            {secondary && <Link to={secondary.to} className="hb-btn">{secondary.label}</Link>}
-            <Link to="/selamat-datang" className="hb-btn is-quiet">
-              {can('homepage_content') && !isViewOnly ? 'Kelola homepage publik' : 'Lihat homepage publik'} <ArrowUpRight size={15} aria-hidden="true" />
-            </Link>
+            {secondary && <Link to={secondary.to} className="hb-btn">{secondary.label} <ArrowRight size={17} aria-hidden="true" /></Link>}
           </div>
         </div>
         <Orbit />
       </section>
 
-      <section className="hb-pulse" aria-label="Hari ini">
+      {pulse.length > 0 && (
+      <section className="hb-pulse" aria-label="Bulan ini">
         {pulse.map((p, i) => {
           const Tag = p.to ? Link : 'div';
           return (
@@ -298,11 +290,12 @@ export default function HomePage() {
           );
         })}
       </section>
+      )}
 
       <section className="hb-section" aria-labelledby="hb-work-title">
         <header className="hb-section-head" data-hb-reveal>
-          <span className="hb-eyebrow"><Sparkles size={14} aria-hidden="true" /> Ruang kerja</span>
-          <h2 id="hb-work-title">{isClient ? 'Yang bisa Anda buka' : 'Mulai dari mana hari ini?'}</h2>
+          <span className="hb-eyebrow"><Sparkles size={14} aria-hidden="true" /> Workspace</span>
+          <h2 id="hb-work-title">{isClient ? 'Yang bisa Anda buka' : 'Mulai darimana Hari Ini?'}</h2>
         </header>
         <div className="hb-groups" onPointerMove={spotlight}>
           {groups.map((g, gi) => (
@@ -334,7 +327,7 @@ export default function HomePage() {
         <section className="hb-section hb-flow" aria-labelledby="hb-flow-title" data-hb-reveal>
           <header className="hb-section-head">
             <span className="hb-eyebrow"><Target size={14} aria-hidden="true" /> Cara kerja ATLAS</span>
-            <h2 id="hb-flow-title">Dari data mentah ke laporan klien</h2>
+            <h2 id="hb-flow-title">Raw Data Jadi Laporan Klien.</h2>
           </header>
           <ol className="hb-steps">
             {FLOW.map((s, i) => (

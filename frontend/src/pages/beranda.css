@@ -6,6 +6,11 @@
    platforms around the ATLAS mark, live numbers that count up, a workspace
    grid lit by the cursor, and the client band running at the foot.
    Every motion stops under prefers-reduced-motion.
+
+   Proportion: the golden ratio. The hero splits copy and orbit 1.618 : 1;
+   type steps by φ (body 17px → headline ≈ 17·φ³); spacing walks the
+   Fibonacci scale --s1…--s6 (8 · 13 · 21 · 34 · 55 · 89), so every gap is
+   φ times the one inside it.
    ========================================================================= */
 
 .hb {
@@ -15,12 +20,14 @@
   --hb-floor: #f3f6fb;
   --hb-accent: #2856b6;
   --hb-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --phi: 1.618;
+  --s1: 8px; --s2: 13px; --s3: 21px; --s4: 34px; --s5: 55px; --s6: 89px;
   width: 100%;
   max-width: var(--workspace-max, 1840px);
   margin: 0 auto;
   padding: clamp(.5rem, 1.2vw, 1rem) 0 3rem;
   display: grid;
-  gap: 28px;
+  gap: var(--s5);
 }
 
 /* ── Hero ──────────────────────────────────────────────────────────────── */
@@ -28,11 +35,10 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+  grid-template-columns: minmax(0, 1.618fr) minmax(320px, 1fr);
   align-items: center;
-  gap: 24px;
-  min-height: 430px;
-  padding: clamp(32px, 4vw, 56px) clamp(28px, 4vw, 60px) 96px;
+  gap: var(--s4);
+  padding: var(--s5) clamp(var(--s4), 5vw, var(--s6));
   overflow: hidden;
   border-radius: 32px;
   background: linear-gradient(125deg, #0d1c4a 0%, #16307c 42%, #1f4fbf 78%, #2b6be0 100%);
@@ -58,7 +64,8 @@
 }
 @keyframes hb-grid { to { background-position: 44px 44px, 44px 44px; } }
 
-.hb-hero-copy { position: relative; display: grid; justify-items: start; gap: 18px; animation: hb-rise .9s var(--hb-ease) both; }
+.hb-hero.has-pulse { padding-bottom: var(--s6); }
+.hb-hero-copy { position: relative; display: grid; justify-items: start; gap: var(--s3); animation: hb-rise .9s var(--hb-ease) both; }
 @keyframes hb-rise { from { opacity: 0; transform: translateY(14px); } }
 .hb-kicker {
   display: inline-flex; align-items: center; gap: 9px;
@@ -70,14 +77,14 @@
 }
 .hb-kicker i { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 0 rgba(74, 222, 128, .6); animation: hb-live 2.2s ease-out infinite; }
 @keyframes hb-live { to { box-shadow: 0 0 0 9px rgba(74, 222, 128, 0); } }
-.hb-hero h1 { margin: 0; color: #fff; font-size: clamp(2.4rem, 4.4vw, 4rem); font-weight: 800; line-height: 1.02; letter-spacing: -.045em; }
+.hb-hero h1 { margin: 0; color: #fff; font-size: clamp(2.6rem, 4.2vw, 4.5rem); font-weight: 800; line-height: 1; letter-spacing: -.045em; }
 .hb-name { color: #8fe3ff; }
-.hb-hero p { max-width: 54ch; margin: 0; color: #d3e0fb; font-size: 1.02rem; line-height: 1.6; }
+.hb-hero p { max-width: 34em; margin: 0; color: #d3e0fb; font-size: 1.0625rem; line-height: 1.618; }
 .hb-hero p b { color: #fff; }
-.hb-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.hb-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
 .hb-btn {
   display: inline-flex; align-items: center; gap: 8px;
-  min-height: 48px; padding: 0 22px;
+  min-height: 52px; padding: 0 var(--s4);
   border: 1px solid rgba(255, 255, 255, .3); border-radius: 999px;
   background: rgba(255, 255, 255, .08);
   color: #fff; font-size: .92rem; font-weight: 750; text-decoration: none;
@@ -95,7 +102,7 @@
 .hb-btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
 /* Orbit: the ATLAS mark with the four ad platforms circling it. */
-.hb-orbit { --r: 190px; position: relative; justify-self: center; width: calc(var(--r) * 2); max-width: 100%; aspect-ratio: 1; }
+.hb-orbit { --r: clamp(150px, 11vw, 190px); position: relative; justify-self: center; width: calc(var(--r) * 2); max-width: 100%; aspect-ratio: 1; }
 .hb-orbit-ring { position: absolute; inset: 0; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%; }
 .hb-orbit-ring.is-1 { inset: 0; border-style: dashed; animation: hb-spin 60s linear infinite; }
 .hb-orbit-ring.is-2 { inset: 16%; border-color: rgba(126, 240, 255, .22); }
@@ -133,8 +140,8 @@
 /* ── Pulse: today's numbers, floating over the hero's foot ─────────────── */
 .hb-pulse {
   position: relative; z-index: 2;
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;
-  margin: -84px clamp(16px, 3vw, 44px) 0;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s2);
+  margin: calc(var(--s5) * -1 - var(--s5)) clamp(var(--s3), 3vw, var(--s5)) 0;
 }
 .hb-stat {
   position: relative;
@@ -163,24 +170,27 @@ a.hb-stat:hover .hb-stat-go { color: var(--hb-accent); transform: translate(2px,
 @keyframes hb-shimmer { to { background-position: -240% 0; } }
 
 /* ── Sections ──────────────────────────────────────────────────────────── */
-.hb-section { display: grid; gap: 18px; padding: 0 4px; }
-.hb-section-head { display: grid; gap: 6px; }
+.hb-section { display: grid; gap: var(--s4); padding: 0 4px; }
+.hb-section-head { display: grid; gap: var(--s1); }
 .hb-eyebrow { display: inline-flex; align-items: center; gap: 7px; color: var(--hb-accent); font-size: .76rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .hb-section-head h2 { margin: 0; color: var(--hb-ink); font-size: clamp(1.5rem, 2.2vw, 2rem); font-weight: 800; letter-spacing: -.035em; }
 
 [data-hb-reveal] { opacity: 0; transform: translateY(18px); transition: opacity .7s var(--hb-ease), transform .7s var(--hb-ease); transition-delay: var(--d, 0ms); }
 [data-hb-reveal].is-in { opacity: 1; transform: none; }
 
-.hb-groups { display: grid; gap: 22px; }
-.hb-group { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; align-items: start; }
+.hb-groups { display: grid; gap: var(--s4); }
+.hb-group { display: grid; grid-template-columns: 233px minmax(0, 1fr); gap: var(--s3); align-items: start; }
 .hb-group-head { position: sticky; top: 16px; padding-top: 6px; }
 .hb-group-head h3 { margin: 0; color: var(--hb-ink); font-size: 1rem; font-weight: 800; }
 .hb-group-head p { margin: 4px 0 0; color: var(--hb-muted); font-size: .8rem; line-height: 1.45; }
-.hb-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+/* One column count for every group, so cards line up across the three
+   rows instead of each row wrapping on its own. */
+.hb-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); }
+@media (max-width: 1600px) { .hb-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .hb-card {
   position: relative; isolation: isolate;
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 14px;
-  padding: 18px 18px 20px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--s2);
+  padding: var(--s3);
   overflow: hidden;
   border: 1px solid var(--hb-line); border-radius: 20px;
   background: #fff;
@@ -215,8 +225,8 @@ a.hb-stat:hover .hb-stat-go { color: var(--hb-accent); transform: translate(2px,
 .hb-card:hover .hb-card-go { color: var(--hb-accent); transform: translate(3px, -3px); }
 
 /* ── Flow ─────────────────────────────────────────────────────────────── */
-.hb-flow { padding: 30px clamp(20px, 3vw, 36px) 34px; border: 1px solid var(--hb-line); border-radius: 26px; background: linear-gradient(180deg, #fff, #f7f9fe); }
-.hb-steps { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 6px 0 0; padding: 0; list-style: none; }
+.hb-flow { padding: var(--s4) clamp(var(--s3), 3vw, var(--s5)) var(--s5); border: 1px solid var(--hb-line); border-radius: 26px; background: linear-gradient(180deg, #fff, #f7f9fe); }
+.hb-steps { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); margin: 0; padding: 0; list-style: none; }
 .hb-steps::before {
   content: ''; position: absolute; top: 26px; right: 12%; left: 12%; height: 2px;
   background: linear-gradient(90deg, #2856b6, #3fd0e8);
@@ -242,8 +252,8 @@ a.hb-stat:hover .hb-stat-go { color: var(--hb-accent); transform: translate(2px,
 
 /* ── Clients ──────────────────────────────────────────────────────────── */
 .hb-clients {
-  display: grid; gap: 14px;
-  padding: 26px 0 18px;
+  display: grid; gap: var(--s3);
+  padding: var(--s4) 0 var(--s3);
   overflow: hidden;
   border-radius: 26px;
   background: linear-gradient(125deg, #0d1c4a, #16307c 60%, #1f4fbf);
@@ -272,6 +282,7 @@ a.hb-stat:hover .hb-stat-go { color: var(--hb-accent); transform: translate(2px,
   .hb-hero { grid-template-columns: minmax(0, 1fr); }
   .hb-orbit { display: none; }
   .hb-group { grid-template-columns: minmax(0, 1fr); }
+  .hb-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hb-group-head { position: static; }
 }
 
