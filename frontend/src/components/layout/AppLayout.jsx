@@ -15,14 +15,14 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 // Ordered the way ATLAS is worked. Everything a brand puts IN — its context,
 // its files, its daily numbers — is one entry, Brand Setting, whose own
 // section bar switches between the three; what ATLAS gives back OUT
-// (Business Overview, Report Generator) follows, so input and output never
-// read as one long list.
+// (Report Generator) follows, so input and output never read as one long
+// list. Business Overview opens the Operasional group.
 const NAV = [
   { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
   { id: 'brand-setting', label: 'Brand Setting', Icon: SlidersHorizontal, group: 'Workspace', sections: BRAND_SETTING_SECTIONS },
   { to: BRAND_TRACKING.to, label: BRAND_TRACKING.label, Icon: BRAND_TRACKING.Icon, group: 'Workspace', module: BRAND_TRACKING.module },
-  { to: '/dashboard', label: 'Business Overview', Icon: LayoutDashboard, group: 'Workspace', module: 'dashboard' },
   { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace', module: 'report_generator' },
+  { to: '/dashboard', label: 'Business Overview', Icon: LayoutDashboard, group: 'Operasional', module: 'dashboard' },
   { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, group: 'Operasional', module: 'meta_automation' },
   { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, group: 'Operasional', module: 'internal_dashboard' },
   { to: '/pusat-kendali', label: 'Pusat Kendali', Icon: Radar, group: 'Operasional', module: 'control_center' },

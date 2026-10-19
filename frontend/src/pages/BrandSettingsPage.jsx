@@ -514,8 +514,11 @@ export default function BrandSettingsPage() {
 
   // The selected brand lives in the URL (?detail=<id>), so Data Collection Hub's
   // "Context & direction" link opens the right brand directly. With none
-  // chosen, the first brand in the list is shown.
+  // chosen, the brand last open in Brand Setting (shared with Data Collection
+  // Hub, so switching sections keeps the brand) is shown, else the first in
+  // the list.
   const detailId = Number(params.get('detail')) || null;
+  const [lastBrandId, setLastBrandId] = useSessionState('brand-settings:brand', null);
   const setDetail = (id) => setParams((p) => {
     const next = new URLSearchParams(p);
     if (id) next.set('detail', String(id)); else next.delete('detail');
@@ -536,7 +539,12 @@ export default function BrandSettingsPage() {
     return brands.filter((b) => matchesBrandStatus(b, listStatus) && b.brand_name.toLowerCase().includes(q));
   }, [brands, listQuery, listStatus]);
 
-  const selected = (detailId && brands.find((b) => b.brand_id === detailId)) || shown[0] || null;
+  const selected = (detailId && brands.find((b) => b.brand_id === detailId))
+    || (lastBrandId && brands.find((b) => b.brand_id === lastBrandId))
+    || shown[0] || null;
+  useEffect(() => {
+    if (selected) setLastBrandId(selected.brand_id);
+  }, [selected?.brand_id, setLastBrandId]);
   const select = (b) => {
     if (b.brand_id === selected?.brand_id) return;
     if (dirtyRef.current && !window.confirm('Perubahan brand context/direction belum disimpan. Pindah brand tanpa menyimpan?')) return;
