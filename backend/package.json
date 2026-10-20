@@ -10,7 +10,8 @@
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "test": "node --test test/",
-    "test:integration": "INTERNAL_DASHBOARD_IT=1 GOOGLE_ADS_IT=1 node --test test/"
+    "test:integration": "INTERNAL_DASHBOARD_IT=1 GOOGLE_ADS_IT=1 node --test test/",
+    "google-reviews:login": "node scripts/googleReviewsLogin.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
@@ -18,6 +19,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
+    "csv-parse": "^5.6.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
@@ -26,5 +28,8 @@
     "pg": "^8.16.0",
     "uuid": "^11.1.0",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
   }
 }
