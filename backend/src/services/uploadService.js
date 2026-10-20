@@ -67,7 +67,7 @@ export async function deleteUpload(uploadId) {
 
     await client.query('COMMIT');
     for (const key of [existing.rows[0].storage_key, archivedKey]) if (key) await fileStore.deleteBytes(key).catch(() => {});
-    // Performance Overview feeds the Internal Dashboard's Shopee Ads funnel.
+    // Performance Overview feeds the Business Insight's Shopee Ads funnel.
     if (existing.rows[0].file_type === 'performance_overview' && existing.rows[0].brand_id) {
       await refreshInternalDashboard(existing.rows[0].brand_id);
     }

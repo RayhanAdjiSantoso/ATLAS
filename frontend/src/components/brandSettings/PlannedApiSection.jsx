@@ -68,7 +68,7 @@ export default function PlannedApiSection({ platformId }) {
         </div>
       </div>
 
-      <p className="pa-now"><UploadCloud size={15} aria-hidden="true" /> Untuk sekarang, unggah file ekspor {plan.exportFrom} ke kartu di atas — Report Generator dan Business Overview membacanya seperti biasa.</p>
+      <p className="pa-now"><UploadCloud size={15} aria-hidden="true" /> Untuk sekarang, unggah file ekspor {plan.exportFrom} ke kartu di atas — Report Generator dan Brand Overview membacanya seperti biasa.</p>
     </section>
   );
 }

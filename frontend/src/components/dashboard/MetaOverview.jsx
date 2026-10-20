@@ -6,7 +6,7 @@ import { META_SOURCE_LABEL } from '../../reportGenerator/lib/metaSources.ts';
 import { META_DATASETS, readMetaPeriod } from './metaOverview.js';
 import './metaOverview.css';
 
-// Business Overview › Meta Ads: the account in three parts, as Data
+// Brand Overview › Meta Ads: the account in three parts, as Data
 // Collection Hub files them — Boost Post (awareness), Non Boost Post
 // (e-commerce & B2B to the website) and CPAS (catalogue sales on Shopee /
 // Tokopedia) — each with the measures that fit its job, against the

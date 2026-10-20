@@ -10,7 +10,7 @@ import { Delta, Figure, InfoTip } from './figures.jsx';
 import PageBand from '../common/PageBand.jsx';
 import './softShell.css';
 
-// Business Overview, Soft Blue — a calmer, more systematic
+// Brand Overview, Soft Blue — a calmer, more systematic
 // frame around the same analysis: brand and period in one header, channel
 // and domain as tab rows, then headline tiles and the analysis at full width.
 // Every number and renderer inside is the classic console's own; only the
@@ -83,7 +83,7 @@ export default function SoftShell({
             band (the same component Brand Setting and Report Generator use). */}
         <PageBand
           kicker="Workspace · Analisis"
-          title="Business Overview"
+          title="Brand Overview"
           desc="Satu pandangan untuk memahami performa brand di seluruh channel."
           tabs={views.map((v) => ({
             key: v.id, label: v.label, hint: v.ready || v.readable ? v.hint : 'Belum ada data', icon: <v.Icon size={19} />, onSelect: () => setViewId(v.id),

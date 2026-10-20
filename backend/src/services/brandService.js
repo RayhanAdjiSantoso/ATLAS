@@ -101,7 +101,7 @@ const REFERENCE_LABELS = [
   [/^public\.users$/, 'Akun klien yang terikat ke brand ini'],
   [/^public\.brand_profiles$/, 'Brand context & current direction'],
   [/^public\.brand_monthly_targets$/, 'Target bulanan'],
-  [/^shopee\./, 'Data penjualan Shopee (Business Overview)'],
+  [/^shopee\./, 'Data penjualan Shopee (Brand Overview)'],
 ];
 const labelFor = (table) => REFERENCE_LABELS.find(([re]) => re.test(table))?.[1] ?? table;
 

@@ -10,7 +10,7 @@ import './pageBand.css';
 // underneath — level 1 of three, with a section's own views (a compact
 // white segmented control) and in-card tabs (underlines) beneath it.
 //
-// Brand Setting, Business Overview and Report Generator all render this one
+// Brand Setting, Brand Overview and Report Generator all render this one
 // component, so the three pages cannot drift apart. The frame around it sets
 // two CSS custom properties: --band-bleed (the frame's padding, which the
 // band cancels to reach the frame's edges) and --band-floor (the frame's

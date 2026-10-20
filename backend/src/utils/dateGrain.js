@@ -1,6 +1,6 @@
 // Shared rule for the dashboard's monthly-snapshot metrics.
 //
-// A handful of Business Overview figures can only be read from
+// A handful of Brand Overview figures can only be read from
 // shopee.product_performance_summary / shopee.product_variant_performance,
 // which store ONE row per calendar month (period_id -> report_periods). Every
 // other domain re-aggregates from daily (daily_order_performance,

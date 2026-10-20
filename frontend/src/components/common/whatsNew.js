@@ -26,6 +26,43 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'sidebar-brand-overview-business-insight',
+    released: '2026-10-20',
+    target: '[data-nav="/dashboard"]',
+    title: 'Nama dan urutan menu baru',
+    body: 'Business Overview kini bernama Brand Overview, dan Internal Dashboard kini Business Insight. Keduanya bersama Beranda ada paling atas sidebar; grup Operasional menjadi Integration.',
+  },
+  {
+    id: 'pintasan-executive-snapshot',
+    released: '2026-10-20',
+    path: '/dashboard',
+    target: '[data-feature="snapshot-shortcuts"]',
+    title: 'Pintasan di Executive Snapshot',
+    body: 'Langsung lompat ke Minutes of Meeting di bawah, atau buka Target & Budget brand ini di Brand Tracking.',
+  },
+  {
+    id: 'halaman-extensions',
+    released: '2026-10-20',
+    target: '[data-nav="/extensions"]',
+    title: 'Halaman Extensions',
+    body: 'Unduh Chrome extension ATLAS Google Reviews Exporter di sini, lengkap dengan cara memasang dan memakainya.',
+  },
+  {
+    id: 'google-reviews-import-csv',
+    released: '2026-10-20',
+    path: '/google-reviews',
+    target: '[data-feature="gr-csv-import"]',
+    title: 'Import CSV Google Reviews',
+    body: 'Kumpulkan ulasan dari Google Maps dengan Chrome extension ATLAS Google Reviews Exporter, lalu unggah CSV-nya di sini. ATLAS menampilkan preview dulu, baru menyimpan dan menganalisisnya.',
+  },
+  {
+    id: 'google-reviews-analytics',
+    released: '2026-10-19',
+    target: '[data-nav="/google-reviews"]',
+    title: 'Google Reviews Analytics',
+    body: 'Cari bisnis di Google Maps, kumpulkan ulasannya, lalu lihat sentimen, kata yang paling sering dipakai pelanggan, tren, dan ringkasan AI dalam satu halaman.',
+  },
+  {
     id: 'panduan-google-ads-script',
     released: '2026-10-15',
     path: '/data-brand',

@@ -57,7 +57,7 @@ function parseMinute(req) {
     todo_client: String(body.todo_client ?? '').trim(),
     todo_mil: String(body.todo_mil ?? '').trim(),
   };
-  // A record with a date and nothing else has nothing for Business Overview to
+  // A record with a date and nothing else has nothing for Brand Overview to
   // read or summarise; the editor blocks it too, this is the server's copy.
   if (!minute.meeting_recap && !minute.todo_client && !minute.todo_mil) {
     throw new AppError('Isi recap atau minimal satu to do list', 400);
@@ -232,7 +232,7 @@ async function storeSplitMetaExport({ req, brandId, month, files }) {
 }
 
 // One part: read it, file it under the right part number, and — for the three
-// Dashboard datasets — parse it into the fact tables Business Overview reads.
+// Dashboard datasets — parse it into the fact tables Brand Overview reads.
 async function storeOnePart({ req, brandId, platform, channel, month, isReference, file, replaceFileId }) {
   let summary = { periodMonth: null, periodStart: null, periodEnd: null, coveredDays: 0, dayBitmap: null };
   let rowCount = null;
@@ -296,7 +296,7 @@ async function storeOnePart({ req, brandId, platform, channel, month, isReferenc
   });
 
   // Storing the bytes is the whole job for Report Generator channels. For the
-  // three the Dashboard is built on it is only half: Business Overview reads
+  // three the Dashboard is built on it is only half: Brand Overview reads
   // shopee.* fact tables, so the file has to go through the same importer the
   // old Upload Data tab used. Parts merge safely there — every loader
   // de-duplicates on a natural key — so part 2 continues part 1 rather than
@@ -431,7 +431,7 @@ export const downloadLibraryFile = asyncHandler(async (req, res) => {
   const brandId = parseBrandId(req);
   const fileId = Number(req.params.fileId);
   if (!Number.isInteger(fileId)) throw new AppError('fileId tidak valid', 400);
-  // Business Overview's Meta tabs fetch the month's files on every open. The
+  // Brand Overview's Meta tabs fetch the month's files on every open. The
   // ETag (a replaced file gets a new object key and updated_at) lets the
   // browser keep its copy: an unchanged file is answered 304 without the
   // bytes being read from storage at all.

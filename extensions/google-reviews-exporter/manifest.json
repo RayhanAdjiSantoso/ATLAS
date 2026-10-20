@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "ATLAS Google Reviews Exporter",
+  "short_name": "ATLAS Reviews",
+  "version": "1.0.1",
+  "description": "Mengumpulkan ulasan yang tampil di halaman bisnis Google Maps dan mengekspornya ke CSV untuk diimpor ke ATLAS.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "ATLAS Google Reviews Exporter",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.google.com/maps*",
+    "https://www.google.co.id/maps*",
+    "https://maps.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/maps*",
+        "https://www.google.co.id/maps*",
+        "https://maps.google.com/*"
+      ],
+      "js": ["lib/core.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

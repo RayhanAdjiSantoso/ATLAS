@@ -1,7 +1,7 @@
 import { InfoTip } from './figures.jsx';
 import { formatPercent } from '../../utils/format.js';
 
-// Shared building blocks for every Business Overview domain.
+// Shared building blocks for every Brand Overview domain.
 //
 // Traffic & Funnel was rebuilt first and set the pattern: a period banner
 // saying what the numbers cover, panels whose heading carries a "?" with the

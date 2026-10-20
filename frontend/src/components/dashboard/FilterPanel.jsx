@@ -115,7 +115,7 @@ export default function FilterPanel({ filters, onChange, variant }) {
     handleChange('compare', next);
   };
 
-  // Header (Business Overview's soft layout): the controls as chips in the
+  // Header (Brand Overview's soft layout): the controls as chips in the
   // page header's corner, the way analytics dashboards carry their context.
   // The comparison's switch and basis are one menu — "Tanpa pembanding" is
   // the switch off, any basis turns it on — with the compared range as a

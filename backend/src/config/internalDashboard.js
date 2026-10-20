@@ -1,5 +1,5 @@
 // =====================================================================
-// Internal Dashboard — tunable analysis constants, ALL in one place.
+// Business Insight — tunable analysis constants, ALL in one place.
 //
 // These are ANALYSIS KNOBS, not settings the app writes. They start as
 // deliberate placeholders and are meant to be recalibrated against real

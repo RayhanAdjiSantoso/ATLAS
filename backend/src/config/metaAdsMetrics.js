@@ -191,7 +191,7 @@ export const METRICS = [
 const BY_KEY = new Map(METRICS.map((m) => [m.key, m]));
 const sectionsOf = (accountType) => SECTIONS.filter((s) => s.accountType === accountType).map((s) => s.key);
 
-// Stored on every row whatever its account type: the Internal Dashboard's
+// Stored on every row whatever its account type: the Business Insight's
 // Meta funnel (internalDashboardRepository.metaInsightsMonthly) sums these
 // for CPAS accounts too, as it did before the per-section catalog.
 const ALWAYS_STORED = ['purchases', 'purchase_value', 'content_views', 'adds_to_cart'];
@@ -219,7 +219,7 @@ export function exportColumns(sections) {
   return METRICS.filter((m) => m.sections.some((s) => wanted.has(s))).map(({ key, header, unit }) => ({ key, header, unit }));
 }
 
-// Typed columns for the additive core metrics (what the Internal Dashboard
+// Typed columns for the additive core metrics (what the Business Insight
 // SUMs); every other metric goes into the `metrics` JSONB. reach is kept in
 // its column for continuity but is no longer exported.
 export const TYPED_KEYS = new Set(['amount_spent', 'impressions', 'link_clicks', 'purchases', 'purchase_value']);
@@ -266,7 +266,7 @@ export function storedValue(row, key) {
 
 // Boost or Non-Boost for a MAIN campaign. With a Kata Kunci Boost Post (set
 // per account in Meta Ads Automation) the keyword decides — the same rule
-// the Internal Dashboard split uses (dailyTrackingSync.metaFunnelByMonth).
+// the Business Insight split uses (dailyTrackingSync.metaFunnelByMonth).
 // Without one, the Report Generator's campaign-name rule
 // (features/meta/metaReport.ts isBoostRow) is used, so an account that has
 // no keyword yet still files somewhere sensible.

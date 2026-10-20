@@ -145,7 +145,7 @@ export const TOURS = {
   'business-overview': [
     {
       target: '.bo-shell .band-tabs',
-      kicker: 'Business Overview',
+      kicker: 'Brand Overview',
       title: 'Executive Snapshot dan tiap channel',
       body: 'Executive Snapshot merangkum semua channel beserta catatan meeting. Meta Ads, Shopee, dan TikTok membuka analisis per channel.',
     },
