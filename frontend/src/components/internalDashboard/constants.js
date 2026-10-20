@@ -1,4 +1,4 @@
-// Shared labels/enums for the Internal Dashboard tabs. Enum *values*
+// Shared labels/enums for the Business Insight tabs. Enum *values*
 // mirror migration 009 (public.sales_channel / public.ad_platform); labels
 // are the Indonesian UI text.
 

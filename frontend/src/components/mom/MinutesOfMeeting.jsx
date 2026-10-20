@@ -39,7 +39,7 @@ const updatedLabel = (minute) => {
   return `Diperbarui ${when}${minute.updated_by_name ? ` oleh ${minute.updated_by_name}` : ''}`;
 };
 
-// A task textarea that also says what Business Overview will make of it, so the
+// A task textarea that also says what Brand Overview will make of it, so the
 // "PIC:" convention is learnt from the count changing rather than from a manual.
 function MomTaskField({ label, guidance, scope, value, onChange, placeholder, left }) {
   const groups = taskGroups(value, scope);
@@ -133,7 +133,7 @@ function MinuteRow({ minute, open, onToggle, onEdit, onDelete, busy, editing, in
                   );
                 })}
               </div>
-              <p className="mom-detail-foot">{updatedLabel(minute)} · Status tugas dicentang dari Business Overview.</p>
+              <p className="mom-detail-foot">{updatedLabel(minute)} · Status tugas dicentang dari Brand Overview.</p>
             </div>
           </motion.div>
         )}
@@ -209,7 +209,7 @@ function MinutesView({ brand, minutes, loading, onSave, onDelete, busy, reduced 
     <>
       <SectionHead
         title="Minutes of Meeting"
-        description="Simpan hasil pembahasan dan pembagian tindak lanjut per meeting. Catatan tampil di Business Overview sesuai periode tanggal meeting."
+        description="Simpan hasil pembahasan dan pembagian tindak lanjut per meeting. Catatan tampil di Brand Overview sesuai periode tanggal meeting."
         meta={`${minutes.length} catatan`}
       />
 
@@ -252,7 +252,7 @@ function MinutesView({ brand, minutes, loading, onSave, onDelete, busy, reduced 
                 </div>
                 <label className="mom-field is-wide">
                   <span className="mom-field-label">Meeting recap</span>
-                  <small>Keputusan, insight, dan konteks penting. Bagian ini yang dirangkum Gemini di Business Overview.</small>
+                  <small>Keputusan, insight, dan konteks penting. Bagian ini yang dirangkum Gemini di Brand Overview.</small>
                   <textarea ref={recapRef} rows="6" value={draft.meeting_recap} onChange={(event) => setField('meeting_recap')(event.target.value)} placeholder="Contoh: Klien setuju menaikkan budget iklan Shopee 20% mulai minggu depan untuk push produk hero…" />
                 </label>
                 <MomTaskField
@@ -330,7 +330,7 @@ function MinutesView({ brand, minutes, loading, onSave, onDelete, busy, reduced 
           <div className="mom-empty">
             <UsersRound size={24} />
             <strong>Belum ada catatan meeting</strong>
-            <span>Catatan pertama langsung tersedia di Business Overview untuk periode tanggalnya.</span>
+            <span>Catatan pertama langsung tersedia di Brand Overview untuk periode tanggalnya.</span>
             <button type="button" className="brand-new" onClick={startNew}><Plus size={14} /> Tulis catatan pertama</button>
           </div>
         )}
@@ -393,7 +393,7 @@ export default function MinutesOfMeeting({ brand }) {
         .sort((a, b) => b.meeting_date.localeCompare(a.meeting_date) || b.id - a.id));
       setNotice(id
         ? `Catatan meeting ${dateLabel(data.minute.meeting_date)} diperbarui.`
-        : `Catatan meeting ${dateLabel(data.minute.meeting_date)} tersimpan dan tersedia di Business Overview.`);
+        : `Catatan meeting ${dateLabel(data.minute.meeting_date)} tersimpan dan tersedia di Brand Overview.`);
       return { ok: true, minute: data.minute };
     } catch (err) {
       return { ok: false, error: describeError(err, id ? 'Gagal memperbarui catatan' : 'Gagal menyimpan catatan') };

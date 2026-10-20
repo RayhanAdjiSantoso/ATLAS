@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { formatPercent } from '../../utils/format.js';
 
-// The seven analytic domains of Business Overview, in the order an analyst
+// The seven analytic domains of Brand Overview, in the order an analyst
 // works them: what happened, whether it moved, where it leaked, who came
 // back, how they paid, what they bought together, which product carried it.
 //
@@ -99,7 +99,7 @@ export const DOMAINS = [
 ];
 
 // ── Channels & views ────────────────────────────────────────────────────
-// Business Overview is read channel-first: pick Meta / Shopee / TikTok, then a
+// Brand Overview is read channel-first: pick Meta / Shopee / TikTok, then a
 // domain inside it. Only Shopee has fact tables today (the shopee.* importer),
 // so the other two carry the same domain shape with no endpoint — their tabs
 // say "belum ada data" rather than pretending to be empty reports.

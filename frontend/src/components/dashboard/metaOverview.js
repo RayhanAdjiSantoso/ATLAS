@@ -3,7 +3,7 @@ import { readSpreadsheetFile } from '../../reportGenerator/lib/xlsxUtils.ts';
 import { resolveMetaMonth } from '../../reportGenerator/lib/metaSources.ts';
 import { aggSum, findDenomCol, findSpentCol, parseMetaDayValue, resolveConceptCount, stripCampaignSubtotals } from '../../reportGenerator/lib/meta.ts';
 
-// Business Overview › Meta Ads, read from Data Collection Hub's three Meta
+// Brand Overview › Meta Ads, read from Data Collection Hub's three Meta
 // datasets — Boost Post, Non Boost Post and CPAS — the split that replaced
 // the old combined "Meta Ads" file. Every number goes through Report
 // Generator's own Meta helpers (the same column finders and the same

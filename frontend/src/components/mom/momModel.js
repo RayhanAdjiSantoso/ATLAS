@@ -1,5 +1,5 @@
 // One reading of a Minutes of Meeting record, shared by the editor in
-// Pengaturan Brand and the workspace in Business Overview. Both pages used to
+// Pengaturan Brand and the workspace in Brand Overview. Both pages used to
 // carry their own copy of the labels and date formatting; the task parser only
 // existed on the dashboard, so the editor could not show what the dashboard
 // would make of the text being typed.
@@ -64,8 +64,7 @@ export const recapPreview = (text, length = 140) => {
 };
 
 // A task is "tertunda" once its meeting is more than a week old and it is
-// still unticked. The same threshold drives the dashboard tag, Pusat Kendali
-// and the sidebar badge (backend/src/services/controlCenterService.js).
+// still unticked. The same threshold drives the dashboard tag.
 export const OVERDUE_DAYS = 7;
 
 export function daysSince(fromISO, toISO = todayISO()) {

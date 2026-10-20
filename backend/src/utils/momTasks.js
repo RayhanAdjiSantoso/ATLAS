@@ -1,10 +1,10 @@
 // Server copy of frontend/src/components/mom/momModel.js#taskGroups.
 //
-// It exists so the sidebar badge can count overdue tasks without shipping
-// every meeting note to every page load. The API bundle (api/index.mjs ->
-// backend/src) cannot import from frontend/, so the rule is duplicated
-// rather than shared — and backend/tests/control-center.unit.mjs asserts both
-// copies produce identical groups and keys, so they cannot drift silently.
+// The server reads MOM tasks too (Google Ads optimization writes to do lines
+// in the same "Name:" format). The API bundle (api/index.mjs -> backend/src)
+// cannot import from frontend/, so the rule is duplicated rather than shared —
+// and backend/test/momTasks.test.js asserts both copies produce identical
+// groups and keys, so they cannot drift silently.
 // The key format is load-bearing: completed_task_keys stored in
 // public.brand_minutes are matched against it.
 

@@ -109,7 +109,7 @@ export async function processUpload({ uploadId, fileType, filepath, brandId, fil
     );
 
     await client.query('COMMIT');
-    // Performance Overview feeds the Internal Dashboard's Shopee Ads funnel.
+    // Performance Overview feeds the Business Insight's Shopee Ads funnel.
     if (fileType === 'performance_overview' && brandId) await refreshInternalDashboard(brandId);
     return { rowsInserted, period, note };
   } catch (err) {

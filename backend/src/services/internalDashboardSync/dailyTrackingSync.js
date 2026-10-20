@@ -5,7 +5,7 @@ import * as repo from '../../repositories/internalDashboardRepository.js';
 import { applyFactPlan, logFailedRun } from './applyFactPlan.js';
 
 // =====================================================================
-// ATLAS Daily Tracking -> Internal Dashboard monthly fact tables.
+// ATLAS Daily Tracking -> Business Insight monthly fact tables.
 //
 // Source of truth (user decision 2026-09-30): the Daily Tracking page's own
 // tables (migration 024), not the client Google Sheets.
@@ -305,7 +305,7 @@ export async function syncBrandFromDailyTracking(brandId, userId, opts = {}) {
 }
 
 // Called after every write to the brand's Daily Tracking / Meta insights
-// data, so the Internal Dashboard never needs a sync button. Awaited (the
+// data, so the Business Insight never needs a sync button. Awaited (the
 // API runs serverless — work after the response may never happen), but it
 // never fails the caller's write: an error is logged by the run itself
 // (S8 shows "sync gagal") and swallowed here.

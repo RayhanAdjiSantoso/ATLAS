@@ -13,7 +13,7 @@ import {
   dataQualityQueryValidation,
 } from '../validators/internalDashboardValidators.js';
 
-// Internal Dashboard — all-clients performance capture. READ-ONLY: there is
+// Business Insight — all-clients performance capture. READ-ONLY: there is
 // no input endpoint here. The monthly fact tables are rolled up
 // automatically from Daily Tracking + Meta Ads insights
 // (services/internalDashboardSync), and ad accounts are copied from

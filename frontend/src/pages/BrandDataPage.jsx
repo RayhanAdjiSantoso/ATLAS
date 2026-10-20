@@ -41,13 +41,13 @@ async function downloadLibraryFile(file) {
 }
 
 // Data Collection Hub — where each brand's source material lives: the monthly file
-// library every other module reads (Report Generator, Business Overview,
+// library every other module reads (Report Generator, Brand Overview,
 // Meta Automation) and its ad-account links. The brand's identity (status,
 // brand context, current direction) is set in Pengaturan Brand; this page
 // only reads the profile for the picker's subtitle and links back to it.
 // Minutes of Meeting lives in Brand Tracking (components/mom/MinutesOfMeeting).
 //
-// The frame is Business Overview's soft layout — masthead, then a white
+// The frame is Brand Overview's soft layout — masthead, then a white
 // command card holding the brand and its numbers — so the modules read as
 // one product. Inside Performance Database:
 //
@@ -235,7 +235,7 @@ function cellState(merged, month) {
   return 'snapshot';
 }
 
-// Tiga dataset ini dibaca Business Overview dari tabel fakta, bukan
+// Tiga dataset ini dibaca Brand Overview dari tabel fakta, bukan
 // dari byte filenya. Untuk ketiganya "tersimpan" dan "terbaca" adalah dua hal
 // berbeda, dan perbedaan itu yang dulu disembunyikan status "Lengkap".
 const DASHBOARD_CHANNELS = new Set(['order', 'performance_overview', 'product_performance']);
@@ -746,7 +746,7 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
       <div className="bp-panel-head">
         <div>
           <h2>Input Monthly Performance Data</h2>
-          <p>Perpustakaan data {brand?.brand_name ?? 'brand ini'}. Report Generator, Business Overview, dan Meta Automation membaca dari sini — tidak ada upload ulang di halaman lain.</p>
+          <p>Perpustakaan data {brand?.brand_name ?? 'brand ini'}. Report Generator, Brand Overview, dan Meta Automation membaca dari sini — tidak ada upload ulang di halaman lain.</p>
         </div>
       </div>
 
@@ -883,7 +883,7 @@ export default function BrandDataPage() {
   const [brand, setBrand] = useState(null);
   const [lastBrandId, setLastBrandId] = useSessionState('brand-settings:brand', null);
   // Same session keys as before the split, so links elsewhere that preset a
-  // brand and platform (Pusat Kendali, Meta Automation) still land on them.
+  // brand and platform (Meta Automation) still land on them.
   const [activeView, setActiveView] = useSessionState('brand-settings:view', 'data');
   const [marketId, setMarketId] = useSessionState('brand-settings:platform', 'shopee');
   // Restore legacy account tabs inside their corresponding data channel. A
@@ -1027,7 +1027,7 @@ export default function BrandDataPage() {
         parts.unshift(`dipisah: ${data.split.boost.toLocaleString('id-ID')} baris Boost Post, ${data.split.nonboost.toLocaleString('id-ID')} baris Non Boost Post`);
       }
       // The three Dashboard datasets are also parsed into the fact tables
-      // Business Overview reads; say so, because "tersimpan" alone left the
+      // Brand Overview reads; say so, because "tersimpan" alone left the
       // dashboard's zeros unexplained.
       if (data.imported?.rowsInserted) parts.push(`${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard`);
       if (data.imported?.errors?.length) parts.push(`gagal masuk ke Dashboard: ${data.imported.errors.join('; ')}`);

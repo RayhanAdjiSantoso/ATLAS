@@ -231,7 +231,7 @@ export async function deleteMonthEntries({ brandId, month, userId }) {
     }
     return { month, deleted: { sales: salesDeleted, spend: spendDeleted } };
   });
-  // Keep the Internal Dashboard's monthly tables in step with this write.
+  // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
   return result;
 }
@@ -290,7 +290,7 @@ export async function upsertEntries({ brandId, entryDate, sales, spend, userId }
 
     return { saved: { sales: salesCount, spend: spendCount } };
   });
-  // Keep the Internal Dashboard's monthly tables in step with this write.
+  // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
   return result;
 }
@@ -323,7 +323,7 @@ async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
     }, db);
     return { applied, skipped };
   });
-  // Keep the Internal Dashboard's monthly tables in step with this write.
+  // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
   return result;
 }
@@ -544,7 +544,7 @@ export async function importFromFile({ brandId, buffer, filename, userId, select
       monthsAffected,
     };
   });
-  // Keep the Internal Dashboard's monthly tables in step with this write.
+  // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
   return result;
 }

@@ -23,7 +23,7 @@ export const BRAND_SETTING_SECTIONS = [
     hint: 'Input Monthly Performance Data',
     Icon: FolderOpen,
     module: 'brand_settings',
-    desc: 'File bulanan dan akun iklan setiap brand — sumber yang dibaca Business Overview dan Report Generator.',
+    desc: 'File bulanan dan akun iklan setiap brand — sumber yang dibaca Brand Overview dan Report Generator.',
   },
 ];
 

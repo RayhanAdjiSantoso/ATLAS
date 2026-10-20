@@ -3,7 +3,7 @@ import { findSpentCol, isAllValue, parseMetaDayValue, parseNum } from '../../rep
 import { isBoostRow } from '../../reportGenerator/features/meta/metaReport.ts';
 import { readMetaRows } from './metaOverview.js';
 
-// Business Overview › Meta Ads analysis tabs (Business Growth, Traffic &
+// Brand Overview › Meta Ads analysis tabs (Business Growth, Traffic &
 // Funnel, Audience, Campaign Performance, Root Cause). Every tab reads the
 // same records: each leaf row of Boost Post, Non Boost Post and CPAS (and,
 // for months before the split, the old combined export divided into Boost /

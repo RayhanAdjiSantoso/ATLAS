@@ -71,7 +71,7 @@ export function slugifyChannelLabel(label) {
 }
 
 // Which ad spend buys which sales — the pairing every per-channel ROAS in
-// ATLAS uses (Business Overview, Brand Tracking's targets). Meta Non-Boost
+// ATLAS uses (Brand Overview, Brand Tracking's targets). Meta Non-Boost
 // and Google Ads send traffic to the website and chat; Boost Post is
 // awareness and has no sales channel of its own, so it only counts in the
 // blended ROAS. Shopee's ROAS is Shopee sales over Iklanku alone: CPAS

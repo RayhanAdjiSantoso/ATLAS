@@ -31,13 +31,12 @@ const PINS_KEY = 'atlas_annotation_pins';
 
 const PAGES = {
   '/': 'Beranda',
-  '/dashboard': 'Business Overview',
+  '/dashboard': 'Brand Overview',
   '/pengaturan-brand': 'Setup Context & Brand Direction',
   '/data-brand': 'Data Collection Hub',
   '/brand-tracking': 'Brand Tracking',
   '/meta-automation': 'Meta Ads Automation',
-  '/internal-dashboard': 'Internal Dashboard',
-  '/pusat-kendali': 'Pusat Kendali',
+  '/internal-dashboard': 'Business Insight',
   '/pengaturan-akses': 'Pengaturan Akses',
 };
 function pageName(path) {

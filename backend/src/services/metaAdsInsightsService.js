@@ -359,7 +359,7 @@ export async function finishRun({ runId, status, rowCount, note }) {
     await repo.finishRun({ runId, status, rowCount, note: noteParts.join(' · ') || null }, db);
     return { status, rowCount, removedStale };
   });
-  // The Internal Dashboard's Meta funnel is rolled up from these rows.
+  // The Business Insight's Meta funnel is rolled up from these rows.
   if (status === 'success') await refreshInternalDashboard(run.brand_id);
   return result;
 }

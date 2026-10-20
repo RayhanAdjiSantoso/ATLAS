@@ -8,7 +8,7 @@ import { callAppsScript } from '../metaAutomationService.js';
 // and the link to an ATLAS brand are registered only there, and stored by
 // the Meta Automation Apps Script (Script Properties + its hard-coded
 // CONFIG.ACCOUNTS — no spreadsheet involved). This copies that list into
-// brand_ad_accounts so the Internal Dashboard reads Postgres only.
+// brand_ad_accounts so the Business Insight reads Postgres only.
 //
 // Called after every brand save/delete in Meta Ads Automation (see
 // metaAutomationController) and by scripts/refreshMetaAccounts.js.

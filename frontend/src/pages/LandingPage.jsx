@@ -328,7 +328,7 @@ function Inside({ home, signedIn }) {
         </article>
         <article className="lp-tile lp-tile-overview" data-reveal style={{ '--i': 2 }}>
           <div className="lp-tile-copy">
-            <strong>Business Overview</strong>
+            <strong>Brand Overview</strong>
             <p>Sales, funnel, products and customers, per brand.</p>
           </div>
           <div className="lp-funnel" aria-hidden="true">
