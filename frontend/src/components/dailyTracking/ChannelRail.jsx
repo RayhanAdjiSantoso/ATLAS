@@ -5,7 +5,7 @@ import { channelTotal, costPerRevenue, fmtNum, fmtRp, fmtRpShort, fmtPct, totalF
 // the height of the sheet's, one quiet line per channel (fill-state dot, name,
 // month total), and the section total as a footer row level with the sheet's
 // own total. Everything else about a channel is in the sheet once picked.
-export default function ChannelRail({ kind, grid, channels, coverage, activeKey, onSelect, onAdd }) {
+export default function ChannelRail({ kind, grid, channels, coverage, activeKey, onSelect, onAdd, deleteAction }) {
   const list = channels[kind] || [];
   const field = kind === 'sales' ? 'revenue' : 'amount';
   const total = totalForKind(grid, channels, kind, field);
@@ -18,9 +18,9 @@ export default function ChannelRail({ kind, grid, channels, coverage, activeKey,
   };
 
   return (
-    <aside className={`bt-rail is-${kind}`} aria-label={kind === 'sales' ? 'Channel penjualan' : 'Channel iklan'}>
+    <aside className={`bt-rail is-${kind}`} aria-label={kind === 'sales' ? 'Revenue Stream' : 'Channel iklan'}>
       <header className="bt-rail-head">
-        <span>{kind === 'sales' ? 'Channel penjualan' : 'Channel iklan'}</span>
+        <span>{kind === 'sales' ? 'Revenue Stream' : 'Channel iklan'}</span>
         <b>{list.length}</b>
       </header>
       <ul className="bt-rail-list" role="tablist" aria-orientation="vertical">
@@ -52,6 +52,7 @@ export default function ChannelRail({ kind, grid, channels, coverage, activeKey,
             </button>
           </li>
         )}
+        {deleteAction && <li>{deleteAction}</li>}
       </ul>
       <footer className="bt-rail-total">
         <span>Total</span>

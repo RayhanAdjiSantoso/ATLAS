@@ -47,6 +47,8 @@ function parseSignedThousandsInput(str) {
   return (negative ? -1 : 1) * Number(digits);
 }
 
+// Revenue totals carry their currency, like the revenue cells above them.
+const fmtCell = (field, v) => (field === 'revenue' && v != null ? `Rp ${fmtNum(v)}` : fmtNum(v));
 const isZero = (v) => v !== '' && v != null && Number(v) === 0;
 const monthOf = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', { month: 'short' });
 const weekRange = (week) => {
@@ -127,9 +129,9 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
             <th>Tanggal</th>
             {sales ? (
               <>
-                <th className="is-num">Revenue <small>Rp</small></th>
-                <th className="is-num">Transaksi</th>
-                <th className="is-num">Qty terjual</th>
+                <th className="is-num">Total Revenue</th>
+                <th className="is-num">Total Transactions</th>
+                <th className="is-num">Total Quantity Sold</th>
                 {showNotes && <th>Notes</th>}
               </>
             ) : (
@@ -148,7 +150,7 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                 Minggu {w + 1}
                 <small>{weekRange(week)}</small>
               </th>
-              {fields.map((f) => <td key={f} className="is-num">{week.some((d) => d <= today) ? fmtNum(sum(week, f)) : ''}</td>)}
+              {fields.map((f) => <td key={f} className="is-num">{week.some((d) => d <= today) ? fmtCell(f, sum(week, f)) : ''}</td>)}
               {showNotes && <td />}
               {!sales && <td />}
               <td />
@@ -170,7 +172,7 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                   </td>
                   {sales ? (
                     <>
-                      <td>{input(date, 'revenue', formatSignedThousands(row.revenue), (e) => onCellChange(date, 'revenue', parseSignedThousandsInput(e.target.value)), { type: 'text', inputMode: 'numeric' })}</td>
+                      <td className="dt-money">{input(date, 'revenue', formatSignedThousands(row.revenue), (e) => onCellChange(date, 'revenue', parseSignedThousandsInput(e.target.value)), { type: 'text', inputMode: 'numeric' })}</td>
                       <td>{input(date, 'transaksi', row.transaksi ?? '', (e) => onCellChange(date, 'transaksi', e.target.value), { type: 'number', inputMode: 'numeric' })}</td>
                       <td>{input(date, 'qty', row.qtySold ?? '', (e) => onCellChange(date, 'qtySold', e.target.value), { type: 'number', inputMode: 'numeric' })}</td>
                       {showNotes && (
@@ -203,7 +205,7 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
         <tfoot>
           <tr>
             <th scope="row">Total bulan ini</th>
-            {fields.map((f) => <td key={f} className="is-num">{fmtNum(sum(days, f))}</td>)}
+            {fields.map((f) => <td key={f} className="is-num">{fmtCell(f, sum(days, f))}</td>)}
             {showNotes && <td />}
             {!sales && <td />}
             <td />

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, ShieldCheck, MessageSquareText, Puzzle } from 'lucide-react';
+import { LayoutDashboard, Home, LogOut, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, ShieldCheck, MessageSquareText, Puzzle } from 'lucide-react';
 import { BRAND_SETTING_SECTIONS, BRAND_TRACKING } from '../brandSettings/sections.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import AnnotationLayer from '../annotations/AnnotationLayer.jsx';
@@ -24,7 +24,6 @@ const NAV = [
   { id: 'brand-setting', label: 'Brand Setting', Icon: SlidersHorizontal, group: 'Workspace', sections: BRAND_SETTING_SECTIONS },
   { to: BRAND_TRACKING.to, label: BRAND_TRACKING.label, Icon: BRAND_TRACKING.Icon, group: 'Workspace', module: BRAND_TRACKING.module },
   { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace', module: 'report_generator' },
-  { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, group: 'Integration', module: 'meta_automation' },
   { to: '/google-reviews', label: 'Google Reviews', Icon: MessageSquareText, group: 'Integration', module: 'google_reviews' },
   { to: '/extensions', label: 'Extensions', Icon: Puzzle, group: 'Integration', module: 'google_reviews' },
   // Account and permission management — superadmin and admin only.

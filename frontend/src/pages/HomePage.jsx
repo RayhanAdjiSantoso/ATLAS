@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Activity, ArrowRight, ArrowUpRight, Building2, FileBarChart, FolderOpen, LayoutDashboard, Megaphone,
+  Activity, ArrowRight, ArrowUpRight, Building2, FileBarChart, FolderOpen, LayoutDashboard,
   NotebookPen, ShieldCheck, Sparkles, Target,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -49,11 +49,6 @@ const MODULES = [
     key: 'report-generator', to: '/report-generator/meta', group: 'read', module: 'report_generator',
     label: 'Report Generator', tagline: 'Meta, Shopee, TikTok, Google', Icon: FileBarChart,
     desc: 'Bandingkan dua periode, susun insight, lalu unduh laporan klien sebagai PDF, PNG, atau Excel.',
-  },
-  {
-    key: 'meta-automation', to: '/meta-automation', group: 'ops', module: 'meta_automation',
-    label: 'Meta Ads Automation', tagline: 'Laporan terjadwal', Icon: Megaphone,
-    desc: 'Akun, langganan notifikasi, dan laporan Meta Ads harian & mingguan yang terkirim sendiri.',
   },
   {
     key: 'internal-dashboard', to: '/internal-dashboard', group: 'ops', module: 'internal_dashboard',
@@ -244,7 +239,7 @@ export default function HomePage() {
   const primary = isClient
     ? { to: '/brand-tracking', label: 'Buka Brand Tracking' }
     : can('dashboard') ? { to: '/dashboard', label: 'Brand Overview' } : { to: modules[0]?.to ?? '/', label: `Buka ${modules[0]?.label ?? 'ATLAS'}` };
-  const secondary = !isClient && can('report_generator') ? { to: '/report-generator/meta', label: 'Business Insight' } : null;
+  const secondary = !isClient && can('internal_dashboard') ? { to: '/internal-dashboard', label: 'Business Insight' } : null;
 
   return (
     <div className="hb" ref={rootRef}>

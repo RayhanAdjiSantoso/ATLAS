@@ -35,7 +35,6 @@ const PAGES = {
   '/pengaturan-brand': 'Setup Context & Brand Direction',
   '/data-brand': 'Data Collection Hub',
   '/brand-tracking': 'Brand Tracking',
-  '/meta-automation': 'Meta Ads Automation',
   '/internal-dashboard': 'Business Insight',
   '/pengaturan-akses': 'Pengaturan Akses',
 };

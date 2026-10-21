@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
   Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
-  Database, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
+  Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
   Trash2, Upload, CalendarRange, HelpCircle, BadgeCheck, CalendarClock,
 } from 'lucide-react';
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
@@ -718,7 +718,21 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
 // core datasets are for the months on screen.
 const PLATFORM_LOGO = { meta: 'meta', shopee: 'shopee', tiktok: 'tiktok', google: 'google' };
 
-function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
+// The brand's profile picture beside the section title: its uploaded logo
+// (Setup Context & Brand Direction), else its initials.
+function BrandAvatar({ brand }) {
+  if (!brand) return null;
+  const initials = brand.brand_name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  return (
+    <span className="bp-brand-avatar" aria-hidden="true">
+      {brand.logo_version
+        ? <img src={`/api/public/brand-logo/${brand.brand_id}?v=${brand.logo_version}`} alt="" />
+        : initials}
+    </span>
+  );
+}
+
+function DataView({ brand, command, months, windowMonths, windowEnd, setWindowEnd, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
   const { isAdmin } = useAuth();
   const accountsRef = useRef(null);
   const [accountsVersion, setAccountsVersion] = useState(0);
@@ -744,10 +758,14 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
   return (
     <div className="soft-card bp-panel bp-data" style={{ '--mk-accent': platform.accent, '--mk-wash': platform.wash, '--mk-tint': platform.tint }}>
       <div className="bp-panel-head">
-        <div>
-          <h2>Input Monthly Performance Data</h2>
-          <p>Perpustakaan data {brand?.brand_name ?? 'brand ini'}. Report Generator, Brand Overview, dan Meta Automation membaca dari sini — tidak ada upload ulang di halaman lain.</p>
+        <div className="bp-data-ident">
+          <BrandAvatar brand={brand} />
+          <div>
+            <h2>Input Monthly Performance Data</h2>
+            <p>Semua data {brand?.brand_name ?? 'brand ini'} tersimpan disini untuk Report Generator, Brand Overview, dan Meta Automation. Cukup unggah data sekali, tidak perlu mengulang di setiap fitur.</p>
+          </div>
         </div>
+        {command}
       </div>
 
       <nav className="soft-subtabs bp-platforms" aria-label="Sumber data" role="tablist">
@@ -1080,43 +1098,33 @@ export default function BrandDataPage() {
   };
 
 
-  // Whole-library figures for the command card.
-  const totals = useMemo(() => {
-    const all = PLATFORMS.flatMap((p) => p.datasets.filter((d) => !d.legacy).map((d) => `${p.id}:${d.channel}`));
-    const withData = new Set(files.map((f) => `${f.platform}:${f.channel}`));
-    return { all: all.length, active: all.filter((k) => withData.has(k)).length };
-  }, [files]);
   const span = files.filter((f) => f.period_month).map((f) => f.period_month).sort();
   const spanLabel = span.length
     ? `${buildMonth(span[0].slice(0, 7)).full} – ${buildMonth(span[span.length - 1].slice(0, 7)).full}`
     : 'Belum ada data';
+
+  // The brand and its data range, at the right of Input Monthly Performance
+  // Data's title.
+  const command = (
+    <div className="bp-command is-inline" role="group" aria-label="Brand yang dikelola">
+      <div className="bp-command-brand">
+        <span className="bp-label">Brand</span>
+        <BrandPicker brands={brands} brand={brand} sector={profile?.sector} onSelect={setBrand} reduced={reduced} />
+      </div>
+      <div className="bp-stats">
+        <div className="bp-stat">
+          <span><CalendarRange size={14} aria-hidden="true" /> Rentang data</span>
+          <strong className="is-text">{loading ? '…' : spanLabel}</strong>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     // Frame and masthead come from BrandSettingLayout (shared with the
     // other Brand Setting sections).
     <>
       <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" multiple hidden onChange={handleFile} />
-
-      <section className="soft-card bp-command" aria-label="Brand yang dikelola">
-        <div className="bp-command-brand">
-          <span className="bp-label">Brand</span>
-          <BrandPicker brands={brands} brand={brand} sector={profile?.sector} onSelect={setBrand} reduced={reduced} />
-        </div>
-        <div className="bp-stats">
-          <div className="bp-stat">
-            <span><CalendarRange size={14} aria-hidden="true" /> Rentang data</span>
-            <strong className="is-text">{loading ? '…' : spanLabel}</strong>
-          </div>
-          <div className="bp-stat">
-            <span><FileSpreadsheet size={14} aria-hidden="true" /> File tersimpan</span>
-            <strong>{loading ? '…' : files.length}</strong>
-          </div>
-          <div className="bp-stat">
-            <span><Database size={14} aria-hidden="true" /> Dataset aktif</span>
-            <strong>{loading ? '…' : totals.active}<small>/{totals.all}</small></strong>
-          </div>
-        </div>
-      </section>
 
       {loading && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat data {brand?.brand_name ?? 'brand'}…</p>}
       {error && (
@@ -1138,7 +1146,7 @@ export default function BrandDataPage() {
         {activeView === 'data' && (
           <ViewShell viewId="data" reduced={reduced}>
             <DataView
-              brand={brand} months={months} windowMonths={windowMonths}
+              brand={brand} command={command} months={months} windowMonths={windowMonths}
               windowEnd={windowEnd} setWindowEnd={(next) => { setWindowEnd(next); setFocus(null); }}
               focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
               onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}

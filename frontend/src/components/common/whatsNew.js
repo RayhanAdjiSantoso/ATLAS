@@ -26,6 +26,14 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'hapus-channel-revenue',
+    released: '2026-10-21',
+    path: '/brand-tracking',
+    target: '[data-feature="hapus-channel"]',
+    title: 'Hapus channel yang tidak dipakai',
+    body: 'Channel di Revenue Stream, termasuk channel bawaan seperti Shopee atau Tokopedia, kini bisa dihapus bila brand tidak memakainya. Semua datanya ikut terhapus; tambahkan lagi lewat Tambah channel kapan saja.',
+  },
+  {
     id: 'sidebar-brand-overview-business-insight',
     released: '2026-10-20',
     target: '[data-nav="/dashboard"]',

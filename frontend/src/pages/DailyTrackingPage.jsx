@@ -21,6 +21,7 @@ import MetaSyncButton from '../components/dailyTracking/MetaSyncButton.jsx';
 import ImportFileButton from '../components/dailyTracking/ImportFileButton.jsx';
 import DeleteMonthButton from '../components/dailyTracking/DeleteMonthButton.jsx';
 import ChannelActions from '../components/dailyTracking/ChannelActions.jsx';
+import DeleteChannelButton from '../components/dailyTracking/DeleteChannelButton.jsx';
 import MinutesOfMeeting from '../components/mom/MinutesOfMeeting.jsx';
 import useAutoSave from '../dailyTracking/lib/useAutoSave.js';
 import { coverage, monthName, shiftMonth, sliceGrid, todayIso } from '../dailyTracking/lib/daily.js';
@@ -180,9 +181,8 @@ export default function DailyTrackingPage() {
 
   // After a custom channel is deleted or moved: reload channels + this month,
   // and point the section that lost it at its first channel.
-  const handleChannelChanged = ({ kind, toKind, movedKey }) => {
-    if (kind === 'sales') setActiveSalesTab(FIXED_SALES_CHANNELS[0].key);
-    else setActiveSpendTab(FIXED_SPEND_CHANNELS[0].key);
+  // The channel that left its list falls back to the list's first (activeKey).
+  const handleChannelChanged = ({ toKind, movedKey }) => {
     if (movedKey && toKind) {
       if (toKind === 'sales') setActiveSalesTab(movedKey); else setActiveSpendTab(movedKey);
     }
@@ -224,7 +224,10 @@ export default function DailyTrackingPage() {
 
   const sales = activeTab === 'sales';
   const kind = sales ? 'sales' : 'spend';
-  const activeKey = sales ? activeSalesTab : activeSpendTab;
+  // A remembered channel this brand no longer has (deleted, moved, or a
+  // built-in one hidden) falls back to the first in the list.
+  const pickedKey = sales ? activeSalesTab : activeSpendTab;
+  const activeKey = channels[kind].length && !channels[kind].some((c) => c.key === pickedKey) ? channels[kind][0].key : pickedKey;
   const setActiveKey = sales ? setActiveSalesTab : setActiveSpendTab;
   const channel = channels[kind].find((c) => c.key === activeKey);
   const canEdit = sales ? canEditSales : canEditSpend;
@@ -236,14 +239,14 @@ export default function DailyTrackingPage() {
   const filledTone = chCov?.used && cov.due && chCov.filledDue < cov.due ? 'gap' : undefined;
   const sheetStats = sales
     ? [
-      { label: 'Revenue', value: fmtRp(chTotal('revenue')) },
-      { label: 'Transaksi', value: fmtNum(chTotal('transaksi')) },
-      { label: 'Qty', value: fmtNum(chTotal('qtySold')) },
+      { label: 'Total Revenue', value: fmtRp(chTotal('revenue')) },
+      { label: 'Total Transactions', value: fmtNum(chTotal('transaksi')) },
+      { label: 'Total Quantity Sold', value: fmtNum(chTotal('qtySold')) },
       { label: 'Terisi', value: filledLabel, tone: filledTone },
     ]
     : [
-      { label: 'Ads spend', value: fmtRp(chTotal('amount')) },
-      { label: 'Rata-rata / hari', value: chCov?.filled ? fmtRpShort(chTotal('amount') / chCov.filled) : '—' },
+      { label: 'Total Ad Spend', value: fmtRp(chTotal('amount')) },
+      { label: 'Avg. Daily Spend', value: chCov?.filled ? fmtRpShort(chTotal('amount') / chCov.filled) : '—' },
       { label: 'Terisi', value: filledLabel, tone: filledTone },
     ];
   const sectionTabs = [
@@ -365,6 +368,7 @@ export default function DailyTrackingPage() {
                 kind={kind} grid={grid} channels={channels} coverage={cov}
                 activeKey={activeKey} onSelect={setActiveKey}
                 onAdd={canEdit ? () => setModalKind(kind) : undefined}
+                deleteAction={canEditSpend && <DeleteChannelButton brandId={brandId} kind={kind} channel={channel} onDeleted={handleChannelChanged} />}
               />
               <div className="bt-sheet">
                 <div className="bt-sheet-body">

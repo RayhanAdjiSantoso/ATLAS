@@ -5,7 +5,6 @@ import LoginPage from './pages/LoginPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import DailyTrackingPage from './pages/DailyTrackingPage.jsx';
-import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
 import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
 import GoogleReviewsPage from './pages/GoogleReviewsPage.jsx';
@@ -71,9 +70,6 @@ export default function App() {
             {/* Extensions: today only the Google Reviews exporter, so the page
                 follows that module. */}
             <Route path="/extensions" element={<ExtensionsPage />} />
-          </Route>
-          <Route element={<ProtectedRoute module="meta_automation" />}>
-            <Route path="/meta-automation" element={<MetaAutomationPage />} />
           </Route>
           <Route element={<ProtectedRoute module="internal_dashboard" />}>
             <Route path="/internal-dashboard" element={<InternalDashboardPage />} />
