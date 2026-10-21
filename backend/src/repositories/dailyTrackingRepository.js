@@ -194,6 +194,33 @@ export async function deleteChannelEntries(brandId, kind, channelKey, db = pool)
   return rowCount;
 }
 
+// Built-in channels a brand has removed (migration 058).
+export async function listHiddenChannelKeys(brandId, kind, db = pool) {
+  const { rows } = await db.query(
+    'SELECT channel_key FROM daily_tracking_hidden_channels WHERE brand_id = $1 AND kind = $2',
+    [brandId, kind],
+  );
+  return new Set(rows.map((r) => r.channel_key));
+}
+
+export async function hideFixedChannel(brandId, kind, channelKey, userId, db = pool) {
+  await db.query(
+    `INSERT INTO daily_tracking_hidden_channels (brand_id, kind, channel_key, hidden_by)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (brand_id, kind, channel_key) DO NOTHING`,
+    [brandId, kind, channelKey, userId ?? null],
+  );
+}
+
+// Returns whether the channel was hidden.
+export async function unhideFixedChannel(brandId, kind, channelKey, db = pool) {
+  const { rowCount } = await db.query(
+    'DELETE FROM daily_tracking_hidden_channels WHERE brand_id = $1 AND kind = $2 AND channel_key = $3',
+    [brandId, kind, channelKey],
+  );
+  return rowCount > 0;
+}
+
 export async function deleteCustomChannel(brandId, kind, channelKey, db = pool) {
   await db.query(
     'DELETE FROM daily_tracking_channels WHERE brand_id = $1 AND kind = $2 AND channel_key = $3',

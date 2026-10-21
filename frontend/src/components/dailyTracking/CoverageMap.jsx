@@ -41,11 +41,11 @@ export default function CoverageMap({ grid, channels, onJump }) {
   ].filter((g) => g.rows.length);
 
   return (
-    <section className={`soft-card bt-coverage${open ? ' is-open' : ''}`} aria-label="Kelengkapan data">
+    <section className={`soft-card bt-coverage${open ? ' is-open' : ''}`} aria-label="Data completeness">
       <button type="button" className="bt-cover-toggle" aria-expanded={open} aria-controls="bt-cover-body" onClick={() => setOpen((o) => !o)}>
         <Ring ratio={cov.ratio} />
         <span className="bt-cover-title">
-          <strong>Kelengkapan data</strong>
+          <strong>Data Completeness</strong>
           <small>
             {cov.expected
               ? <>{cov.done} dari {cov.expected} hari-channel terisi{cov.gaps ? <> · <b>{cov.gaps} masih kosong</b></> : ' · lengkap'}</>

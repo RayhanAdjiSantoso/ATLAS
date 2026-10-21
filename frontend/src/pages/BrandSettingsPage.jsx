@@ -380,7 +380,7 @@ function BrandSetting({ brand, isViewOnly, canDelete, statusBusy, onStatus, onDe
     : 'Belum pernah disimpan untuk brand ini';
   const tabs = [
     ...SECTIONS.map(({ id, label, Icon, fields }) => ({ id, label, Icon, done: filled(draft, fields), total: fields.length })),
-    { id: 'target', label: 'Target tahunan', Icon: Target, year: new Date().getFullYear() },
+    { id: 'target', label: 'Annual Target', Icon: Target, year: new Date().getFullYear() },
   ];
 
   return (

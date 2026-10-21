@@ -12,7 +12,7 @@ export const BRAND_SETTING_SECTIONS = [
   {
     to: '/pengaturan-brand',
     label: 'Setup Context & Brand Direction',
-    hint: 'Status, context & direction',
+    hint: 'Input Status, Context & Direction',
     Icon: NotebookPen,
     module: 'brand_settings',
     desc: 'Daftar klien MIL Digital: atur status setiap brand, lalu lengkapi brand context dan current direction yang dibaca seluruh analisis ATLAS.',
