@@ -309,7 +309,7 @@ var ALERT_ACTION_TYPES = {
   leads: ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'],
   messaging_contacts: ['onsite_conversion.total_messaging_connection'],
   messaging_conversations: ['onsite_conversion.messaging_conversation_started_7d'],
-  post_likes: ['like'],
+  post_likes: ['onsite_conversion.post_net_like'],   // Instagram likes (net), bukan Facebook likes
   post_comments: ['comment'],
   post_saves: ['onsite_conversion.post_save'],
   post_shares: ['post']
@@ -339,6 +339,12 @@ function postInteractionsOf_(r) {
     pickAlertAction_(r.actions, 'post_saves') + pickAlertAction_(r.actions, 'post_shares');
 }
 
+// Instagram follows = field instagram_profile_follow (bukan action type),
+// sama seperti ATLAS -- lihat prepareInsightRow_.
+function instagramFollowsOf_(r) {
+  return num_(r.instagram_follows);
+}
+
 var CATALOG_ALERT_METRICS = [
   // Semua section
   { key: 'linkCtr', label: 'CTR (link click-through rate)', format: 'percent',
@@ -355,6 +361,10 @@ var CATALOG_ALERT_METRICS = [
     compute: postInteractionsOf_ },
   { key: 'cost_per_interaction', label: 'Cost per post interaction', format: 'currency',
     compute: function (r) { return ratioOrNull_(num_(r.spend), postInteractionsOf_(r)); } },
+  { key: 'instagram_follows', label: 'Instagram follows', format: 'number', additive: true, zero: true,
+    compute: instagramFollowsOf_ },
+  { key: 'cost_per_instagram_follow', label: 'Cost per Instagram follow', format: 'currency',
+    compute: function (r) { return ratioOrNull_(num_(r.spend), instagramFollowsOf_(r)); } },
 
   // Non Boost Post (E-commerce)
   { key: 'purchase_value', label: 'Purchases conversion value', format: 'currency', additive: true,
@@ -1118,7 +1128,7 @@ function fetchInsights_(token, accountId, level, period, opts) {
  * untuk metrik katalog (purchase value, profile visits);
  * catalog_segment_* (shared items) cuma untuk akun CPAS (opts.catalog).
  */
-function insightFields_(level, withResults, withCatalog) {
+function insightFields_(level, withResults, withCatalog, withFollows) {
   var fields = [
     'campaign_id', 'campaign_name', 'objective',
     'spend', 'impressions', 'reach', 'frequency',
@@ -1129,6 +1139,9 @@ function insightFields_(level, withResults, withCatalog) {
     'full_view_impressions', 'full_view_reach'
   ];
   if (withResults) fields.push('results');
+  // Kolom "Instagram follows" Ads Manager; field tersendiri yang tidak
+  // didokumentasikan Meta, jadi boleh ditolak (lihat fetchInsightPages_).
+  if (withFollows) fields.push('instagram_profile_follow');
   if (withCatalog) fields.push('catalog_segment_actions', 'catalog_segment_value');
   if (level === 'adset') fields.push('adset_id', 'adset_name');
   return fields;
@@ -1143,18 +1156,20 @@ function insightFields_(level, withResults, withCatalog) {
 function fetchInsightPages_(token, accountId, level, opts, rangeParams, maxPages, onRow) {
   var withResults = true;
   var withCatalog = !!(opts && opts.catalog);
+  var withFollows = true;
   for (var attempt = 0; ; attempt++) {
     var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' +
       accountId + '/insights' +
-      '?fields=' + encodeURIComponent(insightFields_(level, withResults, withCatalog).join(',')) +
+      '?fields=' + encodeURIComponent(insightFields_(level, withResults, withCatalog, withFollows).join(',')) +
       '&level=' + level + rangeParams +
       '&limit=300&access_token=' + encodeURIComponent(token);
     var body;
     try {
       body = fetchJson_(url);
     } catch (e) {
-      if (attempt < 2 && withCatalog && /catalog_segment/.test(e.message)) { withCatalog = false; continue; }
-      if (attempt < 2 && withResults && /results/.test(e.message)) { withResults = false; continue; }
+      if (attempt < 3 && withFollows && /instagram_profile_follow/.test(e.message)) { withFollows = false; continue; }
+      if (attempt < 3 && withCatalog && /catalog_segment/.test(e.message)) { withCatalog = false; continue; }
+      if (attempt < 3 && withResults && /results/.test(e.message)) { withResults = false; continue; }
       throw e;
     }
     var guard = 0;
@@ -1178,6 +1193,8 @@ function prepareInsightRow_(d) {
   d.result_indicator = r ? (r.indicator || '') : '';
   d.result_value = (r && r.values && r.values.length) ? num_(r.values[0].value) : 0;
   delete d.results;
+  d.instagram_follows = num_(d.instagram_profile_follow);
+  delete d.instagram_profile_follow;
   return d;
 }
 
@@ -1230,7 +1247,7 @@ function sumDailyRange_(byDate, sinceStr, untilStr) {
           spend: 0, impressions: 0, reach: 0, clicks: 0,
           unique_clicks: 0, inline_link_clicks: 0, social_spend: 0,
           full_view_impressions: 0, full_view_reach: 0,
-          result_indicator: '', result_value: 0,
+          result_indicator: '', result_value: 0, instagram_follows: 0,
           actions: {}, action_values: {}, catalog_actions: {}, catalog_values: {}
         };
       }
@@ -1250,6 +1267,7 @@ function sumDailyRange_(byDate, sinceStr, untilStr) {
         });
       });
       acc.result_value += num_(row.result_value);
+      acc.instagram_follows += num_(row.instagram_follows);
       if (!acc.result_indicator && row.result_indicator) acc.result_indicator = row.result_indicator;
     });
   });

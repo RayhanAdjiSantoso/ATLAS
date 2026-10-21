@@ -461,3 +461,9 @@
 .roas-strip-parts dd { margin: 0; color: var(--soft-ink); font-size: .95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .roas-strip-note { flex-basis: 100%; margin: 0; color: var(--soft-muted); font-size: .74rem; }
 .roas-strip-note a { display: inline-flex; align-items: center; gap: 2px; color: var(--soft-accent); font-weight: 700; }
+
+/* The brand chip sizes to the brand's full name too (a fixed width cut long
+   names off); a very long name wraps onto a second line instead. */
+.bo-chip-brand { width: auto; max-width: 420px; }
+.band-tools .bo-chip-brand .dashboard-brand-trigger { width: auto; }
+.band-tools .bo-chip-brand .dashboard-brand-trigger span { overflow: visible; text-overflow: clip; white-space: normal; line-height: 1.25; padding: 4px 0; }

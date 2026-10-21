@@ -26,6 +26,14 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'meta-boost-instagram-follows',
+    released: '2026-10-21',
+    path: '/data-brand',
+    target: '[data-feature="meta-kolom-ditarik"]',
+    title: 'Instagram follows di Boost Post',
+    body: 'Tarikan Meta Ads untuk Boost Post kini memuat Instagram follows dan Cost per Instagram follow (Amount spent ÷ follows). Keduanya juga bisa dipilih di alert mingguan dan muncul di Report Generator.',
+  },
+  {
     id: 'hapus-channel-revenue',
     released: '2026-10-21',
     path: '/brand-tracking',
