@@ -11,6 +11,7 @@
 //     spend, impressions, reach, frequency,
 //     linkClicks, linkCtr, cpc, cpm, purchaseRoas,
 //     results: { indicator, value } | null, costPerResult: { indicator, value } | null,
+//     instagramFollows: number | null,   // field instagram_profile_follow
 //     actions: { <action_type>: number }, actionValues: { <action_type>: number },
 //     // CPAS accounts only — Meta's "with shared items" figures:
 //     catalogActions: { <action_type>: number }, catalogValues: { <action_type>: number },
@@ -49,9 +50,11 @@ const ACTION_TYPES = {
   // Ads Manager's "Messaging contacts" and "Messaging conversations started".
   messaging_contacts: ['onsite_conversion.total_messaging_connection'],
   messaging_conversations: ['onsite_conversion.messaging_conversation_started_7d'],
-  // The four columns Post interactions adds up, as Ads Manager names them:
-  // Facebook likes (`like`), Post comments, Post saves, Post shares.
-  post_likes: ['like'],
+  // The four parts of Post interactions: Instagram likes, then Ads Manager's
+  // Post comments, Post saves and Post shares columns. Likes are the post's
+  // net likes (reactions minus unlikes), not Ads Manager's "Facebook likes"
+  // (`like`, Page likes), which a boosted Instagram post barely gets.
+  post_likes: ['onsite_conversion.post_net_like'],
   post_comments: ['comment'],
   post_saves: ['onsite_conversion.post_save'],
   post_shares: ['post'],
@@ -107,9 +110,15 @@ const profileVisits = (ctx) => {
   return visits == null ? null : Math.round(visits);
 };
 
-// Facebook likes + Post comments + Post saves + Post shares — the sum of
-// Ads Manager's own four columns. (post_reaction, used before, also counts
-// every other reaction and came out near double: 50 against 27.)
+// Ads Manager's "Instagram follows" is not an action type: the Insights API
+// returns it as its own undocumented field, instagram_profile_follow, which
+// Apps Script forwards as `instagramFollows` (found by trying field names on
+// Petite Fleur, Oct 2026 — `actions` carried no follow type on any version).
+const instagramFollows = (ctx) => num(ctx.raw.instagramFollows);
+
+// Instagram likes + Post comments + Post saves + Post shares. Likes are
+// post_net_like: post_reaction also keeps likes taken back later (Petite
+// Fleur, 14–20 Oct 2026: 1,799 reactions − 177 unlikes = 1,622 net likes).
 const interactions = (ctx) => sumPresent(['post_likes', 'post_comments', 'post_saves', 'post_shares'].map((g) => count(ctx, g)));
 
 // unit: 'idr' | 'count' | 'pct' | 'ratio' — drives display and the export
@@ -159,6 +168,10 @@ export const METRICS = [
   // ── Boost Post: interactions
   { key: 'interactions', header: 'Post interactions', unit: 'count', sections: ['boost'], compute: interactions },
   { key: 'cost_per_interaction', header: 'Cost per post interaction', unit: 'idr', sections: ['boost'], compute: (c) => ratio(c.spend, interactions(c)) },
+
+  // ── Boost Post: follows
+  { key: 'instagram_follows', header: 'Instagram follows', unit: 'count', sections: ['boost'], compute: instagramFollows },
+  { key: 'cost_per_instagram_follow', header: 'Cost per Instagram follow', unit: 'idr', sections: ['boost'], compute: (c) => ratio(c.spend, instagramFollows(c) || null) },
 
   // ── E-commerce funnel
   { key: 'content_views', header: 'Content views', unit: 'count', sections: ['ecom'], compute: (c) => count(c, 'content_views') },

@@ -27,6 +27,8 @@ const FIELD_GROUPS = [
     ['profile_visit_rate', 'Profile visit rate'],
     ['interactions', 'Post interactions'],
     ['cost_per_interaction', 'Cost per post interaction'],
+    ['instagram_follows', 'Instagram follows'],
+    ['cost_per_instagram_follow', 'Cost per Instagram follow'],
   ] },
   { group: 'Non Boost Post (E-commerce)', types: ['MAIN'], fields: [
     ['purchase_value', 'Purchases conversion value'],

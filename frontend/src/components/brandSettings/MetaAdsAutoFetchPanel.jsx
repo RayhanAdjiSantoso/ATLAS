@@ -348,7 +348,7 @@ export default function MetaAdsAutoFetchPanel({ brand, accountsVersion = 0, onLi
             )}
           </div>
 
-          <details className="mx-specs" open={specsOpen} onToggle={(e) => setSpecsOpen(e.currentTarget.open)}>
+          <details className="mx-specs" data-feature="meta-kolom-ditarik" open={specsOpen} onToggle={(e) => setSpecsOpen(e.currentTarget.open)}>
             <summary>
               <span>Kolom yang ditarik</span>
               <small>{BREAKDOWNS.length} breakdown · {sections.reduce((n, sec) => n + sec.metrics.length, 0)} metrik</small>

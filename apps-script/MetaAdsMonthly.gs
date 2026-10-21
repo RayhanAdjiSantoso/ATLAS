@@ -91,6 +91,10 @@ var MAM_FIELDS = [
 // Diminta terpisah supaya kalau versi API menolak field ini, tarikan tetap
 // jalan tanpa Results / Cost per result (lihat fetchMetaAdsRange_).
 var MAM_RESULT_FIELDS = ['results', 'cost_per_result'];
+// Ads Manager "Instagram follows". Tidak didokumentasikan Meta, tapi diterima
+// Insights API (diuji Okt 2026); diminta terpisah supaya kalau suatu versi
+// menolaknya, tarikan tetap jalan tanpa follows.
+var MAM_FOLLOW_FIELDS = ['instagram_profile_follow'];
 // Hanya untuk akun CPAS (ATLAS memberi tahu lewat /start: catalogSegments).
 var MAM_CATALOG_FIELDS = ['catalog_segment_actions', 'catalog_segment_value', 'catalog_segment_value_omni_purchase_roas'];
 
@@ -369,6 +373,7 @@ function runMetaAdsFetchItem_(item) {
 
     var notes = [];
     if (fetched.withoutResults) notes.push('results/cost_per_result ditolak Meta; Profile visits tidak terisi');
+    if (fetched.withoutFollows) notes.push('instagram_profile_follow ditolak Meta; Instagram follows tidak terisi');
     if (fetched.withoutCatalog) notes.push('field shared items (catalog_segment_*) ditolak Meta; metrik CPAS shared items tidak terisi');
     atlasIngestPost_('/finish', {
       runId: runId, status: 'success', rowCount: total,
@@ -414,16 +419,19 @@ function writeMetaAdsLog_(startedAt, status, detail) {
  * hari. `onRows(rows)` dipanggil per halaman hasil dengan baris yang sudah
  * dipetakan (mapMetaInsightRow_), supaya memori tidak menampung sebulan
  * penuh. Kalau Meta menolak field results/cost_per_result atau field shared
- * items (catalog_segment_*), tarikan diulang tanpa field itu daripada gagal
- * total; hasilnya { withoutResults, withoutCatalog }.
+ * items (catalog_segment_*) atau instagram_profile_follow, tarikan diulang
+ * tanpa field itu daripada gagal total; hasilnya { withoutResults,
+ * withoutCatalog, withoutFollows }.
  */
 function fetchMetaAdsRange_(token, accountId, range, actionTypes, catalogSegments, onRows) {
   var wanted = {};
   actionTypes.forEach(function (t) { wanted[t] = true; });
   var withResults = true;
   var withCatalog = catalogSegments;
+  var withFollows = true;
   var fieldsNow = function () {
-    return MAM_FIELDS.concat(withResults ? MAM_RESULT_FIELDS : []).concat(withCatalog ? MAM_CATALOG_FIELDS : []);
+    return MAM_FIELDS.concat(withResults ? MAM_RESULT_FIELDS : []).concat(withCatalog ? MAM_CATALOG_FIELDS : [])
+      .concat(withFollows ? MAM_FOLLOW_FIELDS : []);
   };
 
   var first = metaAdsParseDate_(range.since);
@@ -435,13 +443,14 @@ function fetchMetaAdsRange_(token, accountId, range, actionTypes, catalogSegment
     var until = metaAdsFormatDate_(to);
     // Ditolak di halaman PERTAMA jendela pertama (belum ada baris terkirim)
     // karena field-nya tidak dikenal: ulangi tanpa field itu. Paling banyak
-    // dua kali (results, lalu shared items).
+    // tiga kali (follows, shared items, results).
     for (var attempt = 0; ; attempt++) {
       try {
         fetchMetaAdsWindow_(token, accountId, fieldsNow(), since, until, wanted, onRows);
         break;
       } catch (e) {
-        if (from !== first || attempt >= 2) throw e;
+        if (from !== first || attempt >= 3) throw e;
+        if (withFollows && /instagram_profile_follow/.test(e.message)) { withFollows = false; continue; }
         if (withCatalog && /catalog_segment/.test(e.message)) { withCatalog = false; continue; }
         if (withResults && /results|cost_per_result/.test(e.message)) { withResults = false; continue; }
         throw e;
@@ -449,7 +458,7 @@ function fetchMetaAdsRange_(token, accountId, range, actionTypes, catalogSegment
     }
     from = to + MAM_DAY_MS;
   }
-  return { withoutResults: !withResults, withoutCatalog: catalogSegments && !withCatalog };
+  return { withoutResults: !withResults, withoutCatalog: catalogSegments && !withCatalog, withoutFollows: !withFollows };
 }
 
 function fetchMetaAdsWindow_(token, accountId, fields, since, until, wanted, onRows) {
@@ -498,6 +507,7 @@ function mapMetaInsightRow_(d, wantedActionTypes) {
     purchaseRoas: firstActionValue_(d.purchase_roas),
     results: firstResult_(d.results),
     costPerResult: firstResult_(d.cost_per_result),
+    instagramFollows: d.instagram_profile_follow === undefined ? null : d.instagram_profile_follow,
     actions: pickActionList_(d.actions, wantedActionTypes),
     actionValues: pickActionList_(d.action_values, wantedActionTypes),
     // CPAS "with shared items"; kosong untuk akun MAIN (field tidak diminta).
@@ -680,6 +690,53 @@ function diagnoseMetaAdsResults() {
       Logger.log(tag + 'DITOLAK: ' + e.message);
     }
   });
+}
+
+/**
+ * Diagnosa dari editor: Instagram follows (field `instagram_profile_follow`)
+ * untuk SATU brand (ubah angka di bawah), 7 hari terakhir: total akun, per
+ * campaign, dan total dengan breakdown age,gender di level ad (yang dipakai
+ * tarikan harian). Ketiganya harus sama dengan kolom Instagram follows di
+ * Ads Manager untuk rentang yang sama. Tidak menulis apa pun ke ATLAS.
+ */
+function diagnoseMetaAdsFollows() {
+  // <- isi id brand ATLAS ATAU id akun iklan Meta
+  var target = '0';
+  var wanted = String(target).replace(/^act_/, '');
+  var acct = getAllAccounts_().filter(function (a) {
+    return String(a.atlasBrandId) === wanted || String(a.id).replace(/^act_/, '') === wanted;
+  })[0];
+  if (!acct) throw new Error('Tidak ada akun dengan atlasBrandId atau id akun iklan ' + target + ' di Brand & Langganan.');
+  var yesterday = metaAdsYesterday_();
+  var since = metaAdsFormatDate_(metaAdsParseDate_(yesterday) - 6 * MAM_DAY_MS);
+  var tag = '[' + acct.client + ' ' + since + '..' + yesterday + '] ';
+  var rows = function (level, fields, extra) {
+    var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' + acct.id + '/insights' +
+      '?fields=' + encodeURIComponent(fields) + '&level=' + level + (extra || '') +
+      '&time_range=' + encodeURIComponent(JSON.stringify({ since: since, until: yesterday })) +
+      '&limit=500&access_token=' + encodeURIComponent(tokenFor_(acct));
+    var out = [];
+    for (var guard = 0; url && guard < 50; guard++) {
+      var body = fetchJson_(url);
+      out = out.concat(body.data || []);
+      url = (body.paging && body.paging.next) ? body.paging.next : null;
+    }
+    return out;
+  };
+  var sum = function (list) { return list.reduce(function (t, d) { return t + num_(d.instagram_profile_follow); }, 0); };
+
+  Logger.log(tag + 'Akun: ' + sum(rows('account', 'instagram_profile_follow')));
+  rows('campaign', 'campaign_name,spend,instagram_profile_follow').forEach(function (d) {
+    if (num_(d.instagram_profile_follow) || num_(d.spend)) {
+      Logger.log(tag + d.campaign_name + ' | spend=' + d.spend + ' | Instagram follows=' + (d.instagram_profile_follow || 0));
+    }
+  });
+  try {
+    Logger.log(tag + 'Level ad, breakdown age,gender: ' +
+      sum(rows('ad', 'instagram_profile_follow', '&breakdowns=' + encodeURIComponent('age,gender'))));
+  } catch (e) {
+    Logger.log(tag + 'Level ad, breakdown age,gender DITOLAK: ' + e.message);
+  }
 }
 
 /** Uji manual dari editor: tarikan harian untuk SATU brand ATLAS (ubah angka di bawah). */
