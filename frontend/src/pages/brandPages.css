@@ -95,6 +95,7 @@
 
 .bp-loading { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 4px 6px; color: var(--soft-muted); font-size: .8rem; }
 .bp .brand-flash { margin: 0; }
+.bp .brand-flash.is-ok { color: #166534; border-color: #b7e3c8; background: #ecfdf3; }
 
 /* ── Panels ─────────────────────────────────────────────────────────────── */
 .bp-panel { padding: 22px 24px 24px; }

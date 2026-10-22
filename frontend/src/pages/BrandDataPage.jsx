@@ -63,6 +63,10 @@ async function downloadLibraryFile(file) {
 //      into one disclosure, so the matrix is the first thing read.
 
 const MONTH_WINDOW = 6;
+// What one upload may weigh: Vercel cuts a request body at ~4.5 MB; the
+// margin covers the form's own overhead.
+const MAX_UPLOAD_BYTES = 4.3 * 1024 * 1024;
+const fmtMb = (bytes) => `${(bytes / 1048576).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
 // Month names in English, as the platforms' own exports and the rest of the
 // hub's labels read.
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -923,11 +927,18 @@ export default function BrandDataPage() {
 
   // Just the file list, without loadBrand's full-page loading state — used
   // when a file appears outside the upload flow (Meta Ads auto-fetch).
+  // The grid always shows what the database holds: it is reloaded after
+  // every upload, so a cell only fills once its file is really stored.
+  // Returns the list, or null when it could not be read.
   const refreshFiles = useCallback(async (brandId) => {
     try {
       const res = await api.get(`/brands/${brandId}/library`);
-      setFiles(res.data.files ?? []);
-    } catch { /* the grid keeps its last known state */ }
+      const list = res.data.files ?? [];
+      setFiles(list);
+      return list;
+    } catch {
+      return null; /* the grid keeps its last known state */
+    }
   }, []);
 
   const loadBrand = useCallback(async (brandId) => {
@@ -1000,6 +1011,18 @@ export default function BrandDataPage() {
     const target = pending.current;
     if (!picked.length || !target || !brand) return;
 
+    // Vercel refuses a request body over ~4.5 MB before it reaches ATLAS, so
+    // anything bigger is stopped here with what to do instead.
+    const total = picked.reduce((sum, f) => sum + f.size, 0);
+    if (total > MAX_UPLOAD_BYTES) {
+      const tooBig = picked.filter((f) => f.size > MAX_UPLOAD_BYTES);
+      setNotice({ tone: 'error', text: tooBig.length
+        ? `Tidak diunggah: ${tooBig.map((f) => `"${f.name}" (${fmtMb(f.size)})`).join(', ')} melebihi batas ${fmtMb(MAX_UPLOAD_BYTES)} per unggahan. Ekspor ulang dari platform dalam dua rentang tanggal (mis. tanggal 1–15 dan 16–akhir bulan), lalu unggah sebagai part 1 dan part 2 di bulan yang sama.`
+        : `Tidak diunggah: ${picked.length} file sekaligus berjumlah ${fmtMb(total)}, melebihi batas ${fmtMb(MAX_UPLOAD_BYTES)} per unggahan. Unggah satu per satu ke bulan yang sama — setiap file menjadi part tersendiri.` });
+      pending.current = null;
+      return;
+    }
+
     const key = fileKey(marketId, target.dataset.channel, target.month?.key ?? null);
     setBusyKey(key);
     setNotice(null);
@@ -1013,11 +1036,13 @@ export default function BrandDataPage() {
       if (target.replaceFile?.id) form.append('replaceFileId', String(target.replaceFile.id));
       const { data } = await api.post(`/brands/${brand.brand_id}/library`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
       const saved = data.files ?? [data.file];
-      const savedIds = new Set(saved.map((f) => f.id));
-      // A split Meta export also removed the month's earlier Meta files, so
-      // the whole list is reloaded rather than patched.
-      if (data.split) await refreshFiles(brand.brand_id);
-      else setFiles((current) => [...current.filter((f) => !savedIds.has(f.id)), ...saved]);
+      // Reload from the database rather than patch the grid with the reply,
+      // and check that what the server reported saved is really there.
+      const list = await refreshFiles(brand.brand_id);
+      if (list && saved.some((f) => !list.some((x) => x.id === f.id))) {
+        setNotice({ tone: 'error', text: `Server menjawab ${target.dataset.name} tersimpan, tetapi filenya belum terlihat di database. Unggah ulang file yang sama — file dengan nama sama akan menggantikan, bukan menggandakan.` });
+        return;
+      }
       setError(null);
       const where = data.split
         ? `Meta Ads · ${target.month.full}`
@@ -1031,9 +1056,19 @@ export default function BrandDataPage() {
       // dashboard's zeros unexplained.
       if (data.imported?.rowsInserted) parts.push(`${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard`);
       if (data.imported?.errors?.length) parts.push(`gagal masuk ke Dashboard: ${data.imported.errors.join('; ')}`);
-      setNotice(`${where} ${target.replaceFile ? 'diganti' : 'tersimpan'} — ${parts.join(' · ')}.`);
+      setNotice({ tone: data.imported?.errors?.length ? 'error' : 'ok', text: `${where} ${target.replaceFile ? 'diganti' : 'tersimpan'} — ${parts.join(' · ').replace(/\.+$/, '')}.` });
     } catch (err) {
-      setNotice(describeError(err, `Gagal mengunggah ${picked.map((f) => f.name).join(', ')}`));
+      const names = picked.map((f) => f.name).join(', ');
+      // The grid is reloaded either way: a reply lost on the way back (or a
+      // split upload whose later part failed) may still have stored files.
+      await refreshFiles(brand.brand_id);
+      if (err?.response?.status === 413) {
+        setNotice({ tone: 'error', text: `Tidak tersimpan: ${names} terlalu besar untuk server (batas ±${fmtMb(MAX_UPLOAD_BYTES)} per unggahan). Ekspor dalam dua rentang tanggal lalu unggah sebagai part 1 dan part 2.` });
+      } else if (!err?.response || err.response.status >= 502) {
+        setNotice({ tone: 'error', text: `Koneksi ke server terputus sebelum ada jawaban untuk ${names}. Daftar di bawah sudah dimuat ulang dari database: kalau sel bulannya terisi, file sudah tersimpan; kalau masih kosong, unggah ulang.` });
+      } else {
+        setNotice({ tone: 'error', text: describeError(err, `Gagal mengunggah ${names}`) });
+      }
     } finally {
       setBusyKey(null);
       pending.current = null;
@@ -1059,7 +1094,7 @@ export default function BrandDataPage() {
         ? `${file.original_filename}: ${n.toLocaleString('id-ID')} baris masuk ke Dashboard.`
         : `${file.original_filename}: tidak ada baris baru — datanya memang sudah ada di Dashboard. Status sekarang tercatat benar.`);
     } catch (err) {
-      setNotice(describeError(err, `Impor ulang ${file.original_filename} gagal`));
+      setNotice({ tone: 'error', text: describeError(err, `Impor ulang ${file.original_filename} gagal`) });
     } finally {
       setBusyKey(null);
     }
@@ -1073,7 +1108,7 @@ export default function BrandDataPage() {
       setFiles((current) => current.filter((f) => f.id !== file.id));
       setNotice('File dihapus dari perpustakaan.');
     } catch (err) {
-      setNotice(describeError(err, 'Gagal menghapus file'));
+      setNotice({ tone: 'error', text: describeError(err, 'Gagal menghapus file') });
     } finally {
       setBusyKey(null);
     }
@@ -1126,13 +1161,18 @@ export default function BrandDataPage() {
           <button type="button" onClick={() => brand && loadBrand(brand.brand_id)}>Coba lagi</button>
         </div>
       )}
-      {notice && (
-        <div className="brand-flash">
-          <CircleAlert size={15} />
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)}>Tutup</button>
-        </div>
-      )}
+      {notice && (() => {
+        // A notice is plain text, or { tone: 'ok' | 'error', text } when it
+        // reports whether a file really reached the database.
+        const { tone, text } = typeof notice === 'string' ? { tone: null, text: notice } : notice;
+        return (
+          <div className={`brand-flash${tone === 'error' ? ' is-error' : tone === 'ok' ? ' is-ok' : ''}`} role={tone === 'error' ? 'alert' : 'status'}>
+            {tone === 'ok' ? <Check size={15} /> : <CircleAlert size={15} />}
+            <span>{text}</span>
+            <button type="button" onClick={() => setNotice(null)}>Tutup</button>
+          </div>
+        );
+      })()}
 
       <AnimatePresence mode="wait">
         {activeView === 'data' && (
