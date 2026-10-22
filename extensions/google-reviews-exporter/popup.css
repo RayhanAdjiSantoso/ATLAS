@@ -1,0 +1,97 @@
+:root {
+  --acc: #1e3eb8;
+  --acc-700: #142c82;
+  --acc-100: #eef1fc;
+  --ink: #0f1a3a;
+  --muted: #5a6a90;
+  --bg: #f3f5fa;
+  --card: #ffffff;
+  --border: #dde2ee;
+  --good: #15803d;
+  --good-100: #eefcf2;
+  --bad: #c81e1e;
+  --bad-100: #fef1f0;
+  --warn: #b45309;
+  --warn-100: #fef3c7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --acc: #8fa6f5;
+    --acc-700: #b8c5f5;
+    --acc-100: #1d2650;
+    --ink: #e7ebf5;
+    --muted: #9aa6c0;
+    --bg: #0d1226;
+    --card: #161d38;
+    --border: #2a3459;
+    --good: #4ade80;
+    --good-100: #10301d;
+    --bad: #f87171;
+    --bad-100: #3a1414;
+    --warn: #fbbf24;
+    --warn-100: #3a2a0a;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  width: 360px;
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.45 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.top img { border-radius: 6px; }
+.top strong { display: block; font-size: 13px; letter-spacing: -.01em; }
+.top span { display: block; color: var(--muted); font-size: 11px; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.card h2 { margin: 0; font-size: 15px; letter-spacing: -.02em; line-height: 1.25; }
+.muted { color: var(--muted); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; word-break: break-all; }
+
+.ack ul { margin: 8px 0 10px; padding-left: 16px; display: grid; gap: 6px; font-size: 12px; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; margin: 8px 0; }
+.check.small { margin: 10px 0 0; color: var(--muted); }
+
+.notice strong { display: block; margin-bottom: 4px; }
+.notice p { margin: 0; color: var(--muted); font-size: 12px; }
+
+.biz-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+#biz-address { margin: 4px 0 8px; font-size: 12px; }
+.biz-meta, .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 0; }
+.biz-meta .wide { grid-column: 1 / -1; }
+dt { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+dd { margin: 2px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stats { grid-template-columns: repeat(3, 1fr); }
+
+.pill { flex: 0 0 auto; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; background: var(--acc-100); color: var(--acc); }
+.pill.is-collecting { background: var(--acc-100); color: var(--acc); }
+.pill.is-completed { background: var(--good-100); color: var(--good); }
+.pill.is-stopped { background: var(--warn-100); color: var(--warn); }
+.pill.is-error { background: var(--bad-100); color: var(--bad); }
+.pill.is-idle { background: var(--bg); color: var(--muted); }
+
+.progress { height: 6px; border-radius: 99px; background: var(--acc-100); overflow: hidden; }
+.progress span { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--acc); transition: width .3s ease; }
+.progress.is-busy span { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .progress.is-busy span { animation: none; } }
+.message { min-height: 18px; margin: 8px 0 10px; font-size: 12px; }
+.message.is-error { color: var(--bad); }
+
+.field { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 12px; font-weight: 600; }
+.field input { width: 100px; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--ink); font: inherit; text-align: right; }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn { height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--acc); }
+.btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.btn.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--acc-700); }
+.btn.primary.outline { background: transparent; color: var(--acc); }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+.btn:disabled { opacity: .45; cursor: default; }
+.ack .btn { width: 100%; }

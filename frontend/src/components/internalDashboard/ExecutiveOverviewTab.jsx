@@ -18,7 +18,7 @@ const money = (v) => new Intl.NumberFormat('id-ID').format(Math.round(v || 0));
 // calculateGrowth); this API returns fractions, so scale here.
 const gpct = (frac) => (frac == null ? null : frac * 100);
 
-// S1 — Executive Overview. First view section of the Internal Dashboard.
+// S1 — Executive Overview. First view section of the Business Insight.
 export default function ExecutiveOverviewTab() {
   const [filters, setFilters] = useState(DEFAULTS);
   const [data, setData] = useState(null);

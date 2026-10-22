@@ -5,14 +5,14 @@ import LoginPage from './pages/LoginPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import DailyTrackingPage from './pages/DailyTrackingPage.jsx';
-import MetaAutomationPage from './pages/MetaAutomationPage.jsx';
 import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
+import GoogleReviewsPage from './pages/GoogleReviewsPage.jsx';
+import ExtensionsPage from './pages/ExtensionsPage.jsx';
 import BrandSettingsPage from './pages/BrandSettingsPage.jsx';
 import BrandDataPage from './pages/BrandDataPage.jsx';
 import BrandSettingLayout from './pages/BrandSettingLayout.jsx';
 import BrandTrackingLayout from './pages/BrandTrackingLayout.jsx';
-import ControlCenterPage from './pages/ControlCenterPage.jsx';
 import AccessSettingsPage from './pages/AccessSettingsPage.jsx';
 import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
@@ -65,14 +65,14 @@ export default function App() {
             <Route path="/report-generator" element={<Navigate to="/report-generator/meta" replace />} />
             <Route path="/report-generator/:platform" element={<ReportGeneratorPage />} />
           </Route>
-          <Route element={<ProtectedRoute module="meta_automation" />}>
-            <Route path="/meta-automation" element={<MetaAutomationPage />} />
+          <Route element={<ProtectedRoute module="google_reviews" />}>
+            <Route path="/google-reviews" element={<GoogleReviewsPage />} />
+            {/* Extensions: today only the Google Reviews exporter, so the page
+                follows that module. */}
+            <Route path="/extensions" element={<ExtensionsPage />} />
           </Route>
           <Route element={<ProtectedRoute module="internal_dashboard" />}>
             <Route path="/internal-dashboard" element={<InternalDashboardPage />} />
-          </Route>
-          <Route element={<ProtectedRoute module="control_center" />}>
-            <Route path="/pusat-kendali" element={<ControlCenterPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={['admin']} />}>
             <Route path="/pengaturan-akses" element={<AccessSettingsPage />} />

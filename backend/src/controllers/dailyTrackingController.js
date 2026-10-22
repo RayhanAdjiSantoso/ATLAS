@@ -112,7 +112,7 @@ export const previewImport = asyncHandler(async (req, res) => {
 // DELETE /api/daily-tracking/channels?brandId=&kind=&key=
 export const deleteChannel = asyncHandler(async (req, res) => {
   validate(req);
-  const result = await service.deleteCustomChannel({
+  const result = await service.deleteChannel({
     brandId: Number(req.query.brandId),
     kind: req.query.kind,
     channelKey: req.query.key,

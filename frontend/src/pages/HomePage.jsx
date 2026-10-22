@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Activity, ArrowRight, ArrowUpRight, Building2, FileBarChart, FolderOpen, LayoutDashboard, Megaphone,
-  NotebookPen, Radar, ShieldCheck, Sparkles, Target,
+  Activity, ArrowRight, ArrowUpRight, Building2, FileBarChart, FolderOpen, LayoutDashboard,
+  NotebookPen, ShieldCheck, Sparkles, Target,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import api from '../api/client.js';
@@ -42,7 +42,7 @@ const MODULES = [
   },
   {
     key: 'dashboard', to: '/dashboard', group: 'read', module: 'dashboard',
-    label: 'Business Overview', tagline: 'Analitik lintas channel', Icon: LayoutDashboard,
+    label: 'Brand Overview', tagline: 'Analitik lintas channel', Icon: LayoutDashboard,
     desc: 'Executive Snapshot, ROAS per channel, funnel, produk, dan pelanggan — per brand dan periode.',
   },
   {
@@ -51,19 +51,9 @@ const MODULES = [
     desc: 'Bandingkan dua periode, susun insight, lalu unduh laporan klien sebagai PDF, PNG, atau Excel.',
   },
   {
-    key: 'meta-automation', to: '/meta-automation', group: 'ops', module: 'meta_automation',
-    label: 'Meta Ads Automation', tagline: 'Laporan terjadwal', Icon: Megaphone,
-    desc: 'Akun, langganan notifikasi, dan laporan Meta Ads harian & mingguan yang terkirim sendiri.',
-  },
-  {
     key: 'internal-dashboard', to: '/internal-dashboard', group: 'ops', module: 'internal_dashboard',
-    label: 'Internal Dashboard', tagline: 'Portofolio klien', Icon: Building2,
+    label: 'Business Insight', tagline: 'Portofolio klien', Icon: Building2,
     desc: 'Benchmark antar klien, business check-up, industri, dan kualitas data yang masuk.',
-  },
-  {
-    key: 'control-center', to: '/pusat-kendali', group: 'ops', module: 'control_center',
-    label: 'Pusat Kendali', tagline: 'Yang perlu ditindak', Icon: Radar,
-    desc: 'Brand yang datanya belum lengkap dan to do meeting yang tertunda, lintas klien.',
   },
   {
     key: 'access', to: '/pengaturan-akses', group: 'ops', adminOnly: true,
@@ -226,7 +216,7 @@ export default function HomePage() {
   const monthName = now.toLocaleDateString('id-ID', { month: 'long' });
 
   // A client's own month at a glance. The team's Beranda leaves numbers to
-  // Business Overview and Pusat Kendali.
+  // Brand Overview.
   const pulse = isClient
     ? [
       {
@@ -249,7 +239,7 @@ export default function HomePage() {
   const primary = isClient
     ? { to: '/brand-tracking', label: 'Buka Brand Tracking' }
     : can('dashboard') ? { to: '/dashboard', label: 'Brand Overview' } : { to: modules[0]?.to ?? '/', label: `Buka ${modules[0]?.label ?? 'ATLAS'}` };
-  const secondary = !isClient && can('report_generator') ? { to: '/report-generator/meta', label: 'Business Insight' } : null;
+  const secondary = !isClient && can('internal_dashboard') ? { to: '/internal-dashboard', label: 'Business Insight' } : null;
 
   return (
     <div className="hb" ref={rootRef}>

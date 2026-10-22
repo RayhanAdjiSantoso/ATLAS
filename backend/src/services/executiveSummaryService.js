@@ -2,7 +2,7 @@ import * as repo from '../repositories/dailyTrackingRepository.js';
 import { FIXED_SALES_LABELS, FIXED_SPEND_LABELS, ROAS_GROUPS } from '../config/dailyTrackingChannels.js';
 import pool from '../config/db.js';
 
-// Executive Snapshot — the one cross-channel reading of Business Overview.
+// Executive Snapshot — the one cross-channel reading of Brand Overview.
 //
 // Source: Daily Tracking (migration 024), and only Daily Tracking. Shopee's
 // own fact tables hold the same marketplace revenue under a different

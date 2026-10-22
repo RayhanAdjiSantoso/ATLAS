@@ -45,10 +45,11 @@ const slugify = slugifyChannelLabel;
 // move confirmations can say exactly what will happen before it does.
 export async function listChannels(brandId) {
   await assertBrand(brandId);
-  const [customSales, customSpend, usageRows] = await Promise.all([
+  const [customSales, customSpend, usageRows, hiddenSales] = await Promise.all([
     repo.listCustomChannels(brandId, 'sales'),
     repo.listCustomChannels(brandId, 'spend'),
     repo.channelUsage(brandId),
+    repo.listHiddenChannelKeys(brandId, 'sales'),
   ]);
   const usage = (kind, key) => {
     const u = usageRows.find((r) => r.kind === kind && r.channel_key === key);
@@ -58,7 +59,7 @@ export async function listChannels(brandId) {
   };
   return {
     sales: [
-      ...FIXED_SALES_CHANNELS.map((c) => ({ ...c, isCustom: false, usage: usage('sales', c.key) })),
+      ...FIXED_SALES_CHANNELS.filter((c) => !hiddenSales.has(c.key)).map((c) => ({ ...c, isCustom: false, usage: usage('sales', c.key) })),
       ...customSales.map((c) => ({ key: c.channel_key, label: c.label, isCustom: true, usage: usage('sales', c.channel_key) })),
     ],
     spend: [
@@ -70,16 +71,21 @@ export async function listChannels(brandId) {
 
 const KIND_LABEL = { sales: 'Revenue Data', spend: 'Spending Data' };
 
-// Delete a custom channel (pill) and every entry saved under it. Fixed
-// channels are app config and cannot be deleted.
-export async function deleteCustomChannel({ brandId, kind, channelKey, userId }) {
+// Delete a channel and every entry saved under it. A custom channel's row
+// goes; a built-in Revenue Data channel is app config, so it is hidden for
+// this brand instead (migration 058). Built-in Spending Data channels are
+// fed by the ad syncs and stay.
+export async function deleteChannel({ brandId, kind, channelKey, userId }) {
   await assertBrand(brandId);
-  const channel = await repo.getCustomChannel(brandId, kind, channelKey);
-  if (!channel) throw new AppError('Hanya channel tambahan (bukan channel bawaan) yang bisa dihapus', 400);
+  const custom = await repo.getCustomChannel(brandId, kind, channelKey);
+  const fixedLabel = kind === 'sales' && FIXED_SALES_KEYS.has(channelKey) ? FIXED_SALES_LABELS[channelKey] : null;
+  if (!custom && !fixedLabel) throw new AppError('Channel bawaan Spending Data tidak bisa dihapus', 400);
+  const channel = custom ?? { label: fixedLabel };
 
   const result = await inTransaction(async (db) => {
     const deleted = await repo.deleteChannelEntries(brandId, kind, channelKey, db);
-    await repo.deleteCustomChannel(brandId, kind, channelKey, db);
+    if (custom) await repo.deleteCustomChannel(brandId, kind, channelKey, db);
+    else await repo.hideFixedChannel(brandId, kind, channelKey, userId, db);
     await repo.logIngestion({
       brandId, targetTable: 'daily_tracking_channels', source: 'manual', rowCount: deleted, status: 'success',
       note: `Hapus channel "${channel.label}" (${KIND_LABEL[kind]}) beserta ${deleted} entri`, performedBy: userId,
@@ -142,6 +148,8 @@ export async function addCustomChannel({ brandId, kind, label, userId }) {
   const resolved = resolveChannelKey(kind, channelKey);
   if (fixedKeys.has(resolved)) {
     const fixedLabel = (kind === 'sales' ? FIXED_SALES_LABELS : FIXED_SPEND_LABELS)[resolved];
+    // A built-in channel this brand removed comes back under its own name.
+    if (await repo.unhideFixedChannel(brandId, kind, resolved)) return { key: resolved, label: fixedLabel, isCustom: false };
     throw new AppError(`Channel itu sudah ada sebagai "${fixedLabel}"`, 409);
   }
 
@@ -231,7 +239,7 @@ export async function deleteMonthEntries({ brandId, month, userId }) {
     }
     return { month, deleted: { sales: salesDeleted, spend: spendDeleted } };
   });
-  // Keep the Internal Dashboard's monthly tables in step with this write.
+  // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
   return result;
 }
@@ -290,7 +298,7 @@ export async function upsertEntries({ brandId, entryDate, sales, spend, userId }
 
     return { saved: { sales: salesCount, spend: spendCount } };
   });
-  // Keep the Internal Dashboard's monthly tables in step with this write.
+  // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
   return result;
 }
@@ -323,7 +331,7 @@ async function applyMetaSpend({ brandId, entryDate, entries, userId }) {
     }, db);
     return { applied, skipped };
   });
-  // Keep the Internal Dashboard's monthly tables in step with this write.
+  // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
   return result;
 }
@@ -494,6 +502,7 @@ export async function importFromFile({ brandId, buffer, filename, userId, select
   const result = await inTransaction(async (db) => {
     for (const c of keptColumns) {
       if (c.isCustom) await repo.upsertCustomChannelIfMissing({ brandId, kind: c.kind, channelKey: c.key, label: c.label, userId }, db);
+      else await repo.unhideFixedChannel(brandId, c.kind, c.key, db);
       for (const l of c.fileLabels) await repo.forgetIgnoredColumn(brandId, c.kind, l, db);
     }
     for (const c of skippedColumns) {
@@ -544,7 +553,7 @@ export async function importFromFile({ brandId, buffer, filename, userId, select
       monthsAffected,
     };
   });
-  // Keep the Internal Dashboard's monthly tables in step with this write.
+  // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
   return result;
 }

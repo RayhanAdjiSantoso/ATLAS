@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
   Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
-  Database, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
+  Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
   Trash2, Upload, CalendarRange, HelpCircle, BadgeCheck, CalendarClock,
 } from 'lucide-react';
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
@@ -41,13 +41,13 @@ async function downloadLibraryFile(file) {
 }
 
 // Data Collection Hub — where each brand's source material lives: the monthly file
-// library every other module reads (Report Generator, Business Overview,
+// library every other module reads (Report Generator, Brand Overview,
 // Meta Automation) and its ad-account links. The brand's identity (status,
 // brand context, current direction) is set in Pengaturan Brand; this page
 // only reads the profile for the picker's subtitle and links back to it.
 // Minutes of Meeting lives in Brand Tracking (components/mom/MinutesOfMeeting).
 //
-// The frame is Business Overview's soft layout — masthead, then a white
+// The frame is Brand Overview's soft layout — masthead, then a white
 // command card holding the brand and its numbers — so the modules read as
 // one product. Inside Performance Database:
 //
@@ -239,7 +239,7 @@ function cellState(merged, month) {
   return 'snapshot';
 }
 
-// Tiga dataset ini dibaca Business Overview dari tabel fakta, bukan
+// Tiga dataset ini dibaca Brand Overview dari tabel fakta, bukan
 // dari byte filenya. Untuk ketiganya "tersimpan" dan "terbaca" adalah dua hal
 // berbeda, dan perbedaan itu yang dulu disembunyikan status "Lengkap".
 const DASHBOARD_CHANNELS = new Set(['order', 'performance_overview', 'product_performance']);
@@ -722,7 +722,21 @@ function PlatformPanel({ platform, months, lookup, reduced, onPick, onDelete, on
 // core datasets are for the months on screen.
 const PLATFORM_LOGO = { meta: 'meta', shopee: 'shopee', tiktok: 'tiktok', google: 'google' };
 
-function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
+// The brand's profile picture beside the section title: its uploaded logo
+// (Setup Context & Brand Direction), else its initials.
+function BrandAvatar({ brand }) {
+  if (!brand) return null;
+  const initials = brand.brand_name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  return (
+    <span className="bp-brand-avatar" aria-hidden="true">
+      {brand.logo_version
+        ? <img src={`/api/public/brand-logo/${brand.brand_id}?v=${brand.logo_version}`} alt="" />
+        : initials}
+    </span>
+  );
+}
+
+function DataView({ brand, command, months, windowMonths, windowEnd, setWindowEnd, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
   const { isAdmin } = useAuth();
   const accountsRef = useRef(null);
   const [accountsVersion, setAccountsVersion] = useState(0);
@@ -748,10 +762,14 @@ function DataView({ brand, months, windowMonths, windowEnd, setWindowEnd, focus,
   return (
     <div className="soft-card bp-panel bp-data" style={{ '--mk-accent': platform.accent, '--mk-wash': platform.wash, '--mk-tint': platform.tint }}>
       <div className="bp-panel-head">
-        <div>
-          <h2>Input Monthly Performance Data</h2>
-          <p>Perpustakaan data {brand?.brand_name ?? 'brand ini'}. Report Generator, Business Overview, dan Meta Automation membaca dari sini — tidak ada upload ulang di halaman lain.</p>
+        <div className="bp-data-ident">
+          <BrandAvatar brand={brand} />
+          <div>
+            <h2>Input Monthly Performance Data</h2>
+            <p>Semua data {brand?.brand_name ?? 'brand ini'} tersimpan disini untuk Report Generator, Brand Overview, dan Meta Automation. Cukup unggah data sekali, tidak perlu mengulang di setiap fitur.</p>
+          </div>
         </div>
+        {command}
       </div>
 
       <nav className="soft-subtabs bp-platforms" aria-label="Sumber data" role="tablist">
@@ -887,7 +905,7 @@ export default function BrandDataPage() {
   const [brand, setBrand] = useState(null);
   const [lastBrandId, setLastBrandId] = useSessionState('brand-settings:brand', null);
   // Same session keys as before the split, so links elsewhere that preset a
-  // brand and platform (Pusat Kendali, Meta Automation) still land on them.
+  // brand and platform (Meta Automation) still land on them.
   const [activeView, setActiveView] = useSessionState('brand-settings:view', 'data');
   const [marketId, setMarketId] = useSessionState('brand-settings:platform', 'shopee');
   // Restore legacy account tabs inside their corresponding data channel. A
@@ -1052,7 +1070,7 @@ export default function BrandDataPage() {
         parts.unshift(`dipisah: ${data.split.boost.toLocaleString('id-ID')} baris Boost Post, ${data.split.nonboost.toLocaleString('id-ID')} baris Non Boost Post`);
       }
       // The three Dashboard datasets are also parsed into the fact tables
-      // Business Overview reads; say so, because "tersimpan" alone left the
+      // Brand Overview reads; say so, because "tersimpan" alone left the
       // dashboard's zeros unexplained.
       if (data.imported?.rowsInserted) parts.push(`${data.imported.rowsInserted.toLocaleString('id-ID')} baris masuk ke Dashboard`);
       if (data.imported?.errors?.length) parts.push(`gagal masuk ke Dashboard: ${data.imported.errors.join('; ')}`);
@@ -1115,43 +1133,33 @@ export default function BrandDataPage() {
   };
 
 
-  // Whole-library figures for the command card.
-  const totals = useMemo(() => {
-    const all = PLATFORMS.flatMap((p) => p.datasets.filter((d) => !d.legacy).map((d) => `${p.id}:${d.channel}`));
-    const withData = new Set(files.map((f) => `${f.platform}:${f.channel}`));
-    return { all: all.length, active: all.filter((k) => withData.has(k)).length };
-  }, [files]);
   const span = files.filter((f) => f.period_month).map((f) => f.period_month).sort();
   const spanLabel = span.length
     ? `${buildMonth(span[0].slice(0, 7)).full} – ${buildMonth(span[span.length - 1].slice(0, 7)).full}`
     : 'Belum ada data';
+
+  // The brand and its data range, at the right of Input Monthly Performance
+  // Data's title.
+  const command = (
+    <div className="bp-command is-inline" role="group" aria-label="Brand yang dikelola">
+      <div className="bp-command-brand">
+        <span className="bp-label">Brand</span>
+        <BrandPicker brands={brands} brand={brand} sector={profile?.sector} onSelect={setBrand} reduced={reduced} />
+      </div>
+      <div className="bp-stats">
+        <div className="bp-stat">
+          <span><CalendarRange size={14} aria-hidden="true" /> Rentang data</span>
+          <strong className="is-text">{loading ? '…' : spanLabel}</strong>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     // Frame and masthead come from BrandSettingLayout (shared with the
     // other Brand Setting sections).
     <>
       <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" multiple hidden onChange={handleFile} />
-
-      <section className="soft-card bp-command" aria-label="Brand yang dikelola">
-        <div className="bp-command-brand">
-          <span className="bp-label">Brand</span>
-          <BrandPicker brands={brands} brand={brand} sector={profile?.sector} onSelect={setBrand} reduced={reduced} />
-        </div>
-        <div className="bp-stats">
-          <div className="bp-stat">
-            <span><CalendarRange size={14} aria-hidden="true" /> Rentang data</span>
-            <strong className="is-text">{loading ? '…' : spanLabel}</strong>
-          </div>
-          <div className="bp-stat">
-            <span><FileSpreadsheet size={14} aria-hidden="true" /> File tersimpan</span>
-            <strong>{loading ? '…' : files.length}</strong>
-          </div>
-          <div className="bp-stat">
-            <span><Database size={14} aria-hidden="true" /> Dataset aktif</span>
-            <strong>{loading ? '…' : totals.active}<small>/{totals.all}</small></strong>
-          </div>
-        </div>
-      </section>
 
       {loading && <p className="bp-loading"><Loader2 size={14} className="brand-spin" /> Memuat data {brand?.brand_name ?? 'brand'}…</p>}
       {error && (
@@ -1178,7 +1186,7 @@ export default function BrandDataPage() {
         {activeView === 'data' && (
           <ViewShell viewId="data" reduced={reduced}>
             <DataView
-              brand={brand} months={months} windowMonths={windowMonths}
+              brand={brand} command={command} months={months} windowMonths={windowMonths}
               windowEnd={windowEnd} setWindowEnd={(next) => { setWindowEnd(next); setFocus(null); }}
               focus={focus} setFocus={setFocus} lookup={lookup} reduced={reduced}
               onPick={pickFile} onDelete={removeFile} onReimport={reimportFile} busyKey={busyKey}

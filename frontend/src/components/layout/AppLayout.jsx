@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Home, LogOut, Megaphone, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, Radar, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Home, LogOut, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, ShieldCheck, MessageSquareText, Puzzle } from 'lucide-react';
 import { BRAND_SETTING_SECTIONS, BRAND_TRACKING } from '../brandSettings/sections.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
-import api from '../../api/client.js';
 import AnnotationLayer from '../annotations/AnnotationLayer.jsx';
 import FeatureSpotlight from '../common/FeatureSpotlight.jsx';
 import atlasIcon from '../../assets/atlas-icon.png';
@@ -16,18 +15,19 @@ const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 // its files, its daily numbers — is one entry, Brand Setting, whose own
 // section bar switches between the three; what ATLAS gives back OUT
 // (Report Generator) follows, so input and output never read as one long
-// list. Business Overview opens the Operasional group.
+// list. The three overview pages sit on top, above every group, because
+// they are where a session starts.
 const NAV = [
-  { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Workspace' },
+  { to: '/', label: 'Beranda', Icon: Home, end: true, group: 'Top' },
+  { to: '/internal-dashboard', label: 'Business Insight', Icon: Building2, group: 'Top', module: 'internal_dashboard' },
+  { to: '/dashboard', label: 'Brand Overview', Icon: LayoutDashboard, group: 'Top', module: 'dashboard' },
   { id: 'brand-setting', label: 'Brand Setting', Icon: SlidersHorizontal, group: 'Workspace', sections: BRAND_SETTING_SECTIONS },
   { to: BRAND_TRACKING.to, label: BRAND_TRACKING.label, Icon: BRAND_TRACKING.Icon, group: 'Workspace', module: BRAND_TRACKING.module },
   { to: '/report-generator', label: 'Report Generator', Icon: FileBarChart, group: 'Workspace', module: 'report_generator' },
-  { to: '/dashboard', label: 'Business Overview', Icon: LayoutDashboard, group: 'Operasional', module: 'dashboard' },
-  { to: '/meta-automation', label: 'Meta Ads Automation', Icon: Megaphone, group: 'Operasional', module: 'meta_automation' },
-  { to: '/internal-dashboard', label: 'Internal Dashboard', Icon: Building2, group: 'Operasional', module: 'internal_dashboard' },
-  { to: '/pusat-kendali', label: 'Pusat Kendali', Icon: Radar, group: 'Operasional', module: 'control_center' },
+  { to: '/google-reviews', label: 'Google Reviews', Icon: MessageSquareText, group: 'Integration', module: 'google_reviews' },
+  { to: '/extensions', label: 'Extensions', Icon: Puzzle, group: 'Integration', module: 'google_reviews' },
   // Account and permission management — superadmin and admin only.
-  { to: '/pengaturan-akses', label: 'Pengaturan Akses', Icon: ShieldCheck, group: 'Operasional', adminOnly: true },
+  { to: '/pengaturan-akses', label: 'Pengaturan Akses', Icon: ShieldCheck, group: 'Integration', adminOnly: true },
 ];
 const ROLE_BADGE = { superadmin: 'Superadmin', admin: 'Admin', reviewer: 'Reviewer', user: 'User', client: 'Client' };
 
@@ -56,22 +56,7 @@ export default function AppLayout() {
   // remembering it would be remembering the wrong thing.
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Pusat Kendali badge: overdue MOM tasks + brands needing data action this
-  // month. Refreshed on navigation at most once a minute — a reminder, not a
-  // live feed, and not worth a request on every click.
   const location = useLocation();
-  const [attention, setAttention] = useState(null);
-  const lastSummaryAt = useRef(0);
-  useEffect(() => {
-    if (!can('control_center') || Date.now() - lastSummaryAt.current < 60_000) return;
-    lastSummaryAt.current = Date.now();
-    api.get('/control-center/summary').then(({ data }) => setAttention(data)).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.modules, location.pathname]);
-  const badgeCount = (attention?.overdueTasks ?? 0) + (attention?.dataAttention ?? 0);
-  const badgeTitle = attention
-    ? `${attention.overdueTasks} to do tertunda · ${attention.dataAttention} brand perlu tindakan data`
-    : undefined;
 
   useEffect(() => {
     try {
@@ -112,7 +97,7 @@ export default function AppLayout() {
       return { ...n, to: sections[0].to, sections };
     })
     .filter((n) => n && (n.sections || allowed(n)));
-  const groups = ['Workspace', 'Operasional']
+  const groups = ['Top', 'Workspace', 'Integration']
     .map((label) => ({ label, links: links.filter((link) => link.group === label) }))
     .filter((group) => group.links.length > 0);
   const open = !collapsed || peek;
@@ -140,9 +125,6 @@ export default function AppLayout() {
     >
       <Icon size={18} className="sidebar-ico" />
       <span className="sidebar-label">{label}</span>
-      {to === '/pusat-kendali' && badgeCount > 0 && (
-        <span className="sidebar-badge" title={badgeTitle} aria-label={badgeTitle}>{badgeCount > 99 ? '99+' : badgeCount}</span>
-      )}
     </NavLink>
   );
 
@@ -177,7 +159,8 @@ export default function AppLayout() {
         <nav className="sidebar-nav">
           {groups.map((group) => (
             <div className="sidebar-nav-group" key={group.label}>
-              <span className="sidebar-nav-title">{group.label}</span>
+              {/* The top group has no heading: it stands above the named groups. */}
+              {group.label !== 'Top' && <span className="sidebar-nav-title">{group.label}</span>}
               {group.links.map(navLink)}
             </div>
           ))}

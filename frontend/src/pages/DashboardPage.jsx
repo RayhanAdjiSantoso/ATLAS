@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowUpRight, Brain, CalendarDays, Check, CheckCircle2, ChevronDown, Circle,
-  CircleAlert, Copy, Database, Download, FileText, ListChecks, Loader2, RefreshCw, Sparkles, UsersRound,
+  CircleAlert, Copy, Database, Download, FileText, ListChecks, Loader2, RefreshCw, Sparkles, Target, UsersRound,
 } from 'lucide-react';
 import DashboardTab from '../components/dashboard/DashboardTab.jsx';
 import { useConsoleData } from '../components/dashboard/useConsoleData.js';
@@ -30,7 +30,7 @@ import { MOM_TYPE_LABELS, OVERDUE_DAYS, dateLabel, daysSince, longDateLabel, par
 
 const DASH_EASE = [0.16, 1, 0.3, 1];
 
-// Business Overview as a console rather than a tab strip.
+// Brand Overview as a console rather than a tab strip.
 //
 // The page it replaces put eight equal pill buttons on one line and showed one
 // of them at a time, which meant it could never tell you where you were, only
@@ -152,10 +152,47 @@ function RecapItem({ minute, open, onToggle }) {
   );
 }
 
+const MOM_JUMP_EVENT = 'atlas:dashboard-mom-jump';
+
+// Executive Snapshot's shortcuts: down to this page's meeting notes, and over
+// to the brand's monthly plan in Brand Tracking.
+function SnapshotShortcuts({ filters, showMinutes, showTarget }) {
+  const reduceMotion = useReducedMotion();
+  if (!showMinutes && !showTarget) return null;
+  const jumpToMinutes = () => {
+    window.dispatchEvent(new Event(MOM_JUMP_EVENT));
+    document.getElementById('mom-dashboard')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  };
+  return (
+    <nav className="snap-shortcuts" aria-label="Pintasan" data-feature="snapshot-shortcuts">
+      {showMinutes && (
+        <button type="button" className="snap-shortcut" onClick={jumpToMinutes}>
+          <UsersRound size={15} aria-hidden="true" />
+          <span><strong>Minutes of Meeting</strong><small>Recap & to do list periode ini</small></span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </button>
+      )}
+      {showTarget && (
+        <Link to="/brand-tracking" className="snap-shortcut" onClick={() => presetBrandTracking({ brandId: filters.brandId, view: 'target' })}>
+          <Target size={15} aria-hidden="true" />
+          <span><strong>Target & Budget</strong><small>Brand Tracking · target, alokasi & pencapaian</small></span>
+          <ArrowUpRight size={14} aria-hidden="true" />
+        </Link>
+      )}
+    </nav>
+  );
+}
+
 function MinutesOverview({ filters }) {
   const { isViewOnly } = useAuth();
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useSessionState('dashboard:mom-open', true);
+  // The snapshot's shortcut jumps here; a collapsed section opens on arrival.
+  useEffect(() => {
+    const onJump = () => setOpen(true);
+    window.addEventListener(MOM_JUMP_EVENT, onJump);
+    return () => window.removeEventListener(MOM_JUMP_EVENT, onJump);
+  }, [setOpen]);
   const [allMinutes, setAllMinutes] = useState([]);
   const [status, setStatus] = useState('idle');
   const [reloadKey, setReloadKey] = useState(0);
@@ -351,7 +388,7 @@ function MinutesOverview({ filters }) {
         : `${periodMinutes.length} meeting di periode · ${activeTasks} tugas aktif dari semua meeting`;
 
   return (
-    <section className={`mom-dashboard${open ? ' is-open' : ''}`} aria-labelledby="mom-dashboard-title">
+    <section id="mom-dashboard" className={`mom-dashboard${open ? ' is-open' : ''}`} aria-labelledby="mom-dashboard-title">
       <header className="mom-dashboard-head">
         <div className="mom-head-main">
           <h2 id="mom-dashboard-title" className="mom-head-title">
@@ -592,6 +629,7 @@ export default function DashboardPage() {
             the snapshot is the sum of the channels, and a meeting record
             answers to the brand. That is why they live on this view
             instead of repeating above every channel. */}
+        <SnapshotShortcuts filters={filters} showMinutes={can('brand_settings')} showTarget={can('daily_tracking')} />
         <ExecutiveSummary filters={filters} />
         {/* Cross-channel reading of the month's product performance. */}
         <CrossChannelPanel filters={filters} />

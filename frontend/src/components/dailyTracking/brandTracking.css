@@ -518,6 +518,9 @@
   cursor: pointer;
 }
 .bt-rail-add:hover { background: var(--soft-secondary); }
+.bt-rail-add.is-danger { color: #b42318; }
+.bt-rail-add.is-danger:hover:not(:disabled) { background: #fef3f2; }
+.bt-rail-add:disabled { color: #a7b2c6; cursor: not-allowed; }
 .bt-rail-total {
   display: grid; flex: 0 0 auto; gap: 2px;
   padding: 12px 16px;
@@ -555,7 +558,7 @@
 .bt-sheet-stats > div { display: grid; gap: 1px; padding: 0 16px; text-align: right; }
 .bt-sheet-stats > div:last-child { padding-right: 0; }
 .bt-sheet-stats > div + div { border-left: 1px solid var(--soft-border); }
-.bt-sheet-stats dt { color: var(--soft-muted); font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.bt-sheet-stats dt { color: var(--soft-muted); font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .bt-sheet-stats dd { margin: 0; color: var(--soft-ink); font-size: .9rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bt-sheet-stats .is-gap dd { color: #b45309; }
 .bt-sheet-head .dt-channel-actions { flex-basis: 100%; margin: 0; }
@@ -663,7 +666,7 @@
 .bt-page .dt-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .86rem; }
 .bt-page .dt-col-date { width: 168px; }
 .bt-page .dt-col-money { width: 190px; }
-.bt-page .dt-col-count { width: 130px; }
+.bt-page .dt-col-count { width: 215px; }
 .bt-page .dt-col-notes { width: 220px; }
 .bt-page .dt-col-source { width: 150px; }
 .bt-page .dt-table th, .bt-page .dt-table td { text-align: left; }
@@ -719,6 +722,12 @@
   background: transparent; color: var(--soft-ink);
   font: inherit; font-variant-numeric: tabular-nums; text-align: right;
   appearance: textfield; -moz-appearance: textfield;
+}
+/* Revenue cells carry their currency, set apart from the right-aligned figure. */
+.bt-page .dt-table td.dt-money { position: relative; }
+.bt-page .dt-table td.dt-money::before {
+  content: 'Rp'; position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+  color: var(--soft-muted); font-size: .76rem; pointer-events: none; z-index: 2;
 }
 .bt-page .dt-table input.is-zero { color: #a7b2c6; }
 .bt-page .dt-table input::-webkit-outer-spin-button,

@@ -8,7 +8,7 @@ import {
 import './metaOverview.css';
 import './metaAnalysis.css';
 
-// Business Overview › Meta Ads, the analysis tabs. All five read one set of
+// Brand Overview › Meta Ads, the analysis tabs. All five read one set of
 // records (metaAnalysis.js) for the period and its comparison, so every
 // number on every tab adds up to the same account.
 

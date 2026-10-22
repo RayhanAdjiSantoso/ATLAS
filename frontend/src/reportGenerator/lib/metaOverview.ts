@@ -7,7 +7,7 @@ import type { DeltaClassName, Sentiment, SheetRow } from './types';
 // META ADS — DEFAULT OVERVIEW METRICS
 //
 // The rows every Meta Overview card opens with, as MIL's brief lists them:
-//   • Boost Post                    — profile visits, interactions, delivery;
+//   • Boost Post                    — profile visits, interactions, follows, delivery;
 // Frequency is left out on purpose: the Day-breakdown export Special Moment
 // needs cannot sum reach, so it would read "—" on every card.
 //   • Non-Boost Post & CPAS, E-commerce — the full sales funnel, content view
@@ -31,6 +31,7 @@ interface Base {
   linkClicks: number | null;
   profileVisits: number | null;
   interactions: number | null;
+  follows: number | null;
   contentViews: number | null;
   atc: number | null;
   purchases: number | null;
@@ -76,6 +77,7 @@ const BASE_PICK: Record<BaseKey, { kw: string[]; concept?: string; allow?: strin
   linkClicks: { kw: ['link clicks', 'outbound clicks'], concept: 'link click' },
   profileVisits: { kw: ['instagram profile visits', 'profile visits', 'profile visit'] },
   interactions: { kw: ['post engagement', 'post interactions', 'interactions', 'interaction'] },
+  follows: { kw: ['instagram follows', 'instagram follow', 'ig follows'] },
   contentViews: { kw: ['content views with shared', 'content views', 'content view'], concept: 'content view' },
   atc: { kw: ['adds to cart with shared', 'adds to cart', 'add to cart'], concept: 'adds to cart' },
   purchases: { kw: ['purchases with shared', 'purchases', 'purchase'], concept: 'purchase' },
@@ -98,6 +100,7 @@ function base(rows: SheetRow[], allowReach: boolean): Base {
     linkClicks: sumBase(rows, 'linkClicks'),
     profileVisits: sumBase(rows, 'profileVisits'),
     interactions: sumBase(rows, 'interactions'),
+    follows: sumBase(rows, 'follows'),
     contentViews: sumBase(rows, 'contentViews'),
     atc: sumBase(rows, 'atc'),
     purchases: sumBase(rows, 'purchases'),
@@ -150,6 +153,8 @@ const BOOST: Spec[] = [
   ...DELIVERY,
   { key: 'interactions', label: 'Interactions', fmt: 'num', sentiment: 'higher-better', value: (b) => b.interactions, from: 'interactions' },
   { key: 'cost_per_interaction', label: 'Cost per interaction', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.interactions), same: ['cost per', 'interaction'] },
+  { key: 'instagram_follows', label: 'Instagram follows', fmt: 'num', sentiment: 'higher-better', value: (b) => b.follows, from: 'follows' },
+  { key: 'cost_per_instagram_follow', label: 'Cost per Instagram follow', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.follows), same: ['cost per', 'follow'] },
 ];
 
 // Non-Boost E-commerce and CPAS: on a CPAS file the counts resolve to the

@@ -234,7 +234,7 @@ export default function AnnualPlan({ brandId, month, canEdit, onSaved }) {
           </footer>
         </div>
       )}
-      <p className="tb-foot">Target tahunan dan update-nya diatur di Brand Setting › Brand Context › Target tahunan. Saat update, target baru dibagi rata ke 12 bulan atau hanya ke bulan berjalan & berikutnya; target awal tetap tersimpan.</p>
+      <p className="tb-foot">Target tahunan dan update-nya diatur di Brand Setting › Setup Context & Brand Direction › Annual Target. Saat update, target baru dibagi rata ke 12 bulan atau hanya ke bulan berjalan & berikutnya; target awal tetap tersimpan.</p>
     </section>
   );
 }

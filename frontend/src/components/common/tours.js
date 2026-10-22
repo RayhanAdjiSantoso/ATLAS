@@ -47,7 +47,7 @@ export const TOURS = {
     {
       target: '.bp-command',
       title: 'Brand yang sedang dikelola',
-      body: 'Semua file di halaman ini milik brand yang dipilih di sini. Di sampingnya: rentang data, jumlah file, dan dataset yang sudah aktif.',
+      body: 'Semua file di halaman ini milik brand yang dipilih di sini. Di sampingnya: rentang bulan yang sudah punya data.',
     },
     {
       target: '.bp-platforms',
@@ -145,7 +145,7 @@ export const TOURS = {
   'business-overview': [
     {
       target: '.bo-shell .band-tabs',
-      kicker: 'Business Overview',
+      kicker: 'Brand Overview',
       title: 'Executive Snapshot dan tiap channel',
       body: 'Executive Snapshot merangkum semua channel beserta catatan meeting. Meta Ads, Shopee, dan TikTok membuka analisis per channel.',
     },

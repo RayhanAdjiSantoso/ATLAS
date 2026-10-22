@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ATLAS Google Reviews Exporter</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="top">
+    <img src="icons/icon-32.png" alt="" width="22" height="22">
+    <div>
+      <strong>ATLAS Google Reviews Exporter</strong>
+      <span>Google Maps → CSV → ATLAS</span>
+    </div>
+  </header>
+
+  <!-- Shown once: what this reads, and the terms it runs under. -->
+  <section id="ack" class="card ack" hidden>
+    <h2>Sebelum mulai</h2>
+    <ul>
+      <li><b>Yang dibaca:</b> nama, alamat, rating dan jumlah ulasan bisnis yang sedang dibuka, serta tiap ulasan yang tampil: nama penulis, bintang, tanggal, teks, bahasa, dan balasan pemilik.</li>
+      <li><b>Yang tidak dibaca:</b> password, cookie, atau data akun Google Anda; halaman di luar Google Maps.</li>
+      <li><b>Ke mana datanya:</b> tetap di tab ini sampai Anda menekan Export CSV. Tidak ada yang dikirim ke server mana pun; file CSV Anda unggah sendiri ke ATLAS.</li>
+      <li><b>Ketentuan Google:</b> Ketentuan Layanan Google Maps membatasi ekstraksi dan ekspor konten Maps. Gunakan hanya untuk analisis internal, dalam jumlah wajar, dan tanggung jawab penggunaan ada pada akun yang menjalankannya.</li>
+    </ul>
+    <label class="check"><input type="checkbox" id="ack-box"> Saya sudah membaca dan memahami hal di atas.</label>
+    <button id="ack-ok" class="btn primary" disabled>Lanjutkan</button>
+  </section>
+
+  <main id="main" hidden>
+    <section id="not-ready" class="card notice" hidden>
+      <strong>Buka halaman bisnis di Google Maps</strong>
+      <p id="not-ready-text">Cari bisnisnya di Google Maps, buka halamannya, lalu klik ikon extension ini lagi. Jika extension baru dipasang, muat ulang tab Google Maps sekali.</p>
+    </section>
+
+    <section id="business" class="card" hidden>
+      <div class="biz-head">
+        <h2 id="biz-name">—</h2>
+        <span id="status" class="pill">Idle</span>
+      </div>
+      <p id="biz-address" class="muted"></p>
+      <dl class="biz-meta">
+        <div><dt>Rating Google</dt><dd id="biz-rating">—</dd></div>
+        <div><dt>Ulasan dilaporkan</dt><dd id="biz-total">—</dd></div>
+        <div class="wide"><dt>Business ID</dt><dd id="biz-id" class="mono">—</dd></div>
+      </dl>
+    </section>
+
+    <section id="progress-card" class="card" hidden>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progres pengumpulan"><span id="bar"></span></div>
+      <p id="message" class="message" aria-live="polite"></p>
+      <dl class="stats">
+        <div><dt>Terkumpul</dt><dd id="s-collected">0</dd></div>
+        <div><dt>Dari total Google</dt><dd id="s-total">—</dd></div>
+        <div><dt>Duplikat dilewati</dt><dd id="s-dup">0</dd></div>
+        <div><dt>Dengan komentar</dt><dd id="s-text">0</dd></div>
+        <div><dt>Tanpa komentar</dt><dd id="s-notext">0</dd></div>
+      </dl>
+    </section>
+
+    <section id="controls" class="card" hidden>
+      <label class="field">
+        <span>Maksimum ulasan</span>
+        <input id="max" type="number" min="1" max="10000" step="50" value="1000">
+      </label>
+      <div class="actions">
+        <button id="start" class="btn primary">Start Collection</button>
+        <button id="stop" class="btn">Stop</button>
+        <button id="export" class="btn primary outline">Export CSV</button>
+        <button id="reset" class="btn ghost">Reset</button>
+      </div>
+      <label class="check small"><input type="checkbox" id="clear-after" checked> Hapus data di tab setelah export</label>
+    </section>
+  </main>
+
+  <script src="lib/core.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

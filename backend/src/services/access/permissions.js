@@ -25,13 +25,13 @@ export const ROLE_LABELS = {
 // Module keys are the unit of permission; the frontend maps each to its menu
 // entry and route, the backend to its API routers.
 export const MODULES = [
-  { key: 'dashboard', label: 'Business Overview' },
+  { key: 'dashboard', label: 'Brand Overview' },
   { key: 'daily_tracking', label: 'Brand Tracking' },
   { key: 'brand_settings', label: 'Brand Setting' },
   { key: 'report_generator', label: 'Report Generator' },
   { key: 'meta_automation', label: 'Meta Ads Automation' },
-  { key: 'internal_dashboard', label: 'Internal Dashboard' },
-  { key: 'control_center', label: 'Pusat Kendali' },
+  { key: 'internal_dashboard', label: 'Business Insight' },
+  { key: 'google_reviews', label: 'Google Reviews Analytics' },
   { key: 'homepage_content', label: 'Kelola Homepage' },
   { key: 'annotations', label: 'Anotasi & Feedback' },
 ];
@@ -41,7 +41,7 @@ const MODULE_KEYS = new Set(MODULES.map((m) => m.key));
 // work (dashboard, report generator, brand data) but not the internal
 // dashboard or the operational tools; client works in Brand Tracking alone —
 // fills in its own daily revenue (ad spend stays with the team) and reads its
-// performance there. Business Overview is the team's analysis room on the
+// performance there. Brand Overview is the team's analysis room on the
 // marketplace files, so it is off for clients unless Pengaturan Akses turns
 // it back on.
 //
@@ -52,23 +52,23 @@ const MODULE_KEYS = new Set(MODULES.map((m) => m.key));
 export const DEFAULTS = {
   admin: {
     dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
-    meta_automation: true, internal_dashboard: true, control_center: true,
-    homepage_content: true, annotations: true,
+    meta_automation: true, internal_dashboard: true,
+    google_reviews: true, homepage_content: true, annotations: true,
   },
   reviewer: {
     dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
-    meta_automation: true, internal_dashboard: true, control_center: true,
-    homepage_content: true, annotations: true,
+    meta_automation: true, internal_dashboard: true,
+    google_reviews: true, homepage_content: true, annotations: true,
   },
   user: {
     dashboard: true, daily_tracking: true, brand_settings: true, report_generator: true,
-    meta_automation: false, internal_dashboard: false, control_center: false,
-    homepage_content: false, annotations: false,
+    meta_automation: false, internal_dashboard: false,
+    google_reviews: true, homepage_content: false, annotations: false,
   },
   client: {
     dashboard: false, daily_tracking: true, brand_settings: false, report_generator: false,
-    meta_automation: false, internal_dashboard: false, control_center: false,
-    homepage_content: false, annotations: false,
+    meta_automation: false, internal_dashboard: false,
+    google_reviews: false, homepage_content: false, annotations: false,
   },
 };
 

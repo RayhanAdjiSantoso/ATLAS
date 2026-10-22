@@ -297,7 +297,7 @@ export async function upsertLibraryFile({
   return saved.rows[0];
 }
 
-// The three exports Dashboard Business Overview is built on. Everything else
+// The three exports Dashboard Brand Overview is built on. Everything else
 // in the library is read by the Report Generator straight from its bytes;
 // these three have to be parsed into shopee.* fact tables as well, because
 // that is what the dashboard queries.
