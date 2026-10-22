@@ -1755,6 +1755,30 @@ function checkTokens() {
   });
 }
 
+/**
+ * Ganti token SEMUA brand sekaligus (mis. setelah app/System User
+ * pindah portfolio). Isi dulu Script Property META_TOKEN_NEW dengan
+ * token baru, lalu jalankan fungsi ini. Property itu dihapus setelah
+ * dipakai, supaya token tidak tersimpan dua kali.
+ */
+function replaceAllMetaTokens() {
+  var props = PropertiesService.getScriptProperties();
+  var token = String(props.getProperty('META_TOKEN_NEW') || '').trim();
+  if (!token) {
+    throw new Error('Isi Script Property "META_TOKEN_NEW" dengan token baru dulu.');
+  }
+  var keys = {};
+  getAllAccounts_().forEach(function (acct) {
+    keys[acct.tokenKey || 'META_TOKEN'] = true;
+  });
+  Object.keys(keys).forEach(function (key) {
+    props.setProperty(key, token);
+    Logger.log('Diganti: %s', key);
+  });
+  props.deleteProperty('META_TOKEN_NEW');
+  checkTokens();
+}
+
 /** Uji coba tanpa menunggu Senin. Tetap menulis sheet & kirim email ke tiap langganan aktif. */
 function testWeeklyRun() {
   Logger.log('Menjalankan weeklyRun() sungguhan (per langganan Weekly aktif)...');
