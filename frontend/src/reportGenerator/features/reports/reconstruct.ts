@@ -116,6 +116,8 @@ export function reconstructShopeeFunnel(detail: ReportDetail): ShopeeFunnelRepor
     omzetCur: config.omzetCur ?? 0,
     productPerfOld: null,
     productPerfCur: null,
+    tokoKeywordOld: byChannelRole('toko_keyword', 'old'),
+    tokoKeywordCur: byChannelRole('toko_keyword', 'cur'),
   });
 }
 
