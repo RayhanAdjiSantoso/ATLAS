@@ -26,6 +26,14 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'shopee-report-channel-tabs',
+    released: '2026-10-26',
+    path: '/report-generator/shopee',
+    target: '[data-feature="shopee-roi-root"]',
+    title: 'Report Shopee per channel',
+    body: 'Report Shopee kini dibagi per tab Overall, Product Ads, Shop+ Ads, Live Ads, dan Banner Ads, masing-masing dengan Traffic, Conversion, Pareto, dan Potential. Overall dibuka dengan ROI yang dipecah ke Revenue dan Spend per channel, Shop+ Ads membandingkan tiap grup iklan, dan Potential Product kini hanya menampilkan produk laku yang belum diiklankan.',
+  },
+  {
     id: 'meta-boost-instagram-follows',
     released: '2026-10-21',
     path: '/data-brand',
