@@ -1,4 +1,5 @@
-import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 
 // A report page as a workspace: a sticky navigator of its sections on the
 // left, the chosen section on the right. Replaces a column of folded rows —
@@ -67,7 +68,18 @@ function readMeta(wrap: HTMLElement | null, fallback: string): SectionMeta {
   return { title: title || fallback, badge };
 }
 
-export function SectionAccordion({ children, defaultOpen = 0 }: { children: ReactNode; defaultOpen?: number }) {
+// `iconFor` turns on the rich navigator a report can opt into (Shopee): an
+// icon tile per section, a progress track for the open section's place in the
+// page, and the keyboard hint. Without it the navigator is unchanged.
+export function SectionAccordion({
+  children,
+  defaultOpen = 0,
+  iconFor,
+}: {
+  children: ReactNode;
+  defaultOpen?: number;
+  iconFor?: (title: string) => ReactNode;
+}) {
   const flat = flatten(children).filter((f) => Boolean(f.node));
   const items = flat.map((f) => f.node);
   const statics = items.map((child) => isValidElement(child) && (child.props as { alwaysOpen?: boolean }).alwaysOpen === true);
@@ -79,7 +91,26 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
   const refs = useRef<(HTMLDivElement | null)[]>([]);
   const deckRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const listRef = useRef<HTMLDivElement>(null);
   const [meta, setMeta] = useState<SectionMeta[]>([]);
+  // The active row's box, for a skin that slides one indicator between rows
+  // (.sdeck-ink) instead of filling the row itself. Re-measured whenever the
+  // list reflows — a skin may grow the active row (its subtitle opens).
+  const [ink, setInk] = useState<{ y: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return undefined;
+    const place = () => {
+      const el = tabRefs.current[active];
+      if (el) setInk((prev) => (prev && prev.y === el.offsetTop && prev.h === el.offsetHeight ? prev : { y: el.offsetTop, h: el.offsetHeight }));
+    };
+    place();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null;
+    ro?.observe(list);
+    const el = tabRefs.current[active];
+    if (el) ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [active, meta]);
 
   // Titles come from the rendered headings; re-read after every render (a
   // heading can change — the Non-Boost breakdowns name their objective) but
@@ -113,9 +144,24 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
 
   return (
     <div className="sdeck" ref={deckRef}>
-      <nav className="sdeck-nav" aria-label="Bagian laporan">
-        <span className="sdeck-nav-label" aria-hidden="true">Bagian laporan</span>
-        <div role="tablist" aria-orientation="vertical" className="sdeck-tabs">
+      <nav
+        className={`sdeck-nav${iconFor ? ' is-rich' : ''}`}
+        aria-label="Bagian laporan"
+        style={{ '--sdeck-progress': (sections.indexOf(active) + 1) / sections.length } as CSSProperties}
+      >
+        <span className="sdeck-nav-label" aria-hidden="true">
+          Bagian laporan
+          <span className="sdeck-count">
+            {sections.indexOf(active) + 1}/{sections.length}
+          </span>
+        </span>
+        {iconFor && (
+          <span className="sdeck-progress" aria-hidden="true">
+            <i />
+          </span>
+        )}
+        <div role="tablist" aria-orientation="vertical" className="sdeck-tabs" ref={listRef}>
+          {ink && <span className="sdeck-ink" aria-hidden="true" style={{ transform: `translateY(${ink.y}px)`, height: ink.h } as CSSProperties} />}
           {sections.map((i, pos) => {
             const m = meta[i];
             const on = i === active;
@@ -142,7 +188,13 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
                 onClick={() => open(i)}
                 onKeyDown={(e) => onKey(e, pos)}
               >
-                <span className="sdeck-dot" aria-hidden="true" />
+                {iconFor ? (
+                  <span className="sdeck-icon" aria-hidden="true">
+                    {iconFor(m ? shortTitle(m.title) : '')}
+                  </span>
+                ) : (
+                  <span className="sdeck-dot" aria-hidden="true" />
+                )}
                 <span className="sdeck-tab-text">
                   <strong>{m ? shortTitle(m.title) : `Bagian ${pos + 1}`}</strong>
                   {m?.badge && <small>{m.badge}</small>}
@@ -152,6 +204,17 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
             );
           })}
         </div>
+        {iconFor && (
+          <span className="sdeck-keys" aria-hidden="true">
+            <kbd>
+              <ArrowUp size={11} strokeWidth={2.6} />
+            </kbd>
+            <kbd>
+              <ArrowDown size={11} strokeWidth={2.6} />
+            </kbd>
+            pindah bagian
+          </span>
+        )}
       </nav>
 
       <div className="sdeck-body">

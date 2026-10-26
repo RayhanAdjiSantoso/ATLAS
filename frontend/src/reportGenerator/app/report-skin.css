@@ -88,7 +88,12 @@
   scrollbar-width: thin;
 }
 .mil-ui.report-generator-app .sdeck-nav-label { padding: 0 .55rem; color: var(--rs-quiet); font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.mil-ui.report-generator-app .sdeck-tabs { display: grid; gap: 3px; }
+.mil-ui.report-generator-app .sdeck-tabs { position: relative; display: grid; gap: 3px; }
+/* Slid between rows only by skins that opt in (Shopee); elsewhere the active
+   row fills itself. */
+.mil-ui.report-generator-app .sdeck-ink { display: none; }
+.mil-ui.report-generator-app .sdeck-nav-label { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.mil-ui.report-generator-app .sdeck-count { color: var(--rs-quiet); font-size: .7rem; font-weight: 700; letter-spacing: .02em; font-variant-numeric: tabular-nums lining-nums; }
 .mil-ui.report-generator-app .sdeck-tab {
   position: relative;
   display: flex;
@@ -268,6 +273,20 @@
   .mil-ui.report-generator-app .sec-split { grid-template-columns: minmax(0, 1.08fr) minmax(360px, 1fr); gap: 1.4rem; }
 }
 .mil-ui.report-generator-app .kpi-compact .kpi-row-label { white-space: nowrap; }
+/* A channel table beside its root cause keeps its four columns inside the
+   card at any width: fixed layout shares the width out (names wrap) instead of
+   letting a long value push CHANGES past the card's edge. */
+@media (min-width: 1181px) {
+  .mil-ui.report-generator-app .sec-split.sec-split-padded { grid-template-columns: minmax(0, 1.35fr) minmax(330px, 1fr); }
+}
+.mil-ui.report-generator-app .sec-split-main .kpi-compact { table-layout: fixed; width: 100%; }
+.mil-ui.report-generator-app .sec-split-main .kpi-compact :is(th, td):nth-child(2),
+.mil-ui.report-generator-app .sec-split-main .kpi-compact :is(th, td):nth-child(3) { width: 22.5%; }
+.mil-ui.report-generator-app .sec-split-main .kpi-compact :is(th, td):nth-child(4) { width: 18.5%; padding-left: .25rem; padding-right: .5rem; text-align: right; }
+.mil-ui.report-generator-app .sec-split-main .kpi-compact .delta-pill { padding: .1rem .38rem; font-size: .7rem; white-space: nowrap; }
+.mil-ui.report-generator-app .sec-split-main .kpi-compact thead th { white-space: normal; }
+.mil-ui.report-generator-app .sec-split-main .kpi-compact .kpi-row-label { white-space: normal; }
+.mil-ui.report-generator-app .sec-split-main .kpi-compact .kpi-row-label-wrap { display: flex; align-items: flex-start; }
 
 /* ── Root cause: a real decision tree ────────────────────────────────────── */
 .mil-ui.report-generator-app .sympt-panel {
