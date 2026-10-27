@@ -149,7 +149,9 @@ export interface FunnelValueDef {
 }
 
 export const FUNNEL_VALUE_DEFS: readonly FunnelValueDef[] = [
-  { key: 'gmvOverall', label: 'GMV (Overall)', fmt: 'rp', sentiment: 'higher-better' },
+  // The store's whole revenue (Total Omzet), the same in every channel's table
+  // — it is Ad Contribution's denominator, not this channel's GMV.
+  { key: 'gmvOverall', label: 'GMV Toko (semua penjualan)', fmt: 'rp', sentiment: 'higher-better' },
   { key: 'gmvAds', label: 'GMV (Ads)', fmt: 'rp', sentiment: 'higher-better' },
   { key: 'adContribution', label: 'Ad Contribution', fmt: 'pct', sentiment: 'higher-better' },
   { key: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better' },

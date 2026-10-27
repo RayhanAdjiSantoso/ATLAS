@@ -342,6 +342,10 @@
 .mil-ui.report-generator-app .st-label { color: var(--rs-ink); font-size: .8rem; font-weight: 620; }
 .mil-ui.report-generator-app .st-vals { color: var(--rs-quiet); font-size: .75rem; }
 .mil-ui.report-generator-app .st-cur { color: var(--rs-ink); font-weight: 780; }
+/* The root has no parent, so no rail or elbow leads into it. */
+.mil-ui.report-generator-app .st-root-list > .st-item::before,
+.mil-ui.report-generator-app .st-root-list > .st-item > .st-node::before,
+.mil-ui.report-generator-app .st-root-list > .st-item > .st-node::after { display: none; }
 /* The root: the number the whole tree explains, set in the accent blue. */
 .mil-ui.report-generator-app .st-node.st-root {
   min-height: 52px;

@@ -9,7 +9,7 @@ import { SegmentedToggle, type SegmentedOption } from '../../components/Segmente
 import { computeDelta, deltaClassForSentiment, formatDeltaID } from '../../lib/delta';
 import { fmtPivotVal, type PivotFmt } from '../../lib/shopeeDeepDivePivot';
 import type { ParetoRow } from '../../lib/shopeeProductAnalysis';
-import { derived, type ItemSums, type PotentialItem, type RoiBranch, type RoiRoot, type ShopPlusGroup, type UnadvertisedProduct } from '../../lib/shopeeChannelAnalysis';
+import { derived, type ItemSums, type PotentialItem, type ProductAdsSplit, type RoiBranch, type RoiRoot, type ShopPlusGroup, type UnadvertisedProduct } from '../../lib/shopeeChannelAnalysis';
 import type { Sentiment } from '../../lib/types';
 import { DataTable, type DataColumn } from './AnalysisSections';
 import { UncategorizedPanel } from './DeepDiveSections';
@@ -278,6 +278,77 @@ export function ShopPlusGroupsSection({ groups, p1, p2 }: { groups: ShopPlusGrou
             Tiap sel: baris atas {p1}, baris bawah (tebal) {p2}, lalu perubahannya bila grup berjalan di kedua periode. Grup yang hanya berjalan di salah satu periode
             ditandai, tidak dihilangkan; klik judul kolom untuk mengurutkan menurut {p2}.
           </p>
+        </>
+      )}
+    </Shell>
+  );
+}
+
+// ── Product Ads: individual ads vs the auto campaign ─────────────────────
+
+interface SplitRow {
+  id: string;
+  label: string;
+  fmt: PivotFmt;
+  sentiment: Sentiment;
+  get: (s: ItemSums, total: ItemSums) => number | null;
+}
+const SPLIT_ROWS: readonly SplitRow[] = [
+  { id: 'spend', label: 'Amount Spend', fmt: 'rp', sentiment: 'neutral', get: (s) => s.spend },
+  { id: 'gmv', label: 'GMV (Ads)', fmt: 'rp', sentiment: 'higher-better', get: (s) => s.gmv },
+  { id: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better', get: derived.roas },
+  { id: 'clicks', label: 'Clicks', fmt: 'num', sentiment: 'higher-better', get: (s) => s.clicks },
+  { id: 'orders', label: 'Purchases', fmt: 'num', sentiment: 'higher-better', get: (s) => s.orders },
+  { id: 'cr', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.cr },
+  { id: 'spendShare', label: 'Porsi Spend Product Ads', fmt: 'pct', sentiment: 'neutral', get: (s, t) => (t.spend > 0 ? (s.spend / t.spend) * 100 : null) },
+  { id: 'gmvShare', label: 'Porsi GMV Product Ads', fmt: 'pct', sentiment: 'neutral', get: (s, t) => (t.gmv > 0 ? (s.gmv / t.gmv) * 100 : null) },
+];
+const sumOf = (a: ItemSums, b: ItemSums): ItemSums => ({
+  impressions: a.impressions + b.impressions, clicks: a.clicks + b.clicks, atc: a.atc + b.atc, orders: a.orders + b.orders, sold: a.sold + b.sold,
+  gmv: a.gmv + b.gmv, spend: a.spend + b.spend, viewers: a.viewers + b.viewers, ordersDirect: a.ordersDirect + b.ordersDirect,
+  gmvDirect: a.gmvDirect + b.gmvDirect, productViews: a.productViews + b.productViews, productClicks: a.productClicks + b.productClicks,
+});
+
+export function ProductAdsSplitSection({ split, p1, p2 }: { split: ProductAdsSplit; p1: string; p2: string }) {
+  const total = { old: sumOf(split.individual.old, split.auto.old), cur: sumOf(split.individual.cur, split.auto.cur) };
+  const value = (side: 'individual' | 'auto', period: 'old' | 'cur', row: SplitRow) => row.get(split[side][period], total[period]);
+  const hasAuto = split.auto.old.spend + split.auto.cur.spend + split.auto.old.gmv + split.auto.cur.gmv > 0;
+  const fmt = (v: number | null, row: SplitRow) => (v === null ? '—' : fmtPivotVal(v, row.fmt));
+  const deltaCell = (side: 'individual' | 'auto', row: SplitRow) => {
+    const o = value(side, 'old', row);
+    const c = value(side, 'cur', row);
+    if (o === null || c === null) return '—';
+    const { deltaNum, deltaStr } = computeDelta(o, c);
+    return <DeltaPill cls={deltaClassForSentiment(deltaNum, row.sentiment)}>{formatDeltaID(deltaNum, deltaStr)}</DeltaPill>;
+  };
+  const sideCols = (side: 'individual' | 'auto', group: string): DataColumn<SplitRow>[] => [
+    { id: `${side}-old`, label: p1, group, thStyle: NUM_TH, tdStyle: { ...NUM_TD, color: '#475569' }, render: (r) => fmt(value(side, 'old', r), r) },
+    { id: `${side}-cur`, label: p2, group, thStyle: NUM_TH, tdStyle: { ...NUM_TD, fontWeight: 750 }, render: (r) => fmt(value(side, 'cur', r), r) },
+    { id: `${side}-delta`, label: '%Chg', group, thStyle: NUM_TH, tdStyle: NUM_TD, render: (r) => deltaCell(side, r) },
+  ];
+  const columns: DataColumn<SplitRow>[] = [
+    { id: 'metric', label: 'Metrik', thStyle: NAME_TH, tdStyle: { textAlign: 'left', fontWeight: 650 }, render: (r) => r.label },
+    ...sideCols('individual', 'Iklan Individu'),
+    ...sideCols('auto', 'Iklan Produk Otomatis'),
+  ];
+  const roasInd = derived.roas(split.individual.cur);
+  const roasAuto = derived.roas(split.auto.cur);
+  return (
+    <Shell title="Individu vs Otomatis" badge={`Product Ads · ${p1} → ${p2}`} excel>
+      {!hasAuto ? (
+        <div className="empty-note">Tidak ada Iklan Produk Otomatis di kedua periode — seluruh Product Ads berasal dari iklan individu.</div>
+      ) : (
+        <>
+          <p className="chart-caption">
+            Product Ads = iklan individu + Iklan Produk Otomatis (Shopee menggolongkan keduanya sebagai Iklan Produk).
+            {roasInd !== null && roasAuto !== null && (
+              <>
+                {' '}
+                ROAS {p2}: individu <strong>{fmtPivotVal(roasInd, 'roas')}</strong>, otomatis <strong>{fmtPivotVal(roasAuto, 'roas')}</strong>.
+              </>
+            )}
+          </p>
+          <DataTable columns={columns} rows={[...SPLIT_ROWS]} rowKey={(r) => r.id} maxHeight={560} />
         </>
       )}
     </Shell>

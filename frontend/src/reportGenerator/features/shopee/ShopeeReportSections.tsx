@@ -10,7 +10,7 @@ import type { ParetoRangeSelection, PerfMetricVars } from '../../lib/shopeeProdu
 import { ChannelPivotSection, DailyTrendSection, ItemPivotSection, TingkatkanDenganIklanTable } from './DeepDiveSections';
 import { FundamentalAnalysisSection, ParetoAnalysisSection, ProductRankingSection, RankingChart } from './AnalysisSections';
 import { ProductChangeChart } from './ProductAnalysisCharts';
-import { ChannelEmptySection, ChannelParetoSection, PotentialItemsSection, RoiRootSection, ShopPlusGroupsSection, UncategorizedNote, UnadvertisedProductsSection } from './ChannelAnalysisSections';
+import { ChannelEmptySection, ChannelParetoSection, PotentialItemsSection, ProductAdsSplitSection, RoiRootSection, ShopPlusGroupsSection, UncategorizedNote, UnadvertisedProductsSection } from './ChannelAnalysisSections';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import './shopeeReport.css';
 import { SHOPEE_CHANNELS, type ChannelAnalysis } from '../../lib/shopeeChannelAnalysis';
@@ -159,7 +159,7 @@ export function ShopeeReportSections({
             </div>
           )}
           {funnelReport && (
-            <SectionGroup label="Produk toko · Product Performance">
+            <SectionGroup label="Penjualan toko · semua produk, bukan hanya iklan">
               {(['traffic', 'conversion'] as const).map((id) => {
                 const chartGroup = funnelReport.productCharts.find((c) => c.group.id === id);
                 return (
@@ -180,7 +180,6 @@ export function ShopeeReportSections({
                 rows={funnelReport.pareto} hasData={funnelReport.pareto.length > 0} range={paretoRange}
                 availableMonths={funnelReport.paretoAvailableMonths} onRangeChange={onParetoRangeChange}
               />
-              {unadvertised}
             </SectionGroup>
           )}
           <DailyTrendSection rows={deepDive.dailyTrendPivot} selections={deepDive.dailyTrendSelections} onSelectionsChange={onDailyTrendSelectionsChange} p1={p1} p2={p2} />
@@ -197,6 +196,7 @@ export function ShopeeReportSections({
             title="Product Ads" badge="Iklan Produk + Iklan Produk Otomatis" rows={deepDive.produk} p1={p1} p2={p2}
             values={channelFunnel('produk')?.values} tree={channelFunnel('produk')?.tree} symptom={channelFunnel('produk')?.symptom}
           />
+          {funnelReport?.produkSplit && <ProductAdsSplitSection split={funnelReport.produkSplit} p1={p1} p2={p2} />}
           {channelReads(produk)}
           {unadvertised}
           <ItemPivotSection

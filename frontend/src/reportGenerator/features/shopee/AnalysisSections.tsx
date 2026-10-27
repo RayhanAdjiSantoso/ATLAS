@@ -347,7 +347,7 @@ export function FundamentalAnalysisSection({
   return (
     <div className="sec-block">
       <div className="sec-heading shopee-heading">
-        Fundamental Analysis <span className="sec-badge">Iklan Produk + Iklan Toko · funnel decomposition</span>
+        Fundamental Analysis <span className="sec-badge">Semua Iklan · Product Ads + Shop+ Ads · funnel decomposition</span>
         <SectionExcelButton />
         <SectionDownloadButton />
       </div>
