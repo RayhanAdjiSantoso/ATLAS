@@ -151,3 +151,13 @@ export function mergeProdukOtomatis(produkRows: SheetRow[], otomatisRows: SheetR
   const normalizedOtomatis = otomatisRows.map((r) => ({ ...r, 'Nama Iklan': r['Nama Produk'] }));
   return [...produkRows, ...normalizedOtomatis].filter((r) => cleanAdName(r['Nama Iklan']).toLowerCase() !== SUBTOTAL_ROW_NAME);
 }
+
+// The archive stores Iklan Produk already merged with Iklan Produk Otomatis
+// (each row's original columns kept). The Otomatis export is keyed by "Nama
+// Produk", a column "Data Keseluruhan Iklan" does not have, so the merged
+// rows split back into the two files exactly — for reopening a saved report
+// with both slots filled, and for the Individu vs Otomatis split.
+export function splitArchivedProduk(rows: SheetRow[]): { individual: SheetRow[]; otomatis: SheetRow[] } {
+  const isOtomatis = (r: SheetRow) => Object.keys(r).some((k) => k.toLowerCase().trim() === 'nama produk');
+  return { individual: rows.filter((r) => !isOtomatis(r)), otomatis: rows.filter(isOtomatis) };
+}

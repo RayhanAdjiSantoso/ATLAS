@@ -15,7 +15,7 @@ import { usePeriodLabel } from '../../hooks/usePeriodLabel';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { fromISODate, toISODate } from '../../lib/dateFmt';
 import { parseShopeeCSV } from '../../lib/shopeeAds';
-import { categorizeProdukRows, mergeProdukOtomatis, mergeProductMaster, parseProductMasterRows, type ProductMasterEntry } from '../../lib/shopeeDeepDive';
+import { categorizeProdukRows, mergeProdukOtomatis, mergeProductMaster, parseProductMasterRows, splitArchivedProduk, type ProductMasterEntry } from '../../lib/shopeeDeepDive';
 import { comparePeriodDays, daysBetweenInclusive, emptyParsedPeriod, type ParsedPeriod } from '../../lib/periodLabel';
 import { omzetFromOverview, omzetFromShopStats, periodFromOverviewFilename } from '../../lib/shopeeOverview';
 import type { SheetRow } from '../../lib/types';
@@ -420,12 +420,16 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         toko_keyword: `toko-keyword-${targetRole}` as AdsFileKey,
         live: `live-${targetRole}` as AdsFileKey,
       };
+      // Iklan Produk was saved merged with Iklan Produk Otomatis; split it back
+      // so both slots refill the way the original files did.
+      const produk = splitArchivedProduk((detail.channels.produk ?? []) as SheetRow[]);
+      const channelRows: Record<string, SheetRow[]> = { ...detail.channels, produk: produk.individual };
       const adsUpdates: Partial<Record<AdsFileKey, AdsFileState | null>> = {
-        [`produk-otomatis-${targetRole}` as AdsFileKey]: null, // already merged into produk at save time
+        [`produk-otomatis-${targetRole}` as AdsFileKey]: produk.otomatis.length ? { rows: produk.otomatis, fileName: name } : null,
       };
-      let filled = 0;
+      let filled = produk.otomatis.length ? 1 : 0;
       for (const [channel, key] of Object.entries(slotOf)) {
-        const rows = detail.channels[channel] ?? [];
+        const rows = channelRows[channel] ?? [];
         adsUpdates[key] = rows.length ? { rows, fileName: name } : null;
         if (rows.length) filled += 1;
       }

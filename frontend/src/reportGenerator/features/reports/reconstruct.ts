@@ -6,7 +6,7 @@ import { buildTiktokReport, type TiktokReport } from '../tiktok/tiktokReport';
 import { findCol } from '../../lib/columns';
 import type { MetaIndustry } from '../../lib/meta';
 import { daysBetweenInclusive } from '../../lib/periodLabel';
-import type { ProductMasterEntry } from '../../lib/shopeeDeepDive';
+import { splitArchivedProduk, type ProductMasterEntry } from '../../lib/shopeeDeepDive';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import type { SheetRow } from '../../lib/types';
@@ -105,9 +105,16 @@ export function reconstructShopeeFunnel(detail: ReportDetail): ShopeeFunnelRepor
   const { report, rows } = detail;
   const byChannelRole = (channel: string, role: string) => rows.filter((r) => r.channel === channel && r.period_role === role).map((r) => extraOf(r));
   const config = (report.reportConfig ?? {}) as { omzetOld?: number; omzetCur?: number };
+  // Saved merged; split back into individual ads and the auto campaign.
+  const splitOld = splitArchivedProduk(byChannelRole('produk', 'old'));
+  const splitCur = splitArchivedProduk(byChannelRole('produk', 'cur'));
   return buildShopeeFunnelReport({
     produkOld: byChannelRole('produk', 'old'),
     produkCur: byChannelRole('produk', 'cur'),
+    produkIndividualOld: splitOld.individual,
+    produkIndividualCur: splitCur.individual,
+    produkOtomatisOld: splitOld.otomatis,
+    produkOtomatisCur: splitCur.otomatis,
     tokoOld: byChannelRole('toko', 'old'),
     tokoCur: byChannelRole('toko', 'cur'),
     liveOld: byChannelRole('live', 'old'),
