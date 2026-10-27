@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 export interface ReportPage {
   id: string;
@@ -6,6 +6,8 @@ export interface ReportPage {
   content: ReactNode;
   // Drop the page from the tab bar entirely (e.g. a group with no data).
   hidden?: boolean;
+  // A thin rule before this tab, to set a new run of pages apart.
+  dividerBefore?: boolean;
 }
 
 // A report's sections split into tabbed pages instead of one endless scroll.
@@ -68,13 +70,15 @@ export function ReportPages({ pages, accent, accentInk }: { pages: ReportPage[];
       >
         {pill && <span className="report-tab-pill" style={{ transform: `translateX(${pill.x}px)`, width: pill.w }} />}
         {visible.map((p, i) => (
+          <Fragment key={p.id}>
+          {p.dividerBefore && i > 0 && <span className="report-tab-divider" aria-hidden />}
           <button
-            key={p.id}
             ref={(el) => {
               btnRefs.current[p.id] = el;
             }}
             type="button"
             role="tab"
+            data-page={p.id}
             aria-selected={current === p.id}
             className={`report-tab${current === p.id ? ' active' : ''}`}
             style={{ '--rt-i': i } as CSSProperties}
@@ -83,6 +87,7 @@ export function ReportPages({ pages, accent, accentInk }: { pages: ReportPage[];
             <span className="report-tab-dot" aria-hidden />
             {p.label}
           </button>
+          </Fragment>
         ))}
       </div>
       {visible.map((p) => (

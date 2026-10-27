@@ -26,6 +26,14 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'meta-tab-per-channel',
+    released: '2026-10-27',
+    path: '/report-generator',
+    target: '.panel.active [data-page="v2-boost"]',
+    title: 'Tab per channel di laporan Meta Ads',
+    body: 'Laporan Meta Ads kini punya tab Boost Post, Non Boost Post Retail, Non Boost Post Non Retail, dan CPAS. Tiap tab berisi Overall, Traffic Analysis, Conversion Analysis, dan Top Content Analysis, dengan tabel perubahan dibanding periode lalu di bawah setiap grafik.',
+  },
+  {
     id: 'brand-ikut-antar-halaman',
     released: '2026-10-26',
     target: '[data-nav="/brand-tracking"]',

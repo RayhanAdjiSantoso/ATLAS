@@ -19,7 +19,9 @@ import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, 
 // gets the workspace unchanged.
 
 // Names a run of sections in the navigator ("Audience Analysis", "Creative
-// Analysis"). Outside a deck it is transparent.
+// Analysis"). A SectionGroup inside another one is a smaller sub-label under
+// it ("Traffic Analysis" → "Audience", "Creative"). Outside a deck it is
+// transparent.
 export function SectionGroup({ children }: { label: string; children: ReactNode }) {
   return <>{children}</>;
 }
@@ -27,16 +29,17 @@ export function SectionGroup({ children }: { label: string; children: ReactNode 
 interface Flat {
   node: ReactNode;
   group: string | null;
+  sub: string | null;
 }
 
-function flatten(children: ReactNode, group: string | null = null): Flat[] {
+function flatten(children: ReactNode, group: string | null = null, sub: string | null = null): Flat[] {
   return Children.toArray(children).flatMap((child): Flat[] => {
-    if (isValidElement(child) && child.type === Fragment) return flatten((child as ReactElement<{ children?: ReactNode }>).props.children, group);
+    if (isValidElement(child) && child.type === Fragment) return flatten((child as ReactElement<{ children?: ReactNode }>).props.children, group, sub);
     if (isValidElement(child) && child.type === SectionGroup) {
       const p = (child as ReactElement<{ label: string; children?: ReactNode }>).props;
-      return flatten(p.children, p.label);
+      return group ? flatten(p.children, group, p.label) : flatten(p.children, p.label, null);
     }
-    return [{ node: child, group }];
+    return [{ node: child, group, sub }];
   });
 }
 
@@ -119,13 +122,19 @@ export function SectionAccordion({ children, defaultOpen = 0 }: { children: Reac
           {sections.map((i, pos) => {
             const m = meta[i];
             const on = i === active;
-            const group = flat[i].group;
-            const prevGroup = pos > 0 ? flat[sections[pos - 1]].group : null;
+            const { group, sub } = flat[i];
+            const prev = pos > 0 ? flat[sections[pos - 1]] : null;
+            const newGroup = group !== (prev?.group ?? null);
             return (
               <Fragment key={i}>
-              {group && group !== prevGroup && (
+              {group && newGroup && (
                 <span className="sdeck-group" role="presentation">
                   {group}
+                </span>
+              )}
+              {sub && (newGroup || sub !== prev?.sub) && (
+                <span className="sdeck-subgroup" role="presentation">
+                  {sub}
                 </span>
               )}
               <button

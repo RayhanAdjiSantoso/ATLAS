@@ -294,9 +294,9 @@ function SymptomTreeNode({ node }: { node: SymptomNode }) {
       <div className={`st-node${node.depth === 0 ? ' st-root' : ''}`} data-depth={node.depth}>
         <span className="st-label">{node.label}</span>
         <span className="st-vals num">
-          <span className="st-old">{fmtPivotVal(node.oldNum, node.fmt)}</span>
+          <span className="st-old">{node.na ? '—' : fmtPivotVal(node.oldNum, node.fmt)}</span>
           <span className="st-arrow" aria-hidden="true">→</span>
-          <span className="st-cur">{fmtPivotVal(node.curNum, node.fmt)}</span>
+          <span className="st-cur">{node.na ? '—' : fmtPivotVal(node.curNum, node.fmt)}</span>
         </span>
         <DeltaPill cls={node.cls}>{node.delta}</DeltaPill>
       </div>
