@@ -214,6 +214,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const industry: MetaIndustry = brandIndustry ? BRAND_INDUSTRY_TO_META[brandIndustry] ?? null : null;
   // Which Non-Boost lane (Retail / B2B Leads) the Non-Boost page reads.
   const [nbLane, setNbLane] = useState<NonBoostLaneKey>('retail');
+  // Which audience the CPAS Shopee overall card reads: Gabungan, NV or RM.
+  const [cpasAud, setCpasAud] = useState<'all' | 'NV' | 'RM'>('all');
   // The B2B lane's result, picked on the report (null = the automatic pick).
   const [b2bResult, setB2bResult] = useState<LeadResultKind | null>(null);
   // Legacy — the "Custom Conversion" column picker is gone; kept so old saved
@@ -856,7 +858,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     genderCol,
     leadKind,
     overall,
-    retail = false,
+    shopLayout = false,
   }: {
     prefix: string;
     period: string;
@@ -869,8 +871,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     genderCol: string | null;
     leadKind?: LeadResultKind;
     overall: ReactNode;
-    // Non-Boost Post (Retail): its own flat page set, audience read per ad set.
-    retail?: boolean;
+    // Non-Boost Post (Retail) and CPAS Shopee, the two selling channels: a
+    // flat page set, audience read per ad set.
+    shopLayout?: boolean;
   }) {
     const adCol = rows.length ? findAdCol(rows) : null;
     const badge = `data ${period}`;
@@ -882,9 +885,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const noGender = 'File yang diunggah tidak memuat breakdown Gender.';
     const noCamp = 'File yang diunggah tidak memuat kolom Campaign name.';
     const empty = (m: string) => (rows.length ? m : noRows);
-    // Boost Post and Non-Boost Post (Retail) read one navigator row per page,
-    // no group labels: several charts stacked under a hidden heading that
-    // names the page (each chart keeps its own).
+    // Boost Post, Non-Boost Post (Retail) and CPAS Shopee read one navigator
+    // row per page, no group labels: several charts stacked under a hidden
+    // heading that names the page (each chart keeps its own).
     const page = (title: string, b: string, charts: ReactNode) => (
       <div className="sec-stack">
         <div className="sec-heading" style={{ display: 'none' }}>
@@ -921,7 +924,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       );
     }
 
-    if (retail) {
+    if (shopLayout) {
       const adsetCol = rows.length ? findAdsetCol(rows) : null;
       const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
       const audienceBadge = `per ad set · NV · RM · ${period}`;
@@ -1102,7 +1105,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           rows: lane.curRows,
           oldRows: lane.oldRows,
           kind: key === 'retail' ? 'sales' : 'b2b',
-          retail: key === 'retail',
+          shopLayout: key === 'retail',
           leadKind: laneLeadKind(lane) ?? undefined,
           campCol: lane.campCol,
           ageCol: lane.ageCol,
@@ -1626,19 +1629,43 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           campCol: report.cols?.cpasCampaign ?? null,
                           ageCol: report.cols?.cpasAge ?? null,
                           genderCol: report.cols?.cpasGender ?? null,
-                          overall: (
-                            <>
-                              {cpas.overall && (
-                                <OverviewDetailedCard heading="CPAS Shopee" badge="Overall" overviewRows={relabelMetaRows(cpas.overall.overviewRows)} detailedRows={relabelMetaRows(cpas.overall.detailedRows)} allCols={cpas.overall.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.funnel, cpas.p1, cpas.p2)} />
-                              )}
-                              {cpas.nv && (
-                                <OverviewDetailedCard heading="CPAS Shopee · Overall NV" badge="New Visitor" overviewRows={relabelMetaRows(cpas.nv.overviewRows)} detailedRows={relabelMetaRows(cpas.nv.detailedRows)} allCols={cpas.nv.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.nvFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · NV')} />
-                              )}
-                              {cpas.rm && (
-                                <OverviewDetailedCard heading="CPAS Shopee · Overall RM" badge="Re-Marketing" overviewRows={relabelMetaRows(cpas.rm.overviewRows)} detailedRows={relabelMetaRows(cpas.rm.detailedRows)} allCols={cpas.rm.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.rmFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · RM')} />
-                              )}
-                            </>
-                          ),
+                          shopLayout: true,
+                          overall: (() => {
+                            // One card, the audience picked on its toolbar; a side
+                            // the period has no campaign for is shown disabled.
+                            const sides = { all: cpas.overall, NV: cpas.nv, RM: cpas.rm };
+                            const funnels = { all: cpas.funnel, NV: cpas.nvFunnel, RM: cpas.rmFunnel };
+                            const aud = sides[cpasAud] ? cpasAud : (['all', 'NV', 'RM'] as const).find((k) => sides[k]) ?? 'all';
+                            const side = sides[aud];
+                            if (!side) return null;
+                            const none = 'Tidak ada campaign dengan label ini di periode ini';
+                            return (
+                              <OverviewDetailedCard
+                                key={aud}
+                                toolbar={cpas.nv || cpas.rm ? (
+                                  <SegmentedToggle
+                                    label="Audiens"
+                                    options={[
+                                      { value: 'all', label: 'Gabungan NV + RM', disabled: cpas.overall ? false : none },
+                                      { value: 'NV', label: 'NV', disabled: cpas.nv ? false : none },
+                                      { value: 'RM', label: 'RM', disabled: cpas.rm ? false : none },
+                                    ]}
+                                    value={aud}
+                                    onChange={setCpasAud}
+                                    accent="var(--acc)"
+                                  />
+                                ) : undefined}
+                                heading="CPAS Shopee"
+                                badge={aud === 'NV' ? 'New Visitor' : aud === 'RM' ? 'Re-Marketing' : 'Gabungan NV + RM'}
+                                overviewRows={relabelMetaRows(side.overviewRows)}
+                                detailedRows={relabelMetaRows(side.detailedRows)}
+                                allCols={side.allCols}
+                                p1={cpas.p1}
+                                p2={cpas.p2}
+                                aside={rcaPanel(funnels[aud], cpas.p1, cpas.p2, aud === 'all' ? 'Root Cause Analysis' : `Root Cause Analysis · ${aud}`)}
+                              />
+                            );
+                          })(),
                         })}
                       </SectionAccordion>
                     );
