@@ -142,7 +142,12 @@ const SUBTOTAL_ROW_NAME = 'iklan produk otomatis';
 // "Iklan Produk Otomatis" itself (same underlying numbers, verified against
 // the real export) — so a single post-merge filter on that exact name
 // removes both at once instead of needing to special-case either file.
+//
+// Without the Otomatis file, the rollup row in "Iklan Produk" is the only
+// place the auto campaign's spend and revenue exist, so it stays — dropping it
+// left Product Ads short by the whole auto campaign.
 export function mergeProdukOtomatis(produkRows: SheetRow[], otomatisRows: SheetRow[]): SheetRow[] {
+  if (!otomatisRows.length) return produkRows;
   const normalizedOtomatis = otomatisRows.map((r) => ({ ...r, 'Nama Iklan': r['Nama Produk'] }));
   return [...produkRows, ...normalizedOtomatis].filter((r) => cleanAdName(r['Nama Iklan']).toLowerCase() !== SUBTOTAL_ROW_NAME);
 }

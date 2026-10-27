@@ -10,9 +10,11 @@ import {
 import { buildSymptomSummary, type SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import {
   buildChannelAnalyses,
+  buildProductAdsSplit,
   buildRoiRoot,
   buildUnadvertisedProducts,
   type ChannelAnalysis,
+  type ProductAdsSplit,
   type RoiRoot,
   type UnadvertisedProduct,
 } from '../../lib/shopeeChannelAnalysis';
@@ -83,6 +85,10 @@ export interface BuildShopeeFunnelReportInput {
   tokoKeywordCur?: SheetRow[];
   produkIndividualCur?: SheetRow[];
   produkOtomatisCur?: SheetRow[];
+  // The older period's two files, for the Individu vs Otomatis split. Omitted
+  // (a reconstructed report only has them merged) → no split.
+  produkIndividualOld?: SheetRow[];
+  produkOtomatisOld?: SheetRow[];
 }
 
 // One ad channel's current-period contribution — feeds the "Kontribusi Antar
@@ -144,6 +150,9 @@ export interface ShopeeFunnelReport {
   // Overall root: ROI split into revenue and spend, each by channel.
   channelAnalyses: ChannelAnalysis[];
   roiRoot: RoiRoot;
+  // Product Ads split back into individual ads and the auto campaign; null
+  // when the separate files are not at hand.
+  produkSplit: ProductAdsSplit | null;
   // False when the export has no plain "Pengunjung Produk" column — the
   // Visit → ATC chart says so rather than drawing a row of zero bars.
   hasVisitorsCol: boolean;
@@ -238,6 +247,10 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     unadvertised: buildUnadvertisedProducts(input.productPerfCur, input.produkIndividualCur ?? input.produkCur, input.produkOtomatisCur ?? [], 60),
     channelAnalyses,
     roiRoot: buildRoiRoot(channelAnalyses),
+    produkSplit:
+      input.produkIndividualOld && input.produkIndividualCur
+        ? buildProductAdsSplit(input.produkIndividualOld, input.produkIndividualCur, input.produkOtomatisOld ?? [], input.produkOtomatisCur ?? [])
+        : null,
     hasVisitorsCol: input.productPerfCur ? hasVisitorsCol(input.productPerfCur) : false,
     paretoAvailableMonths: [...new Set(allMonths.map((m) => m.month))].sort(),
   };

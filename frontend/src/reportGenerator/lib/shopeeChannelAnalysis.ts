@@ -442,6 +442,35 @@ export function buildChannelAnalyses(input: ShopeeChannelInput): ChannelAnalysis
   ];
 }
 
+// ── Product Ads: individual ads vs the auto campaign ─────────────────────
+// Shopee files Iklan Produk Otomatis under Iklan Produk, so Product Ads keeps
+// both (its total is what Overall and the ROI root add up); this splits it
+// back so the two can be judged against each other. Individual = "Data
+// Keseluruhan Iklan" minus its auto rollup row; auto = the Otomatis file's
+// products, or that rollup row when the file was not uploaded — the same
+// figures mergeProdukOtomatis puts into the Product Ads total.
+
+export interface ProductAdsSplit {
+  individual: { old: ItemSums; cur: ItemSums };
+  auto: { old: ItemSums; cur: ItemSums };
+}
+
+const isAutoRollup = (r: SheetRow, h: Map<string, string>) => productNameKey(cell(r, h, 'nama iklan') || cell(r, h, 'nama produk')) === 'iklan produk otomatis';
+
+function splitPeriod(individualRows: SheetRow[], autoRows: SheetRow[]): { individual: ItemSums; auto: ItemSums } {
+  const hi = headerMap(individualRows);
+  const ha = headerMap(autoRows);
+  const individual = individualRows.filter((r) => !isAutoRollup(r, hi));
+  const auto = autoRows.length ? autoRows.filter((r) => !isAutoRollup(r, ha)) : individualRows.filter((r) => isAutoRollup(r, hi));
+  return { individual: sumRows(individual), auto: sumRows(auto) };
+}
+
+export function buildProductAdsSplit(individualOld: SheetRow[], individualCur: SheetRow[], autoOld: SheetRow[], autoCur: SheetRow[]): ProductAdsSplit {
+  const o = splitPeriod(individualOld, autoOld);
+  const c = splitPeriod(individualCur, autoCur);
+  return { individual: { old: o.individual, cur: c.individual }, auto: { old: o.auto, cur: c.auto } };
+}
+
 // ── Shop+ ad groups, both periods ────────────────────────────────────────
 // One entry per Nama Iklan across the two exports. Groups come and go month
 // to month (a promo group runs a week, then ends), so a group present in only

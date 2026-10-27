@@ -763,6 +763,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       tokoKeywordCur: adsFiles['toko-keyword-cur']?.rows ?? [],
       produkIndividualCur: adsFiles['produk-cur']?.rows ?? [],
       produkOtomatisCur: adsFiles['produk-otomatis-cur']?.rows ?? [],
+      produkIndividualOld: adsFiles['produk-old']?.rows ?? [],
+      produkOtomatisOld: adsFiles['produk-otomatis-old']?.rows ?? [],
     });
     // Only default the open tab to the dominant channel on the very first
     // Generate — a later regenerate (metric change, uncategorized-mapping
