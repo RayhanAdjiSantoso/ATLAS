@@ -187,6 +187,20 @@ export const BRAND_CONVERSION_METRICS: readonly AudienceMetricDef<MetaBrandMetri
   { key: 'follows', label: 'Follows', fmt: 'num', additive: true },
 ];
 
+// Boost Post's Consideration Analysis, per materi iklan: how often an
+// impression turned into each brand action, then what the click and each
+// action cost.
+export const BRAND_CONSIDERATION_RATE_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
+  { key: 'interactionRate', label: 'Interaction Rate', fmt: 'pct', additive: false },
+  { key: 'profileVisitsRate', label: 'Profile Visit Rate', fmt: 'pct', additive: false },
+  { key: 'followRate', label: 'Follow Rate', fmt: 'pct', additive: false },
+];
+export const BRAND_CONSIDERATION_COST_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
+  { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
+];
+
 // Top Content Analysis: the materi iklan ranked by what the channel is bought
 // for — the result first, the reach behind it after.
 export const SALES_TOP_CONTENT_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [

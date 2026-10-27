@@ -1,7 +1,6 @@
 import { resolveMetaMonth } from '../../lib/metaSources';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { RotateCcw } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
@@ -10,9 +9,7 @@ import { SectionAccordion, SectionGroup } from '../../components/SectionAccordio
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import MetaDatasetSpecs, { SPEC_INTRO, SPEC_NOTES } from '../../../components/brandSettings/MetaDatasetSpecs.jsx';
 import { InlineNotice } from '../../components/InlineNotice';
-import { SearchSelect } from '../../components/SearchSelect';
 import {
-  META_OBJECTIVE_CHOICES,
   splitMonths,
   detectMetaObjectiveCol,
   resolveCampaignObjectives,
@@ -39,6 +36,8 @@ import { MetaBreakdownSection } from './MetaBreakdownSection';
 import {
   BRAND_AUDIENCE_METRICS,
   BRAND_CONVERSION_METRICS,
+  BRAND_CONSIDERATION_COST_METRICS,
+  BRAND_CONSIDERATION_RATE_METRICS,
   BRAND_CREATIVE_METRICS,
   BRAND_TOP_EFFICIENCY_METRICS,
   BRAND_TOP_PERFORMANCE_METRICS,
@@ -103,8 +102,7 @@ const BRAND_INDUSTRY_TO_META: Record<string, Exclude<MetaIndustry, 'custom' | nu
   'B2B Services': 'b2b',
   'B2B + Services': 'b2b',
 };
-const META_INDUSTRY_LABEL: Record<'b2b' | 'retail', string> = { b2b: 'B2B / Services', retail: 'Retail' };
-const OBJECTIVE_OPTIONS = META_OBJECTIVE_CHOICES.map((o) => ({ id: o.key, name: o.label }));
+const CONSIDERATION_MIN_IMPRESSIONS = 1000;
 
 // 'boost' / 'nonboost' are the two halves of a month's Meta Ads export in
 // Data Collection Hub; 'meta' is the combined file of before that split.
@@ -572,22 +570,15 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, isActive]);
-  function pickObjective(obj: MetaObjectiveKey | null) {
-    setObjective(obj);
-    setReport(null);
-    onInvalidate();
-  }
-
   // When the export carries an "Objective" column, Non-Boost is split per
-  // objective automatically; the Objective dropdown is prefilled but purely
-  // informational then. Without the column, the Objective pick is the single
-  // Non-Boost headline.
+  // objective automatically. Without it, the prefilled objective below is the
+  // single Non-Boost headline.
   const objectiveCol = metaRows ? detectMetaObjectiveCol(metaHeaders) : null;
 
-  // Prefill the Objective dropdown with the Non-Boost lane's highest-spend
+  // Prefill the objective with the Non-Boost lane's highest-spend
   // objective — read per campaign from the Objective column, else the name,
-  // else the metrics — once per file; a manual change afterwards sticks.
-  // Boost rows stay out: the dropdown is about Non-Boost.
+  // else the metrics — once per file. Boost rows stay out: the objective is
+  // about Non-Boost.
   useEffect(() => {
     if (!metaRows) return;
     const fileKey = (objectiveCol ?? '') + '·' + metaRows.length;
@@ -608,10 +599,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     if (dom) setObjective(dom);
   }, [metaRows, objectiveCol, metaHeaders]);
 
-  const objectiveOk = Boolean(objectiveCol) || Boolean(objective) || Boolean(industry);
   const dayRangesOk = !dayCol || Boolean(oldRange && curRange && oldRange.start <= oldRange.end && curRange.start <= curRange.end);
-  // Either source is enough; the objective only matters when Meta Ads (Non-Boost) is in.
-  const ready = Boolean((metaRows || cpasRows) && (!metaRows || objectiveOk) && clientId && dayRangesOk);
+  // Either source is enough. A Non-Boost lane with no objective signal falls
+  // back to the brand's industry, else Retail.
+  const ready = Boolean((metaRows || cpasRows) && clientId && dayRangesOk);
   const dayRanges = oldRange && curRange ? { old: oldRange, cur: curRange } : null;
 
   const autoSave = useAutoSave('meta');
@@ -839,12 +830,14 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     );
   }
 
-  // ── Per-channel pages (Boost Post, Non Boost Post Retail / Non Retail,
-  // CPAS): every page reads the same steps in its navigator — Overall,
+  // ── Per-channel pages (Boost Post, Non-Boost Post (Retail) / (Non Retail),
+  // CPAS Shopee): every page reads the same steps in its navigator — the
+  // channel's own Overall card (one row named after the tab, no group),
   // Traffic Analysis (Audience, Creative), Conversion Analysis, Top Content
   // Analysis. Boost Post has no purchase funnel to send traffic down, so it
-  // goes from Overall straight to its brand actions. Every chart opens
-  // ranked and carries a changes table against the last period.
+  // goes from Overall straight to its brand actions (Consideration Analysis).
+  // Every chart opens ranked and carries a changes table against the last
+  // period.
   function rcaPanel(f: MetaFunnel | undefined, p1: string, p2: string, title = 'Root Cause Analysis', badge = `${p1} → ${p2}`) {
     return f?.hasData ? <SymptomTreePanel tree={f.tree} p1={p1} p2={p2} title={title} badge={badge} /> : undefined;
   }
@@ -874,7 +867,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     genderCol: string | null;
     leadKind?: LeadResultKind;
     overall: ReactNode;
-    // Non Boost Post Retail: Campaign Traffic leads the audience reads, and
+    // Non-Boost Post (Retail): Campaign Traffic leads the audience reads, and
     // the Conversion Rate chart names the rate itself.
     retail?: boolean;
   }) {
@@ -890,28 +883,37 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const empty = (m: string) => (rows.length ? m : noRows);
 
     if (kind === 'brand') {
-      const brandBars = (title: string, b: string, menu: typeof BRAND_CONVERSION_METRICS, dimCol: string | null, dimNoun: string, emptyMessage: string) => (
-        <MetaCompareBars key={title} heading={`${prefix} · ${title}`} badge={b} rows={rows} kind="brand" menu={L(menu)} dimCol={dimCol} campCol={campCol} audience="none" sortable hideDefaultOrder copyLabels dimNoun={dimNoun} emptyMessage={empty(emptyMessage)} changes={changes} />
+      const brandBars = (title: string, b: string, menu: typeof BRAND_CONVERSION_METRICS, dimCol: string | null, dimNoun: string, emptyMessage: string, minImpressions?: number) => (
+        <MetaCompareBars key={title} heading={`${prefix} · ${title}`} badge={b} rows={rows} kind="brand" menu={L(menu)} dimCol={dimCol} campCol={campCol} audience="none" sortable hideDefaultOrder copyLabels dimNoun={dimNoun} emptyMessage={empty(emptyMessage)} changes={changes} minImpressions={minImpressions} />
+      );
+      // One navigator row per page, no group labels: the Overall card, then
+      // two stacked pages each named by a hidden heading (each chart keeps
+      // its own). Consideration reads per materi iklan, only ads that reached
+      // 1,000 impressions — a rate over fewer is noise.
+      const page = (title: string, b: string, charts: ReactNode) => (
+        <div className="sec-stack">
+          <div className="sec-heading" style={{ display: 'none' }}>
+            {`${prefix} · ${title}`}
+            <span className="sec-badge">{b}</span>
+          </div>
+          {charts}
+        </div>
       );
       return (
         <>
-          <SectionGroup label="Overall">{overall}</SectionGroup>
-          <SectionGroup label="Conversion Analysis">
-            {brandBars('Brand Action per Campaign', `per campaign · ${period}`, BRAND_CONVERSION_METRICS, campCol, 'campaign', noCamp)}
-            {brandBars('Creative Brand Action', creativeBadge, BRAND_CONVERSION_METRICS, adCol, 'materi iklan', noAd)}
-          </SectionGroup>
-          <SectionGroup label="Top Content Analysis">
-            {/* One page, two reads: the navigator names it from the hidden
-                heading, each chart keeps its own. */}
-            <div className="sec-stack">
-              <div className="sec-heading" style={{ display: 'none' }}>
-                {`${prefix} · Top Content`}
-                <span className="sec-badge">{creativeBadge}</span>
-              </div>
+          {overall}
+          {page('Consideration Analysis', creativeBadge, (
+            <>
+              {brandBars('Consideration Rate', creativeBadge, BRAND_CONSIDERATION_RATE_METRICS, adCol, 'materi iklan', noAd, CONSIDERATION_MIN_IMPRESSIONS)}
+              {brandBars('Consideration Cost', creativeBadge, BRAND_CONSIDERATION_COST_METRICS, adCol, 'materi iklan', noAd, CONSIDERATION_MIN_IMPRESSIONS)}
+            </>
+          ))}
+          {page('Top Content Analysis', creativeBadge, (
+            <>
               {brandBars('Top Content Performance', creativeBadge, BRAND_TOP_PERFORMANCE_METRICS, adCol, 'materi iklan', noAd)}
               {brandBars('Top Content Efficiency', creativeBadge, BRAND_TOP_EFFICIENCY_METRICS, adCol, 'materi iklan', noAd)}
-            </div>
-          </SectionGroup>
+            </>
+          ))}
         </>
       );
     }
@@ -958,7 +960,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const campaignTraffic = perCampaign('Campaign Traffic', sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS);
     return (
       <>
-        <SectionGroup label="Overall">{overall}</SectionGroup>
+        {overall}
         <SectionGroup label="Traffic Analysis">
           <SectionGroup label="Audience">
             {retail && campaignTraffic}
@@ -1028,7 +1030,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             accent="var(--acc)"
           />
         ) : undefined}
-        heading={`${lane.key === 'retail' ? 'Non Boost Post Retail' : 'Non Boost Post Non Retail'} · Overall`}
+        heading={lane.key === 'retail' ? 'Non-Boost Post (Retail)' : 'Non-Boost Post (Non Retail)'}
         badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
         overviewRows={relabelMetaRows(variant?.overviewRows ?? lane.overview.overviewRows)}
         detailedRows={relabelMetaRows(lane.overview.detailedRows)}
@@ -1049,7 +1051,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     return (
       <SectionAccordion key={`v2-${lane.key}`}>
         {channelSections({
-          prefix: key === 'retail' ? 'Non Boost Post Retail' : 'Non Boost Post Non Retail',
+          prefix: key === 'retail' ? 'Non-Boost Post (Retail)' : 'Non-Boost Post (Non Retail)',
           period: r.p2,
           p1: r.p1,
           rows: lane.curRows,
@@ -1070,7 +1072,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     {
       label: 'Pilih file Meta Ads / CPAS',
       sub: periodSides.old && periodSides.cur ? `${periodSides.old.fileName} · ${periodSides.cur.fileName}` : undefined,
-      status: (metaRows && objectiveOk) || (!metaRows && cpasRows) ? 'done' : 'current',
+      status: metaRows || cpasRows ? 'done' : 'current',
     },
     { label: 'Generate laporan', status: report ? 'done' : ready ? 'current' : 'todo' },
     { label: 'Lihat & unduh PDF', status: report ? 'current' : 'todo' },
@@ -1284,43 +1286,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           initialTab={pickerTab === 'range' ? 'library' : pickerTab}
           bound={boundFor(pickerRole)}
         />
-      )}
-
-      {metaRows && (
-        <section className="setup-board setup-board-split" aria-label="Industri dan objective">
-          <header className="setup-board-head">
-            <h3>Industri &amp; objective</h3>
-            <p>
-              Non-Boost dipetakan otomatis ke <strong>Retail</strong> atau <strong>B2B Leads</strong> per campaign (nama campaign, lalu objective
-              {objectiveCol ? <> dari kolom “{objectiveCol}”</> : null}). Industri dipakai untuk campaign tanpa sinyal itu; Objective mengisi metrik headline
-              bila file tidak punya kolom Objective.
-            </p>
-          </header>
-          <div className="setup-fields">
-            <div className="setup-field">
-              <span className="setup-field-label">Industri</span>
-              <div className={`setup-readonly${brandIndustry ? '' : ' is-empty'}`} aria-readonly="true">
-                {brandIndustry === undefined ? 'Memuat…' : brandIndustry || 'Belum diatur'}
-              </div>
-              <span className="setup-field-hint">
-                {brandIndustry && industry ? <>Dibaca sebagai {META_INDUSTRY_LABEL[industry]} · </> : null}
-                {brandIndustry && !industry ? <>Kategori ini tidak dikenali report Meta · </> : null}
-                {clientId ? <Link to={`/pengaturan-brand?detail=${clientId}`}>{brandIndustry ? 'Ubah' : 'Atur'} di Brand Setting</Link> : 'Diatur di Brand Setting'}
-              </span>
-            </div>
-            <div className="setup-field">
-              <span className="setup-field-label">Objective{objectiveCol ? ' · prefill dari file' : ''}</span>
-              <SearchSelect
-                options={OBJECTIVE_OPTIONS}
-                value={objective}
-                onChange={(id) => pickObjective(id as MetaObjectiveKey)}
-                placeholder="— pilih —"
-                searchable={false}
-              />
-              <span className="setup-field-hint">{objectiveCol ? 'Info dari file' : 'Metrik headline Non-Boost (file tanpa kolom Objective)'}</span>
-            </div>
-          </div>
-        </section>
       )}
 
       {ready && (
@@ -1571,7 +1536,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                         genderCol: report.cols?.gender ?? null,
                         overall: (
                           <OverviewDetailedCard
-                            heading="Boost Post · Overall"
+                            heading="Boost Post"
                             badge={report.boostObjective ? `objective ${report.boostObjective.label}${report.boostObjective.mixed ? ' (dominan)' : ''}` : 'Meta Ads'}
                             overviewRows={relabelMetaRows(report.boost.overviewRows)}
                             detailedRows={relabelMetaRows(report.boost.detailedRows)}
@@ -1587,19 +1552,19 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                 },
                 {
                   id: 'v2-nb-retail',
-                  label: 'Non Boost Post Retail',
+                  label: 'Non-Boost Post (Retail)',
                   hidden: !report.nonBoostLanes?.some((l) => l.key === 'retail'),
                   content: lanePage(report, 'retail'),
                 },
                 {
                   id: 'v2-nb-nonretail',
-                  label: 'Non Boost Post Non Retail',
+                  label: 'Non-Boost Post (Non Retail)',
                   hidden: !report.nonBoostLanes?.some((l) => l.key === 'b2b'),
                   content: lanePage(report, 'b2b'),
                 },
                 {
                   id: 'v2-cpas',
-                  label: 'CPAS',
+                  label: 'CPAS Shopee',
                   hidden: !report.cpas || !(report.cpas.overall || report.cpas.nv || report.cpas.rm),
                   content: (() => {
                     const cpas = report.cpas;
@@ -1607,7 +1572,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     return (
                       <SectionAccordion>
                         {channelSections({
-                          prefix: 'CPAS',
+                          prefix: 'CPAS Shopee',
                           period: cpas.p2,
                           p1: cpas.p1,
                           rows: report.curRows?.cpas ?? [],
@@ -1619,13 +1584,13 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           overall: (
                             <>
                               {cpas.overall && (
-                                <OverviewDetailedCard heading="CPAS · Overall" badge="Overall" overviewRows={relabelMetaRows(cpas.overall.overviewRows)} detailedRows={relabelMetaRows(cpas.overall.detailedRows)} allCols={cpas.overall.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.funnel, cpas.p1, cpas.p2)} />
+                                <OverviewDetailedCard heading="CPAS Shopee" badge="Overall" overviewRows={relabelMetaRows(cpas.overall.overviewRows)} detailedRows={relabelMetaRows(cpas.overall.detailedRows)} allCols={cpas.overall.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.funnel, cpas.p1, cpas.p2)} />
                               )}
                               {cpas.nv && (
-                                <OverviewDetailedCard heading="CPAS · Overall NV" badge="New Visitor" overviewRows={relabelMetaRows(cpas.nv.overviewRows)} detailedRows={relabelMetaRows(cpas.nv.detailedRows)} allCols={cpas.nv.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.nvFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · NV')} />
+                                <OverviewDetailedCard heading="CPAS Shopee · Overall NV" badge="New Visitor" overviewRows={relabelMetaRows(cpas.nv.overviewRows)} detailedRows={relabelMetaRows(cpas.nv.detailedRows)} allCols={cpas.nv.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.nvFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · NV')} />
                               )}
                               {cpas.rm && (
-                                <OverviewDetailedCard heading="CPAS · Overall RM" badge="Re-Marketing" overviewRows={relabelMetaRows(cpas.rm.overviewRows)} detailedRows={relabelMetaRows(cpas.rm.detailedRows)} allCols={cpas.rm.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.rmFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · RM')} />
+                                <OverviewDetailedCard heading="CPAS Shopee · Overall RM" badge="Re-Marketing" overviewRows={relabelMetaRows(cpas.rm.overviewRows)} detailedRows={relabelMetaRows(cpas.rm.detailedRows)} allCols={cpas.rm.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.rmFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · RM')} />
                               )}
                             </>
                           ),
