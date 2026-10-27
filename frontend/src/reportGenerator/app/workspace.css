@@ -187,6 +187,14 @@
 .mil-ui.report-generator-app .rgx-field { display: grid; gap: 8px; min-width: 0; }
 .mil-ui.report-generator-app .rgx-field-label { color: var(--rx-muted); font-size: .8rem; font-weight: 650; }
 .mil-ui.report-generator-app .rgx-field-brand { flex: 1 1 520px; }
+/* The brand logo sits in a column of its own at the field's left, spanning
+   the label and the picker (18px label + 8px gap + 46px picker = 72px), so
+   the label lines up with the picker rather than with the logo. */
+.mil-ui.report-generator-app .rgx-field-brand { padding-left: 86px; }
+/* The logo is placed from the picker's row (made its containing block here
+   so another rule cannot change it): up past the label, left past the gutter. */
+.mil-ui.report-generator-app .rgx-command .client-bar { position: relative; }
+.mil-ui.report-generator-app .rgx-field-brand .rgx-field-label { line-height: 18px; }
 .mil-ui.report-generator-app .rgx-command .client-bar {
   display: flex;
   width: 100%;
@@ -200,6 +208,15 @@
   box-shadow: none;
 }
 .mil-ui.report-generator-app .rgx-command .client-bar-label { display: none; }
+.mil-ui.report-generator-app .rgx-command .client-bar-avatar {
+  position: absolute; top: -26px; left: -86px;
+  display: grid; place-items: center; width: 72px; height: 72px; overflow: hidden;
+  border-radius: 16px; background: #eef1f6; color: #5a6782; font-size: 1.15rem; font-weight: 850; letter-spacing: .02em;
+  box-shadow: inset 0 0 0 1px var(--rx-line);
+}
+.mil-ui.report-generator-app .rgx-command .client-bar-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mil-ui.report-generator-app .rgx-command .client-bar-avatar.is-empty { background: var(--rx-soft); color: var(--rx-muted); box-shadow: inset 0 0 0 1px var(--rx-line); }
+.mil-ui.report-generator-app .rgx-command .client-bar-avatar.is-empty svg { width: 24px; height: 24px; }
 .mil-ui.report-generator-app .rgx-command .client-bar > .dashboard-brand-trigger {
   flex: 0 1 320px;
   width: 320px;
@@ -292,36 +309,6 @@
 .mil-ui.report-generator-app .rgx-head-ico svg { width: 26px; height: 26px; }
 .mil-ui.report-generator-app .rgx-head h2 { margin: 0; color: var(--rx-ink); font-size: clamp(1.5rem, 2vw, 1.95rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
 .mil-ui.report-generator-app .rgx-head p { max-width: 80ch; margin: 6px 0 0; color: var(--rx-muted); font-size: .95rem; line-height: 1.5; }
-
-/* ── How-to: one quiet row until opened ─────────────────────────────────── */
-.mil-ui.report-generator-app .howto { border: 1px solid var(--rx-line); border-radius: 20px; background: var(--rx-card); box-shadow: var(--rx-shadow); }
-.mil-ui.report-generator-app .howto-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  padding: 16px 22px;
-  border: 0;
-  background: transparent;
-  color: var(--rx-ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background .2s ease;
-}
-.mil-ui.report-generator-app .howto-header:hover { background: var(--rx-soft); }
-.mil-ui.report-generator-app .howto-header:focus-visible { outline: 2px solid var(--pf); outline-offset: -2px; border-radius: 20px; }
-.mil-ui.report-generator-app .howto-title { display: inline-flex; align-items: center; gap: 10px; color: var(--rx-ink); font-size: .95rem; font-weight: 750; }
-.mil-ui.report-generator-app .howto-title::before { display: none; }
-.mil-ui.report-generator-app .howto-title svg { color: var(--pf); }
-.mil-ui.report-generator-app .howto-hint { color: var(--rx-quiet); font-size: .85rem; }
-.mil-ui.report-generator-app .howto-chevron { margin-left: auto; color: var(--rx-quiet); transition: transform .3s var(--rx-ease); }
-.mil-ui.report-generator-app .howto-chevron.open { transform: rotate(180deg); }
-.mil-ui.report-generator-app .howto-body.open { padding: 8px 22px 22px; border-top: 1px solid var(--rx-line); animation: rx-rise .35s var(--rx-ease) both; }
-.mil-ui.report-generator-app .howto-step-title { font-size: .95rem; }
-.mil-ui.report-generator-app .howto-step-desc,
-.mil-ui.report-generator-app .howto-col-list li { font-size: .86rem; }
-.mil-ui.report-generator-app .howto-col-title { font-size: .78rem; }
 
 /* ── Stepper: three stops on one track ──────────────────────────────────── */
 .mil-ui.report-generator-app .stepper {

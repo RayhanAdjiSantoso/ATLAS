@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { FileSpreadsheet, Loader2, RotateCcw } from 'lucide-react';
 import { DeltaPill } from '../../components/DeltaPill';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
-import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
 import { KpiTable, type KpiRowDisplay } from '../../components/KpiTable';
 import { PeriodCompareChip } from '../../components/PeriodCompareChip';
@@ -15,6 +14,10 @@ import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import { usePeriodLabel } from '../../hooks/usePeriodLabel';
+import { PeriodSourceSwitch } from '../../components/SlotSourceTabs';
+import { RangeCalendar } from '../reports/RangeCalendar';
+import { periodBound } from '../reports/periodOrder';
+import { readSession, sessionKey } from '../../../hooks/useSessionState.js';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import { computeDelta, deltaClassForSentiment } from '../../lib/delta';
 import type { Sentiment } from '../../lib/types';
@@ -100,17 +103,48 @@ function metricColumns<T extends GadsMetrics>(f: Formatter, keys: MetricKey[]): 
   }));
 }
 
+// The last generated report, per brand, so leaving the page or refreshing it
+// shows it again. Google Ads reports are not saved to Riwayat laporan (the
+// other tabs reopen theirs from there, see useRestoreLastReport.ts); the response is
+// plain JSON, so it is kept whole in the browser tab's session.
+interface StoredGadsReport { report: GadsReport; labels: { p1: string; p2: string }; range: PeriodPair; preset: string; generatedAt: string }
+const storedKey = (clientId: number | null) => `generator:google-report:${clientId}`;
+
 export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: GoogleAdsTabProps) {
+  const [stored] = useState(() => (clientId ? (readSession(storedKey(clientId), null) as StoredGadsReport | null) : null));
   const periodOld = usePeriodLabel('Periode Lalu');
   const periodCur = usePeriodLabel('Periode Ini');
-  const [preset, setPreset] = useState(PRESETS[0].id);
-  const [range, setRange] = useState<PeriodPair>(() => PRESETS[0].build(new Date()));
+  const [preset, setPreset] = useState(stored?.preset ?? PRESETS[0].id);
+  const [range, setRange] = useState<PeriodPair>(() => stored?.range ?? PRESETS[0].build(new Date()));
   const [overview, setOverview] = useState<GadsOverview | null>(null);
   const [overviewError, setOverviewError] = useState('');
-  const [report, setReport] = useState<GadsReport | null>(null);
-  const [labels, setLabels] = useState({ p1: '', p2: '' });
-  const [reportRange, setReportRange] = useState<PeriodPair | null>(null);
-  const [generatedAt, setGeneratedAt] = useState('');
+  const [report, setReport] = useState<GadsReport | null>(stored?.report ?? null);
+  const [labels, setLabels] = useState(stored?.labels ?? { p1: '', p2: '' });
+  const [reportRange, setReportRange] = useState<PeriodPair | null>(stored?.range ?? null);
+  const [generatedAt, setGeneratedAt] = useState(stored?.generatedAt ?? '');
+
+  // Keep the stored copy in step: written on generate, dropped as soon as the
+  // report is cleared (a new period, Reset).
+  useEffect(() => {
+    if (!clientId) return;
+    try {
+      if (report && reportRange) {
+        const value: StoredGadsReport = { report, labels, range: reportRange, preset, generatedAt };
+        sessionStorage.setItem(sessionKey(storedKey(clientId)), JSON.stringify(value));
+      } else {
+        sessionStorage.removeItem(sessionKey(storedKey(clientId)));
+      }
+    } catch {
+      /* storage full or blocked — the report just isn't kept */
+    }
+    // preset is saved with the report, not tracked on its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, report, reportRange, labels, generatedAt]);
+
+  useEffect(() => {
+    if (stored) onGenerated();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const armReportScroll = useScrollAfterGenerate('report-google', report);
@@ -193,30 +227,43 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
     return `Data tersedia ${day(first)} – ${day(last)}`;
   }, [accounts]);
 
-  function rangeCell(role: 'old' | 'cur', title: string) {
+  // The days Google Ads has synced, across the brand's accounts; the
+  // calendar offers only those (today's year, before the first sync).
+  const span = useMemo(() => {
+    const withData = accounts.filter((a) => a.coverage);
+    if (!withData.length) {
+      const today = new Date().toISOString().slice(0, 10);
+      return { first: `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`, last: today, label: 'Google Ads' };
+    }
+    return {
+      first: withData.map((a) => a.coverage!.first_date).sort()[0].slice(0, 10),
+      last: withData.map((a) => a.coverage!.last_date).sort().slice(-1)[0].slice(0, 10),
+      label: 'Google Ads',
+    };
+  }, [accounts]);
+
+  // Same "Sumber" cell as Meta's, with the one source Google Ads has: a
+  // date range of the data its script syncs every day.
+  function sourceCell(role: 'old' | 'cur', title: string) {
+    const side = (r: 'old' | 'cur') => ({ start: range[`${r}Start`], end: range[`${r}End`] });
     return (
-      <div className="setup-range-inputs">
-        <input type="date" className="setup-input" aria-label={`${title} mulai`} value={range[`${role}Start`]} max={range[`${role}End`]}
-          onChange={(e) => e.target.value && changeRange({ [`${role}Start`]: e.target.value } as Partial<PeriodPair>)} />
-        <span aria-hidden>–</span>
-        <input type="date" className="setup-input" aria-label={`${title} akhir`} value={range[`${role}End`]} min={range[`${role}Start`]}
-          onChange={(e) => e.target.value && changeRange({ [`${role}End`]: e.target.value } as Partial<PeriodPair>)} />
-      </div>
+      <>
+        <PeriodSourceSwitch label={title} kinds={['range']} value="range" onChange={() => {}} />
+        <RangeCalendar
+          clientId={clientId!}
+          role={role}
+          value={side(role)}
+          other={side(role === 'old' ? 'cur' : 'old')}
+          available={span}
+          bound={periodBound(role, { start: range.oldStart, label: periodOld.label }, { start: range.curStart, label: periodCur.label })}
+          onApply={(r) => changeRange({ [`${role}Start`]: r.start, [`${role}End`]: r.end } as Partial<PeriodPair>)}
+        />
+      </>
     );
   }
 
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
-      <HowTo>
-        <HowToStep num={1} numClassName="google-num" title="Hubungkan akun di Data Collection Hub">
-          Buka <strong>Data Collection Hub › Performance Database › Input Monthly Performance Data › Google Ads</strong>, tambahkan Customer ID akun Google Ads brand ini. Data harian ditarik otomatis setiap hari
-          oleh Google Ads Script yang dipasang di akun Google Ads klien — tidak ada file yang perlu diunduh atau diunggah.
-        </HowToStep>
-        <HowToStep num={2} numClassName="google-num" title="Pilih periode & buat laporan">
-          Pilih preset atau isi tanggal Periode Lalu dan Periode Ini sendiri, lalu klik <strong>Generate Laporan</strong>. Kartu KPI dibandingkan dengan
-          Periode Lalu; tabel campaign, keyword, search term, dan kota menampilkan Periode Ini.
-        </HowToStep>
-      </HowTo>
 
       <StepIndicator steps={steps} accent="var(--google)" />
 
@@ -233,8 +280,12 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
       ) : (
         <>
           {clientId && <AlertsPanel clientId={clientId} compact />}
-          <SetupBoard title="Periode" note={<>Data ditarik otomatis dari akun Google Ads yang terhubung — {coverageText ?? 'menunggu sinkron pertama'}.</>}>
+          <SetupBoard
+            title="Sumber data"
+            note={<>Data ditarik otomatis setiap hari dari akun Google Ads yang terhubung — {coverageText ?? 'menunggu sinkron pertama'}. Pilih <strong>Rentang tanggal</strong> tiap periode, atau isi keduanya sekaligus lewat preset.</>}
+          >
             <SetupGrid>
+              <SetupRow label="Sumber" sub="per periode" req old={sourceCell('old', 'Periode Lalu')} cur={sourceCell('cur', 'Periode Ini')} />
               <SetupRow
                 label="Preset"
                 sub="isi kedua periode sekaligus"
@@ -248,12 +299,6 @@ export function GoogleAdsTab({ isActive, clientId, onGenerated, onInvalidate }: 
                     <span className={`gads-preset is-static${preset === 'custom' ? ' is-active' : ''}`}>Kustom</span>
                   </div>
                 }
-              />
-              <SetupRow
-                label="Rentang tanggal"
-                req
-                old={rangeCell('old', 'Periode Lalu')}
-                cur={rangeCell('cur', 'Periode Ini')}
               />
               <SetupRow
                 label="Label periode"

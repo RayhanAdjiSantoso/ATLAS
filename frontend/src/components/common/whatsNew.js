@@ -26,6 +26,45 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'brand-ikut-antar-halaman',
+    released: '2026-10-26',
+    target: '[data-nav="/brand-tracking"]',
+    title: 'Brand ikut saat pindah halaman',
+    body: 'Brand yang Anda pilih di satu halaman kini langsung terbuka di halaman lain — Brand Overview, Brand Tracking, Brand Setting, Report Generator, dan Business Insight.',
+  },
+  {
+    id: 'laporan-terakhir-tetap-tampil',
+    released: '2026-10-26',
+    path: '/report-generator',
+    target: '.panel.active .report-top',
+    title: 'Laporan tidak hilang saat pindah halaman',
+    body: 'Laporan yang sudah di-Generate tetap tampil setelah Anda pindah halaman atau me-refresh, jadi tidak perlu generate ulang. Tekan Ganti Sumber Data untuk mulai dari awal.',
+  },
+  {
+    id: 'sumber-data-shopee-seperti-meta',
+    released: '2026-10-26',
+    path: '/report-generator',
+    target: '.panel.active .src-switch',
+    title: 'Sumber data yang seragam di semua channel',
+    body: 'Shopee, TikTok, dan Google Ads kini memilih sumber data per periode dengan cara yang sama seperti Meta Ads. Google Ads memakai kalender Rentang tanggal dari data yang ditarik otomatis.',
+  },
+  {
+    id: 'logo-brand-report-generator',
+    released: '2026-10-26',
+    path: '/report-generator',
+    target: '.client-bar-avatar',
+    title: 'Logo brand di Report Generator',
+    body: 'Logo brand yang dipilih kini tampil di samping pilihan brand, jadi mudah memastikan laporan dibuat untuk brand yang benar.',
+  },
+  {
+    id: 'shortcut-report-generator',
+    released: '2026-10-26',
+    path: '/data-brand',
+    target: '[data-feature="shortcut-report-generator"]',
+    title: 'Pintasan ke Report Generator',
+    body: 'Dari setiap channel di Data Collection Hub, buka Report Generator untuk channel dan brand yang sama dengan satu klik.',
+  },
+  {
     id: 'meta-boost-instagram-follows',
     released: '2026-10-21',
     path: '/data-brand',

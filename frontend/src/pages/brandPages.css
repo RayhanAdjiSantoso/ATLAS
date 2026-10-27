@@ -74,15 +74,15 @@
 .bp-stat strong { color: var(--soft-ink); font-size: 1.3rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .bp-stat strong.is-text { font-size: .92rem; letter-spacing: -.01em; }
 .bp-stat strong small { color: var(--soft-muted); font-size: .8rem; font-weight: 650; }
-/* Inside Input Monthly Performance Data, right of the title: no card of its own. */
+/* Inside Input Monthly Performance Data, left of the title: no card of its own. */
 .bp-command.is-inline { flex-wrap: nowrap; align-items: flex-end; gap: 10px; padding: 0; border: 0; background: none; box-shadow: none; }
 .bp-command.is-inline .bp-command-brand { flex: 0 1 300px; min-width: 220px; }
 .bp-command.is-inline .bp-stats { flex: 0 0 auto; }
-/* Here the picker sits near the panel's right edge, so its menu opens
-   leftward, its right edge level with the group's (the Rentang data card). */
+/* Here the picker sits at the panel's left edge, so its menu opens
+   rightward from the group's left edge. */
 .bp-command.is-inline { position: relative; }
 .bp-command.is-inline .brand-picker { position: static; }
-.bp-command.is-inline .brand-picker-menu { right: 0; left: auto; width: min(720px, calc(100vw - 6rem)); transform-origin: top right; }
+.bp-command.is-inline .brand-picker-menu { right: auto; left: 0; width: min(720px, calc(100vw - 6rem)); transform-origin: top left; }
 @media (max-width: 720px) { .bp-command.is-inline { flex-wrap: wrap; width: 100%; } }
 
 .bp-data-ident { display: flex; align-items: center; gap: 14px; }
@@ -168,6 +168,29 @@
 
 /* ── Data & file ────────────────────────────────────────────────────────── */
 .bp-platforms { margin: 0 0 4px; padding-left: 2px; }
+.bp-platforms-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.bp-platforms-row > .bp-platforms { flex: 1 1 auto; min-width: 0; }
+/* Report Generator shortcut: the section's primary action, in the
+   design system's accent (not the channel's) so it reads the same on every
+   channel tab. Scoped under the row so link and icon colours elsewhere on
+   the page cannot dim its text or icons. A flat colour, not a gradient, so
+   the hover darkening can transition. */
+.bp-platforms-row .bp-report-link {
+  flex: 0 0 auto; gap: 8px; min-height: 40px; padding: 0 16px;
+  background-color: var(--soft-accent); color: #fff; line-height: 1;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .16) inset, 0 8px 18px -12px rgba(30, 62, 184, .85);
+  transition: background-color 200ms ease, box-shadow 200ms ease, transform 160ms var(--bp-ease);
+}
+.bp-platforms-row .bp-report-link:visited,
+.bp-platforms-row .bp-report-link:hover { color: #fff; text-decoration: none; }
+.bp-platforms-row .bp-report-link:hover { background-color: #142c82; box-shadow: 0 1px 0 rgba(255, 255, 255, .12) inset, 0 10px 20px -12px rgba(20, 44, 130, .9); }
+.bp-platforms-row .bp-report-link:focus-visible { outline: 2px solid var(--soft-accent); outline-offset: 3px; }
+.bp-platforms-row .bp-report-link svg { display: block; flex: 0 0 auto; color: #fff; stroke: currentColor; }
+.bp-platforms-row .bp-report-link .bp-report-link-arrow { margin-left: 2px; transition: transform 200ms var(--bp-ease); }
+.bp-platforms-row .bp-report-link:hover .bp-report-link-arrow { transform: translateX(3px); }
+@media (prefers-reduced-motion: reduce) {
+  .bp-platforms-row .bp-report-link, .bp-platforms-row .bp-report-link .bp-report-link-arrow { transition: none; }
+}
 .bp-platform { display: inline-flex; align-items: center; gap: 8px; }
 .bp-platform > :not(.soft-subtab-line) { position: relative; }
 .bp-platform small {

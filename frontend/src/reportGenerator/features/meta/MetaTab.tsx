@@ -8,7 +8,6 @@ import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { ReportPages } from '../../components/ReportPages';
 import { SectionAccordion, SectionGroup } from '../../components/SectionAccordion';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
-import { HowTo, HowToStep } from '../../components/HowTo';
 import MetaDatasetSpecs, { SPEC_INTRO, SPEC_NOTES } from '../../../components/brandSettings/MetaDatasetSpecs.jsx';
 import { InlineNotice } from '../../components/InlineNotice';
 import { SearchSelect } from '../../components/SearchSelect';
@@ -63,9 +62,12 @@ import { LEAD_RESULT, type LeadResultKind, type MetaFunnel } from '../../lib/met
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
+import { useRestoreLastReport } from '../reports/useRestoreLastReport';
+import { forgetLastReport } from '../reports/lastReportStore';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
 import { PeriodSourcePicker, type LibraryMonth, type PeriodSourceTab, type PickScopeOption } from '../reports/PeriodSourcePicker';
 import { RangeCalendar } from '../reports/RangeCalendar';
+import { periodBound } from '../reports/periodOrder';
 import type { AutoRange } from '../reports/AutoRangePanel';
 import { getClients, getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
@@ -155,8 +157,8 @@ async function downloadLibraryFile(clientId: number, file: LibraryFileMeta): Pro
   return new File([data], file.original_filename, { type: (data as Blob).type });
 }
 
-function formatGeneratedDate(): string {
-  return new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+function formatGeneratedDate(at?: string): string {
+  return (at ? new Date(at) : new Date()).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 // Day-breakdown Meta exports carry the full original row (every column) into
@@ -608,18 +610,36 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   const autoSave = useAutoSave('meta');
   const armReportScroll = useScrollAfterGenerate('report-meta', report);
 
-  function generate() {
+  // `restoredAt`: reopening the last report (useRestoreLastReport) — shown
+  // with its original date and not saved a second time.
+  function generate(restoredAt?: string) {
     if (!metaRows && !cpasRows) return;
     const r = buildMetaReport({ metaRows: metaRows ?? [], metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
     setNbLane(r.nonBoostLanes?.[0]?.key ?? 'retail');
     setB2bResult(null);
     setReport(r);
-    setGeneratedAt(formatGeneratedDate());
+    setGeneratedAt(formatGeneratedDate(restoredAt));
     onGenerated({ period: { old: r.p1, cur: r.p2 }, kpis: r.summary.kpis, cpasKpis: r.summary.cpasKpis, spend: r.summary.spend });
-    autoSave.save(clientId, buildSavePayload(r), buildSaveFiles());
+    if (!restoredAt) autoSave.save(clientId, buildSavePayload(r), buildSaveFiles());
   }
 
+  const restoring = useRestoreLastReport({
+    platform: 'meta',
+    clientId,
+    apply: async (old, cur) => {
+      for (const [role, period] of [['old', old], ['cur', cur]] as const) {
+        (role === 'old' ? setOldPickedRun : setCurPickedRun)({ ...period, include: BOTH });
+        (role === 'old' ? setOldSource : setCurSource)('saved');
+        await applyArchivePeriod(role, period, BOTH);
+      }
+    },
+    // The industry (from Brand Setting) feeds the report too.
+    ready: ready && brandIndustry !== undefined && !applyingRole,
+    generate,
+  });
+
   function reset() {
+    forgetLastReport('meta', clientId);
     setMetaSides(EMPTY_META_SIDES);
     setCpasSides(EMPTY_META_SIDES);
     setOldSource('upload');
@@ -822,20 +842,20 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     { label: 'Lihat & unduh PDF', status: report ? 'current' : 'todo' },
   ];
 
+  // Each side's picked period, so the other side cannot be picked out of
+  // order (Periode Ini before Periode Lalu).
+  function pickedPeriod(role: PeriodRole): { start: string | null; label: string } | null {
+    const month = role === 'old' ? oldPickedMonth : curPickedMonth;
+    if (month) return { start: `${month.month}-01`, label: month.label };
+    const run = role === 'old' ? oldPickedRun : curPickedRun;
+    if (run) return { start: run.start, label: run.label || run.sourceComparison };
+    const range = role === 'old' ? oldPickedRange : curPickedRange;
+    return range ? { start: range.start, label: range.label } : null;
+  }
+  const boundFor = (role: PeriodRole) => periodBound(role, pickedPeriod('old'), pickedPeriod('cur'));
+
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
-      <HowTo>
-        <HowToStep num={1} title="Kolom yang ditarik — tarik otomatis & Data Collection Hub">
-          File Meta Ads dan CPAS di Data Collection Hub memakai breakdown dan metrik berikut, sama seperti panel Tarik otomatis di Brand Setting:
-          <MetaDatasetSpecs sections={['boost', 'ecom', 'b2b', 'cpas']} />
-          <div className="empty-note" style={{ padding: '.4rem 0 0' }}>
-            {SPEC_INTRO} <strong>Meta Ads:</strong> {SPEC_NOTES.MAIN} <strong>CPAS:</strong> {SPEC_NOTES.CPAS}
-          </div>
-        </HowToStep>
-        <HowToStep num={2} title="Pilih sumber & buat laporan">
-          Pilih file Meta Ads dan/atau CPAS untuk periode lalu dan periode ini dari Data Collection Hub — cukup salah satu, misalnya CPAS saja untuk brand yang hanya butuh analisa CPAS. Klik <strong>Generate Laporan</strong> untuk melihat hasil.
-        </HowToStep>
-      </HowTo>
 
       <StepIndicator steps={steps} accent="var(--acc)" />
 
@@ -905,6 +925,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                       })()}
                       autoOpen={rangeAutoOpen === role}
                       onApply={(range) => applyRangeFor(role, range)}
+                      bound={boundFor(role)}
                     />
                   ) : (
                     <SavedSlotCard
@@ -1027,6 +1048,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           onPickLibrary={handlePickMonth}
           onPickArchive={handlePickArchive}
           initialTab={pickerTab === 'range' ? 'library' : pickerTab}
+          bound={boundFor(pickerRole)}
         />
       )}
 
@@ -1083,6 +1105,12 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               <RotateCcw size={15} aria-hidden /> Reset
             </button>
           </div>
+        </div>
+      )}
+
+      {restoring && (
+        <div className="setup-applying" role="status">
+          <span className="setup-spinner" aria-hidden="true" /> Membuka laporan terakhir…
         </div>
       )}
 

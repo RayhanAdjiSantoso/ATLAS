@@ -1,6 +1,7 @@
 import useSessionState from '../hooks/useSessionState.js';
+import useActiveBrand from '../hooks/useActiveBrand.js';
 import { Link } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowUpRight, Brain, CalendarDays, Check, CheckCircle2, ChevronDown, Circle,
@@ -584,7 +585,7 @@ export default function DashboardPage() {
   const [productLevel, setProductLevel] = useSessionState('dashboard:product-level', 'category');
   const reduceMotion = useReducedMotion();
 
-  const [filters, setFilters] = useSessionState('dashboard:filters', {
+  const [storedFilters, setStoredFilters] = useSessionState('dashboard:filters', {
     brandId: '',
     startDate: '2026-06-01',
     endDate: '2026-06-30',
@@ -592,6 +593,15 @@ export default function DashboardPage() {
     compareStartDate: '',
     compareEndDate: '',
   });
+  // The brand is the one shared across pages (useActiveBrand); the rest of
+  // the filters stay this page's own.
+  const [activeBrand, setActiveBrand] = useActiveBrand();
+  const filters = useMemo(() => ({ ...storedFilters, brandId: activeBrand ?? storedFilters.brandId }), [storedFilters, activeBrand]);
+  const setFilters = useCallback((next) => {
+    const resolved = typeof next === 'function' ? next(filters) : next;
+    if (resolved.brandId) setActiveBrand(resolved.brandId);
+    setStoredFilters(resolved);
+  }, [filters, setActiveBrand, setStoredFilters]);
 
   const { read, retry } = useConsoleData({ filters, activeKey, productLevel });
 

@@ -12,6 +12,8 @@ export interface Client {
   name: string;
   // Kategori Industri from Brand Setting (e.g. "Retail Fashion"), or null.
   industry?: string | null;
+  // Changes when the brand's logo is replaced; null when it has none.
+  logoVersion?: number | null;
 }
 
 export interface ShopeeAdRowInput {
