@@ -83,6 +83,7 @@ export function MetaCompareBars({
   changes,
   hideDefaultOrder = false,
   minImpressions,
+  minSpend,
 }: {
   heading: string;
   badge: string;
@@ -110,6 +111,9 @@ export function MetaCompareBars({
   // Only items with at least this many impressions this period — chart and
   // changes table alike; a rate over a handful of impressions is noise.
   minImpressions?: number;
+  // Only items that spent more than this (Rp) this period — the same floor,
+  // read on spend.
+  minSpend?: number;
 }) {
   const typeOf = (r: SheetRow): TypeKey => (campCol ? audienceTypeOf(r[campCol]) : null) ?? 'other';
   const leadKind = useMemo(() => leadKindProp ?? leadResultKind(rows), [leadKindProp, rows]);
@@ -127,9 +131,9 @@ export function MetaCompareBars({
   const canSplit = typesPresent.length >= 2 && (hasNV || hasRM);
 
   const [aud, setAud] = useState<Aud>(audience === 'age' && canSplit ? 'split' : 'all');
-  // The items that clear `minImpressions`, by label (null = no floor).
+  // The items that clear `minImpressions` / `minSpend`, by label (null = no floor).
   const eligible = useMemo(() => {
-    if (!minImpressions || !dimCol) return null;
+    if ((!minImpressions && !minSpend) || !dimCol) return null;
     const map = new Map<string, SheetRow[]>();
     for (const r of rows) {
       const label = String(r[dimCol] ?? '').trim();
@@ -137,8 +141,16 @@ export function MetaCompareBars({
       if (!map.has(label)) map.set(label, []);
       map.get(label)!.push(r);
     }
-    return new Set([...map].filter(([, rs]) => ((metricsFor(kind, rs, leadKind).impressions as number | null) ?? 0) >= minImpressions).map(([label]) => label));
-  }, [rows, dimCol, minImpressions, kind, leadKind]);
+    const clears = (rs: SheetRow[]) => {
+      const m = metricsFor(kind, rs, leadKind);
+      return (!minImpressions || ((m.impressions as number | null) ?? 0) >= minImpressions) && (!minSpend || ((m.spend as number | null) ?? 0) > minSpend);
+    };
+    return new Set([...map].filter(([, rs]) => clears(rs)).map(([label]) => label));
+  }, [rows, dimCol, minImpressions, minSpend, kind, leadKind]);
+  const floorText = [
+    minImpressions ? `minimal ${minImpressions.toLocaleString('id-ID')} impressions` : '',
+    minSpend ? `spending di atas Rp${minSpend.toLocaleString('id-ID')}` : '',
+  ].filter(Boolean).join(' dan ');
   const inFloor = (r: SheetRow) => !eligible || !dimCol || eligible.has(String(r[dimCol] ?? '').trim());
   const scoped = useMemo(() => (aud === 'NV' || aud === 'RM' ? rows.filter((r) => typeOf(r) === aud) : rows).filter(inFloor), [rows, aud, eligible]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -274,7 +286,7 @@ export function MetaCompareBars({
           <div className="empty-note">
             {!dimCol || aud === 'all' || aud === 'split'
               ? eligible && dimCol && rows.length
-                ? `Tidak ada ${dimNoun} dengan minimal ${minImpressions!.toLocaleString('id-ID')} impressions di periode ini.`
+                ? `Tidak ada ${dimNoun} dengan ${floorText} di periode ini.`
                 : emptyMessage ?? 'Breakdown ini tidak ada di file yang diunggah.'
               : `Tidak ada campaign ${aud} di periode ini.`}
           </div>
@@ -314,7 +326,7 @@ export function MetaCompareBars({
             <p className="chart-foot">
               {metric.label} per {dimNoun}
               {aud === 'NV' || aud === 'RM' ? ` · hanya campaign ${aud}` : aud === 'all' && audience !== 'none' && campCol ? ' · gabungan NV + RM' : ''}
-              {eligible ? ` · hanya ${dimNoun} dengan minimal ${minImpressions!.toLocaleString('id-ID')} impressions` : ''}
+              {eligible ? ` · hanya ${dimNoun} dengan ${floorText}` : ''}
               {view.cut ? ` — ${MAX_BARS} ${order === 'asc' ? 'terendah' : 'tertinggi'} dari ${view.total} ditampilkan` : ''}.
               {copyLabels ? ' Klik batang, nama di bawah grafik, atau nama Tertinggi/Terendah untuk menyalin nama lengkapnya.' : ''}
               {note ? <> {note}</> : null}
