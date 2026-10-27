@@ -223,6 +223,13 @@ export const BRAND_TOP_EFFICIENCY_METRICS: readonly AudienceMetricDef<MetaBrandM
   { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
   { key: 'costPerInteraction', label: 'Cost per Interaction', fmt: 'rp', additive: false },
 ];
+// Non-Boost Post (Retail)'s Top Content, per materi iklan: the click, then
+// what each step of the funnel cost.
+export const RETAIL_TOP_CONTENT_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'costPerAtc', label: 'Cost per ATC', fmt: 'rp', additive: false },
+  { key: 'costPerPurchase', label: 'Cost per Purchase', fmt: 'rp', additive: false },
+];
 // ── Architecture sheet menus (Audience & Creative Analysis) ──────────────
 // CPAS and Non-Boost Retail sell; they are read on the sales funnel.
 export const SALES_AGE_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
@@ -239,10 +246,12 @@ export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetri
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
   { key: 'purchase', label: 'Purchase', fmt: 'num', additive: true },
 ];
-// Non Boost Post Retail's Conversion Rate chart also names the rate itself.
-export const RETAIL_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
-  ...SALES_CONVERSION_METRICS,
+// Non-Boost Post (Retail)'s Conversion Analysis, per ad set: the whole
+// funnel, then its two steps.
+export const RETAIL_AUDIENCE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
+  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
 ];
 export const SALES_CLICK_ATC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
@@ -286,6 +295,11 @@ export const LEAD_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaLe
 
 // The column a creative breakdown needs. Meta names it "Ad name" in a
 // Formatted data table export and "Ad ID" in the API pull.
+export function findAdsetCol(rows: SheetRow[]): string | null {
+  const headers = Object.keys(rows[0] || {});
+  return headers.find((h) => /\bad ?set name\b/i.test(h)) ?? headers.find((h) => /\bad ?set id\b/i.test(h)) ?? null;
+}
+
 export function findAdCol(rows: SheetRow[]): string | null {
   const headers = Object.keys(rows[0] || {});
   return (

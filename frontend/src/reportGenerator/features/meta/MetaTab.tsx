@@ -55,10 +55,12 @@ import {
   SALES_CLICK_ATC_METRICS,
   SALES_CONVERSION_METRICS,
   SALES_CREATIVE_CONVERSION_METRICS,
-  RETAIL_CONVERSION_METRICS,
+  RETAIL_AUDIENCE_CONVERSION_METRICS,
+  RETAIL_TOP_CONTENT_METRICS,
   SALES_TOP_CONTENT_METRICS,
   SALES_TRAFFIC_METRICS,
   findAdCol,
+  findAdsetCol,
 } from '../../lib/metaAudience';
 import { MetaCompareBars } from './MetaCompareBars';
 import { MetaLaneSwitch } from './MetaLaneSwitch';
@@ -867,8 +869,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     genderCol: string | null;
     leadKind?: LeadResultKind;
     overall: ReactNode;
-    // Non-Boost Post (Retail): Campaign Traffic leads the audience reads, and
-    // the Conversion Rate chart names the rate itself.
+    // Non-Boost Post (Retail): its own flat page set, audience read per ad set.
     retail?: boolean;
   }) {
     const adCol = rows.length ? findAdCol(rows) : null;
@@ -881,24 +882,26 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const noGender = 'File yang diunggah tidak memuat breakdown Gender.';
     const noCamp = 'File yang diunggah tidak memuat kolom Campaign name.';
     const empty = (m: string) => (rows.length ? m : noRows);
+    // Boost Post and Non-Boost Post (Retail) read one navigator row per page,
+    // no group labels: several charts stacked under a hidden heading that
+    // names the page (each chart keeps its own).
+    const page = (title: string, b: string, charts: ReactNode) => (
+      <div className="sec-stack">
+        <div className="sec-heading" style={{ display: 'none' }}>
+          {`${prefix} · ${title}`}
+          <span className="sec-badge">{b}</span>
+        </div>
+        {charts}
+      </div>
+    );
 
     if (kind === 'brand') {
       const brandBars = (title: string, b: string, menu: typeof BRAND_CONVERSION_METRICS, dimCol: string | null, dimNoun: string, emptyMessage: string, minImpressions?: number) => (
         <MetaCompareBars key={title} heading={`${prefix} · ${title}`} badge={b} rows={rows} kind="brand" menu={L(menu)} dimCol={dimCol} campCol={campCol} audience="none" sortable hideDefaultOrder copyLabels dimNoun={dimNoun} emptyMessage={empty(emptyMessage)} changes={changes} minImpressions={minImpressions} />
       );
-      // One navigator row per page, no group labels: the Overall card, then
-      // two stacked pages each named by a hidden heading (each chart keeps
-      // its own). Consideration reads per materi iklan, only ads that reached
-      // 1,000 impressions — a rate over fewer is noise.
-      const page = (title: string, b: string, charts: ReactNode) => (
-        <div className="sec-stack">
-          <div className="sec-heading" style={{ display: 'none' }}>
-            {`${prefix} · ${title}`}
-            <span className="sec-badge">{b}</span>
-          </div>
-          {charts}
-        </div>
-      );
+      // The Overall card, then two pages. Consideration reads per materi
+      // iklan, only ads that reached 1,000 impressions — a rate over fewer is
+      // noise.
       return (
         <>
           {overall}
@@ -914,6 +917,49 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               {brandBars('Top Content Efficiency', creativeBadge, BRAND_TOP_EFFICIENCY_METRICS, adCol, 'materi iklan', noAd)}
             </>
           ))}
+        </>
+      );
+    }
+
+    if (retail) {
+      const adsetCol = rows.length ? findAdsetCol(rows) : null;
+      const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
+      const audienceBadge = `per ad set · NV · RM · ${period}`;
+      const bars = (title: string, b: string, menu: typeof SALES_TRAFFIC_METRICS, level: 'adset' | 'creative', sortable = true) => (
+        <MetaCompareBars
+          key={title}
+          heading={`${prefix} · ${title}`}
+          badge={b}
+          rows={rows}
+          kind="sales"
+          menu={L(menu)}
+          dimCol={level === 'adset' ? adsetCol : adCol}
+          campCol={campCol}
+          audience={level === 'adset' ? 'campaign' : 'creative'}
+          sortable={sortable}
+          hideDefaultOrder
+          copyLabels
+          dimNoun={level === 'adset' ? 'ad set' : 'materi iklan'}
+          emptyMessage={empty(level === 'adset' ? noAdset : noAd)}
+          changes={changes}
+        />
+      );
+      return (
+        <>
+          {overall}
+          {page('Traffic Analysis', audienceBadge, (
+            <>
+              {bars('Audience Traffic', audienceBadge, SALES_TRAFFIC_METRICS, 'adset')}
+              {bars('Creative Traffic', creativeBadge, SALES_TRAFFIC_METRICS, 'creative')}
+            </>
+          ))}
+          {page('Conversion Analysis', audienceBadge, (
+            <>
+              {bars('Audience Conversion', audienceBadge, RETAIL_AUDIENCE_CONVERSION_METRICS, 'adset')}
+              {bars('Creative Conversion', creativeBadge, SALES_TRAFFIC_METRICS, 'creative')}
+            </>
+          ))}
+          {bars('Top Content Analysis', creativeBadge, RETAIL_TOP_CONTENT_METRICS, 'creative')}
         </>
       );
     }
@@ -963,7 +1009,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         {overall}
         <SectionGroup label="Traffic Analysis">
           <SectionGroup label="Audience">
-            {retail && campaignTraffic}
             <MetaCompareBars
               heading={`${prefix} · Age Breakdown`}
               badge={`NV · RM · ${period}`}
@@ -993,14 +1038,14 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             ) : (
               <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} leadKind={leadKind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={empty(noGender)} />
             )}
-            {!retail && campaignTraffic}
+            {campaignTraffic}
           </SectionGroup>
           <SectionGroup label="Creative">
             {perCreative('Creative Traffic', sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS)}
           </SectionGroup>
         </SectionGroup>
         <SectionGroup label="Conversion Analysis">
-          {perCampaign('Conversion Rate', retail ? RETAIL_CONVERSION_METRICS : sales ? SALES_CONVERSION_METRICS : B2B_CONVERSION_METRICS)}
+          {perCampaign('Conversion Rate', sales ? SALES_CONVERSION_METRICS : B2B_CONVERSION_METRICS)}
           {perCampaign('Click → ATC Rate', sales ? SALES_CLICK_ATC_METRICS : B2B_CLICK_ATC_METRICS)}
           {perCampaign('ATC → Purchase Rate', sales ? SALES_ATC_PURCHASE_METRICS : B2B_ATC_PURCHASE_METRICS)}
         </SectionGroup>
