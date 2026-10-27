@@ -4,6 +4,7 @@ import { CalendarDays, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsR
 import api from '../../../api/client.js';
 import { getLayoutRect, getLayoutViewport } from '../../../utils/uiScale.js';
 import { getPortalContainer } from '../../utils/portalTarget';
+import { breaksOrder, orderReason, type PeriodBound } from './periodOrder';
 import { formatAutoRange, type AutoRange } from './AutoRangePanel';
 
 // "Rentang tanggal" as a field on the page, not a step inside a dialog: the
@@ -67,9 +68,22 @@ interface Props {
   other: { start: string; end: string } | null;
   autoOpen?: boolean;
   onApply: (range: AutoRange) => void;
+  // Days that would put Periode Ini before Periode Lalu are blocked.
+  bound?: PeriodBound | null;
+  // Another source's data span instead of the Meta auto-fetch days (Google
+  // Ads: every day between its first and last synced day), named in the
+  // calendar's messages.
+  available?: { first: string; last: string; label: string };
 }
 
-export function RangeCalendar({ clientId, role, value, other, autoOpen = false, onApply }: Props) {
+function spanDays(first: string, last: string): StoredDays {
+  const MAIN: string[] = [];
+  for (let d = first; d <= last; d = addDays(d, 1)) MAIN.push(d);
+  return { days: { MAIN, CPAS: [] }, maxRangeDays: 366 };
+}
+
+export function RangeCalendar({ clientId, role, value, other, autoOpen = false, onApply, bound, available }: Props) {
+  const sourceLabel = available?.label ?? 'Meta Ads';
   const [stored, setStored] = useState<StoredDays | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -82,16 +96,21 @@ export function RangeCalendar({ clientId, role, value, other, autoOpen = false, 
   const popRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setError(null);
+    if (available) {
+      setStored(spanDays(available.first, available.last));
+      return;
+    }
     let alive = true;
     setStored(null);
-    setError(null);
     loadDays(clientId)
       .then((d) => alive && setStored(d))
       .catch((e: { response?: { data?: { message?: string } }; message?: string }) => alive && setError(e.response?.data?.message || e.message || 'Data harian tidak bisa dimuat.'));
     return () => {
       alive = false;
     };
-  }, [clientId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, available?.first, available?.last]);
 
   const main = useMemo(() => stored?.days.MAIN ?? [], [stored]);
   const cpas = useMemo(() => stored?.days.CPAS ?? [], [stored]);
@@ -209,7 +228,7 @@ export function RangeCalendar({ clientId, role, value, other, autoOpen = false, 
     const length = daysInclusive(start, end);
     if (length > stored.maxRangeDays) return { error: `Rentang maksimal ${stored.maxRangeDays} hari (sekarang ${length} hari).` };
     const mainDays = main.filter((d) => d >= start && d <= end).length;
-    if (!mainDays) return { error: 'Belum ada data Meta Ads tersimpan pada rentang ini.' };
+    if (!mainDays) return { error: `Belum ada data ${sourceLabel} tersimpan pada rentang ini.` };
     return { length, mainDays, cpasDays: cpas.filter((d) => d >= start && d <= end).length };
   }, [stored, start, end, main, cpas]);
   const ok = check && 'mainDays' in check ? check : null;
@@ -270,7 +289,7 @@ export function RangeCalendar({ clientId, role, value, other, autoOpen = false, 
                   <li key={p.label}>
                     <button
                       type="button"
-                      disabled={!p.range}
+                      disabled={!p.range || breaksOrder(bound, p.range[0]) || breaksOrder(bound, p.range[1])}
                       className={p.range && start === p.range[0] && end === p.range[1] ? 'is-on' : undefined}
                       onClick={() => {
                         if (!p.range) return;
@@ -324,7 +343,8 @@ export function RangeCalendar({ clientId, role, value, other, autoOpen = false, 
                       ))}
                       {cells(mo).map((iso, k) => {
                         if (!iso) return <span key={k} />;
-                        const out = !first || !last || iso < first || iso > last;
+                        const outOfOrder = breaksOrder(bound, iso);
+                        const out = !first || !last || iso < first || iso > last || outOfOrder;
                         const edgeS = iso === start;
                         const edgeE = iso === effEnd;
                         const inside = start && effEnd && iso > start && iso < effEnd;
@@ -345,7 +365,8 @@ export function RangeCalendar({ clientId, role, value, other, autoOpen = false, 
                             className={cls}
                             disabled={out}
                             aria-pressed={Boolean(edgeS || edgeE || inside)}
-                            aria-label={`${Number(iso.slice(8))} ${MONTHS[mo.m]} ${mo.y}${out ? ' — tidak ada data' : ''}`}
+                            title={outOfOrder && bound ? orderReason(bound) : undefined}
+                            aria-label={`${Number(iso.slice(8))} ${MONTHS[mo.m]} ${mo.y}${outOfOrder ? ' — di luar urutan periode' : out ? ' — tidak ada data' : ''}`}
                             onMouseEnter={() => setHover(iso)}
                             onClick={() => pickDay(iso)}
                           >
@@ -367,7 +388,7 @@ export function RangeCalendar({ clientId, role, value, other, autoOpen = false, 
                     : check && 'error' in check
                       ? check.error
                       : ok
-                        ? `${formatAutoRange(start, end!)} · ${ok.length} hari · Meta Ads ${ok.mainDays} hari${ok.mainDays < ok.length ? ` (${ok.length - ok.mainDays} kosong)` : ''}${cpas.length ? ` · CPAS ${ok.cpasDays} hari` : ''}`
+                        ? `${formatAutoRange(start, end!)} · ${ok.length} hari · ${sourceLabel} ${ok.mainDays} hari${ok.mainDays < ok.length ? ` (${ok.length - ok.mainDays} kosong)` : ''}${cpas.length ? ` · CPAS ${ok.cpasDays} hari` : ''}`
                         : ''}
               </span>
               <span className="rc-actions">

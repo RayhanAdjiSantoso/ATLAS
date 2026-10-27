@@ -9,6 +9,7 @@ import { formatMonth, type LibraryFile } from './LibraryFileSlot';
 import { channelLabel, formatSavedAt } from './savedPeriodLabels';
 import { getSavedPeriods } from './api';
 import { AutoRangePanel, type AutoRange } from './AutoRangePanel';
+import { breaksOrder, orderReason, type PeriodBound } from './periodOrder';
 import type { PeriodRole, Platform, SavedPeriod } from './types';
 import './librarySource.css';
 import './periodSourcePicker.css';
@@ -76,6 +77,9 @@ interface PeriodSourcePickerProps {
   scope?: { options: PickScopeOption[]; initial: string[] };
   // Shown in the header eyebrow, e.g. "Meta Ads".
   platformLabel?: string;
+  // The other side's period: months and report periods that would put
+  // Periode Ini before Periode Lalu cannot be picked.
+  bound?: PeriodBound | null;
 }
 
 const SHORT_MONTH = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -104,6 +108,7 @@ export function PeriodSourcePicker({
   initialTab = 'library',
   scope,
   platformLabel,
+  bound,
 }: PeriodSourcePickerProps) {
   const [tab, setTab] = useState<Tab>(initialTab === 'range' && !onPickRange ? 'library' : initialTab);
   const [months, setMonths] = useState<LibraryMonth[] | null>(null);
@@ -204,6 +209,7 @@ export function PeriodSourcePicker({
   const chosen = scope ? scope.options.filter((o) => include.includes(o.key)) : [];
   const monthUsable = (m: LibraryMonth) => !scope || chosen.some((o) => has(m.channels, o.libraryChannels));
   const runUsable = (p: SavedPeriod) => !scope || chosen.some((o) => has(p.channels, o.archiveChannels));
+  const reason = bound ? orderReason(bound) : null;
   const missingText = (channels: Record<string, number>, kind: 'libraryChannels' | 'archiveChannels') => {
     const missing = chosen.filter((o) => !has(channels, o[kind])).map((o) => o.label);
     return missing.length ? `Tanpa ${missing.join(' & ')}` : null;
@@ -314,6 +320,11 @@ export function PeriodSourcePicker({
             )}
 
             <div className="sp-body">
+              {bound && tab !== 'range' && (
+                <InlineNotice tone="info" title={reason!}>
+                  {bound.role === 'cur' ? 'Periode yang dimulai sebelumnya' : 'Periode yang dimulai sesudahnya'} tidak bisa dipilih.
+                </InlineNotice>
+              )}
               {tab === 'range' && onPickRange ? (
                 <AutoRangePanel
                   clientId={clientId}
@@ -345,7 +356,8 @@ export function PeriodSourcePicker({
                       <div className="sp-grid">
                         {list.map((m) => {
                           const selected = selectedMonth === m.month;
-                          const usable = monthUsable(m);
+                          const outOfOrder = breaksOrder(bound, m.month);
+                          const usable = monthUsable(m) && !outOfOrder;
                           const missing = scope ? missingText(m.channels, 'libraryChannels') : null;
                           return (
                             <button
@@ -354,7 +366,7 @@ export function PeriodSourcePicker({
                               className={`sp-month${selected ? ' is-selected' : ''}`}
                               aria-pressed={selected}
                               disabled={!usable}
-                              title={!usable ? `Bulan ini tidak punya ${chosen.map((o) => o.label).join(' atau ')}` : undefined}
+                              title={outOfOrder ? reason! : !usable ? `Bulan ini tidak punya ${chosen.map((o) => o.label).join(' atau ')}` : undefined}
                               onClick={() => {
                                 onPickLibrary(m, include);
                                 onClose();
@@ -404,7 +416,8 @@ export function PeriodSourcePicker({
                         <div className="sp-run-sides">
                           {run.sides.map((p) => {
                             const selected = selectedRun?.runId === p.runId && selectedRun?.role === p.role;
-                            const usable = runUsable(p);
+                            const outOfOrder = breaksOrder(bound, p.start);
+                            const usable = runUsable(p) && !outOfOrder;
                             const missing = scope ? missingText(p.channels, 'archiveChannels') : null;
                             return (
                               <button
@@ -413,6 +426,7 @@ export function PeriodSourcePicker({
                                 className={`sp-side${selected ? ' is-selected' : ''}`}
                                 aria-pressed={selected}
                                 disabled={!usable}
+                                title={outOfOrder ? reason! : undefined}
                                 onClick={() => {
                                   onPickArchive(p, include);
                                   onClose();

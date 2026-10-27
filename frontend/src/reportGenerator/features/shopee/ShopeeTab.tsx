@@ -6,7 +6,6 @@ import { LibraryFileSlot, isMisfiledShopeeFile, type LibrarySelection } from '..
 import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { combineManualPeriods } from '../../lib/manualPeriod';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
-import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
 import { OmzetField } from '../../components/OmzetField';
 import { PeriodCompareChip } from '../../components/PeriodCompareChip';
@@ -26,11 +25,14 @@ import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
+import { useRestoreLastReport } from '../reports/useRestoreLastReport';
+import { forgetLastReport } from '../reports/lastReportStore';
 import { getProductMaster, getSavedPeriod, getSavedPeriods, saveProductMasterEntry } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { mapShopeeRows, type ShopeeCategorization } from '../reports/rowMapping';
 import { PeriodSourcePicker, type LibraryMonth } from '../reports/PeriodSourcePicker';
-import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
+import { periodBound } from '../reports/periodOrder';
+import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import { SetupBoard, SetupGrid, SetupRow, SetupTextInput } from '../../components/SetupBoard';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
@@ -128,8 +130,8 @@ async function downloadLibraryFile(clientId: number, file: LibraryFileMeta): Pro
   return new File([data], file.original_filename, { type: (data as Blob).type });
 }
 
-function formatGeneratedDate(): string {
-  return new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+function formatGeneratedDate(at?: string): string {
+  return (at ? new Date(at) : new Date()).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 interface ShopeeTabProps {
@@ -142,6 +144,16 @@ interface ShopeeTabProps {
   onGenerated: (data: PlatformResultData) => void;
   onInvalidate: () => void;
 }
+
+// Meta's source switch minus Rentang tanggal (Shopee has no auto-fetched
+// daily rows), with the same hints under an empty pick.
+type ShopeeSourceKind = 'upload' | 'library' | 'archive';
+const SHOPEE_SOURCE_KINDS: PeriodSourceKind[] = ['upload', 'library', 'archive'];
+const SHOPEE_SOURCE_HINT: Record<ShopeeSourceKind, string> = {
+  upload: '',
+  library: 'Buka Perpustakaan Brand — pilih bulan, semua file Shopee periode itu terisi sekaligus',
+  archive: 'Buka Arsip Laporan — pakai ulang periode laporan yang pernah dibuat',
+};
 
 export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldChange, onOmzetCurChange, onGenerated, onInvalidate }: ShopeeTabProps) {
   const periodOld = usePeriodLabel('Bulan Lalu');
@@ -258,6 +270,11 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const [curPickedRun, setCurPickedRun] = useState<SavedPeriod | null>(null);
   const [curPickedMonth, setCurPickedMonth] = useState<LibraryMonth | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
+  // Same source switch as Meta's, minus Rentang tanggal: which stored
+  // source each period last asked for, until a pick lands, and which list
+  // the dialog opens on.
+  const [pendingKind, setPendingKind] = useState<Record<PeriodRole, ShopeeSourceKind>>({ old: 'library', cur: 'library' });
+  const [pickerTab, setPickerTab] = useState<'library' | 'archive'>('library');
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
   // Where each side's Total Omzet came from — the Performa Toko file, the
   // Product Overview file, or typed in (null) — said under the field.
@@ -684,7 +701,9 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const autoSave = useAutoSave('shopee');
   const armReportScroll = useScrollAfterGenerate('report-shopee', report);
 
-  function generate() {
+  // `restoredAt`: reopening the last report (useRestoreLastReport) — shown
+  // with its original date and not saved a second time.
+  function generate(restoredAt?: string) {
     const r = buildShopeeReport({
       p1: periodOld.label,
       p2: periodCur.label,
@@ -749,10 +768,24 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     setReport(r);
     setDeepDive(dd);
     setFunnelReport(funnel);
-    setGeneratedAt(formatGeneratedDate());
+    setGeneratedAt(formatGeneratedDate(restoredAt));
     onGenerated({ period: { old: r.p1, cur: r.p2 }, kpis: r.summary.kpis, spend: r.summary.spend });
-    autoSave.save(clientId, buildSavePayload(), buildSaveFiles());
+    if (!restoredAt) autoSave.save(clientId, buildSavePayload(), buildSaveFiles());
   }
+
+  const restoring = useRestoreLastReport({
+    platform: 'shopee',
+    clientId,
+    apply: async (old, cur) => {
+      for (const [role, period] of [['old', old], ['cur', cur]] as const) {
+        (role === 'old' ? setOldPickedRun : setCurPickedRun)(period);
+        (role === 'old' ? setOldSource : setCurSource)('saved');
+        await applyArchivePeriod(role, period);
+      }
+    },
+    ready: ready && !applyingRole,
+    generate,
+  });
 
   // Re-runs Generate after the user completes an "Uncategorized" mapping or
   // changes an item-pivot metric selection, so the report (and its
@@ -770,6 +803,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   }
 
   function reset() {
+    forgetLastReport('shopee', clientId);
     periodOld.reset();
     periodCur.reset();
     onOmzetOldChange(null);
@@ -975,6 +1009,29 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     );
   }
 
+  function sourceKindOf(role: PeriodRole): ShopeeSourceKind {
+    if ((role === 'old' ? oldSource : curSource) === 'upload') return 'upload';
+    if (role === 'old' ? oldPickedMonth : curPickedMonth) return 'library';
+    if (role === 'old' ? oldPickedRun : curPickedRun) return 'archive';
+    return pendingKind[role];
+  }
+
+  function openPicker(role: PeriodRole, kind: ShopeeSourceKind) {
+    setPickerTab(kind === 'archive' ? 'archive' : 'library');
+    setPickerRole(role);
+  }
+
+  function chooseSourceKind(role: PeriodRole, kind: PeriodSourceKind) {
+    if (kind === 'upload') {
+      (role === 'old' ? setOldSource : setCurSource)('upload');
+      return;
+    }
+    if (kind !== 'library' && kind !== 'archive') return;
+    setPendingKind((prev) => ({ ...prev, [role]: kind }));
+    (role === 'old' ? setOldSource : setCurSource)('saved');
+    openPicker(role, kind);
+  }
+
   // The "Sumber" cell of one period: library/archive pick, or manual upload.
   function sourceCell(role: PeriodRole) {
     const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
@@ -989,22 +1046,16 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           }
         : null;
     const source = role === 'old' ? oldSource : curSource;
+    const label = role === 'old' ? 'Periode Lalu' : 'Periode Ini';
     return (
       <>
-        <SlotSourceTabs
-          savedFirst
-          value={source}
-          onChange={(v) => {
-            (role === 'old' ? setOldSource : setCurSource)(v);
-            if (v === 'saved' && !picked) setPickerRole(role);
-          }}
+        <PeriodSourceSwitch
+          label={label}
+          kinds={SHOPEE_SOURCE_KINDS}
+          value={sourceKindOf(role)}
+          onChange={(kind) => chooseSourceKind(role, kind)}
           disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
         />
-        {source === 'upload' && (
-          <div className="manual-mode-note">
-            <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah langsung di setiap baris — file hanya dibaca untuk laporan ini dan tidak disimpan ke Data Collection Hub. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis.
-          </div>
-        )}
         {source === 'saved' &&
           (applyingRole === role ? (
             <div className="setup-applying" role="status">
@@ -1013,7 +1064,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           ) : (
             <SavedSlotCard
               picked={picked && { title: picked.title, sourceComparison: '', savedAt: '', summary: picked.summary, metaLine: picked.metaLine }}
-              onOpen={() => setPickerRole(role)}
+              hint={SHOPEE_SOURCE_HINT[sourceKindOf(role)]}
+              onOpen={() => openPicker(role, sourceKindOf(role))}
               onClear={() => clearPickedPeriod(role)}
             />
           ))}
@@ -1045,22 +1097,17 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     );
   }
 
+  // Each side's picked period, so the other side cannot be picked out of
+  // order (Periode Ini before Periode Lalu).
+  function pickedPeriod(role: PeriodRole): { start: string | null; label: string } | null {
+    const month = role === 'old' ? oldPickedMonth : curPickedMonth;
+    if (month) return { start: `${month.month}-01`, label: month.label };
+    const run = role === 'old' ? oldPickedRun : curPickedRun;
+    return run ? { start: run.start, label: run.label || run.sourceComparison } : null;
+  }
+
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
-      <HowTo>
-        <HowToStep num={1} numClassName="shopee-num" title="Download report Iklan Produk">
-          Dari dashboard Shopee Seller Center, buka menu <strong>Iklan Saya</strong> dan download laporan <strong>Iklan Produk</strong> dan iklan lainnya (jika tersedia), untuk periode lalu dan periode ini.
-        </HowToStep>
-        <HowToStep num={2} numClassName="shopee-num" title="Total Omzet Toko terisi otomatis">
-          Total Omzet diambil dari file <strong>Performa Toko</strong> (Seller Centre › Performa Toko, sheet <strong>Pesanan Dibuat</strong> › Total Penjualan) yang ada di Data Collection Hub › Performance Overview. Tanpa file itu, angkanya dijumlah dari <strong>Product Overview</strong>. File Performa Toko juga bisa diunggah langsung di kolom Total Omzet.
-        </HowToStep>
-        <HowToStep num={3} numClassName="shopee-num" title="(Opsional) Upload data untuk analisis mendalam">
-          Untuk analisis lebih dalam, tambahkan juga Iklan Produk Otomatis, Iklan Toko - Keyword (jika menggunakan iklan toko), Referensi Kategori Produk, Product Overview & Product Performance untuk insight tambahan. Semuanya opsional, laporan tetap bisa dibuat tanpanya.
-        </HowToStep>
-        <HowToStep num={4} numClassName="shopee-num" title="Pilih sumber & buat laporan">
-          Pilih Iklan Produk dan Product Overview kedua periode (Total Omzet ikut terisi), lalu klik <strong>Generate Laporan</strong>.
-        </HowToStep>
-      </HowTo>
 
       <StepIndicator steps={steps} accent="var(--shopee-700)" />
 
@@ -1069,20 +1116,20 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         title="Sumber data"
         note={
           <>
-            Iklan Produk dan Total Omzet wajib. Pilihan <strong>Perpustakaan Brand</strong> atau <strong>Arsip Laporan</strong> mengisi semua file periode itu sekaligus.
+            Iklan Produk dan Total Omzet wajib. <strong>Perpustakaan</strong> dan <strong>Arsip</strong> mengisi semua file periode itu sekaligus; di mode <strong>Upload</strong>, unggah file di setiap baris — file hanya dibaca untuk laporan ini dan tidak disimpan ke Data Collection Hub.
             Total Omzet terisi otomatis dari file <strong>Performa Toko</strong> di Data Collection Hub (Total Penjualan, Pesanan Dibuat), atau dari Product Overview bila file itu
             tidak ada — ketik manual hanya bila keduanya tidak tersedia.
           </>
         }
       >
         <SetupGrid>
+          <SetupRow label="Sumber" sub="per periode" old={sourceCell('old')} cur={sourceCell('cur')} />
           <SetupRow
             label="Label periode"
             sub="tampil di laporan"
             old={<SetupTextInput label="Label Periode Lalu" value={periodOld.inputValue} onChange={periodOld.onInput} placeholder="cth: Apr 2026 / W1 Mei" />}
             cur={<SetupTextInput label="Label Periode Ini" value={periodCur.inputValue} onChange={periodCur.onInput} placeholder="cth: Mei 2026 / W2 Mei" />}
           />
-          <SetupRow label="Sumber" sub="per periode" old={sourceCell('old')} cur={sourceCell('cur')} />
           <SetupRow label="Product Overview (Toko)" sub="tren harian · cadangan sumber omzet" old={overviewDropzone('overview-old')} cur={overviewDropzone('overview-cur')} />
           <SetupRow label="Total Omzet Toko" sub="Pesanan Dibuat · otomatis" req old={omzetCell('old')} cur={omzetCell('cur')} />
           <SetupRow label="Iklan Produk" req old={adsDropzone('produk-old', 'Periode Lalu')} cur={adsDropzone('produk-cur', 'Periode Ini')} />
@@ -1102,6 +1149,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
               : null
           }
           onClose={() => setPickerRole(null)} onPickLibrary={handlePickMonth} onPickArchive={handlePickArchive}
+          initialTab={pickerTab}
+          bound={periodBound(pickerRole, pickedPeriod('old'), pickedPeriod('cur'))}
         />
       )}
 
@@ -1174,6 +1223,12 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
               <RotateCcw size={15} aria-hidden /> Reset
             </button>
           </div>
+        </div>
+      )}
+
+      {restoring && (
+        <div className="setup-applying" role="status">
+          <span className="setup-spinner" aria-hidden="true" /> Membuka laporan terakhir…
         </div>
       )}
 

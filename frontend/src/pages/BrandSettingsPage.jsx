@@ -7,6 +7,7 @@ import {
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
+import useActiveBrand from '../hooks/useActiveBrand.js';
 import { matchesBrandStatus, BRAND_STATUS_LABELS } from '../components/common/BrandStatusFilter.jsx';
 import { presetBrandSettings } from '../components/common/brandSettingsLink.js';
 import { describeError } from '../components/brandSettings/describeError.js';
@@ -601,7 +602,7 @@ export default function BrandSettingsPage() {
   // Hub, so switching sections keeps the brand) is shown, else the first in
   // the list.
   const detailId = Number(params.get('detail')) || null;
-  const [lastBrandId, setLastBrandId] = useSessionState('brand-settings:brand', null);
+  const [lastBrandId, setLastBrandId] = useActiveBrand();
   const setDetail = (id) => setParams((p) => {
     const next = new URLSearchParams(p);
     if (id) next.set('detail', String(id)); else next.delete('detail');

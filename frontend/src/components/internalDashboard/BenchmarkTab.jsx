@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Info } from 'lucide-react';
+import useActiveBrand from '../../hooks/useActiveBrand.js';
 import api from '../../api/client.js';
 import { formatPercent } from '../../utils/format.js';
 import ClientPicker from './ClientPicker.jsx';
@@ -12,7 +13,10 @@ const pct = (v, d = 1) => (v == null ? '-' : formatPercent(v * 100, d));
 // S5 — Benchmarking.
 export default function BenchmarkTab() {
   const [clients, setClients] = useState([]);
-  const [clientId, setClientId] = useState('');
+  // The brand shared across pages (useActiveBrand); ClientPicker speaks strings.
+  const [activeBrand, setActiveBrand] = useActiveBrand();
+  const clientId = activeBrand ? String(activeBrand) : '';
+  const setClientId = setActiveBrand;
   const [period, setPeriod] = useState(thisMonth());
   const [compare, setCompare] = useState('mom');
   const [data, setData] = useState(null);

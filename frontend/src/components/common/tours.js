@@ -130,11 +130,6 @@ export const TOURS = {
       body: 'Untuk Periode Lalu dan Periode Ini, pilih Upload, Perpustakaan (Data Collection Hub), Arsip laporan, atau Rentang tanggal. Di Meta Ads, centang Meta Ads, CPAS, atau keduanya.',
     },
     {
-      target: '.panel.active .howto',
-      title: 'Cara penggunaan',
-      body: 'Kolom export yang dibutuhkan dan alurnya lengkap ada di sini.',
-    },
-    {
       target: '.panel.active .ai-sum',
       title: 'AI Consultant Brief',
       body: 'Setelah laporan dibuat, AI membaca angka, target, Brand Tracking, dan catatan meeting, lalu menyusun verdict, bukti, dan action plan.',

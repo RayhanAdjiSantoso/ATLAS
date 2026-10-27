@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { saveReport } from './api';
+import { rememberLastReport } from './lastReportStore';
 import { useAuth } from '../../../contexts/AuthContext.jsx';
 import type { Platform, RawFileEntry, SaveReportPayload } from './types';
 
@@ -27,7 +28,8 @@ export function useAutoSave(platform: Platform) {
     setStatus('saving');
     setMessage('');
     try {
-      await saveReport({ ...payload, brandId: clientId, platform }, files);
+      const { id } = await saveReport({ ...payload, brandId: clientId, platform }, files);
+      rememberLastReport(platform, clientId, id);
       setStatus('saved');
       setMessage('Laporan tersimpan.');
     } catch (err) {
