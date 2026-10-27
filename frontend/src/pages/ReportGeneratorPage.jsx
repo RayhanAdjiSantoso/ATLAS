@@ -1,9 +1,14 @@
-import ReportGeneratorApp from '../reportGenerator/App';
+// Stylesheets first, on purpose: index.css carries the scoped reset
+// (.mil-ui *{margin:0;padding:0}), and every stylesheet the app's components
+// import (PageBand's, the report sections') must come after it or the reset
+// wins their equal-specificity rules — the band header lost its padding when
+// AppLayout started importing this page before anything else had loaded it.
 import '../reportGenerator/index.css';
 import '../reportGenerator/app/shell.css';
 import '../reportGenerator/app/atlas-fit.css';
 import '../reportGenerator/app/report-skin.css';
 import '../reportGenerator/app/workspace.css';
+import ReportGeneratorApp from '../reportGenerator/App';
 
 // The "Performance Report Generator" (Meta / Shopee / TikTok ads reports),
 // merged in as one page — same pattern as MetaAutomationPage.jsx mounting a

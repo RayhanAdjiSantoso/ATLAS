@@ -30,7 +30,11 @@
    (.main-content is flex:1 inside .layout) keeps its content-based automatic
    minimum width, so one wide table still stretches the whole page no matter
    what `overflow` says. */
+/* AppLayout keeps the generator mounted inside .rg-keepalive (hidden while
+   another page is open), so the frame is released only while that wrapper is
+   the one on screen. */
 .main-content:has(> .report-generator-app),
+.main-content:has(> .rg-keepalive:not([hidden])),
 .main-content:has(> .atlas-home) {
   padding: 0;
   overflow-x: clip;
