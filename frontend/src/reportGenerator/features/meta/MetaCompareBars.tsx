@@ -9,6 +9,7 @@ import { leadResultKind, type LeadResultKind } from '../../lib/metaFunnel';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 import { copyText } from '../../utils/copyText';
+import { MetaChangesTable } from './MetaChangesTable';
 
 // One bar chart of the architecture sheet: a dimension (age group, campaign,
 // materi iklan) on the axis, one of a few metrics on the bars, read through
@@ -79,6 +80,8 @@ export function MetaCompareBars({
   dimNoun,
   note,
   emptyMessage,
+  changes,
+  hideDefaultOrder = false,
 }: {
   heading: string;
   badge: string;
@@ -98,6 +101,11 @@ export function MetaCompareBars({
   // Lead / B2B: which result the leads figures read (the report's pick);
   // without it, the automatic pick over these rows.
   leadKind?: LeadResultKind;
+  // When given, a changes table follows the chart: every metric of the menu
+  // per item, this period beside its %Chg from `oldRows`.
+  changes?: { oldRows: SheetRow[]; p1: string; p2: string };
+  // Drop "Bawaan" from the sort switch — the chart opens ranked.
+  hideDefaultOrder?: boolean;
 }) {
   const typeOf = (r: SheetRow): TypeKey => (campCol ? audienceTypeOf(r[campCol]) : null) ?? 'other';
   const leadKind = useMemo(() => leadKindProp ?? leadResultKind(rows), [leadKindProp, rows]);
@@ -233,7 +241,7 @@ export function MetaCompareBars({
               options={[
                 { value: 'desc', label: 'Tertinggi' },
                 { value: 'asc', label: 'Terendah' },
-                { value: 'default', label: 'Bawaan' },
+                ...(hideDefaultOrder ? [] : [{ value: 'default', label: 'Bawaan' }]),
               ]}
               value={order}
               onChange={(v) => setOrder(v as Order)}
@@ -293,6 +301,21 @@ export function MetaCompareBars({
           </>
         )}
         {missing.length > 0 && metrics.length > 0 && groups.length > 0 && <p className="chart-foot">Tidak ditampilkan karena kolomnya tidak ada di file: {missing.map((m) => m.label).join(', ')}.</p>}
+        {changes && dimCol && metric && view && view.total > 0 && (
+          <MetaChangesTable
+            key={`${String(metric.key)}-${aud}`}
+            rows={scoped}
+            oldRows={aud === 'NV' || aud === 'RM' ? changes.oldRows.filter((r) => typeOf(r) === aud) : changes.oldRows}
+            dimCol={dimCol}
+            kind={kind}
+            leadKind={leadKind}
+            metrics={metrics}
+            p1={changes.p1}
+            p2={changes.p2}
+            dimNoun={dimNoun}
+            initialSort={sortable ? String(metric.key) : undefined}
+          />
+        )}
       </div>
     </div>
   );

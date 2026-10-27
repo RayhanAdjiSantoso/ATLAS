@@ -158,6 +158,8 @@ export interface MetaReport {
   // Ad, and it has to be the reported period alone — the combined row set
   // spans both periods and would silently average two months together.
   curRows?: { boost: SheetRow[]; nonBoost: SheetRow[]; cpas: SheetRow[] };
+  // The previous period's rows, same split — read by the change tables.
+  oldRows?: { boost: SheetRow[]; nonBoost: SheetRow[]; cpas: SheetRow[] };
   cpas?: CpasSections;
   // Non-Boost split into Retail / B2B Leads; only lanes with rows.
   nonBoostLanes?: NonBoostLane[];
@@ -434,6 +436,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     summary: { kpis: [], cpasKpis: [], spend: {} },
   };
   report.curRows = { boost: mBoostCur, nonBoost: mNonCur, cpas: [] };
+  report.oldRows = { boost: mBoostOld, nonBoost: mNonOld, cpas: [] };
   const metaKpis: SummaryKpi[] = [];
   const metaSpend: Record<string, SpendEntry | undefined> = {};
 
@@ -651,6 +654,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     }
     cpas.funnel = buildMetaSalesFunnel(cOld, cCur);
     if (report.curRows) report.curRows.cpas = cCur;
+    if (report.oldRows) report.oldRows.cpas = cOld;
     if (defCpasDemo.length && cAgeCol) cpas.ageDemo = { rows: cCur.filter((r) => !isAllValue(r[cAgeCol])), dimCol: cAgeCol, defaultCols: defCpasDemo, allCols: cAllCols };
     if (defCpasDemo.length && cGenderCol) cpas.genderDemo = { rows: cCur.filter((r) => !isAllValue(r[cGenderCol])), dimCol: cGenderCol, defaultCols: defCpasDemo, allCols: cAllCols };
     if (defCpasNV.length) {

@@ -130,6 +130,8 @@
 .mil-ui.report-generator-app .sdeck-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
 .mil-ui.report-generator-app .sdeck-item { min-width: 0; }
 .mil-ui.report-generator-app .sdeck-item > .sec-block { margin-bottom: 0; }
+.mil-ui.report-generator-app .sec-stack { display: grid; gap: 1.25rem; }
+.mil-ui.report-generator-app .sec-stack > .sec-block { margin-bottom: 0; }
 .mil-ui.report-generator-app .sdeck-item.is-active:not(.is-static) { animation: sdeck-in .38s cubic-bezier(.22, 1, .36, 1) both; }
 @keyframes sdeck-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
@@ -397,9 +399,19 @@
   text-transform: uppercase;
 }
 .mil-ui.report-generator-app .sdeck-tabs > .sdeck-group:first-child { margin-top: .1rem; padding-top: 0; border-top: 0; }
+.mil-ui.report-generator-app .sdeck-subgroup {
+  display: block;
+  margin: .45rem .55rem .1rem .7rem;
+  color: var(--rs-muted);
+  font-size: .64rem;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 @media (max-width: 1100px) {
   .mil-ui.report-generator-app .sdeck-group { flex: 0 0 auto; align-self: center; margin: 0 .2rem 0 .5rem; padding: 0 0 0 .6rem; border-top: 0; border-left: 1px solid var(--rs-line); }
   .mil-ui.report-generator-app .sdeck-tabs > .sdeck-group:first-child { padding-left: 0; border-left: 0; }
+  .mil-ui.report-generator-app .sdeck-subgroup { flex: 0 0 auto; align-self: center; margin: 0 .2rem 0 .3rem; }
 }
 
 /* ── Compare bars: the two ends, and the NV / RM key ─────────────────────── */
