@@ -282,6 +282,25 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const [omzetAuto, setOmzetAuto] = useState<Record<PeriodRole, OmzetSource>>({ old: null, cur: null });
   const [omzetReading, setOmzetReading] = useState<PeriodRole | null>(null);
 
+  // Product Performance (both of its sheets) for one period, from library files.
+  async function loadProductPerf(brandId: number, targetRole: PeriodRole, perfList: LibraryFileMeta[]) {
+    if (!perfList.length) {
+      setProductPerfFiles((prev) => ({ ...prev, [targetRole]: null }));
+      return;
+    }
+    const parts = await Promise.all(perfList.map((f) => downloadLibraryFile(brandId, f)));
+    const mainRows: SheetRow[] = [];
+    const tingkatkanRows: SheetRow[] = [];
+    for (const file of parts) {
+      const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+      const mainSheet = wb.Sheets['Produk dengan Performa Terbaik'];
+      if (mainSheet) mainRows.push(...XLSX.utils.sheet_to_json<SheetRow>(mainSheet, { defval: '' }));
+      const extraSheet = wb.Sheets['Tingkatkan dengan Iklan'];
+      if (extraSheet) tingkatkanRows.push(...XLSX.utils.sheet_to_json<SheetRow>(extraSheet, { defval: '' }));
+    }
+    setProductPerfFiles((prev) => ({ ...prev, [targetRole]: mainRows.length ? { mainRows, tingkatkanRows, fileName: perfList.map((f) => f.original_filename).join(' · ') } : null }));
+  }
+
   async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
     if (!clientId) return;
     setApplyingRole(targetRole);
@@ -325,22 +344,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         setOverviewFiles((prev) => ({ ...prev, [`overview-${targetRole}`]: null }));
       }
 
-      const perfList = byChannel.get('product_performance') ?? [];
-      if (perfList.length) {
-        const parts = await downloadAll(perfList);
-        const mainRows: SheetRow[] = [];
-        const tingkatkanRows: SheetRow[] = [];
-        for (const file of parts) {
-          const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
-          const mainSheet = wb.Sheets['Produk dengan Performa Terbaik'];
-          if (mainSheet) mainRows.push(...XLSX.utils.sheet_to_json<SheetRow>(mainSheet, { defval: '' }));
-          const extraSheet = wb.Sheets['Tingkatkan dengan Iklan'];
-          if (extraSheet) tingkatkanRows.push(...XLSX.utils.sheet_to_json<SheetRow>(extraSheet, { defval: '' }));
-        }
-        setProductPerfFiles((prev) => ({ ...prev, [targetRole]: mainRows.length ? { mainRows, tingkatkanRows, fileName: perfList.map((f) => f.original_filename).join(' · ') } : null }));
-      } else {
-        setProductPerfFiles((prev) => ({ ...prev, [targetRole]: null }));
-      }
+      await loadProductPerf(clientId, targetRole, byChannel.get('product_performance') ?? []);
 
       const [y, mo] = month.month.split('-').map(Number);
       const calStart = `${month.month}-01`;
@@ -439,6 +443,19 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         ...prev,
         [`overview-${targetRole}`]: detail.overview.length ? { rows: detail.overview, fileName: name, period: detail.period.label ?? '' } : null,
       }));
+
+      // The archive keeps no Product Performance (the file has no date
+      // column), so a reopened report took Traffic, Conversion, Pareto and
+      // Potential Product down with it. Bring it back from the brand's
+      // library for the same month, when the library has it.
+      if (clientId && detail.period.start) {
+        const month = detail.period.start.slice(0, 7);
+        const { data } = await api.get(`/brands/${clientId}/library`);
+        const perfList = (data.files as LibraryFileMeta[]).filter(
+          (f) => f.platform === 'shopee' && f.channel === 'product_performance' && f.period_month?.slice(0, 7) === month,
+        );
+        await loadProductPerf(clientId, targetRole, perfList);
+      }
 
       (targetRole === 'old' ? periodOld : periodCur).autoFill(detail.period.label);
       if (detail.period.start && detail.period.end) {
