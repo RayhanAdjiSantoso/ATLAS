@@ -338,20 +338,165 @@ export function ProductAdsSplitSection({ split, p1, p2 }: { split: ProductAdsSpl
       {!hasAuto ? (
         <div className="empty-note">Tidak ada Iklan Produk Otomatis di kedua periode — seluruh Product Ads berasal dari iklan individu.</div>
       ) : (
-        <>
-          <p className="chart-caption">
-            Product Ads = iklan individu + Iklan Produk Otomatis (Shopee menggolongkan keduanya sebagai Iklan Produk).
-            {roasInd !== null && roasAuto !== null && (
-              <>
-                {' '}
-                ROAS {p2}: individu <strong>{fmtPivotVal(roasInd, 'roas')}</strong>, otomatis <strong>{fmtPivotVal(roasAuto, 'roas')}</strong>.
-              </>
-            )}
-          </p>
-          <DataTable columns={columns} rows={[...SPLIT_ROWS]} rowKey={(r) => r.id} maxHeight={560} />
-        </>
+        <div className="pas">
+          <div className="pas-duel">
+            <DuelCard side="individual" split={split} total={total} p1={p1} />
+            <DuelScore roasInd={roasInd} roasAuto={roasAuto} autoShare={total.cur.spend > 0 ? (split.auto.cur.spend / total.cur.spend) * 100 : null} />
+            <DuelCard side="auto" split={split} total={total} p1={p1} />
+          </div>
+
+          <div className="pas-shares">
+            <ShareBar label="Porsi spend" ind={split.individual.cur.spend} auto={split.auto.cur.spend} />
+            <ShareBar label="Porsi GMV" ind={split.individual.cur.gmv} auto={split.auto.cur.gmv} />
+          </div>
+
+          <div className="pas-fly" role="table" aria-label={`Individu vs Otomatis per metrik, ${p2}`}>
+            <div className="pas-fly-head" role="row">
+              <span role="columnheader">Iklan Individu</span>
+              <span role="columnheader">{p2}</span>
+              <span role="columnheader">Iklan Otomatis</span>
+            </div>
+            {FLY_ROWS.map((row) => (
+              <FlyRow key={row.id} row={row} split={split} total={total} p1={p1} />
+            ))}
+          </div>
+
+          <details className="pas-detail">
+            <summary>Tabel lengkap {p1} → {p2}</summary>
+            <DataTable columns={columns} rows={[...SPLIT_ROWS]} rowKey={(r) => r.id} maxHeight={560} />
+          </details>
+        </div>
       )}
     </Shell>
+  );
+}
+
+// The duel's parts. Individu wears the Shopee orange, Otomatis an indigo —
+// two hues that cannot be read as better/worse; only the delta pills and the
+// "lebih efisien" marks carry judgement.
+const SIDE_META = {
+  individual: { label: 'Iklan Individu', hint: 'Iklan yang Anda buat per produk' },
+  auto: { label: 'Iklan Produk Otomatis', hint: 'Shopee memilih produk & bid' },
+} as const;
+type Side = keyof typeof SIDE_META;
+const FLY_ROWS = SPLIT_ROWS.filter((r) => !r.id.endsWith('Share'));
+// Only ratios name a winner; a bigger spend or GMV is size, not skill.
+const EFFICIENCY = new Set(['roas', 'cr']);
+
+function oldLine(v: number | null, o: number | null, row: SplitRow, p1: string) {
+  if (o === null) return null;
+  const { deltaNum, deltaStr } = v === null ? { deltaNum: null, deltaStr: '' } : computeDelta(o, v);
+  return (
+    <small>
+      {shortPeriod(p1)} {fmtPivotVal(o, row.fmt)}
+      {v !== null && <DeltaPill cls={deltaClassForSentiment(deltaNum, row.sentiment)}>{formatDeltaID(deltaNum, deltaStr)}</DeltaPill>}
+    </small>
+  );
+}
+
+function DuelCard({ side, split, total, p1 }: { side: Side; split: ProductAdsSplit; total: { old: ItemSums; cur: ItemSums }; p1: string }) {
+  const cur = split[side].cur;
+  const old = split[side].old;
+  const gmvRow = SPLIT_ROWS.find((r) => r.id === 'gmv')!;
+  const share = total.cur.gmv > 0 ? (cur.gmv / total.cur.gmv) * 100 : null;
+  return (
+    <section className={`pas-card is-${side}`} aria-label={SIDE_META[side].label}>
+      <header>
+        <span className="pas-swatch" aria-hidden="true" />
+        <span>
+          <strong>{SIDE_META[side].label}</strong>
+          <small>{SIDE_META[side].hint}</small>
+        </span>
+      </header>
+      <div className="pas-card-figure">
+        <span className="pas-card-label">GMV iklan</span>
+        <b>{fmtPivotVal(cur.gmv, 'rp')}</b>
+        {oldLine(cur.gmv, old.gmv || old.spend ? old.gmv : null, gmvRow, p1)}
+      </div>
+      <dl>
+        <div>
+          <dt>Spend</dt>
+          <dd>{fmtPivotVal(cur.spend, 'rp')}</dd>
+        </div>
+        <div>
+          <dt>Pesanan</dt>
+          <dd>{fmtPivotVal(cur.orders, 'num')}</dd>
+        </div>
+        <div>
+          <dt>Porsi GMV</dt>
+          <dd>{share === null ? '—' : fmtPivotVal(share, 'pct')}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function DuelScore({ roasInd, roasAuto, autoShare }: { roasInd: number | null; roasAuto: number | null; autoShare: number | null }) {
+  const both = roasInd !== null && roasAuto !== null && roasInd > 0 && roasAuto > 0;
+  const autoWins = both && roasAuto! > roasInd!;
+  const gap = both ? (Math.max(roasInd!, roasAuto!) / Math.min(roasInd!, roasAuto!) - 1) * 100 : null;
+  return (
+    <div className="pas-score">
+      <span className="pas-score-label">ROAS</span>
+      <div className="pas-score-pair">
+        <b className={both && !autoWins ? 'is-lead' : undefined}>{roasInd === null ? '—' : fmtPivotVal(roasInd, 'roas')}</b>
+        <span className="pas-vs" aria-hidden="true">vs</span>
+        <b className={autoWins ? 'is-lead' : undefined}>{roasAuto === null ? '—' : fmtPivotVal(roasAuto, 'roas')}</b>
+      </div>
+      {both && gap !== null && (
+        <p>
+          <strong>{autoWins ? 'Otomatis' : 'Individu'}</strong> {gap < 1 ? 'setara' : `${gap.toLocaleString('id-ID', { maximumFractionDigits: 0 })}% lebih efisien`}
+          {autoWins && autoShare !== null && <> · kini {autoShare.toLocaleString('id-ID', { maximumFractionDigits: 1 })}% dari spend</>}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ShareBar({ label, ind, auto }: { label: string; ind: number; auto: number }) {
+  const total = ind + auto;
+  const pInd = total > 0 ? (ind / total) * 100 : 0;
+  const pct = (v: number) => `${v.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`;
+  return (
+    <div className="pas-share">
+      <span className="pas-share-label">{label}</span>
+      <div className="pas-share-bar" role="img" aria-label={`${label}: individu ${pct(pInd)}, otomatis ${pct(100 - pInd)}`}>
+        <i className="is-individual" style={{ flexGrow: Math.max(pInd, 0.0001) }}>{pInd >= 12 && pct(pInd)}</i>
+        <i className="is-auto" style={{ flexGrow: Math.max(100 - pInd, 0.0001) }}>{100 - pInd >= 12 && pct(100 - pInd)}</i>
+      </div>
+    </div>
+  );
+}
+
+function FlyRow({ row, split, total, p1 }: { row: SplitRow; split: ProductAdsSplit; total: { old: ItemSums; cur: ItemSums }; p1: string }) {
+  const v = (side: Side, period: 'old' | 'cur') => row.get(split[side][period], total[period]);
+  const ind = v('individual', 'cur');
+  const auto = v('auto', 'cur');
+  const max = Math.max(ind ?? 0, auto ?? 0);
+  const lead = EFFICIENCY.has(row.id) && ind !== null && auto !== null && ind !== auto ? (ind > auto ? 'individual' : 'auto') : null;
+  const side = (s: Side) => {
+    const cur = s === 'individual' ? ind : auto;
+    return (
+      <div className={`pas-fly-side is-${s}${lead === s ? ' is-lead' : ''}`} role="cell">
+        <div className="pas-fly-val">
+          <b>
+            {cur === null ? '—' : fmtPivotVal(cur, row.fmt)}
+            {lead === s && <span className="pas-lead">lebih efisien</span>}
+          </b>
+          {oldLine(cur, v(s, 'old'), row, p1)}
+        </div>
+        <span className="pas-fly-track" aria-hidden="true">
+          <i style={{ transform: `scaleX(${max > 0 && cur !== null ? cur / max : 0})` }} />
+        </span>
+      </div>
+    );
+  };
+  return (
+    <div className="pas-fly-row" role="row">
+      {side('individual')}
+      <span className="pas-fly-metric" role="rowheader">{row.label}</span>
+      {side('auto')}
+    </div>
   );
 }
 

@@ -466,3 +466,135 @@
   color: #fff;
   box-shadow: 0 8px 16px -10px rgba(201, 59, 28, .8);
 }
+
+/* ── Individu vs Otomatis: a duel ────────────────────────────────────────── */
+/* Two cards face each other across the ROAS score, a pair of share bars
+   shows who takes the budget and who brings the revenue, and a butterfly of
+   mirrored bars compares them metric by metric. Individu wears the Shopee
+   orange, Otomatis an indigo; only the ratio rows name a winner. */
+.mil-ui.report-generator-app #report-shopee .pas {
+  --pas-ind: #c93b1c;
+  --pas-ind-soft: #fff1ec;
+  --pas-auto: #4f46e5;
+  --pas-auto-soft: #eef0ff;
+  display: grid;
+  gap: 1.1rem;
+}
+.mil-ui.report-generator-app #report-shopee .pas-duel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, auto) minmax(0, 1fr); gap: .9rem; align-items: stretch; }
+.mil-ui.report-generator-app #report-shopee .pas-card {
+  position: relative;
+  display: grid;
+  gap: .9rem;
+  overflow: hidden;
+  padding: 1.05rem 1.15rem 1.1rem;
+  border: 1px solid var(--pas-line, #efe3de);
+  border-radius: 18px;
+  background: radial-gradient(120% 90% at var(--pas-glow-x, 0%) 0%, var(--pas-soft) 0%, #fff 62%);
+  box-shadow: 0 1px 2px rgba(15, 26, 58, .04), 0 18px 34px -28px var(--pas-c);
+}
+.mil-ui.report-generator-app #report-shopee .pas-card.is-individual { --pas-c: var(--pas-ind); --pas-soft: var(--pas-ind-soft); --pas-line: #f3dcd3; }
+.mil-ui.report-generator-app #report-shopee .pas-card.is-auto { --pas-c: var(--pas-auto); --pas-soft: var(--pas-auto-soft); --pas-line: #dfe1fb; --pas-glow-x: 100%; text-align: right; }
+.mil-ui.report-generator-app #report-shopee .pas-card header { display: flex; align-items: center; gap: .6rem; }
+.mil-ui.report-generator-app #report-shopee .pas-card.is-auto header { flex-direction: row-reverse; }
+.mil-ui.report-generator-app #report-shopee .pas-card header strong { display: block; color: var(--rs-ink); font-size: .92rem; font-weight: 800; letter-spacing: -.01em; }
+.mil-ui.report-generator-app #report-shopee .pas-card header small { color: var(--rs-muted); font-size: .72rem; font-weight: 600; }
+.mil-ui.report-generator-app #report-shopee .pas-swatch { width: 12px; height: 12px; flex: none; border-radius: 4px; background: var(--pas-c); box-shadow: 0 0 0 4px var(--pas-soft); }
+.mil-ui.report-generator-app #report-shopee .pas-card-figure { display: grid; gap: .2rem; }
+.mil-ui.report-generator-app #report-shopee .pas-card.is-auto .pas-card-figure { justify-items: end; }
+.mil-ui.report-generator-app #report-shopee .pas-card-label { color: var(--rs-quiet); font-size: .66rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.mil-ui.report-generator-app #report-shopee .pas-card-figure b { color: var(--rs-ink); font-size: 1.55rem; font-weight: 850; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app #report-shopee .pas small { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; color: #475569; font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app #report-shopee .pas small .delta-pill { padding: .05rem .4rem; font-size: .66rem; }
+.mil-ui.report-generator-app #report-shopee .pas-card dl { display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between; gap: .5rem 1rem; margin: 0; padding-top: .75rem; border-top: 1px dashed var(--pas-line); }
+.mil-ui.report-generator-app #report-shopee .pas-card dt { color: var(--rs-quiet); font-size: .64rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.mil-ui.report-generator-app #report-shopee .pas-card dd { margin: .15rem 0 0; color: var(--rs-ink); font-size: .84rem; white-space: nowrap; font-weight: 750; font-variant-numeric: tabular-nums lining-nums; }
+
+/* The score: the one number that decides where the next rupiah goes. */
+.mil-ui.report-generator-app #report-shopee .pas-score {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: .45rem;
+  padding: 1rem .9rem;
+  border-radius: 18px;
+  background: linear-gradient(160deg, #1d2440 0%, #262d52 100%);
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 18px 36px -24px rgba(29, 36, 64, .9), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.mil-ui.report-generator-app #report-shopee .pas-score-label { color: rgba(255, 255, 255, .6); font-size: .66rem; font-weight: 800; letter-spacing: .14em; }
+.mil-ui.report-generator-app #report-shopee .pas-score-pair { display: flex; align-items: baseline; gap: .55rem; }
+.mil-ui.report-generator-app #report-shopee .pas-score-pair b { color: rgba(255, 255, 255, .62); font-size: 1.3rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app #report-shopee .pas-score-pair b:first-child.is-lead { color: #ffb59f; }
+.mil-ui.report-generator-app #report-shopee .pas-score-pair b:last-child.is-lead { color: #b9bdff; }
+.mil-ui.report-generator-app #report-shopee .pas-score-pair b.is-lead { font-size: 1.7rem; }
+.mil-ui.report-generator-app #report-shopee .pas-vs { color: rgba(255, 255, 255, .4); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+.mil-ui.report-generator-app #report-shopee .pas-score p { margin: 0; color: rgba(255, 255, 255, .75); font-size: .74rem; line-height: 1.4; }
+.mil-ui.report-generator-app #report-shopee .pas-score p strong { color: #fff; }
+
+/* Share bars: budget vs revenue, side by side. */
+.mil-ui.report-generator-app #report-shopee .pas-shares { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem 1.4rem; padding: .85rem 1rem; border: 1px solid #efe3de; border-radius: 16px; background: #fcfaf9; }
+.mil-ui.report-generator-app #report-shopee .pas-share { display: grid; gap: .35rem; }
+.mil-ui.report-generator-app #report-shopee .pas-share-label { color: var(--rs-muted); font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.mil-ui.report-generator-app #report-shopee .pas-share-bar { display: flex; gap: 3px; height: 24px; overflow: hidden; border-radius: 8px; }
+.mil-ui.report-generator-app #report-shopee .pas-share-bar i { display: grid; place-items: center; min-width: 3px; color: #fff; font-size: .68rem; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app #report-shopee .pas-share-bar i.is-individual { background: linear-gradient(90deg, #b8341a, var(--pas-ind)); }
+.mil-ui.report-generator-app #report-shopee .pas-share-bar i.is-auto { background: linear-gradient(90deg, var(--pas-auto), #6d63f2); }
+
+/* Butterfly: individu grows left from the metric, otomatis grows right. */
+.mil-ui.report-generator-app #report-shopee .pas-fly { display: grid; border: 1px solid #efe3de; border-radius: 16px; background: #fff; overflow: hidden; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-head,
+.mil-ui.report-generator-app #report-shopee .pas-fly-row { display: grid; grid-template-columns: minmax(0, 1fr) 9.5rem minmax(0, 1fr); align-items: center; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-head { padding: .6rem 1rem; border-bottom: 1px solid #f0dcd4; background: #fcf8f6; color: #66707f; font-size: .66rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-head span:nth-child(2) { text-align: center; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-head span:last-child { text-align: right; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-row { padding: .6rem 1rem; border-bottom: 1px solid #f5eeeb; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-row:last-child { border-bottom: 0; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-row:hover { background: #fffaf8; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-metric { padding: 0 .6rem; color: var(--rs-ink); font-size: .78rem; font-weight: 750; text-align: center; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-side { display: grid; grid-template-columns: auto minmax(40px, 1fr); align-items: center; gap: .8rem; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-side.is-auto { grid-template-columns: minmax(40px, 1fr) auto; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-side.is-auto .pas-fly-val { order: 2; justify-items: end; text-align: right; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-val { display: grid; gap: .15rem; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-val b { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; color: var(--rs-ink); font-size: .9rem; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-side.is-auto .pas-fly-val b { justify-content: flex-end; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-track { display: flex; height: 10px; overflow: hidden; border-radius: 99px; background: #f4eeec; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-side.is-individual .pas-fly-track { justify-content: flex-end; }
+.mil-ui.report-generator-app #report-shopee .pas-fly-track i { width: 100%; border-radius: inherit; transition: transform .5s var(--sh-ease); }
+.mil-ui.report-generator-app #report-shopee .pas-fly-side.is-individual .pas-fly-track i { transform-origin: right; background: linear-gradient(270deg, var(--pas-ind), #e2694a); }
+.mil-ui.report-generator-app #report-shopee .pas-fly-side.is-auto .pas-fly-track i { transform-origin: left; background: linear-gradient(90deg, var(--pas-auto), #8b84f5); }
+.mil-ui.report-generator-app #report-shopee .pas-fly-side:not(.is-lead) .pas-fly-track i { opacity: .82; }
+.mil-ui.report-generator-app #report-shopee .pas-lead { padding: .08rem .45rem; border-radius: 99px; background: #e8f6ee; color: #15803d; font-size: .6rem; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+
+.mil-ui.report-generator-app #report-shopee .pas-detail summary {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .35rem .8rem;
+  border: 1px solid #efe3de;
+  border-radius: 99px;
+  background: #fff;
+  color: var(--rs-muted);
+  font-size: .76rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.mil-ui.report-generator-app #report-shopee .pas-detail summary::-webkit-details-marker { display: none; }
+.mil-ui.report-generator-app #report-shopee .pas-detail summary:hover { border-color: var(--sh-line); color: var(--rs-accent); }
+.mil-ui.report-generator-app #report-shopee .pas-detail[open] summary { margin-bottom: .7rem; }
+
+/* The bars grow out from the metric when the section opens. */
+@media (prefers-reduced-motion: no-preference) {
+  .mil-ui.report-generator-app #report-shopee .sdeck-item.is-active .pas-fly-track i { animation: pas-grow .7s var(--sh-ease) backwards; animation-delay: .18s; }
+  .mil-ui.report-generator-app #report-shopee .sdeck-item.is-active .pas-share-bar i { animation: pas-fade .6s var(--sh-ease) backwards; animation-delay: .1s; }
+}
+@keyframes pas-grow { from { transform: scaleX(0); } }
+@keyframes pas-fade { from { opacity: 0; } }
+.mil-ui.report-generator-app.pdf-export-mode #report-shopee :is(.pas-fly-track i, .pas-share-bar i) { animation: none !important; }
+.mil-ui.report-generator-app.pdf-export-mode #report-shopee .pas-detail { display: none; }
+
+@media (max-width: 1100px) {
+  .mil-ui.report-generator-app #report-shopee .pas-duel { grid-template-columns: minmax(0, 1fr); }
+  .mil-ui.report-generator-app #report-shopee .pas-card.is-auto { text-align: left; }
+}
