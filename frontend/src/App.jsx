@@ -5,7 +5,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import DailyTrackingPage from './pages/DailyTrackingPage.jsx';
-import ReportGeneratorPage from './pages/ReportGeneratorPage.jsx';
+import { ReportGeneratorRoute } from './pages/ReportGeneratorPage.jsx';
 import InternalDashboardPage from './pages/InternalDashboardPage.jsx';
 import GoogleReviewsPage from './pages/GoogleReviewsPage.jsx';
 import ExtensionsPage from './pages/ExtensionsPage.jsx';
@@ -60,10 +60,11 @@ export default function App() {
           <Route path="/daily-tracking" element={<Navigate to="/brand-tracking" replace />} />
           <Route element={<ProtectedRoute module="report_generator" />}>
             {/* The report type is a URL param so each one is linkable and the
-                back button works; the page stays mounted across param changes,
-                so an upload in progress survives switching. */}
+                back button works. The generator itself is kept mounted by
+                AppLayout (so a generated report survives leaving the page);
+                this route holds the access guard and the address. */}
             <Route path="/report-generator" element={<Navigate to="/report-generator/meta" replace />} />
-            <Route path="/report-generator/:platform" element={<ReportGeneratorPage />} />
+            <Route path="/report-generator/:platform" element={<ReportGeneratorRoute />} />
           </Route>
           <Route element={<ProtectedRoute module="google_reviews" />}>
             <Route path="/google-reviews" element={<GoogleReviewsPage />} />

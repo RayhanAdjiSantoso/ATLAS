@@ -20,6 +20,10 @@ import type { PlatformKey, PlatformResultData, PlatformStateMap } from '../lib/s
 import { Archive, History, Layers, LayoutGrid } from 'lucide-react';
 
 export interface GeneratorShellProps {
+  // The report type to show. Comes from the URL; passed in because the
+  // generator is kept mounted by AppLayout, outside the route that owns the
+  // :platform param (see ReportGeneratorPage.jsx).
+  platform?: string;
   clientId: number | null;
   setClientId: (id: number | null) => void;
   badges: Record<ReportKey, string>;
@@ -50,7 +54,8 @@ export interface GeneratorShellProps {
 const TAB_REPORTS = REPORT_NAV.filter((r) => !DISABLED_REPORTS.includes(r.key) && r.key !== 'reports');
 
 export function GeneratorShell(props: GeneratorShellProps) {
-  const { platform } = useParams();
+  const params = useParams();
+  const platform = props.platform ?? params.platform;
   useEffect(() => () => clearLibraryCatalog(), []);
   if (!isReportKey(platform) || DISABLED_REPORTS.includes(platform)) return <Navigate to="/report-generator/meta" replace />;
   const activeTab: ReportKey = platform;

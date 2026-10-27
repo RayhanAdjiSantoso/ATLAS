@@ -26,6 +26,13 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'report-generator-tetap-tersimpan',
+    released: '2026-10-27',
+    target: '[data-nav^="/report-generator"]',
+    title: 'Laporan tidak hilang saat pindah halaman',
+    body: 'Laporan yang sudah di-generate di Report Generator kini tetap ada saat Anda membuka halaman lain dan kembali lagi — lengkap dengan file, periode, dan tab yang terakhir dibuka.',
+  },
+  {
     id: 'shopee-report-channel-tabs',
     released: '2026-10-26',
     path: '/report-generator/shopee',
