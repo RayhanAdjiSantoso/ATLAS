@@ -20,9 +20,9 @@ import { MetaChangesTable } from './MetaChangesTable';
 // side by side. A side the period has no campaign for is shown disabled, so
 // the switch reads the same on every chart. `audience` says which:
 //   • age      — NV vs RM (default) / Gabungan / NV / RM;
-//   • campaign — the axis IS the campaign, so Gabungan tints each bar by its
-//                own audience instead of doubling it;
-//   • creative — Gabungan / NV / RM over the materi iklan;
+//   • campaign — the axis IS the campaign (or its ad set), so Gabungan tints
+//                each bar by its own audience instead of doubling it;
+//   • creative — Gabungan / NV / RM over the materi iklan, tinted the same way;
 //   • none     — Boost Post, which has no NV / RM.
 // "Lowest & Highest" is the sort switch plus the two ends named above the
 // chart; a long axis shows the top or bottom 15 of the order. Names on the
@@ -187,11 +187,12 @@ export function MetaCompareBars({
     if (aud === 'split' && canSplit) {
       series = typesPresent.map((t) => ({ label: SHORT[t], values: shown.map((g) => val(g.perType?.[t] as Record<string, unknown>)), color: TYPE_COLOR[t] }));
       legend = typesPresent;
-    } else if (audience === 'campaign' && aud === 'all' && typesPresent.length) {
+    } else if ((audience === 'campaign' || audience === 'creative') && aud === 'all' && typesPresent.length) {
       series = [{ label: metric.label, values: shown.map((g) => val(g.total)), color: shown.map((g) => TYPE_COLOR[g.type]) }];
       legend = typesPresent.filter((t) => shown.some((g) => g.type === t));
     } else {
       series = [{ label: metric.label, values: shown.map((g) => val(g.total)), color: aud === 'NV' || aud === 'RM' ? TYPE_COLOR[aud] : TYPE_COLOR.all }];
+      if (aud === 'NV' || aud === 'RM') legend = [aud];
     }
     const ranked = [...usable].sort((a, b) => (val(b.total) as number) - (val(a.total) as number));
     return {
