@@ -4,7 +4,6 @@ import { LibraryFileSlot, type LibrarySelection } from '../reports/LibraryFileSl
 import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { combineManualPeriods } from '../../lib/manualPeriod';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
-import { HowTo, HowToStep } from '../../components/HowTo';
 import { InlineNotice } from '../../components/InlineNotice';
 import { KpiTable } from '../../components/KpiTable';
 import { PeriodCompareChip } from '../../components/PeriodCompareChip';
@@ -23,13 +22,16 @@ import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
+import { useRestoreLastReport } from '../reports/useRestoreLastReport';
+import { forgetLastReport } from '../reports/lastReportStore';
 import { mapTiktokRows } from '../reports/rowMapping';
 import { getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage, formatSavedAt } from '../reports/savedPeriodLabels';
 import { PeriodSourcePicker, type LibraryMonth } from '../reports/PeriodSourcePicker';
+import { periodBound } from '../reports/periodOrder';
 import api from '../../../api/client.js';
 import type { LibraryFile } from '../reports/LibraryFileSlot';
-import { SavedSlotCard, SlotSourceTabs, type SlotSource } from '../../components/SlotSourceTabs';
+import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SaveReportPayload, SavedPeriod } from '../reports/types';
 import { buildTiktokReport, type TiktokReport } from './tiktokReport';
 
@@ -54,8 +56,8 @@ interface DateRange {
 
 const EMPTY_RANGE: DateRange = { start: null, end: null };
 
-function formatGeneratedDate(): string {
-  return new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+function formatGeneratedDate(at?: string): string {
+  return (at ? new Date(at) : new Date()).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 interface TiktokTabProps {
@@ -64,6 +66,16 @@ interface TiktokTabProps {
   onGenerated: (data: PlatformResultData) => void;
   onInvalidate: () => void;
 }
+
+// Meta's source switch minus Rentang tanggal (TikTok has no auto-fetched
+// daily rows), with the same hints under an empty pick.
+type TiktokSourceKind = 'upload' | 'library' | 'archive';
+const TIKTOK_SOURCE_KINDS: PeriodSourceKind[] = ['upload', 'library', 'archive'];
+const TIKTOK_SOURCE_HINT: Record<TiktokSourceKind, string> = {
+  upload: '',
+  library: 'Buka Perpustakaan Brand — pilih bulan, file GMV Max periode itu terisi',
+  archive: 'Buka Arsip Laporan — pakai ulang periode laporan yang pernah dibuat',
+};
 
 export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: TiktokTabProps) {
   const periodOld = usePeriodLabel('Bulan Lalu');
@@ -89,6 +101,11 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   const [oldPicked, setOldPicked] = useState<SavedPeriod | null>(null);
   const [curPicked, setCurPicked] = useState<SavedPeriod | null>(null);
   const [pickerRole, setPickerRole] = useState<PeriodRole | null>(null);
+  // Same source switch as Meta's, minus Rentang tanggal: which stored
+  // source each period last asked for, until a pick lands, and which list
+  // the dialog opens on.
+  const [pendingKind, setPendingKind] = useState<Record<PeriodRole, TiktokSourceKind>>({ old: 'library', cur: 'library' });
+  const [pickerTab, setPickerTab] = useState<'library' | 'archive'>('library');
   const [applyingRole, setApplyingRole] = useState<PeriodRole | null>(null);
   // Per-slot notes from combining manual files (a date gap, an unreadable period).
   const [manualWarnings, setManualWarnings] = useState<Record<FileKey, string | null>>({ 'tiktok-old': null, 'tiktok-cur': null });
@@ -231,15 +248,33 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
   const autoSave = useAutoSave('tiktok');
   const armReportScroll = useScrollAfterGenerate('report-tiktok', report);
 
-  function generate() {
+  // `restoredAt`: reopening the last report (useRestoreLastReport) — shown
+  // with its original date and not saved a second time.
+  function generate(restoredAt?: string) {
     const r = buildTiktokReport(periodOld.label, periodCur.label, periodOldDays, periodCurDays, files['tiktok-old']?.rows ?? [], files['tiktok-cur']?.rows ?? []);
     setReport(r);
-    setGeneratedAt(formatGeneratedDate());
+    setGeneratedAt(formatGeneratedDate(restoredAt));
     onGenerated({ period: { old: r.p1, cur: r.p2 }, kpis: r.summary.kpis, spend: r.summary.spend });
-    autoSave.save(clientId, buildSavePayload(), buildSaveFiles());
+    if (!restoredAt) autoSave.save(clientId, buildSavePayload(), buildSaveFiles());
   }
 
+  const restoring = useRestoreLastReport({
+    platform: 'tiktok',
+    clientId,
+    apply: async (old, cur) => {
+      for (const [role, period] of [['old', old], ['cur', cur]] as const) {
+        (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+        (role === 'old' ? setOldPicked : setCurPicked)(period);
+        (role === 'old' ? setOldSource : setCurSource)('saved');
+        await applySavedPeriod(role, period);
+      }
+    },
+    ready: ready && !applyingRole,
+    generate,
+  });
+
   function reset() {
+    forgetLastReport('tiktok', clientId);
     periodOld.reset();
     periodCur.reset();
     setFiles({ 'tiktok-old': null, 'tiktok-cur': null });
@@ -311,6 +346,29 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     { label: 'Lihat & unduh PDF', status: report ? 'current' : 'todo' },
   ];
 
+  function sourceKindOf(role: PeriodRole): TiktokSourceKind {
+    if ((role === 'old' ? oldSource : curSource) === 'upload') return 'upload';
+    if (role === 'old' ? oldPickedMonth : curPickedMonth) return 'library';
+    if (role === 'old' ? oldPicked : curPicked) return 'archive';
+    return pendingKind[role];
+  }
+
+  function openPicker(role: PeriodRole, kind: TiktokSourceKind) {
+    setPickerTab(kind === 'archive' ? 'archive' : 'library');
+    setPickerRole(role);
+  }
+
+  function chooseSourceKind(role: PeriodRole, kind: PeriodSourceKind) {
+    if (kind === 'upload') {
+      (role === 'old' ? setOldSource : setCurSource)('upload');
+      return;
+    }
+    if (kind !== 'library' && kind !== 'archive') return;
+    setPendingKind((prev) => ({ ...prev, [role]: kind }));
+    (role === 'old' ? setOldSource : setCurSource)('saved');
+    openPicker(role, kind);
+  }
+
   function sourceCell(role: 'old' | 'cur') {
     const pickedRun = role === 'old' ? oldPicked : curPicked;
     const pickedMonth = role === 'old' ? oldPickedMonth : curPickedMonth;
@@ -328,42 +386,36 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     const source = role === 'old' ? oldSource : curSource;
     return (
       <>
-        <SlotSourceTabs
-          savedFirst
-          value={source}
-          onChange={(v) => {
-            (role === 'old' ? setOldSource : setCurSource)(v);
-            if (v === 'saved' && !picked) setPickerRole(role);
-          }}
+        <PeriodSourceSwitch
+          label={role === 'old' ? 'Periode Lalu' : 'Periode Ini'}
+          kinds={TIKTOK_SOURCE_KINDS}
+          value={sourceKindOf(role)}
+          onChange={(kind) => chooseSourceKind(role, kind)}
           disabledSavedReason={!clientId ? 'Pilih klien terlebih dahulu' : null}
         />
-        {source === 'upload' && (
-          <div className="manual-mode-note">
-            <strong>{role === 'old' ? 'Periode Lalu' : 'Periode Ini'} memakai file manual.</strong> Unggah di baris TikTok GMV Max — file tidak disimpan ke Data Collection Hub. Beberapa file yang rentangnya bersambung (mis. 1–7 dan 8–12) dijumlahkan otomatis; periode dibaca dari nama file ekspor TikTok.
-          </div>
-        )}
         {source === 'saved' &&
           (applyingRole === role ? (
             <div className="setup-applying" role="status">
               <span className="setup-spinner" aria-hidden="true" /> Menerapkan periode…
             </div>
           ) : (
-            <SavedSlotCard picked={picked} onOpen={() => setPickerRole(role)} onClear={() => clearPickedPeriod(role)} />
+            <SavedSlotCard picked={picked} hint={TIKTOK_SOURCE_HINT[sourceKindOf(role)]} onOpen={() => openPicker(role, sourceKindOf(role))} onClear={() => clearPickedPeriod(role)} />
           ))}
       </>
     );
   }
 
+  // Each side's picked period, so the other side cannot be picked out of
+  // order (Periode Ini before Periode Lalu).
+  function pickedPeriod(role: PeriodRole): { start: string | null; label: string } | null {
+    const month = role === 'old' ? oldPickedMonth : curPickedMonth;
+    if (month) return { start: `${month.month}-01`, label: month.label };
+    const run = role === 'old' ? oldPicked : curPicked;
+    return run ? { start: run.start, label: run.label || run.sourceComparison } : null;
+  }
+
   return (
     <div className={`panel${isActive ? ' active' : ''}`}>
-      <HowTo>
-        <HowToStep num={1} numClassName="tiktok-num" title="Download report dari TikTok Ads Manager">
-          Buka TikTok Ads Manager → <strong>Reporting</strong> → pilih level <strong>Campaign</strong>. Set rentang tanggal untuk periode lalu dan periode ini secara terpisah, lalu download masing-masing sebagai file Excel (.xlsx). Pastikan kolom yang tersedia meliputi: Campaign Name, Cost, SKU Orders, Cost per Order, Gross Revenue, dan ROI.
-        </HowToStep>
-        <HowToStep num={2} numClassName="tiktok-num" title="Pilih sumber & buat laporan">
-          Pilih file perpustakaan untuk periode lalu dan periode ini — atau pilih <strong>Upload file baru</strong> untuk rentang khusus yang tidak disimpan — lalu klik <strong>Generate Laporan</strong>. Semua metrik (Cost, Order, Cost per Order, Gross Revenue, AOV, ROI) dihitung otomatis dari data campaign.
-        </HowToStep>
-      </HowTo>
 
       <StepIndicator steps={steps} accent="var(--tiktok)" />
 
@@ -372,19 +424,19 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
         title="Sumber data"
         note={
           <>
-            Pilih file GMV Max tiap periode dari <strong>Perpustakaan Brand</strong> atau <strong>Arsip Laporan</strong>, atau unggah file baru untuk rentang khusus yang
-            tidak disimpan.
+            <strong>Perpustakaan</strong> dan <strong>Arsip</strong> mengisi file GMV Max periode itu; di mode <strong>Upload</strong>, unggah file di baris TikTok GMV Max — file
+            hanya dibaca untuk laporan ini dan tidak disimpan ke Data Collection Hub. Beberapa file yang rentangnya bersambung dijumlahkan otomatis.
           </>
         }
       >
         <SetupGrid>
+          <SetupRow label="Sumber" sub="per periode" old={sourceCell('old')} cur={sourceCell('cur')} />
           <SetupRow
             label="Label periode"
             sub="tampil di laporan"
             old={<SetupTextInput label="Label Periode Lalu" value={periodOld.inputValue} onChange={periodOld.onInput} placeholder="cth: Apr 2026 / W1–W2 Jun" />}
             cur={<SetupTextInput label="Label Periode Ini" value={periodCur.inputValue} onChange={periodCur.onInput} placeholder="cth: Mei 2026 / W3–W4 Jun" />}
           />
-          <SetupRow label="Sumber" sub="per periode" old={sourceCell('old')} cur={sourceCell('cur')} />
           <SetupRow label="TikTok GMV Max" req old={dropzone('tiktok-old')} cur={dropzone('tiktok-cur')} />
         </SetupGrid>
         {fileErrors['tiktok-old'] && <InlineNotice title="Sumber Periode Lalu belum dapat dibaca">{fileErrors['tiktok-old']}</InlineNotice>}
@@ -406,6 +458,8 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
           onClose={() => setPickerRole(null)}
           onPickLibrary={handlePickMonth}
           onPickArchive={handlePickPeriod}
+          initialTab={pickerTab}
+          bound={periodBound(pickerRole, pickedPeriod('old'), pickedPeriod('cur'))}
         />
       )}
 
@@ -425,6 +479,12 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
               <RotateCcw size={15} aria-hidden /> Reset
             </button>
           </div>
+        </div>
+      )}
+
+      {restoring && (
+        <div className="setup-applying" role="status">
+          <span className="setup-spinner" aria-hidden="true" /> Membuka laporan terakhir…
         </div>
       )}
 

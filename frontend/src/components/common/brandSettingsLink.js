@@ -1,4 +1,5 @@
 import { sessionKey } from '../../hooks/useSessionState.js';
+import { presetActiveBrand } from '../../hooks/useActiveBrand.js';
 
 // Data Collection Hub restores its brand, view and platform from sessionStorage
 // on mount. Writing them just before navigating is how a link elsewhere lands
@@ -11,7 +12,7 @@ export function presetBrandSettings({ brandId, view, platform } = {}) {
     if (view === 'data' || view === 'meta-automation' || view === 'google-ads') {
       sessionStorage.setItem(sessionKey('brand-settings:database-view'), JSON.stringify('files'));
     }
-    if (brandId) sessionStorage.setItem(sessionKey('brand-settings:brand'), JSON.stringify(Number(brandId)));
+    if (brandId) presetActiveBrand(brandId);
     if (accountPlatform || platform) sessionStorage.setItem(sessionKey('brand-settings:platform'), JSON.stringify(accountPlatform || platform));
   } catch {
     /* storage blocked — the link still navigates, just without the preset */
@@ -23,7 +24,7 @@ export function presetBrandSettings({ brandId, view, platform } = {}) {
 export function presetBrandTracking({ brandId, view } = {}) {
   try {
     if (view) sessionStorage.setItem(sessionKey('daily-tracking:view'), JSON.stringify(view));
-    if (brandId) sessionStorage.setItem(sessionKey('daily-tracking:client'), JSON.stringify(Number(brandId)));
+    if (brandId) presetActiveBrand(brandId);
   } catch {
     /* storage blocked — the link still navigates, just without the preset */
   }

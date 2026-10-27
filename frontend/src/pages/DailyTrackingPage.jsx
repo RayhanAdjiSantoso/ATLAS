@@ -4,6 +4,7 @@ import { BadgeDollarSign, CheckCircle2, Eye, Loader2, PencilLine, PieChart, Rece
 import api from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
+import useActiveBrand from '../hooks/useActiveBrand.js';
 import DashboardBrandPicker from '../components/dashboard/DashboardBrandPicker.jsx';
 import MonthPillNav from '../components/dailyTracking/MonthPillNav.jsx';
 import TrackingKpis from '../components/dailyTracking/TrackingKpis.jsx';
@@ -78,7 +79,7 @@ export default function DailyTrackingPage() {
   const view = views.some((v) => v.id === storedView) ? storedView : 'overview';
   const [activeTab, setActiveTab] = useSessionState('daily-tracking:tab', 'sales');
   const [brands, setBrands] = useState([]);
-  const [storedBrandId, setBrandId] = useSessionState('daily-tracking:client', null);
+  const [storedBrandId, setBrandId] = useActiveBrand();
   // A client account is pinned to its own brand from the first request on,
   // whatever an earlier session left behind.
   const brandId = locked ? allowedBrandId : storedBrandId;

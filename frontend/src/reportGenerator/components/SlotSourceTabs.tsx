@@ -66,20 +66,24 @@ const SOURCE_OPTIONS: { value: PeriodSourceKind; label: string; hint: string; Ic
   { value: 'range', label: 'Rentang tanggal', hint: 'Tanggal bebas dari data harian tarikan otomatis', Icon: CalendarDays },
 ];
 
+// `kinds` narrows the buttons for a platform without one of the sources —
+// Shopee has no auto-fetched daily rows, so no Rentang tanggal.
 export function PeriodSourceSwitch({
   value,
   onChange,
   disabledSavedReason,
   label,
+  kinds,
 }: {
   value: PeriodSourceKind;
   onChange: (value: PeriodSourceKind) => void;
   disabledSavedReason?: string | null;
   label: string;
+  kinds?: PeriodSourceKind[];
 }) {
   return (
     <div className="src-switch" role="group" aria-label={`Sumber ${label}`}>
-      {SOURCE_OPTIONS.map(({ value: v, label: l, hint, Icon }) => {
+      {SOURCE_OPTIONS.filter((o) => !kinds || kinds.includes(o.value)).map(({ value: v, label: l, hint, Icon }) => {
         const blocked = v !== 'upload' && Boolean(disabledSavedReason);
         return (
           <button

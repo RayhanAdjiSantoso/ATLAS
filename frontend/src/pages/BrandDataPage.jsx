@@ -1,11 +1,13 @@
 import useSessionState from '../hooks/useSessionState.js';
+import useActiveBrand from '../hooks/useActiveBrand.js';
+import { Link } from 'react-router-dom';
 import BrandStatusFilter, { matchesBrandStatus, BRAND_STATUS_LABELS } from '../components/common/BrandStatusFilter.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
   Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert,
   Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
-  Trash2, Upload, CalendarRange, HelpCircle, BadgeCheck, CalendarClock,
+  Trash2, Upload, CalendarRange, HelpCircle, BadgeCheck, CalendarClock, FileBarChart, ArrowRight,
 } from 'lucide-react';
 import MetaAutomationSection from '../components/brandSettings/MetaAutomationSection.jsx';
 import MetaDatasetSpecs from '../components/brandSettings/MetaDatasetSpecs.jsx';
@@ -737,7 +739,7 @@ function BrandAvatar({ brand }) {
 }
 
 function DataView({ brand, command, months, windowMonths, windowEnd, setWindowEnd, focus, setFocus, lookup, reduced, onPick, onDelete, onReimport, onLibraryChanged, busyKey, marketId, setMarketId }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, can } = useAuth();
   const accountsRef = useRef(null);
   const [accountsVersion, setAccountsVersion] = useState(0);
   // A Meta dataset row's "Lihat breakdown & metrik": the auto-fetch panel
@@ -762,6 +764,7 @@ function DataView({ brand, command, months, windowMonths, windowEnd, setWindowEn
   return (
     <div className="soft-card bp-panel bp-data" style={{ '--mk-accent': platform.accent, '--mk-wash': platform.wash, '--mk-tint': platform.tint }}>
       <div className="bp-panel-head">
+        {command}
         <div className="bp-data-ident">
           <BrandAvatar brand={brand} />
           <div>
@@ -769,9 +772,9 @@ function DataView({ brand, command, months, windowMonths, windowEnd, setWindowEn
             <p>Semua data {brand?.brand_name ?? 'brand ini'} tersimpan disini untuk Report Generator, Brand Overview, dan Meta Automation. Cukup unggah data sekali, tidak perlu mengulang di setiap fitur.</p>
           </div>
         </div>
-        {command}
       </div>
 
+      <div className="bp-platforms-row">
       <nav className="soft-subtabs bp-platforms" aria-label="Sumber data" role="tablist">
         {PLATFORMS.map((item) => {
           const itemSummary = platformSummary(item, months, lookup);
@@ -795,6 +798,15 @@ function DataView({ brand, command, months, windowMonths, windowEnd, setWindowEn
           );
         })}
       </nav>
+      {can('report_generator') && (
+        // Opens this channel's report on the same brand (the brand is shared
+        // across pages, see useActiveBrand).
+        <Link to={`/report-generator/${platform.id}`} className="bp-primary bp-report-link" data-feature="shortcut-report-generator">
+          <FileBarChart size={15} aria-hidden="true" /> Buat report {platform.label}
+          <ArrowRight size={15} aria-hidden="true" className="bp-report-link-arrow" />
+        </Link>
+      )}
+      </div>
 
       <div className="bp-toolbar">
         <MonthRail
@@ -903,7 +915,7 @@ export default function BrandDataPage() {
   const reduced = useReducedMotion();
   const [brands, setBrands] = useState([]);
   const [brand, setBrand] = useState(null);
-  const [lastBrandId, setLastBrandId] = useSessionState('brand-settings:brand', null);
+  const [lastBrandId, setLastBrandId] = useActiveBrand();
   // Same session keys as before the split, so links elsewhere that preset a
   // brand and platform (Meta Automation) still land on them.
   const [activeView, setActiveView] = useSessionState('brand-settings:view', 'data');
@@ -1138,7 +1150,7 @@ export default function BrandDataPage() {
     ? `${buildMonth(span[0].slice(0, 7)).full} – ${buildMonth(span[span.length - 1].slice(0, 7)).full}`
     : 'Belum ada data';
 
-  // The brand and its data range, at the right of Input Monthly Performance
+  // The brand and its data range, at the left of Input Monthly Performance
   // Data's title.
   const command = (
     <div className="bp-command is-inline" role="group" aria-label="Brand yang dikelola">

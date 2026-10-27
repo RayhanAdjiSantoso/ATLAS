@@ -1,4 +1,5 @@
 import useSessionState from '../../hooks/useSessionState.js';
+import useActiveBrand from '../../hooks/useActiveBrand.js';
 import { useEffect, useState } from 'react';
 import { Info } from 'lucide-react';
 import api from '../../api/client.js';
@@ -20,7 +21,10 @@ const num = (v) => (v == null ? '-' : new Intl.NumberFormat('id-ID').format(v));
 
 function DetailView() {
   const [clients, setClients] = useState([]);
-  const [clientId, setClientId] = useSessionState('internal:ClientDetailTab:clientId', '');
+  // The brand shared across pages (useActiveBrand); ClientPicker speaks strings.
+  const [activeBrand, setActiveBrand] = useActiveBrand();
+  const clientId = activeBrand ? String(activeBrand) : '';
+  const setClientId = setActiveBrand;
   const [period, setPeriod] = useSessionState('internal:ClientDetailTab:period', thisMonth());
   const [compare, setCompare] = useSessionState('internal:ClientDetailTab:compare', 'mom');
   const [data, setData] = useState(null);

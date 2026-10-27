@@ -1,4 +1,4 @@
-import useSessionState from '../hooks/useSessionState.js';
+import useActiveBrand from '../hooks/useActiveBrand.js';
 import { useState } from 'react';
 import { GeneratorShell } from './app/GeneratorShell';
 import type { ReportKey } from './app/reports';
@@ -23,7 +23,7 @@ const EMPTY_BIZ_ROWS: BizRow[] = [];
 // Ported from MRG's App.tsx minus its router, auth provider and site shell:
 // ATLAS supplies all three (App.jsx, AuthContext, AppLayout).
 function App({ platform }: { platform?: string }) {
-  const [clientId, setClientId] = useSessionState('generator:client', null);
+  const [clientId, setClientId] = useActiveBrand();
 
   // platformState feeds the Summary Overview tab (Meta/Shopee/TikTok each
   // report their last-generated result here).
