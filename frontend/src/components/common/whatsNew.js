@@ -34,6 +34,14 @@ export const WHATS_NEW = [
     body: 'Laporan Meta Ads kini punya tab Boost Post, Non Boost Post Retail, Non Boost Post Non Retail, dan CPAS. Tiap tab berisi Overall, Traffic Analysis, Conversion Analysis, dan Top Content Analysis, dengan tabel perubahan dibanding periode lalu di bawah setiap grafik.',
   },
   {
+    id: 'shopee-report-channel-tabs',
+    released: '2026-10-26',
+    path: '/report-generator/shopee',
+    target: '[data-feature="shopee-roi-root"]',
+    title: 'Report Shopee per channel',
+    body: 'Report Shopee kini dibagi per tab Overall, Product Ads, Shop+ Ads, Live Ads, dan Banner Ads, masing-masing dengan Traffic, Conversion, Pareto, dan Potential. Overall dibuka dengan ROI yang dipecah ke Revenue dan Spend per channel, Shop+ Ads membandingkan tiap grup iklan, dan Potential Product kini hanya menampilkan produk laku yang belum diiklankan.',
+  },
+  {
     id: 'brand-ikut-antar-halaman',
     released: '2026-10-26',
     target: '[data-nav="/brand-tracking"]',

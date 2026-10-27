@@ -14,15 +14,15 @@ const EMPTY_BIZ_ROWS: BizRow[] = [];
 // Holds the state every report type shares and hands it to GeneratorShell,
 // which decides what to show from the :platform URL param.
 //
-// This component is mounted by the /report-generator/:platform route, so it
-// stays mounted as you move between report types — only the param changes —
-// and an upload in progress or an already-generated report survives the move.
-// Leaving the generator for another ATLAS page does reset it, same as every
-// other page in the app.
+// AppLayout keeps this component mounted once the generator has been opened
+// (hidden while another ATLAS page is on screen), so an upload in progress or
+// an already-generated report survives moving between report types *and*
+// leaving for another page and coming back. It is dropped on logout, when the
+// layout itself unmounts.
 //
 // Ported from MRG's App.tsx minus its router, auth provider and site shell:
 // ATLAS supplies all three (App.jsx, AuthContext, AppLayout).
-function App() {
+function App({ platform }: { platform?: string }) {
   const [clientId, setClientId] = useActiveBrand();
 
   // platformState feeds the Summary Overview tab (Meta/Shopee/TikTok each
@@ -61,6 +61,7 @@ function App() {
     // on it and portalTarget.ts renders popups into it.
     <div className="mil-ui report-generator-app">
       <GeneratorShell
+        platform={platform}
         clientId={clientId}
         setClientId={(id) => {
           if (id === clientId) return;

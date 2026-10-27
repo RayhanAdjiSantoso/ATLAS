@@ -8,6 +8,11 @@ export interface ReportPage {
   hidden?: boolean;
   // A thin rule before this tab, to set a new run of pages apart.
   dividerBefore?: boolean;
+  // A short reading beside the label (a channel's ROAS) — the tab bar then
+  // says where to look before anything is opened.
+  hint?: string;
+  // The page exists but holds no data; its tab stays reachable, quieter.
+  empty?: boolean;
 }
 
 // A report's sections split into tabbed pages instead of one endless scroll.
@@ -80,12 +85,13 @@ export function ReportPages({ pages, accent, accentInk }: { pages: ReportPage[];
             role="tab"
             data-page={p.id}
             aria-selected={current === p.id}
-            className={`report-tab${current === p.id ? ' active' : ''}`}
+            className={`report-tab${current === p.id ? ' active' : ''}${p.empty ? ' is-empty' : ''}`}
             style={{ '--rt-i': i } as CSSProperties}
             onClick={() => setActive(p.id)}
           >
             <span className="report-tab-dot" aria-hidden />
             {p.label}
+            {p.hint && <span className="report-tab-hint">{p.hint}</span>}
           </button>
           </Fragment>
         ))}

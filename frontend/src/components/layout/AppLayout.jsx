@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Home, LogOut, FileBarChart, Building2, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Menu, ShieldCheck, MessageSquareText, Puzzle } from 'lucide-react';
 import { BRAND_SETTING_SECTIONS, BRAND_TRACKING } from '../brandSettings/sections.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import AnnotationLayer from '../annotations/AnnotationLayer.jsx';
 import FeatureSpotlight from '../common/FeatureSpotlight.jsx';
 import atlasIcon from '../../assets/atlas-icon.png';
+import ReportGeneratorPage from '../../pages/ReportGeneratorPage.jsx';
 
 const COLLAPSE_KEY = 'atlas_sidebar_collapsed';
 
@@ -33,6 +34,19 @@ const ROLE_BADGE = { superadmin: 'Superadmin', admin: 'Admin', reviewer: 'Review
 
 export default function AppLayout() {
   const { user, logout, isAdmin, isSuperAdmin, isViewOnly, can } = useAuth();
+
+  // The generator's address while it is on screen, and the report type it
+  // last showed while it is not — so the hidden instance keeps rendering the
+  // same report instead of jumping back to Meta.
+  const generatorMatch = useMatch('/report-generator/:platform');
+  const canGenerator = can('report_generator');
+  const generatorRoute = Boolean(generatorMatch && canGenerator);
+  const [lastGeneratorPlatform, setLastGeneratorPlatform] = useState(null);
+  const generatorPlatform = generatorRoute ? generatorMatch.params.platform : lastGeneratorPlatform;
+  useEffect(() => {
+    if (generatorRoute) setLastGeneratorPlatform(generatorMatch.params.platform);
+  }, [generatorRoute, generatorMatch?.params.platform]);
+  const keepGenerator = canGenerator && Boolean(generatorPlatform);
   const navigate = useNavigate();
 
   // Remembered per browser: whoever collapses the sidebar means it, and having
@@ -89,6 +103,8 @@ export default function AppLayout() {
   // disappears when it has none.
   const links = NAV
     .map((n) => {
+      // Back to the report type last open, where the kept-alive report waits.
+      if (n.to === '/report-generator' && lastGeneratorPlatform) return { ...n, to: `/report-generator/${lastGeneratorPlatform}` };
       if (!n.sections) return n;
       const sections = n.sections.filter(allowed);
       if (!sections.length) return null;
@@ -221,6 +237,14 @@ export default function AppLayout() {
           </Link>
         </div>
         <Outlet />
+        {/* Report Generator, kept alive: mounted the first time it is opened
+            and only hidden while another page is on screen, so a generated
+            report (and its files and selections) is still there on return. */}
+        {keepGenerator && (
+          <div className="rg-keepalive" hidden={!generatorRoute}>
+            <ReportGeneratorPage platform={generatorPlatform} />
+          </div>
+        )}
       </main>
 
       {/* Feedback pinned to parts of the page — only for roles Pengaturan

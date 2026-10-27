@@ -4,6 +4,7 @@ import { KpiTable, type KpiRowDisplay } from '../../components/KpiTable';
 import { MetricPicker } from '../../components/MetricPicker';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
+import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { reorderIds, useInlineMetricEditor } from '../../hooks/useInlineMetricEditor';
 import { validateFormula } from '../../lib/formula';
 import { DAILY_TREND_BUILTIN_METRICS, dailyTrendSelectionId, dailyTrendSelectionLabel, type DailyTrendMetricSelection, type DailyTrendPivotRow, type ProductPerformanceRow } from '../../lib/shopeeDeepDiveInsights';
@@ -13,7 +14,8 @@ import { PERFORMANCE_BUILTIN_METRICS, type PerfMetricVars, type PerformancePivot
 import type { FunnelTreeRow, FunnelValueRow } from '../../lib/shopeeFunnel';
 import type { SheetRow } from '../../lib/types';
 import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
-import { SymptomSummaryPanel, SymptomTreePanel } from './AnalysisSections';
+import { DataTable, EqualSplit, SymptomSummaryPanel, SymptomTreePanel, type DataColumn } from './AnalysisSections';
+import { parseShopeeNum } from '../../lib/shopeeAds';
 
 // ══════════════════════════════════════════════════════
 // FASE 3 — SHOPEE DEEP-DIVE UI building blocks. Kept separate from
@@ -63,10 +65,10 @@ export function ChannelPivotSection({
       </div>
       {tree ? (
         <>
-          <div className="sec-split sec-split-padded">
+          <EqualSplit className="sec-split-padded">
             <div className="sec-split-main">{table}</div>
-            <SymptomTreePanel tree={tree} p1={p1} p2={p2} title="Symptom Analysis" badge={title} />
-          </div>
+            <SymptomTreePanel tree={tree} p1={p1} p2={p2} title="Root Cause" badge={title} />
+          </EqualSplit>
           {symptom && (
             <div style={{ padding: '1.3rem 1.4rem 1.2rem' }}>
               <SymptomSummaryPanel summary={symptom} />
@@ -307,7 +309,8 @@ function MultiMetricTable<T extends { metrics: GenericMetricCell[] }>({
                             editor.startEdit(m.id, m.label);
                           }}
                         >
-                          {m.label} {p1}
+                          {m.label}
+                          <span className="th-sub">{p1}</span>
                         </span>
                         <button
                           type="button"
@@ -326,11 +329,13 @@ function MultiMetricTable<T extends { metrics: GenericMetricCell[] }>({
                     )}
                   </th>
                   <th style={{ ...thStyle, textAlign: 'left' }} onClick={() => handleHeaderClick({ kind: 'metric', index: mi, field: 'cur' })}>
-                    {m.label} {p2}
+                    {m.label}
+                    <span className="th-sub">{p2}</span>
                     {sortIndicator({ kind: 'metric', index: mi, field: 'cur' })}
                   </th>
                   <th style={{ ...thStyle, textAlign: 'left' }} onClick={() => handleHeaderClick({ kind: 'metric', index: mi, field: 'delta' })}>
-                    %Chg {m.label}
+                    {m.label}
+                    <span className="th-sub">%Chg</span>
                     {sortIndicator({ kind: 'metric', index: mi, field: 'delta' })}
                   </th>
                 </Fragment>
@@ -791,38 +796,133 @@ export function UnadvertisedProductsTable({ rows, hasFile }: { rows: ProductPerf
 // Only rendered by the caller when non-empty (the real sample file has this
 // sheet empty — spec: "kalau ternyata berisi data ... tampilkan juga").
 // Columns aren't fixed ahead of time, so every key present is shown as-is.
+// Shopee's own "Tingkatkan dengan Iklan" list, read column by column off the
+// export's headers. Most of its columns come in pairs — "… (Pesanan Dibuat)"
+// and "… (Pesanan Siap Dikirim)" — under headers five lines tall; here each
+// pair is one column with both figures in the cell (dibuat above, siap
+// dikirim below), so the list fits the card and reads like the rest of the
+// report. A column the export adds later still shows, paired or on its own.
+const TK_CREATED = /\(?\s*pesanan dibuat\s*\)?/;
+const TK_SHIPPED = /\(?\s*pesanan siap dikirim\s*\)?/;
+const TK_LABELS: Record<string, string> = {
+  penjualan: 'Penjualan',
+  'tingkat konversi pesanan': 'Konversi',
+  '': 'Pesanan',
+  produk: 'Unit Terjual',
+  pembeli: 'Pembeli',
+  'jumlah produk dilihat': 'Dilihat',
+  'produk diklik': 'Diklik',
+  'persentase klik': 'CTR',
+  'dimasukkan ke keranjang (produk)': 'Masuk Keranjang',
+};
+// The columns a reader needs to decide whether to advertise a product; the
+// rest of the export's two dozen stay one click away.
+const TK_CORE = new Set(['pair:penjualan', 'pair:', 'pair:tingkat konversi pesanan', 'col:jumlah produk dilihat', 'col:produk diklik', 'col:persentase klik', 'col:dimasukkan ke keranjang (produk)']);
+type TkView = 'core' | 'all';
+
+const tkBase = (h: string) =>
+  h.toLowerCase().replace(TK_CREATED, ' ').replace(TK_SHIPPED, ' ').replace(/\(idr\)/, ' ').replace(/^\s*total\s+/, '').replace(/\s+/g, ' ').trim();
+const tkLabel = (base: string) => TK_LABELS[base] ?? base.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+
+// The sheet writes Indonesian numerals as text ("17.419.850", "18,35%").
+function tkValue(raw: unknown, idr: boolean): { text: string; num: number | null } {
+  const str = String(raw ?? '').trim();
+  if (!str || str === '-') return { text: '—', num: null };
+  if (str.endsWith('%')) return { text: str, num: Number(str.replace('%', '').replace(/\./g, '').replace(',', '.')) };
+  const num = /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(str) ? Number(str.replace(/\./g, '').replace(',', '.')) : typeof raw === 'number' ? raw : parseShopeeNum(str);
+  return { text: fmtPivotVal(num, idr ? 'rp' : 'num'), num };
+}
+
 export function TingkatkanDenganIklanTable({ rows }: { rows: SheetRow[] }) {
+  const [view, setView] = useState<TkView>('core');
   if (!rows.length) return null;
-  const cols = Object.keys(rows[0]);
+  const headers = Object.keys(rows[0]);
+  const find = (name: string) => headers.find((h) => h.toLowerCase().trim() === name);
+  const codeCol = find('kode produk');
+  const nameCol = find('produk') ?? find('nama produk');
+
+  const columns: DataColumn<SheetRow>[] = [
+    {
+      id: 'produk', label: 'Produk', thStyle: { textAlign: 'left', width: 'auto' }, tdStyle: { textAlign: 'left', minWidth: '15rem' },
+      sortValue: (r) => String(nameCol ? r[nameCol] : ''),
+      render: (r) => (
+        <span className="tk-prod">
+          <span>{String(nameCol ? r[nameCol] ?? '' : '')}</span>
+          {codeCol && <small>Kode {String(r[codeCol] ?? '')}</small>}
+        </span>
+      ),
+    },
+  ];
+  const numTh: CSSProperties = { width: '1%', whiteSpace: 'normal' };
+  const numTd: CSSProperties = { whiteSpace: 'nowrap' };
+  const done = new Set<string>([codeCol, nameCol].filter((c): c is string => Boolean(c)));
+  for (const h of headers) {
+    if (done.has(h)) continue;
+    const lower = h.toLowerCase();
+    const base = tkBase(h);
+    const isCreated = TK_CREATED.test(lower);
+    const isShipped = TK_SHIPPED.test(lower);
+    const twin = isCreated || isShipped
+      ? headers.find((o) => o !== h && !done.has(o) && tkBase(o) === base && (isCreated ? TK_SHIPPED : TK_CREATED).test(o.toLowerCase()))
+      : undefined;
+    const idr = lower.includes('(idr)');
+    done.add(h);
+    if (twin) {
+      done.add(twin);
+      const created = isCreated ? h : twin;
+      const shipped = isCreated ? twin : h;
+      columns.push({
+        id: `pair:${base}`, label: tkLabel(base), sub: view === 'all' ? 'dibuat · siap dikirim' : undefined, thStyle: numTh, tdStyle: numTd,
+        sortValue: (r) => tkValue(r[created], idr).num,
+        render: (r) => (
+          <span className="tk-pair">
+            <b>{tkValue(r[created], idr).text}</b>
+            <small>{tkValue(r[shipped], idr).text}</small>
+          </span>
+        ),
+      });
+    } else {
+      columns.push({
+        id: `col:${lower.trim()}`, label: tkLabel(base) || h, thStyle: numTh, tdStyle: numTd,
+        sortValue: (r) => tkValue(r[h], idr).num,
+        render: (r) => tkValue(r[h], idr).text,
+      });
+    }
+  }
+
+  const shown = (ids: Set<string>) => columns.filter((c) => c.id === 'produk' || ids.has(c.id));
+
   return (
     <div className="sec-block">
       <div className="sec-heading shopee-heading">
         Tingkatkan dengan Iklan <span className="sec-badge">Product Performance · referensi silang</span>
+        <SectionExcelButton />
         <SectionDownloadButton />
       </div>
-      <div style={{ padding: '.6rem 1.4rem 1.4rem', overflowX: 'auto' }}>
-        <table className="kpi-table">
-          <thead>
-            <tr>
-              {cols.map((c) => (
-                <th key={c} style={{ textAlign: 'left' }}>
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                {cols.map((c) => (
-                  <td key={c} style={{ textAlign: 'left' }}>
-                    {String(r[c] ?? '')}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ padding: '1rem 1.4rem 1.4rem' }}>
+        <div className="chart-controls">
+          <SegmentedToggle
+            label="Kolom"
+            options={[
+              { value: 'core', label: `Ringkas (${shown(TK_CORE).length - 1})` },
+              { value: 'all', label: `Semua (${columns.length - 1})` },
+            ]}
+            value={view}
+            onChange={setView}
+            accent="var(--shopee-700)"
+          />
+        </div>
+        <p className="chart-caption">
+          Produk yang disarankan Shopee untuk diiklankan. Di kolom berpasangan, angka atas = pesanan <strong>dibuat</strong>, angka bawah = pesanan{' '}
+          <strong>siap dikirim</strong>.{view === 'all' && ' Geser tabel ke samping untuk kolom lainnya — nama produk tetap terlihat.'}
+        </p>
+        <DataTable
+          columns={view === 'all' ? columns : shown(TK_CORE)}
+          rows={rows}
+          rowKey={(r, i) => `${codeCol ? String(r[codeCol]) : ''}:${i}`}
+          maxHeight={640}
+          className={view === 'all' ? 'dt-sticky-first' : ''}
+        />
       </div>
     </div>
   );

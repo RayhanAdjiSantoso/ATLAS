@@ -380,17 +380,6 @@ export interface PotentialProduct {
   conversionRate: number;
 }
 
-// Top N by revenue in the newest period. "Potensial" is read as "already
-// earning" — revenue leads the sort, conversion rate rides alongside so a
-// high-revenue product converting badly is visible as a headroom case.
-export function buildPotentialProducts(curRecords: ProductPerfRecord[], count = 10): PotentialProduct[] {
-  return [...curRecords]
-    .filter((r) => r.salesConfirmed > 0)
-    .sort((a, b) => b.salesConfirmed - a.salesConfirmed)
-    .slice(0, count)
-    .map((r) => ({ key: r.key, produk: r.produk, revenue: r.salesConfirmed, conversionRate: r.conversionRate }));
-}
-
 // ── "Per Performa" item pivot (Analisis Per Item) ────────────────────────
 // A dedicated metric universe drawn only from the "Produk dengan Performa
 // Terbaik" sheet's own columns — kept separate from ItemMetricVars (which

@@ -9,8 +9,15 @@ import {
 } from '../../lib/shopeeFunnel';
 import { buildSymptomSummary, type SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import {
+  buildChannelAnalyses,
+  buildRoiRoot,
+  buildUnadvertisedProducts,
+  type ChannelAnalysis,
+  type RoiRoot,
+  type UnadvertisedProduct,
+} from '../../lib/shopeeChannelAnalysis';
+import {
   buildPareto,
-  buildPotentialProducts,
   buildProductChartPoints,
   buildProductRankings,
   CONVERSION_METRIC_DEFS,
@@ -23,12 +30,12 @@ import {
   TRAFFIC_METRIC_DEFS,
   type ParetoRangeSelection,
   type ParetoRow,
-  type PotentialProduct,
   type ProductChartGroupDef,
   type ProductMetricRanking,
   type ProductChartPoint,
   type ProductPerfMonth,
 } from '../../lib/shopeeProductAnalysis';
+import { buildShopPlusFunnel } from '../../lib/shopeeShopPlus';
 import { findShopeeCol, parseShopeeNum } from '../../lib/shopeeAds';
 import type { SheetRow } from '../../lib/types';
 
@@ -66,6 +73,16 @@ export interface BuildShopeeFunnelReportInput {
   // Which of the months above to include — "Semua Bulan" (default), a
   // Bulan Awal–Akhir range, or a single month. See selectParetoMonths.
   paretoRange?: ParetoRangeSelection | null;
+  // Channel tabs. Shop+ keyword rows (items of the Shop+ tab), and the current
+  // period's Iklan Produk split back into its two files: individual ads
+  // ("Data Keseluruhan Iklan") and the auto campaign ("Iklan Produk
+  // Otomatis") — Produk Potensial reads "not advertised" off the individual
+  // ads and flags products only the auto campaign reaches. A reconstructed
+  // report has them merged; it passes the merged rows as individual.
+  tokoKeywordOld?: SheetRow[];
+  tokoKeywordCur?: SheetRow[];
+  produkIndividualCur?: SheetRow[];
+  produkOtomatisCur?: SheetRow[];
 }
 
 // One ad channel's current-period contribution — feeds the "Kontribusi Antar
@@ -84,7 +101,9 @@ export interface ChannelMixEntry {
 // One ad channel's own funnel, so each channel section can show which stage
 // moved *its* GMV — the account-level tree can't tell you whether a drop came
 // from Iklan Produk or Iklan Toko. Live has no impression/click columns, so it
-// only gets a tree when its export happens to carry them.
+// only gets a tree when its export happens to carry them. Iklan Toko (Shop+)
+// gets its own metric set and tree (lib/shopeeShopPlus.ts) — its export has
+// no ATC and adds direct conversions and product clicks.
 export interface ChannelFunnel {
   key: 'produk' | 'toko' | 'live';
   label: string;
@@ -119,7 +138,12 @@ export interface ShopeeFunnelReport {
   // single-period Top 5. Keyed by pair id so the section can look one up
   // without depending on array order.
   productCharts: { group: ProductChartGroupDef; points: ProductChartPoint[] }[];
-  potentialProducts: PotentialProduct[];
+  // Products selling in the store but without an individual Iklan Produk.
+  unadvertised: { products: UnadvertisedProduct[]; advertisedCount: number; totalProducts: number };
+  // One analysis per channel tab (Product Ads, Shop+, Live, Banner), and the
+  // Overall root: ROI split into revenue and spend, each by channel.
+  channelAnalyses: ChannelAnalysis[];
+  roiRoot: RoiRoot;
   // False when the export has no plain "Pengunjung Produk" column — the
   // Visit → ATC chart says so rather than drawing a row of zero bars.
   hasVisitorsCol: boolean;
@@ -180,9 +204,21 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     const cc = funnelMetrics(sc, input.omzetCur);
     return { key, label, values: buildFunnelValues(co, cc), tree: buildFunnelTree(co, cc), symptom: buildSymptomSummary(co, cc) };
   };
+  const channelAnalyses = buildChannelAnalyses({
+    produkOld: input.produkOld,
+    produkCur: input.produkCur,
+    tokoOld: input.tokoOld,
+    tokoCur: input.tokoCur,
+    tokoKeywordOld: input.tokoKeywordOld ?? [],
+    tokoKeywordCur: input.tokoKeywordCur ?? [],
+    liveOld: input.liveOld,
+    liveCur: input.liveCur,
+  });
+  const shopPlus = buildShopPlusFunnel(input.tokoOld, input.tokoCur, channelAnalyses.find((a) => a.key === 'toko')?.groups ?? []);
+
   const channels = [
     channelFunnel('produk', 'Iklan Produk', input.produkOld, input.produkCur),
-    channelFunnel('toko', 'Iklan Toko', input.tokoOld, input.tokoCur),
+    shopPlus ? { key: 'toko' as const, label: 'Iklan Toko', ...shopPlus } : null,
     channelFunnel('live', 'Iklan Live', input.liveOld, input.liveCur),
   ].filter((c): c is ChannelFunnel => c !== null);
 
@@ -199,7 +235,9 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     hasProductPerfCur: perfCur.length > 0,
     hasProductPerfOld: perfOld.length > 0,
     productCharts: PRODUCT_CHART_GROUPS.map((group) => ({ group, points: buildProductChartPoints(perfOld, perfCur, group) })),
-    potentialProducts: buildPotentialProducts(perfCur, 10),
+    unadvertised: buildUnadvertisedProducts(input.productPerfCur, input.produkIndividualCur ?? input.produkCur, input.produkOtomatisCur ?? [], 60),
+    channelAnalyses,
+    roiRoot: buildRoiRoot(channelAnalyses),
     hasVisitorsCol: input.productPerfCur ? hasVisitorsCol(input.productPerfCur) : false,
     paretoAvailableMonths: [...new Set(allMonths.map((m) => m.month))].sort(),
   };
