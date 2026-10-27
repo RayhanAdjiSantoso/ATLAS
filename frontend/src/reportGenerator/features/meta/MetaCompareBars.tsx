@@ -20,9 +20,9 @@ import { MetaChangesTable } from './MetaChangesTable';
 // side by side. A side the period has no campaign for is shown disabled, so
 // the switch reads the same on every chart. `audience` says which:
 //   • age      — NV vs RM (default) / Gabungan / NV / RM;
-//   • campaign — the axis IS the campaign, so Gabungan tints each bar by its
-//                own audience instead of doubling it;
-//   • creative — Gabungan / NV / RM over the materi iklan;
+//   • campaign — the axis IS the campaign (or its ad set), so Gabungan tints
+//                each bar by its own audience instead of doubling it;
+//   • creative — Gabungan / NV / RM over the materi iklan, tinted the same way;
 //   • none     — Boost Post, which has no NV / RM.
 // "Lowest & Highest" is the sort switch plus the two ends named above the
 // chart; a long axis shows the top or bottom 15 of the order. Names on the
@@ -82,6 +82,8 @@ export function MetaCompareBars({
   emptyMessage,
   changes,
   hideDefaultOrder = false,
+  minImpressions,
+  minSpend,
 }: {
   heading: string;
   badge: string;
@@ -106,6 +108,12 @@ export function MetaCompareBars({
   changes?: { oldRows: SheetRow[]; p1: string; p2: string };
   // Drop "Bawaan" from the sort switch — the chart opens ranked.
   hideDefaultOrder?: boolean;
+  // Only items with at least this many impressions this period — chart and
+  // changes table alike; a rate over a handful of impressions is noise.
+  minImpressions?: number;
+  // Only items that spent more than this (Rp) this period — the same floor,
+  // read on spend.
+  minSpend?: number;
 }) {
   const typeOf = (r: SheetRow): TypeKey => (campCol ? audienceTypeOf(r[campCol]) : null) ?? 'other';
   const leadKind = useMemo(() => leadKindProp ?? leadResultKind(rows), [leadKindProp, rows]);
@@ -123,7 +131,28 @@ export function MetaCompareBars({
   const canSplit = typesPresent.length >= 2 && (hasNV || hasRM);
 
   const [aud, setAud] = useState<Aud>(audience === 'age' && canSplit ? 'split' : 'all');
-  const scoped = useMemo(() => (aud === 'NV' || aud === 'RM' ? rows.filter((r) => typeOf(r) === aud) : rows), [rows, aud]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The items that clear `minImpressions` / `minSpend`, by label (null = no floor).
+  const eligible = useMemo(() => {
+    if ((!minImpressions && !minSpend) || !dimCol) return null;
+    const map = new Map<string, SheetRow[]>();
+    for (const r of rows) {
+      const label = String(r[dimCol] ?? '').trim();
+      if (!label || isAllValue(r[dimCol])) continue;
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(r);
+    }
+    const clears = (rs: SheetRow[]) => {
+      const m = metricsFor(kind, rs, leadKind);
+      return (!minImpressions || ((m.impressions as number | null) ?? 0) >= minImpressions) && (!minSpend || ((m.spend as number | null) ?? 0) > minSpend);
+    };
+    return new Set([...map].filter(([, rs]) => clears(rs)).map(([label]) => label));
+  }, [rows, dimCol, minImpressions, minSpend, kind, leadKind]);
+  const floorText = [
+    minImpressions ? `minimal ${minImpressions.toLocaleString('id-ID')} impressions` : '',
+    minSpend ? `spending di atas Rp${minSpend.toLocaleString('id-ID')}` : '',
+  ].filter(Boolean).join(' dan ');
+  const inFloor = (r: SheetRow) => !eligible || !dimCol || eligible.has(String(r[dimCol] ?? '').trim());
+  const scoped = useMemo(() => (aud === 'NV' || aud === 'RM' ? rows.filter((r) => typeOf(r) === aud) : rows).filter(inFloor), [rows, aud, eligible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groups = useMemo(() => {
     if (!dimCol) return [];
@@ -170,11 +199,12 @@ export function MetaCompareBars({
     if (aud === 'split' && canSplit) {
       series = typesPresent.map((t) => ({ label: SHORT[t], values: shown.map((g) => val(g.perType?.[t] as Record<string, unknown>)), color: TYPE_COLOR[t] }));
       legend = typesPresent;
-    } else if (audience === 'campaign' && aud === 'all' && typesPresent.length) {
+    } else if ((audience === 'campaign' || audience === 'creative') && aud === 'all' && typesPresent.length) {
       series = [{ label: metric.label, values: shown.map((g) => val(g.total)), color: shown.map((g) => TYPE_COLOR[g.type]) }];
       legend = typesPresent.filter((t) => shown.some((g) => g.type === t));
     } else {
       series = [{ label: metric.label, values: shown.map((g) => val(g.total)), color: aud === 'NV' || aud === 'RM' ? TYPE_COLOR[aud] : TYPE_COLOR.all }];
+      if (aud === 'NV' || aud === 'RM') legend = [aud];
     }
     const ranked = [...usable].sort((a, b) => (val(b.total) as number) - (val(a.total) as number));
     return {
@@ -255,7 +285,9 @@ export function MetaCompareBars({
         {!dimCol || !groups.length ? (
           <div className="empty-note">
             {!dimCol || aud === 'all' || aud === 'split'
-              ? emptyMessage ?? 'Breakdown ini tidak ada di file yang diunggah.'
+              ? eligible && dimCol && rows.length
+                ? `Tidak ada ${dimNoun} dengan ${floorText} di periode ini.`
+                : emptyMessage ?? 'Breakdown ini tidak ada di file yang diunggah.'
               : `Tidak ada campaign ${aud} di periode ini.`}
           </div>
         ) : !metric || !view || !view.total ? (
@@ -294,6 +326,7 @@ export function MetaCompareBars({
             <p className="chart-foot">
               {metric.label} per {dimNoun}
               {aud === 'NV' || aud === 'RM' ? ` · hanya campaign ${aud}` : aud === 'all' && audience !== 'none' && campCol ? ' · gabungan NV + RM' : ''}
+              {eligible ? ` · hanya ${dimNoun} dengan ${floorText}` : ''}
               {view.cut ? ` — ${MAX_BARS} ${order === 'asc' ? 'terendah' : 'tertinggi'} dari ${view.total} ditampilkan` : ''}.
               {copyLabels ? ' Klik batang, nama di bawah grafik, atau nama Tertinggi/Terendah untuk menyalin nama lengkapnya.' : ''}
               {note ? <> {note}</> : null}
@@ -305,7 +338,7 @@ export function MetaCompareBars({
           <MetaChangesTable
             key={`${String(metric.key)}-${aud}`}
             rows={scoped}
-            oldRows={aud === 'NV' || aud === 'RM' ? changes.oldRows.filter((r) => typeOf(r) === aud) : changes.oldRows}
+            oldRows={(aud === 'NV' || aud === 'RM' ? changes.oldRows.filter((r) => typeOf(r) === aud) : changes.oldRows).filter(inFloor)}
             dimCol={dimCol}
             kind={kind}
             leadKind={leadKind}

@@ -107,6 +107,8 @@ export interface MetaSalesMetrics {
   visitToAtcRate: number | null;
   purchase: number | null;
   atcToPurchaseRate: number | null;
+  costPerAtc: number | null;
+  costPerPurchase: number | null;
 }
 
 export function metaSalesMetrics(rows: SheetRow[]): MetaSalesMetrics {
@@ -138,6 +140,8 @@ export function metaSalesMetrics(rows: SheetRow[]): MetaSalesMetrics {
     visitToAtcRate: rateOr(ratio(atc, contentViews), rows, ['content views to atc rate', 'atc rate']),
     purchase: orders,
     atcToPurchaseRate: rateOr(ratio(orders, atc), rows, ['atc to pur', 'purchase rate']),
+    costPerAtc: ratio(spend, atc, 1),
+    costPerPurchase: ratio(spend, orders, 1),
   };
 }
 

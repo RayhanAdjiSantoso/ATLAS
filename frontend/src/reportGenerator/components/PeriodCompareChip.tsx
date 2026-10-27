@@ -8,7 +8,7 @@ interface PeriodCompareChipProps {
   className?: string;
 }
 
-// The signature "Comparison Rail" motif's second application: old period →
+// The signature "Comparison Rail" motif's second application: old period vs
 // current period, wherever the report used to show p1/p2 as plain text.
 // `onBrand` is for use directly on a colored banner (e.g. .report-top).
 export function PeriodCompareChip({ old, cur, accent, onBrand, className }: PeriodCompareChipProps) {
@@ -16,7 +16,7 @@ export function PeriodCompareChip({ old, cur, accent, onBrand, className }: Peri
   return (
     <span className={`compare-chip${onBrand ? ' on-brand' : ''}${className ? ' ' + className : ''}`} style={style}>
       <span className="cc-old num">{old}</span>
-      <span className="cc-arrow">→</span>
+      <span className="cc-arrow">vs</span>
       <span className="cc-cur num">{cur}</span>
     </span>
   );

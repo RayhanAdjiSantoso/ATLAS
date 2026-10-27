@@ -31,7 +31,7 @@ export const WHATS_NEW = [
     path: '/report-generator',
     target: '.panel.active [data-page="v2-boost"]',
     title: 'Tab per channel di laporan Meta Ads',
-    body: 'Laporan Meta Ads kini punya tab Boost Post, Non Boost Post Retail, Non Boost Post Non Retail, dan CPAS. Tiap tab berisi Overall, Traffic Analysis, Conversion Analysis, dan Top Content Analysis, dengan tabel perubahan dibanding periode lalu di bawah setiap grafik.',
+    body: 'Laporan Meta Ads kini punya tab Boost Post, Non-Boost Post (Retail), Non-Boost Post (Non Retail), dan CPAS Shopee. Tiap tab dibuka dengan ringkasan channel-nya, lalu Traffic, Conversion, dan Top Content Analysis — Boost Post membaca Consideration Analysis per materi iklan. Setiap grafik diikuti tabel perubahan dibanding periode lalu.',
   },
   {
     id: 'shopee-report-channel-tabs',

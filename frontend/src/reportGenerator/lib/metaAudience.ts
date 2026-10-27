@@ -1,5 +1,5 @@
 import { isAllValue } from './meta';
-import { LEAD_RESULT, leadResultKind, metaBrandMetrics, metaLeadMetrics, metaObjectiveMetrics, metaSalesMetrics, type LeadResultKind, type MetaBrandMetrics, type MetaLeadMetrics, type MetaObjectiveMetrics, type MetaSalesMetrics } from './metaFunnel';
+import { LEAD_RESULT, leadResultKind, leadResultKinds, metaBrandMetrics, metaLeadMetrics, metaObjectiveMetrics, metaSalesMetrics, type LeadResultKind, type MetaBrandMetrics, type MetaLeadMetrics, type MetaObjectiveMetrics, type MetaSalesMetrics } from './metaFunnel';
 import type { MetaObjectiveKey } from './meta';
 import type { PivotFmt } from './shopeeDeepDivePivot';
 import type { SheetRow } from './types';
@@ -83,11 +83,20 @@ export interface MetaB2bMetrics extends MetaSalesMetrics {
   leadRate: number | null;
   linkClicks: number | null;
   costPerLead: number | null;
+  // Read on the form lead itself, whatever result the report picked: how
+  // many leads went on to a chat, and what each step cost.
+  leadToConversationRate: number | null;
+  leadToContactRate: number | null;
+  costPerFormLead: number | null;
+  costPerConversation: number | null;
+  costPerContact: number | null;
 }
 
 export function metaB2bMetrics(rows: SheetRow[], leadKind?: LeadResultKind): MetaB2bMetrics {
   const s = metaSalesMetrics(rows);
   const l = metaLeadMetrics(rows, leadKind);
+  const o = metaObjectiveMetrics(rows);
+  const per = (n: number | null, d: number | null, scale: number) => (n === null || d === null || d <= 0 ? null : (n / d) * scale);
   return {
     ...s,
     purchase: s.purchase ?? l.leads,
@@ -96,6 +105,11 @@ export function metaB2bMetrics(rows: SheetRow[], leadKind?: LeadResultKind): Met
     leadRate: l.leadRate,
     linkClicks: l.linkClicks,
     costPerLead: l.costPerLead,
+    leadToConversationRate: per(o.conversations, o.leads, 100),
+    leadToContactRate: per(o.messagingContacts, o.leads, 100),
+    costPerFormLead: o.costPerLead,
+    costPerConversation: o.costPerConversation,
+    costPerContact: per(o.spend, o.messagingContacts, 1),
   };
 }
 
@@ -187,15 +201,20 @@ export const BRAND_CONVERSION_METRICS: readonly AudienceMetricDef<MetaBrandMetri
   { key: 'follows', label: 'Follows', fmt: 'num', additive: true },
 ];
 
-// Top Content Analysis: the materi iklan ranked by what the channel is bought
-// for — the result first, the reach behind it after.
-export const SALES_TOP_CONTENT_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
-  { key: 'purchase', label: 'Purchase', fmt: 'num', additive: true },
-  { key: 'gmv', label: 'Purchase Value', fmt: 'rp', additive: true },
-  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
-  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
-  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+// Boost Post's Consideration Analysis, per materi iklan: how often an
+// impression turned into each brand action, then what the click and each
+// action cost.
+export const BRAND_CONSIDERATION_RATE_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
+  { key: 'interactionRate', label: 'Interaction Rate', fmt: 'pct', additive: false },
+  { key: 'profileVisitsRate', label: 'Profile Visit Rate', fmt: 'pct', additive: false },
+  { key: 'followRate', label: 'Follow Rate', fmt: 'pct', additive: false },
 ];
+export const BRAND_CONSIDERATION_COST_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
+  { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
+];
+
 // Boost Post's Top Content reads two questions: how much each materi iklan
 // brought in (Performance), and what each of those cost (Efficiency).
 export const BRAND_TOP_PERFORMANCE_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
@@ -208,6 +227,13 @@ export const BRAND_TOP_EFFICIENCY_METRICS: readonly AudienceMetricDef<MetaBrandM
   { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
   { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
   { key: 'costPerInteraction', label: 'Cost per Interaction', fmt: 'rp', additive: false },
+];
+// Non-Boost Post (Retail)'s Top Content, per materi iklan: the click, then
+// what each step of the funnel cost.
+export const RETAIL_TOP_CONTENT_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'costPerAtc', label: 'Cost per ATC', fmt: 'rp', additive: false },
+  { key: 'costPerPurchase', label: 'Cost per Purchase', fmt: 'rp', additive: false },
 ];
 // ── Architecture sheet menus (Audience & Creative Analysis) ──────────────
 // CPAS and Non-Boost Retail sell; they are read on the sales funnel.
@@ -225,10 +251,12 @@ export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetri
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
   { key: 'purchase', label: 'Purchase', fmt: 'num', additive: true },
 ];
-// Non Boost Post Retail's Conversion Rate chart also names the rate itself.
-export const RETAIL_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
-  ...SALES_CONVERSION_METRICS,
+// Non-Boost Post (Retail)'s Conversion Analysis, per ad set: the whole
+// funnel, then its two steps.
+export const RETAIL_AUDIENCE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
+  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
 ];
 export const SALES_CLICK_ATC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
@@ -272,6 +300,11 @@ export const LEAD_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaLe
 
 // The column a creative breakdown needs. Meta names it "Ad name" in a
 // Formatted data table export and "Ad ID" in the API pull.
+export function findAdsetCol(rows: SheetRow[]): string | null {
+  const headers = Object.keys(rows[0] || {});
+  return headers.find((h) => /\bad ?set name\b/i.test(h)) ?? headers.find((h) => /\bad ?set id\b/i.test(h)) ?? null;
+}
+
 export function findAdCol(rows: SheetRow[]): string | null {
   const headers = Object.keys(rows[0] || {});
   return (
@@ -353,12 +386,35 @@ export const B2B_ATC_PURCHASE_METRICS: readonly B2bDef[] = [
   { key: 'atc', label: 'ATC', fmt: 'num', additive: true },
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
 ];
-export const B2B_TOP_CONTENT_METRICS: readonly B2bDef[] = [
-  { key: 'leads', label: 'Leads', fmt: 'num', additive: true },
-  { key: 'leadRate', label: 'Click → Lead Rate', fmt: 'pct', additive: false },
-  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
-  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
-];
+// Non-Boost Post (Non Retail) on the selling channels' page set. The chat
+// that follows a lead is read as a Conversations or a Contacts count — both
+// offered when the file has both, else only the one it has.
+type MessageKind = 'conversations' | 'contacts';
+export function messageKindsOf(...rowSets: SheetRow[][]): MessageKind[] {
+  const kinds = leadResultKinds(...rowSets).filter((k): k is MessageKind => k !== 'leads');
+  return kinds.length ? kinds : ['conversations'];
+}
+const MESSAGE_NAME: Record<MessageKind, string> = { conversations: 'Conversations', contacts: 'Contacts' };
+export function nonRetailConversionMetrics(kinds: MessageKind[]): B2bDef[] {
+  return kinds.map((k) => ({
+    key: k === 'conversations' ? 'leadToConversationRate' : 'leadToContactRate',
+    label: kinds.length > 1 ? `Leads → Message Rate (${MESSAGE_NAME[k]})` : 'Leads → Message Rate',
+    fmt: 'pct',
+    additive: false,
+  }));
+}
+export function nonRetailTopContentMetrics(kinds: MessageKind[]): B2bDef[] {
+  return [
+    { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+    { key: 'costPerFormLead', label: 'Cost per Lead', fmt: 'rp', additive: false },
+    ...kinds.map((k): B2bDef => ({
+      key: k === 'conversations' ? 'costPerConversation' : 'costPerContact',
+      label: kinds.length > 1 ? `Cost per Message (${MESSAGE_NAME[k]})` : 'Cost per Message',
+      fmt: 'rp',
+      additive: false,
+    })),
+  ];
+}
 export const B2B_CREATIVE_CONVERSION_METRICS: readonly B2bDef[] = [
   { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },
   { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
