@@ -8,6 +8,7 @@ import { leadResultKind, type LeadResultKind } from '../../lib/metaFunnel';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
 import type { AudienceSlice } from '../../lib/metaAudience';
+import { MetaChangesTable } from './MetaChangesTable';
 
 // One breakdown — Age, Gender, or Ad — with the metric chosen by the reader.
 //
@@ -100,6 +101,7 @@ export function MetaBreakdownSection<M>({
   emptyMessage,
   campCol = null,
   leadKind: leadKindProp,
+  changes,
 }: {
   heading: string;
   badge: string;
@@ -118,6 +120,8 @@ export function MetaBreakdownSection<M>({
   campCol?: string | null;
   // Lead / B2B: which result the leads figures read (the report's pick).
   leadKind?: LeadResultKind;
+  // When given, a changes table follows the breakdown (see MetaChangesTable).
+  changes?: { oldRows: SheetRow[]; p1: string; p2: string };
 }) {
   const typeOf = (r: SheetRow): AudienceType | 'other' => (campCol ? audienceTypeOf(r[campCol]) : null) ?? 'other';
   const types = useMemo(() => {
@@ -206,6 +210,20 @@ export function MetaBreakdownSection<M>({
             <div className={`bd-pies${metrics.length === 3 ? ' bd-pies-3' : ''}`}>
               {metrics.map((m) => <PieTile key={`${String(m.key)}-${aud}`} metric={m} slices={slices} group={group} kind={kind} />)}
             </div>
+          )}
+          {changes && slices.length > 0 && (
+            <MetaChangesTable
+              key={aud}
+              rows={scoped}
+              oldRows={aud !== 'all' ? changes.oldRows.filter((r) => typeOf(r) === aud) : changes.oldRows}
+              dimCol={dimCol}
+              kind={kind}
+              leadKind={leadKind}
+              metrics={metrics}
+              p1={changes.p1}
+              p2={changes.p2}
+              dimNoun={group}
+            />
           )}
           {missing.length > 0 && (
             <p className="chart-foot">Tidak ditampilkan karena kolomnya tidak ada di file: {missing.map((m) => m.label).join(', ')}.</p>

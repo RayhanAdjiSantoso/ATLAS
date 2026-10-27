@@ -1,5 +1,5 @@
 import { resolveMetaMonth } from '../../lib/metaSources';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../../api/client.js';
@@ -38,7 +38,11 @@ import { MetaSpecialMomentSection, type MomentPeriod, type MomentSource } from '
 import { MetaBreakdownSection } from './MetaBreakdownSection';
 import {
   BRAND_AUDIENCE_METRICS,
+  BRAND_CONVERSION_METRICS,
   BRAND_CREATIVE_METRICS,
+  BRAND_TOP_EFFICIENCY_METRICS,
+  BRAND_TOP_PERFORMANCE_METRICS,
+  B2B_TOP_CONTENT_METRICS,
   B2B_AGE_METRICS,
   B2B_ATC_PURCHASE_METRICS,
   B2B_CLICK_ATC_METRICS,
@@ -52,13 +56,16 @@ import {
   SALES_CLICK_ATC_METRICS,
   SALES_CONVERSION_METRICS,
   SALES_CREATIVE_CONVERSION_METRICS,
+  RETAIL_CONVERSION_METRICS,
+  SALES_TOP_CONTENT_METRICS,
   SALES_TRAFFIC_METRICS,
   findAdCol,
 } from '../../lib/metaAudience';
 import { MetaCompareBars } from './MetaCompareBars';
 import { MetaLaneSwitch } from './MetaLaneSwitch';
+import { relabelMetaMenu as L, relabelMetaRows } from '../../lib/metaLabels';
 import { SymptomTreePanel } from '../shopee/AnalysisSections';
-import { LEAD_RESULT, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
+import { LEAD_RESULT, buildMetaSalesFunnel, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
@@ -832,6 +839,233 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     );
   }
 
+  // ── Per-channel pages (Boost Post, Non Boost Post Retail / Non Retail,
+  // CPAS): every page reads the same steps in its navigator — Overall,
+  // Traffic Analysis (Audience, Creative), Conversion Analysis, Top Content
+  // Analysis. Boost Post has no purchase funnel to send traffic down, so it
+  // goes from Overall straight to its brand actions. Every chart opens
+  // ranked and carries a changes table against the last period.
+  function rcaPanel(f: MetaFunnel | undefined, p1: string, p2: string, title = 'Root Cause Analysis', badge = `${p1} → ${p2}`) {
+    return f?.hasData ? <SymptomTreePanel tree={f.tree} p1={p1} p2={p2} title={title} badge={badge} /> : undefined;
+  }
+
+  function channelSections({
+    prefix,
+    period,
+    p1,
+    rows,
+    oldRows,
+    kind,
+    campCol,
+    ageCol,
+    genderCol,
+    leadKind,
+    overall,
+    retail = false,
+  }: {
+    prefix: string;
+    period: string;
+    p1: string;
+    rows: SheetRow[];
+    oldRows: SheetRow[];
+    kind: 'sales' | 'b2b' | 'brand';
+    campCol: string | null;
+    ageCol: string | null;
+    genderCol: string | null;
+    leadKind?: LeadResultKind;
+    overall: ReactNode;
+    // Non Boost Post Retail: Campaign Traffic leads the audience reads, and
+    // the Conversion Rate chart names the rate itself.
+    retail?: boolean;
+  }) {
+    const adCol = rows.length ? findAdCol(rows) : null;
+    const badge = `data ${period}`;
+    const creativeBadge = `per materi iklan · ${period}`;
+    const changes = { oldRows, p1, p2: period };
+    const noRows = 'Periode ini tidak punya baris data untuk channel ini.';
+    const noAd = 'Bagian ini membandingkan performa per materi iklan. File yang diunggah tidak dipecah per Ad — export ulang dari Meta Ads Reporting dengan breakdown Ad name.';
+    const noAge = 'File yang diunggah tidak memuat breakdown Age.';
+    const noGender = 'File yang diunggah tidak memuat breakdown Gender.';
+    const noCamp = 'File yang diunggah tidak memuat kolom Campaign name.';
+    const empty = (m: string) => (rows.length ? m : noRows);
+
+    if (kind === 'brand') {
+      const brandBars = (title: string, b: string, menu: typeof BRAND_CONVERSION_METRICS, dimCol: string | null, dimNoun: string, emptyMessage: string) => (
+        <MetaCompareBars key={title} heading={`${prefix} · ${title}`} badge={b} rows={rows} kind="brand" menu={L(menu)} dimCol={dimCol} campCol={campCol} audience="none" sortable hideDefaultOrder copyLabels dimNoun={dimNoun} emptyMessage={empty(emptyMessage)} changes={changes} />
+      );
+      return (
+        <>
+          <SectionGroup label="Overall">{overall}</SectionGroup>
+          <SectionGroup label="Conversion Analysis">
+            {brandBars('Brand Action per Campaign', `per campaign · ${period}`, BRAND_CONVERSION_METRICS, campCol, 'campaign', noCamp)}
+            {brandBars('Creative Brand Action', creativeBadge, BRAND_CONVERSION_METRICS, adCol, 'materi iklan', noAd)}
+          </SectionGroup>
+          <SectionGroup label="Top Content Analysis">
+            {/* One page, two reads: the navigator names it from the hidden
+                heading, each chart keeps its own. */}
+            <div className="sec-stack">
+              <div className="sec-heading" style={{ display: 'none' }}>
+                {`${prefix} · Top Content`}
+                <span className="sec-badge">{creativeBadge}</span>
+              </div>
+              {brandBars('Top Content Performance', creativeBadge, BRAND_TOP_PERFORMANCE_METRICS, adCol, 'materi iklan', noAd)}
+              {brandBars('Top Content Efficiency', creativeBadge, BRAND_TOP_EFFICIENCY_METRICS, adCol, 'materi iklan', noAd)}
+            </div>
+          </SectionGroup>
+        </>
+      );
+    }
+
+    const sales = kind === 'sales';
+    const perCampaign = (title: string, menu: typeof SALES_TRAFFIC_METRICS | typeof B2B_TRAFFIC_METRICS) => (
+      <MetaCompareBars
+        key={title}
+        heading={`${prefix} · ${title}`}
+        badge={`per campaign · NV · RM · ${period}`}
+        rows={rows}
+        kind={kind} leadKind={leadKind}
+        menu={L(menu)}
+        dimCol={campCol}
+        campCol={campCol}
+        audience="campaign"
+        sortable
+        hideDefaultOrder
+        copyLabels
+        dimNoun="campaign"
+        emptyMessage={empty(noCamp)}
+        changes={changes}
+      />
+    );
+    const perCreative = (title: string, menu: typeof SALES_TRAFFIC_METRICS | typeof B2B_TRAFFIC_METRICS) => (
+      <MetaCompareBars
+        key={title}
+        heading={`${prefix} · ${title}`}
+        badge={creativeBadge}
+        rows={rows}
+        kind={kind} leadKind={leadKind}
+        menu={L(menu)}
+        dimCol={adCol}
+        campCol={campCol}
+        audience="creative"
+        sortable
+        hideDefaultOrder
+        copyLabels
+        dimNoun="materi iklan"
+        emptyMessage={empty(noAd)}
+        changes={changes}
+      />
+    );
+    const campaignTraffic = perCampaign('Campaign Traffic', sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS);
+    return (
+      <>
+        <SectionGroup label="Overall">{overall}</SectionGroup>
+        <SectionGroup label="Traffic Analysis">
+          <SectionGroup label="Audience">
+            {retail && campaignTraffic}
+            <MetaCompareBars
+              heading={`${prefix} · Age Breakdown`}
+              badge={`NV · RM · ${period}`}
+              rows={rows}
+              kind={kind} leadKind={leadKind}
+              menu={L(sales ? SALES_AGE_METRICS : B2B_AGE_METRICS)}
+              dimCol={ageCol}
+              campCol={campCol}
+              audience="age"
+              sortable={false}
+              dimNoun="kelompok umur"
+              emptyMessage={empty(noAge)}
+              changes={changes}
+            />
+            {genderCol ? (
+              <MetaBreakdownSection
+                heading={`${prefix} · Gender Breakdown`}
+                badge={`NV · RM · ${period}`}
+                rows={rows}
+                dimCol={genderCol}
+                kind={kind} leadKind={leadKind}
+                metrics={L((sales ? SALES_AUDIENCE_METRICS : B2B_GENDER_METRICS) as typeof SALES_AUDIENCE_METRICS)}
+                prefer="pies"
+                campCol={campCol}
+                changes={changes}
+              />
+            ) : (
+              <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} leadKind={leadKind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={empty(noGender)} />
+            )}
+            {!retail && campaignTraffic}
+          </SectionGroup>
+          <SectionGroup label="Creative">
+            {perCreative('Creative Traffic', sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS)}
+          </SectionGroup>
+        </SectionGroup>
+        <SectionGroup label="Conversion Analysis">
+          {perCampaign('Conversion Rate', retail ? RETAIL_CONVERSION_METRICS : sales ? SALES_CONVERSION_METRICS : B2B_CONVERSION_METRICS)}
+          {perCampaign('Click → ATC Rate', sales ? SALES_CLICK_ATC_METRICS : B2B_CLICK_ATC_METRICS)}
+          {perCampaign('ATC → Purchase Rate', sales ? SALES_ATC_PURCHASE_METRICS : B2B_ATC_PURCHASE_METRICS)}
+        </SectionGroup>
+        <SectionGroup label="Top Content Analysis">
+          {perCreative('Top Content', sales ? SALES_TOP_CONTENT_METRICS : B2B_TOP_CONTENT_METRICS)}
+        </SectionGroup>
+      </>
+    );
+  }
+
+  // The Overall card of one Non-Boost lane, with the B2B result switch.
+  // Retail's root cause always draws the whole Conversion Rate branch
+  // (Visit → ATC Rate and ATC → Purchase Rate), "—" where the file lacks it.
+  function laneOverallCard(lane: NonBoostLane, r: MetaReport) {
+    const kind = laneLeadKind(lane);
+    const variant = kind ? lane.leadResults?.byKind[kind] : undefined;
+    const funnel = lane.key === 'retail' ? buildMetaSalesFunnel(lane.oldRows, lane.curRows, { keepConversionBranch: true }) : variant?.funnel ?? lane.funnel;
+    return (
+      <OverviewDetailedCard
+        key={`${lane.key}-${kind ?? 'auto'}`}
+        toolbar={lane.leadResults && lane.leadResults.kinds.length > 0 ? (
+          <SegmentedToggle
+            label="Hasil B2B"
+            options={lane.leadResults.kinds.map((k) => ({ value: k, label: LEAD_RESULT[k].label }))}
+            value={kind ?? lane.leadResults.auto}
+            onChange={setB2bResult}
+            accent="var(--acc)"
+          />
+        ) : undefined}
+        heading={`${lane.key === 'retail' ? 'Non Boost Post Retail' : 'Non Boost Post Non Retail'} · Overall`}
+        badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
+        overviewRows={relabelMetaRows(variant?.overviewRows ?? lane.overview.overviewRows)}
+        detailedRows={relabelMetaRows(lane.overview.detailedRows)}
+        allCols={lane.overview.allCols}
+        p1={r.p1}
+        p2={r.p2}
+        aside={rcaPanel(
+          funnel, r.p1, r.p2,
+          lane.key === 'b2b' ? `Root Cause Analysis · ${LEAD_RESULT[kind ?? 'leads'].label}` : 'Root Cause Analysis',
+        )}
+      />
+    );
+  }
+
+  function lanePage(r: MetaReport, key: NonBoostLaneKey) {
+    const lane = r.nonBoostLanes?.find((l) => l.key === key);
+    if (!lane) return null;
+    return (
+      <SectionAccordion key={`v2-${lane.key}`}>
+        {channelSections({
+          prefix: key === 'retail' ? 'Non Boost Post Retail' : 'Non Boost Post Non Retail',
+          period: r.p2,
+          p1: r.p1,
+          rows: lane.curRows,
+          oldRows: lane.oldRows,
+          kind: key === 'retail' ? 'sales' : 'b2b',
+          retail: key === 'retail',
+          leadKind: laneLeadKind(lane) ?? undefined,
+          campCol: lane.campCol,
+          ageCol: lane.ageCol,
+          genderCol: lane.genderCol,
+          overall: laneOverallCard(lane, r),
+        })}
+      </SectionAccordion>
+    );
+  }
+
   const steps: Step[] = [
     {
       label: 'Pilih file Meta Ads / CPAS',
@@ -1313,6 +1547,88 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           campCol: report.cols?.campaign ?? null,
                           ageCol: report.cols?.age ?? null,
                           genderCol: report.cols?.gender ?? null,
+                        })}
+                      </SectionAccordion>
+                    );
+                  })(),
+                },
+                {
+                  id: 'v2-boost',
+                  label: 'Boost Post',
+                  dividerBefore: true,
+                  hidden: !report.boost,
+                  content: report.boost ? (
+                    <SectionAccordion>
+                      {channelSections({
+                        prefix: 'Boost Post',
+                        period: report.p2,
+                        p1: report.p1,
+                        rows: report.curRows?.boost ?? [],
+                        oldRows: report.oldRows?.boost ?? [],
+                        kind: 'brand',
+                        campCol: report.cols?.campaign ?? null,
+                        ageCol: report.cols?.age ?? null,
+                        genderCol: report.cols?.gender ?? null,
+                        overall: (
+                          <OverviewDetailedCard
+                            heading="Boost Post · Overall"
+                            badge={report.boostObjective ? `objective ${report.boostObjective.label}${report.boostObjective.mixed ? ' (dominan)' : ''}` : 'Meta Ads'}
+                            overviewRows={relabelMetaRows(report.boost.overviewRows)}
+                            detailedRows={relabelMetaRows(report.boost.detailedRows)}
+                            allCols={report.boost.allCols}
+                            p1={report.p1}
+                            p2={report.p2}
+                            aside={rcaPanel(report.boostFunnel, report.p1, report.p2, 'Root Cause Analysis', 'Brand Consideration')}
+                          />
+                        ),
+                      })}
+                    </SectionAccordion>
+                  ) : null,
+                },
+                {
+                  id: 'v2-nb-retail',
+                  label: 'Non Boost Post Retail',
+                  hidden: !report.nonBoostLanes?.some((l) => l.key === 'retail'),
+                  content: lanePage(report, 'retail'),
+                },
+                {
+                  id: 'v2-nb-nonretail',
+                  label: 'Non Boost Post Non Retail',
+                  hidden: !report.nonBoostLanes?.some((l) => l.key === 'b2b'),
+                  content: lanePage(report, 'b2b'),
+                },
+                {
+                  id: 'v2-cpas',
+                  label: 'CPAS',
+                  hidden: !report.cpas || !(report.cpas.overall || report.cpas.nv || report.cpas.rm),
+                  content: (() => {
+                    const cpas = report.cpas;
+                    if (!cpas) return null;
+                    return (
+                      <SectionAccordion>
+                        {channelSections({
+                          prefix: 'CPAS',
+                          period: cpas.p2,
+                          p1: cpas.p1,
+                          rows: report.curRows?.cpas ?? [],
+                          oldRows: report.oldRows?.cpas ?? [],
+                          kind: 'sales',
+                          campCol: report.cols?.cpasCampaign ?? null,
+                          ageCol: report.cols?.cpasAge ?? null,
+                          genderCol: report.cols?.cpasGender ?? null,
+                          overall: (
+                            <>
+                              {cpas.overall && (
+                                <OverviewDetailedCard heading="CPAS · Overall" badge="Overall" overviewRows={relabelMetaRows(cpas.overall.overviewRows)} detailedRows={relabelMetaRows(cpas.overall.detailedRows)} allCols={cpas.overall.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.funnel, cpas.p1, cpas.p2)} />
+                              )}
+                              {cpas.nv && (
+                                <OverviewDetailedCard heading="CPAS · Overall NV" badge="New Visitor" overviewRows={relabelMetaRows(cpas.nv.overviewRows)} detailedRows={relabelMetaRows(cpas.nv.detailedRows)} allCols={cpas.nv.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.nvFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · NV')} />
+                              )}
+                              {cpas.rm && (
+                                <OverviewDetailedCard heading="CPAS · Overall RM" badge="Re-Marketing" overviewRows={relabelMetaRows(cpas.rm.overviewRows)} detailedRows={relabelMetaRows(cpas.rm.detailedRows)} allCols={cpas.rm.allCols} p1={cpas.p1} p2={cpas.p2} aside={rcaPanel(cpas.rmFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · RM')} />
+                              )}
+                            </>
+                          ),
                         })}
                       </SectionAccordion>
                     );

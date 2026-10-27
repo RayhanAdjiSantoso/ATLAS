@@ -249,6 +249,8 @@ export interface FunnelTreeRow {
   deltaNum: number | null;
   delta: string;
   cls: DeltaClassName;
+  // Not measurable in this export — drawn as "—" rather than dropped.
+  na?: boolean;
 }
 
 export function buildFunnelTree(mOld: FunnelMetrics, mCur: FunnelMetrics): FunnelTreeRow[] {

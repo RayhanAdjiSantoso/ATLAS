@@ -179,6 +179,36 @@ export const SALES_CREATIVE_METRICS: readonly AudienceMetricDef<MetaSalesMetrics
 
 export const BRAND_CREATIVE_METRICS = BRAND_AUDIENCE_METRICS;
 
+// Boost Post's conversion is the brand action itself, counted per campaign.
+export const BRAND_CONVERSION_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
+  { key: 'brandConsideration', label: 'Brand Consideration', fmt: 'num', additive: true },
+  { key: 'interactions', label: 'Interactions', fmt: 'num', additive: true },
+  { key: 'profileVisits', label: 'Profile Visits', fmt: 'num', additive: true },
+  { key: 'follows', label: 'Follows', fmt: 'num', additive: true },
+];
+
+// Top Content Analysis: the materi iklan ranked by what the channel is bought
+// for — the result first, the reach behind it after.
+export const SALES_TOP_CONTENT_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  { key: 'purchase', label: 'Purchase', fmt: 'num', additive: true },
+  { key: 'gmv', label: 'Purchase Value', fmt: 'rp', additive: true },
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+];
+// Boost Post's Top Content reads two questions: how much each materi iklan
+// brought in (Performance), and what each of those cost (Efficiency).
+export const BRAND_TOP_PERFORMANCE_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
+  { key: 'profileVisits', label: 'Profile Visit', fmt: 'num', additive: true },
+  { key: 'follows', label: 'Follow', fmt: 'num', additive: true },
+  { key: 'interactions', label: 'Interaction', fmt: 'num', additive: true },
+];
+export const BRAND_TOP_EFFICIENCY_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
+  { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
+  { key: 'costPerInteraction', label: 'Cost per Interaction', fmt: 'rp', additive: false },
+];
 // ── Architecture sheet menus (Audience & Creative Analysis) ──────────────
 // CPAS and Non-Boost Retail sell; they are read on the sales funnel.
 export const SALES_AGE_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
@@ -194,6 +224,11 @@ export const SALES_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>
 export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
   { key: 'purchase', label: 'Purchase', fmt: 'num', additive: true },
+];
+// Non Boost Post Retail's Conversion Rate chart also names the rate itself.
+export const RETAIL_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  ...SALES_CONVERSION_METRICS,
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
 ];
 export const SALES_CLICK_ATC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
@@ -317,6 +352,12 @@ export const B2B_CLICK_ATC_METRICS: readonly B2bDef[] = [
 export const B2B_ATC_PURCHASE_METRICS: readonly B2bDef[] = [
   { key: 'atc', label: 'ATC', fmt: 'num', additive: true },
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
+];
+export const B2B_TOP_CONTENT_METRICS: readonly B2bDef[] = [
+  { key: 'leads', label: 'Leads', fmt: 'num', additive: true },
+  { key: 'leadRate', label: 'Click → Lead Rate', fmt: 'pct', additive: false },
+  { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
 ];
 export const B2B_CREATIVE_CONVERSION_METRICS: readonly B2bDef[] = [
   { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },

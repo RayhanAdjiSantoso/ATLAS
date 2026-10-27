@@ -182,6 +182,11 @@ export interface MetaBrandMetrics {
   interactionRate: number | null;
   profileVisitsRate: number | null;
   followRate: number | null;
+  linkClicks: number | null;
+  ctr: number | null;
+  costPerProfileVisit: number | null;
+  costPerFollow: number | null;
+  costPerInteraction: number | null;
 }
 
 export function metaBrandMetrics(rows: SheetRow[]): MetaBrandMetrics {
@@ -192,6 +197,7 @@ export function metaBrandMetrics(rows: SheetRow[]): MetaBrandMetrics {
   const interactions = total(rows, ['post engagement', 'post interactions', 'engagement', 'interaction'], ['rate']);
   const profileVisits = total(rows, ['profile visits', 'profile visit'], ['rate']);
   const follows = total(rows, ['follows', 'new followers', 'page likes'], ['rate']);
+  const linkClicks = total(rows, ['link clicks', 'outbound clicks', 'clicks (all)'], ['rate', 'ctr']);
 
   return {
     // Brand Consideration has no column of its own: it is the three outcomes
@@ -207,6 +213,11 @@ export function metaBrandMetrics(rows: SheetRow[]): MetaBrandMetrics {
     interactionRate: ratio(interactions, impressions),
     profileVisitsRate: ratio(profileVisits, impressions),
     followRate: ratio(follows, impressions),
+    linkClicks,
+    ctr: rateOr(ratio(linkClicks, impressions), rows, ['ctr']),
+    costPerProfileVisit: ratio(spend, profileVisits, 1),
+    costPerFollow: ratio(spend, follows, 1),
+    costPerInteraction: ratio(spend, interactions, 1),
   };
 }
 
@@ -380,7 +391,9 @@ export interface MetaFunnel {
   missing: string[];
 }
 
-function assemble<M>(defs: readonly TreeDef<M>[], mOld: M, mCur: M): MetaFunnel {
+// `keep`: nodes drawn even when the export cannot measure them — shown as
+// "—", never as zero — so a branch the reader expects is never silently gone.
+function assemble<M>(defs: readonly TreeDef<M>[], mOld: M, mCur: M, keep?: ReadonlySet<string>): MetaFunnel {
   // A node this export cannot measure is DROPPED, together with everything
   // beneath it — never drawn as zero. Zero is a real reading ("nobody added
   // to cart"); a missing column is not, and the two must never look alike.
@@ -399,6 +412,10 @@ function assemble<M>(defs: readonly TreeDef<M>[], mOld: M, mCur: M): MetaFunnel 
     const curNum = (mCur[def.metric] ?? null) as number | null;
     if (oldNum === null && curNum === null) {
       if (!missing.includes(def.label)) missing.push(def.label);
+      if (keep?.has(def.key)) {
+        rows.push({ key: def.key, label: def.label, prefix: def.prefix, depth: def.depth, fmt: def.fmt, oldNum: 0, curNum: 0, deltaNum: null, delta: '—', cls: 'delta-neutral', na: true });
+        continue;
+      }
       skipBelow = def.depth;
       continue;
     }
@@ -425,7 +442,7 @@ function assemble<M>(defs: readonly TreeDef<M>[], mOld: M, mCur: M): MetaFunnel 
   const seen = new Set<string>();
   const values: FunnelValueRow[] = [];
   for (const r of rows) {
-    if (seen.has(r.label)) continue;
+    if (r.na || seen.has(r.label)) continue;
     seen.add(r.label);
     values.push({ key: r.key, label: r.label, fmt: r.fmt, oldNum: r.oldNum, curNum: r.curNum, deltaNum: r.deltaNum, delta: r.delta, cls: r.cls });
   }
@@ -433,8 +450,12 @@ function assemble<M>(defs: readonly TreeDef<M>[], mOld: M, mCur: M): MetaFunnel 
   return { values, tree: rows, hasData: rows.length > 0, missing };
 }
 
-export function buildMetaSalesFunnel(oldRows: SheetRow[], curRows: SheetRow[]): MetaFunnel {
-  return assemble(SALES_TREE, metaSalesMetrics(oldRows), metaSalesMetrics(curRows));
+// The whole Conversion Rate branch: Visit → ATC Rate and ATC → Purchase Rate
+// with their counts.
+const SALES_CONVERSION_BRANCH: ReadonlySet<string> = new Set(['visitToAtc', 'visitor', 'atcUnderVisit', 'atcToPurchase', 'atcUnderPurchase', 'purchase']);
+
+export function buildMetaSalesFunnel(oldRows: SheetRow[], curRows: SheetRow[], opts: { keepConversionBranch?: boolean } = {}): MetaFunnel {
+  return assemble(SALES_TREE, metaSalesMetrics(oldRows), metaSalesMetrics(curRows), opts.keepConversionBranch ? SALES_CONVERSION_BRANCH : undefined);
 }
 
 export function buildMetaBrandFunnel(oldRows: SheetRow[], curRows: SheetRow[]): MetaFunnel {
