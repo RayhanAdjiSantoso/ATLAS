@@ -211,9 +211,13 @@ export function buildFunnelValues(mOld: FunnelMetrics, mCur: FunnelMetrics): Fun
 // Values panel next to it.
 //
 // `prefix` is the literal tree-line string that precedes the label, encoded
-// once here (13 static nodes) so the component stays a dumb renderer.
+// once here (17 static nodes) so the component stays a dumb renderer.
 
 export interface FunnelTreeDef {
+  // Unique node id when the metric appears twice in the tree (Clicks is both
+  // Traffic and a part of Add to Cart Rate); defaults to `key`. An id reads
+  // `<parent>.<metric>`, so a node goes `na` with its parent.
+  id?: string;
   key: keyof FunnelMetrics;
   label: string;
   prefix: string;
@@ -232,8 +236,13 @@ export const FUNNEL_TREE_DEFS: readonly FunnelTreeDef[] = [
   { key: 'cpm', label: 'CPM', prefix: '│  │  │  └─ ', depth: 4, fmt: 'rp', sentiment: 'lower-better' },
   { key: 'ctr', label: 'CTR', prefix: '│  │  └─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
   { key: 'cvr', label: 'Conversion Rate', prefix: '│  └─ ', depth: 2, fmt: 'pct', sentiment: 'higher-better' },
-  { key: 'clicksToAtcRate', label: 'Clicks → ATC Rate', prefix: '│     ├─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
-  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', prefix: '│     └─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  // Each step of Conversion Rate over the two counts it divides.
+  { key: 'clicksToAtcRate', label: 'Add to Cart Rate', prefix: '│     ├─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  { id: 'clicksToAtcRate.clicks', key: 'clicks', label: 'Clicks', prefix: '│     │  ├─ ', depth: 4, fmt: 'num', sentiment: 'higher-better' },
+  { id: 'clicksToAtcRate.addToCart', key: 'addToCart', label: 'Add to Cart', prefix: '│     │  └─ ', depth: 4, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'atcToPurchaseRate', label: 'Purchase Rate', prefix: '│     └─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  { id: 'atcToPurchaseRate.addToCart', key: 'addToCart', label: 'Add to Cart', prefix: '│        ├─ ', depth: 4, fmt: 'num', sentiment: 'higher-better' },
+  { id: 'atcToPurchaseRate.purchases', key: 'purchases', label: 'Purchases', prefix: '│        └─ ', depth: 4, fmt: 'num', sentiment: 'higher-better' },
   { key: 'aov', label: 'Average Order Value', prefix: '└─ ', depth: 1, fmt: 'rp', sentiment: 'higher-better' },
   { key: 'abs', label: 'Average Basket Size', prefix: '   ├─ ', depth: 2, fmt: 'dec', sentiment: 'higher-better' },
   { key: 'aur', label: 'Average Unit Retail', prefix: '   └─ ', depth: 2, fmt: 'rp', sentiment: 'higher-better' },
@@ -260,7 +269,7 @@ export function buildFunnelTree(mOld: FunnelMetrics, mCur: FunnelMetrics): Funne
     const curNum = mCur[def.key];
     const { deltaNum, deltaStr } = computeDelta(oldNum, curNum);
     return {
-      key: def.key,
+      key: def.id ?? def.key,
       label: def.label,
       prefix: def.prefix,
       depth: def.depth,
@@ -281,5 +290,5 @@ export function buildFunnelTree(mOld: FunnelMetrics, mCur: FunnelMetrics): Funne
 const ATC_KEYS = new Set(['addToCart', 'clicksToAtcRate', 'cpAtc', 'atcToPurchaseRate']);
 
 export function blankAtcRows<T extends FunnelValueRow | FunnelTreeRow>(rows: T[]): T[] {
-  return rows.map((r) => (ATC_KEYS.has(r.key) ? { ...r, na: true, deltaNum: null, delta: '—', cls: 'delta-neutral' as DeltaClassName } : r));
+  return rows.map((r) => (ATC_KEYS.has(r.key) || ATC_KEYS.has(r.key.split('.')[0]) ? { ...r, na: true, deltaNum: null, delta: '—', cls: 'delta-neutral' as DeltaClassName } : r));
 }
