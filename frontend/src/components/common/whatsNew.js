@@ -32,6 +32,8 @@ export const WHATS_NEW = [
     target: '.panel.active [data-feature="meta-bars-periode-lalu"]',
     title: 'Periode lalu di setiap grafik batang',
     body: 'Grafik batang Meta Ads kini menampilkan periode lalu di samping periode ini: batang pudar untuk periode lalu, batang penuh untuk periode ini. Arahkan kursor ke batang untuk melihat angkanya.',
+  },
+  {
     id: 'shopee-shopplus-keyword-charts',
     released: '2026-10-28',
     path: '/report-generator/shopee',
