@@ -213,9 +213,9 @@ export const BRAND_CONSIDERATION_RATE_METRICS: readonly AudienceMetricDef<MetaBr
 // brand actions cost.
 export const BRAND_TOP_EFFICIENCY_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
   { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'costPerInteraction', label: 'Cost per Interaction', fmt: 'rp', additive: false },
   { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
   { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
-  { key: 'costPerInteraction', label: 'Cost per Interaction', fmt: 'rp', additive: false },
 ];
 // Non-Boost Post (Retail)'s Top Content, per materi iklan: the click, then
 // what each step of the funnel cost.
@@ -421,6 +421,6 @@ export function nonRetailTopContentMetrics(kinds: MessageKind[]): B2bDef[] {
 // Non Retail's Conversion Analysis by Creative: the same three as Retail.
 export const B2B_CREATIVE_CONVERSION_METRICS: readonly B2bDef[] = [
   { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
-  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
-  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
+  { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
 ];
