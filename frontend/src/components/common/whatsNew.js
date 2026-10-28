@@ -26,6 +26,12 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'meta-bars-periode-lalu',
+    released: '2026-10-28',
+    path: '/report-generator',
+    target: '.panel.active [data-feature="meta-bars-periode-lalu"]',
+    title: 'Periode lalu di setiap grafik batang',
+    body: 'Grafik batang Meta Ads kini menampilkan periode lalu di samping periode ini: batang pudar untuk periode lalu, batang penuh untuk periode ini. Arahkan kursor ke batang untuk melihat angkanya.',
     id: 'shopee-shopplus-keyword-charts',
     released: '2026-10-28',
     path: '/report-generator/shopee',

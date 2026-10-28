@@ -44,6 +44,8 @@ const TYPE_COLOR: Record<TypeKey | 'all', string> = {
 const TYPE_ORDER: TypeKey[] = ['NV', 'RM', 'NV+RM', 'other'];
 const SHORT: Record<TypeKey, string> = { NV: 'NV', RM: 'RM', 'NV+RM': 'NV + RM', other: 'Lainnya' };
 const MAX_BARS = 15;
+// The previous period's bar sits beside each item in the same hue, faded.
+const fade = (c: string | string[]) => (Array.isArray(c) ? c.map((x) => `${x}66`) : `${c}66`);
 
 function ageRank(label: string): number {
   const i = AGE_ORDER.findIndex((a) => a.toLowerCase() === label.toLowerCase());
@@ -178,6 +180,35 @@ export function MetaCompareBars({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scoped, dimCol, kind, aud, canSplit, typesPresent, campCol, leadKind]);
 
+  // The same items over `changes.oldRows`, read the same way (audience side,
+  // floor) — the faded bar beside each one.
+  const oldScoped = useMemo(
+    () => (changes ? (aud === 'NV' || aud === 'RM' ? changes.oldRows.filter((r) => typeOf(r) === aud) : changes.oldRows).filter(inFloor) : []),
+    [changes, aud, eligible], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const oldGroups = useMemo(() => {
+    const out = new Map<string, { total: Record<string, unknown>; perType: Record<string, Record<string, unknown>> | null }>();
+    if (!dimCol || !oldScoped.length) return out;
+    const map = new Map<string, SheetRow[]>();
+    for (const r of oldScoped) {
+      if (isAllValue(r[dimCol])) continue;
+      const label = String(r[dimCol] ?? '').trim();
+      if (!label) continue;
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(r);
+    }
+    const split = aud === 'split' && canSplit;
+    for (const [label, rs] of map) {
+      out.set(label, {
+        total: metricsFor(kind, rs, leadKind),
+        perType: split ? Object.fromEntries(typesPresent.map((t) => [t, metricsFor(kind, rs.filter((r) => typeOf(r) === t), leadKind)])) : null,
+      });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oldScoped, dimCol, kind, aud, canSplit, typesPresent, leadKind]);
+  const hasOld = oldGroups.size > 0;
+
   const metrics = useMemo(() => menu.filter((m) => groups.some((g) => g.total[m.key as string] !== null && g.total[m.key as string] !== undefined)), [menu, groups]);
   const missing = menu.filter((m) => !metrics.includes(m));
 
@@ -196,14 +227,19 @@ export function MetaCompareBars({
     const labels = shown.map((g) => g.label);
     let series: BarSeries[];
     let legend: TypeKey[] = [];
+    // Each series of this period, paired with its previous-period twin first.
+    const withOld = (s: BarSeries, old: (g: (typeof shown)[number]) => Record<string, unknown> | null | undefined): BarSeries[] =>
+      hasOld && changes
+        ? [{ label: `${s.label} · ${changes.p1}`, values: shown.map((g) => val(old(g))), color: fade(s.color) }, { ...s, label: `${s.label} · ${changes.p2}` }]
+        : [s];
     if (aud === 'split' && canSplit) {
-      series = typesPresent.map((t) => ({ label: SHORT[t], values: shown.map((g) => val(g.perType?.[t] as Record<string, unknown>)), color: TYPE_COLOR[t] }));
+      series = typesPresent.flatMap((t) => withOld({ label: SHORT[t], values: shown.map((g) => val(g.perType?.[t] as Record<string, unknown>)), color: TYPE_COLOR[t] }, (g) => oldGroups.get(g.label)?.perType?.[t]));
       legend = typesPresent;
     } else if ((audience === 'campaign' || audience === 'creative') && aud === 'all' && typesPresent.length) {
-      series = [{ label: metric.label, values: shown.map((g) => val(g.total)), color: shown.map((g) => TYPE_COLOR[g.type]) }];
+      series = withOld({ label: metric.label, values: shown.map((g) => val(g.total)), color: shown.map((g) => TYPE_COLOR[g.type]) }, (g) => oldGroups.get(g.label)?.total);
       legend = typesPresent.filter((t) => shown.some((g) => g.type === t));
     } else {
-      series = [{ label: metric.label, values: shown.map((g) => val(g.total)), color: aud === 'NV' || aud === 'RM' ? TYPE_COLOR[aud] : TYPE_COLOR.all }];
+      series = withOld({ label: metric.label, values: shown.map((g) => val(g.total)), color: aud === 'NV' || aud === 'RM' ? TYPE_COLOR[aud] : TYPE_COLOR.all }, (g) => oldGroups.get(g.label)?.total);
       if (aud === 'NV' || aud === 'RM') legend = [aud];
     }
     const ranked = [...usable].sort((a, b) => (val(b.total) as number) - (val(a.total) as number));
@@ -218,7 +254,7 @@ export function MetaCompareBars({
       low: ranked.length > 1 ? ranked[ranked.length - 1] : null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, metric, order, aud, canSplit, typesPresent, audience]);
+  }, [groups, oldGroups, hasOld, changes, metric, order, aud, canSplit, typesPresent, audience]);
 
   const mixedOnly = typesPresent.includes('NV+RM') && !hasNV && !hasRM;
   const noSide = mixedOnly ? 'Campaign di sini memakai NV dan RM dalam satu campaign — tidak bisa dipisah' : 'Tidak ada campaign dengan label ini di periode ini';
@@ -303,7 +339,7 @@ export function MetaCompareBars({
                 <End tone="low" g={view.low} />
               </div>
             )}
-            {view.legend.length > 0 && (
+            {(view.legend.length > 0 || (hasOld && changes)) && (
               <ul className="cb-legend" aria-label="Audiens">
                 {view.legend.map((t) => (
                   <li key={t}>
@@ -311,6 +347,18 @@ export function MetaCompareBars({
                     {AUDIENCE_TYPE_LABEL[t]}
                   </li>
                 ))}
+                {hasOld && changes && (
+                  <>
+                    <li data-feature="meta-bars-periode-lalu">
+                      <span style={{ background: fade('#5A6A90') as string }} aria-hidden="true" />
+                      Periode lalu · {changes.p1}
+                    </li>
+                    <li>
+                      <span style={{ background: '#5A6A90' }} aria-hidden="true" />
+                      Periode ini · {changes.p2}
+                    </li>
+                  </>
+                )}
               </ul>
             )}
             <GroupedBarChart
@@ -325,6 +373,7 @@ export function MetaCompareBars({
             />
             <p className="chart-foot">
               {metric.label} per {dimNoun}
+              {hasOld && changes ? ` · batang pudar = ${changes.p1}` : ''}
               {aud === 'NV' || aud === 'RM' ? ` · hanya campaign ${aud}` : aud === 'all' && audience !== 'none' && campCol ? ' · gabungan NV + RM' : ''}
               {eligible ? ` · hanya ${dimNoun} dengan ${floorText}` : ''}
               {view.cut ? ` — ${MAX_BARS} ${order === 'asc' ? 'terendah' : 'tertinggi'} dari ${view.total} ditampilkan` : ''}.
