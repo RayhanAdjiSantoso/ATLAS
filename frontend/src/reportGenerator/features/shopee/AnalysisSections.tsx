@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode }
 import { DeltaPill } from '../../components/DeltaPill';
 import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { ParetoChart } from '../../components/ParetoChart';
+import { SearchSelect } from '../../components/SearchSelect';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
@@ -311,8 +312,8 @@ function FundamentalValuesTable({ values, p1, p2 }: { values: FunnelValueRow[]; 
             {values.map((v, i) => (
               <tr key={v.key} className={i === lastCore ? 'fa-rule' : undefined}>
                 <td>{v.label}</td>
-                <td className="num">{fmtPivotVal(v.oldNum, v.fmt)}</td>
-                <td className="num">{fmtPivotVal(v.curNum, v.fmt)}</td>
+                <td className="num">{v.na ? '—' : fmtPivotVal(v.oldNum, v.fmt)}</td>
+                <td className="num">{v.na ? '—' : fmtPivotVal(v.curNum, v.fmt)}</td>
                 <td>
                   <DeltaPill cls={v.cls}>{v.delta}</DeltaPill>
                 </td>
@@ -735,6 +736,49 @@ export function ProductRankingSection({
 
 const RANKING_CHART_COUNT = 8;
 
+// The bars of one ranking: its top items, last period beside this one.
+function RankingBars({
+  ranking,
+  hasOld,
+  p1,
+  p2,
+  itemLabel,
+  color,
+  height = 300,
+  count = RANKING_CHART_COUNT,
+}: {
+  ranking: RankingLike;
+  hasOld: boolean;
+  p1: string;
+  p2: string;
+  itemLabel: string;
+  color: string;
+  height?: number;
+  count?: number;
+}) {
+  const shown = ranking.rows.filter((r) => r.cur !== null).slice(0, count);
+  if (!shown.length) return <div className="empty-note">Tidak ada {itemLabel.toLowerCase()} dengan data {ranking.label} pada periode ini.</div>;
+  const series = [
+    ...(hasOld ? [{ label: p1, values: shown.map((r) => r.old), color: '#cbd5e1' }] : []),
+    { label: p2, values: shown.map((r) => r.cur), color },
+  ];
+  return (
+    <>
+      <p className="chart-caption">
+        {shown.length} {itemLabel.toLowerCase()} dengan <strong>{ranking.label}</strong> tertinggi {p2}
+        {hasOld ? `, dibandingkan ${p1}` : ''}.
+      </p>
+      <GroupedBarChart
+        labels={shown.map((r) => r.produk)}
+        series={series}
+        formatValue={(v) => fmtPivotVal(v, ranking.fmt)}
+        height={height}
+        ariaLabel={`${ranking.label} per ${itemLabel.toLowerCase()}`}
+      />
+    </>
+  );
+}
+
 export function RankingChart({
   rankings,
   hasOld,
@@ -753,13 +797,8 @@ export function RankingChart({
   const [metric, setMetric] = useState(rankings[0]?.metric ?? '');
   const ranking = rankings.find((r) => r.metric === metric) ?? rankings[0];
   if (!ranking) return null;
-  const shown = ranking.rows.filter((r) => r.cur !== null).slice(0, RANKING_CHART_COUNT);
   // One bar compares nothing — the table row says it all.
-  if (shown.length < 2) return null;
-  const series = [
-    ...(hasOld ? [{ label: p1, values: shown.map((r) => r.old), color: '#cbd5e1' }] : []),
-    { label: p2, values: shown.map((r) => r.cur), color },
-  ];
+  if (ranking.rows.filter((r) => r.cur !== null).length < 2) return null;
   return (
     <div className="ranking-chart">
       {rankings.length > 1 && (
@@ -773,17 +812,104 @@ export function RankingChart({
           />
         </div>
       )}
-      <p className="chart-caption">
-        {shown.length} {itemLabel.toLowerCase()} dengan <strong>{ranking.label}</strong> tertinggi {p2}
-        {hasOld ? `, dibandingkan ${p1}` : ''}.
-      </p>
-      <GroupedBarChart
-        labels={shown.map((r) => r.produk)}
-        series={series}
-        formatValue={(v) => fmtPivotVal(v, ranking.fmt)}
-        height={300}
-        ariaLabel={`${ranking.label} per ${itemLabel.toLowerCase()}`}
-      />
+      <RankingBars ranking={ranking} hasOld={hasOld} p1={p1} p2={p2} itemLabel={itemLabel} color={color} />
+    </div>
+  );
+}
+
+// Shop+ reads its traffic and conversion twice: per campaign (ad group, from
+// the overall file) and per keyword (from the keyword file), side by side on
+// one metric switch. The keyword chart can be narrowed to one campaign — the
+// same keyword in two campaigns is two different bids.
+const ALL_CAMPAIGNS = '__all';
+export const KEYWORD_COUNTS = [
+  { value: '5' as const, label: '5 keyword' },
+  { value: '10' as const, label: '10 keyword' },
+];
+
+export function ShopPlusRankingCharts({
+  rankings,
+  hasOld,
+  keywords,
+  campaigns,
+  campaignOf,
+  p1,
+  p2,
+  color,
+}: {
+  rankings: RankingLike[];
+  hasOld: boolean;
+  keywords?: { all: RankingLike[]; byCampaign: RankingLike[]; hasOld: boolean } | null;
+  campaigns: string[];
+  campaignOf: Record<string, string>;
+  p1: string;
+  p2: string;
+  color: string;
+}) {
+  const [metric, setMetric] = useState(rankings[0]?.metric ?? '');
+  const [campaign, setCampaign] = useState(ALL_CAMPAIGNS);
+  const [count, setCount] = useState<'5' | '10'>('5');
+  const ranking = rankings.find((r) => r.metric === metric) ?? rankings[0];
+  if (!ranking) return null;
+  const activeCampaign = campaigns.includes(campaign) ? campaign : ALL_CAMPAIGNS;
+  const kwRanking = (() => {
+    if (!keywords) return null;
+    if (activeCampaign === ALL_CAMPAIGNS) return keywords.all.find((r) => r.metric === ranking.metric) ?? null;
+    const r = keywords.byCampaign.find((k) => k.metric === ranking.metric);
+    return r ? { ...r, rows: r.rows.filter((row) => campaignOf[row.key] === activeCampaign) } : null;
+  })();
+  return (
+    <div className="ranking-chart">
+      {rankings.length > 1 && (
+        <div className="chart-controls">
+          <SegmentedToggle
+            label="Metrik"
+            options={rankings.map((r) => ({ value: r.metric, label: r.label }))}
+            value={ranking.metric}
+            onChange={setMetric}
+            accent="var(--shopee-700)"
+          />
+        </div>
+      )}
+      <div className="rk-duo" data-feature="shopee-keyword-charts">
+        <div className="rk-card">
+          <div className="rk-card-head">
+            <span className="rk-card-title">
+              Per Campaign <small>Grup Iklan · Shop+ Ads Overall Data</small>
+            </span>
+          </div>
+          <RankingBars ranking={ranking} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" color={color} height={280} />
+        </div>
+        <div className="rk-card">
+          <div className="rk-card-head">
+            <span className="rk-card-title">
+              Per Keyword <small>Iklan Toko - Keyword</small>
+            </span>
+            {keywords && (
+              <div className="rk-card-tools">
+                <SegmentedToggle label="Tampilkan" options={KEYWORD_COUNTS} value={count} onChange={setCount} accent="var(--shopee-700)" />
+                {campaigns.length > 0 && (
+                  <div className="rk-filter">
+                    <SearchSelect
+                      options={[{ id: ALL_CAMPAIGNS, name: 'Semua campaign' }, ...campaigns.map((c) => ({ id: c, name: c }))]}
+                      value={activeCampaign}
+                      onChange={(id) => setCampaign(String(id))}
+                      searchable={campaigns.length > 6}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {!keywords || !kwRanking ? (
+            <div className="empty-note">
+              Upload file <strong>Iklan Toko - Keyword</strong> di Data Collection Hub untuk melihat grafik per keyword.
+            </div>
+          ) : (
+            <RankingBars ranking={kwRanking} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" color={color} height={280} count={Number(count)} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

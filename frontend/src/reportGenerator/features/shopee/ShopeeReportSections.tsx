@@ -1,4 +1,4 @@
-import { BarChart3, FileBarChart, Layers, ListTree, Megaphone, MousePointerClick, Network, PieChart, Rocket, Scale, ShoppingCart, Sparkles, Store, TrendingUp, type LucideIcon } from 'lucide-react';
+import { BarChart3, FileBarChart, Layers, ListTree, Megaphone, MousePointerClick, Network, PieChart, Scale, ShoppingCart, Sparkles, Store, TrendingUp, type LucideIcon } from 'lucide-react';
 import { KpiTable } from '../../components/KpiTable';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { ReportPages } from '../../components/ReportPages';
@@ -7,8 +7,8 @@ import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights';
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import type { ParetoRangeSelection, PerfMetricVars } from '../../lib/shopeeProductAnalysis';
-import { ChannelPivotSection, DailyTrendSection, ItemPivotSection, TingkatkanDenganIklanTable } from './DeepDiveSections';
-import { FundamentalAnalysisSection, ParetoAnalysisSection, ProductRankingSection, RankingChart } from './AnalysisSections';
+import { ChannelPivotSection, DailyTrendSection, ItemPivotSection } from './DeepDiveSections';
+import { FundamentalAnalysisSection, ParetoAnalysisSection, ProductRankingSection, RankingChart, ShopPlusRankingCharts } from './AnalysisSections';
 import { ProductChangeChart } from './ProductAnalysisCharts';
 import { ChannelEmptySection, ChannelParetoSection, PotentialItemsSection, ProductAdsSplitSection, RoiRootSection, ShopPlusGroupsSection, UncategorizedNote, UnadvertisedProductsSection } from './ChannelAnalysisSections';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
@@ -24,8 +24,8 @@ import type { ShopeeReport } from './shopeeReport';
 // drift. The caller owns the three report objects (built from files, or
 // reconstructed from the DB) plus the interactive selection state.
 //
-// One tab per channel: Overall · Product Ads · Shop+ Ads · Live Ads · Banner
-// Ads. Overall opens on the ROI root (ROI = revenue ÷ spend, each split by
+// One tab per channel: Overall Performance · Product Ads · Shop+ Ads · Live
+// Ads · Banner Ads. Overall Performance opens on the ROI root (ROI = revenue ÷ spend, each split by
 // channel) and carries the store-level reads (Product Performance); every
 // channel tab reads Traffic, Conversion, Pareto and Potential off its own
 // export (see lib/shopeeChannelAnalysis.ts for which file feeds which).
@@ -35,11 +35,10 @@ const SECTION_ICONS: readonly [RegExp, LucideIcon][] = [
   [/roi/i, Scale],
   [/fundamental/i, Network],
   [/kontribusi/i, PieChart],
-  [/shopee toko|overview/i, Store],
+  [/store overview/i, Store],
   [/traffic/i, MousePointerClick],
   [/conversion/i, ShoppingCart],
   [/pareto/i, BarChart3],
-  [/tingkatkan/i, Rocket],
   [/potential/i, Sparkles],
   [/tren/i, TrendingUp],
   [/per item/i, ListTree],
@@ -94,26 +93,45 @@ export function ShopeeReportSections({
   const analysis = (key: ChannelAnalysis['key']) => funnelReport?.channelAnalyses.find((c) => c.key === key);
   const { p1, p2 } = report;
 
-  // Traffic, Conversion, Pareto and Potential of one channel, read off its own
-  // export — each one section, its chart above its table. Live sessions never
-  // repeat across periods, so they rank without a %Change column.
+  // Traffic, Conversion and Pareto of one channel, read off its own export —
+  // each one section, its chart above its table. Live sessions never repeat
+  // across periods, so they rank without a %Change column. Shop+ draws two
+  // charts per read (per campaign and per keyword) and its Pareto ranks
+  // keywords, not campaigns.
   const channelReads = (a: ChannelAnalysis | undefined) => {
     if (!a) return [];
     const oldMissing = <>Tidak ada {a.itemLabel.toLowerCase()} yang sama di periode lalu — ranking ditampilkan tanpa kolom %Perubahan.</>;
-    const color = SHOPEE_CHANNELS.find((c) => c.key === a.key)?.color ?? 'var(--shopee)';
-    const chart = (r: ChannelAnalysis['traffic']) => <RankingChart rankings={r.rankings} hasOld={r.hasOld} p1={p1} p2={p2} itemLabel={a.itemLabel} color={color} />;
+    // Shop+ bars wear the Shopee orange like Product Ads; Live keeps its own hue.
+    const color = a.key === 'toko' ? '#c93b1c' : SHOPEE_CHANNELS.find((c) => c.key === a.key)?.color ?? 'var(--shopee)';
+    const kw = a.keywords;
+    const chart = (r: ChannelAnalysis['traffic'], read: 'traffic' | 'conversion') =>
+      a.key === 'toko' ? (
+        <ShopPlusRankingCharts
+          rankings={r.rankings} hasOld={r.hasOld} keywords={kw?.hasData ? kw[read] : null}
+          campaigns={kw?.campaigns ?? []} campaignOf={kw?.campaignOf ?? {}} p1={p1} p2={p2} color={color}
+        />
+      ) : (
+        <RankingChart rankings={r.rankings} hasOld={r.hasOld} p1={p1} p2={p2} itemLabel={a.itemLabel} color={color} />
+      );
     return [
       <ProductRankingSection
         key="traffic" title="Traffic Analysis" badge={`${a.label} · ${a.source}`} itemLabel={a.itemLabel}
         rankings={a.traffic.rankings} hasCur={a.traffic.rankings[0]?.rows.length > 0} hasOld={a.traffic.hasOld}
-        emptyText={`Belum ada data ${a.label} periode ini.`} oldMissingText={oldMissing} p1={p1} p2={p2} chart={chart(a.traffic)}
+        emptyText={`Belum ada data ${a.label} periode ini.`} oldMissingText={oldMissing} p1={p1} p2={p2} chart={chart(a.traffic, 'traffic')}
       />,
       <ProductRankingSection
         key="conversion" title="Conversion Analysis" badge={`${a.label} · ${a.source}`} itemLabel={a.itemLabel}
         rankings={a.conversion.rankings} hasCur={a.conversion.rankings[0]?.rows.length > 0} hasOld={a.conversion.hasOld}
-        emptyText={`Belum ada data ${a.label} periode ini.`} oldMissingText={oldMissing} p1={p1} p2={p2} chart={chart(a.conversion)}
+        emptyText={`Belum ada data ${a.label} periode ini.`} oldMissingText={oldMissing} p1={p1} p2={p2} chart={chart(a.conversion, 'conversion')}
       />,
-      <ChannelParetoSection key="pareto" rows={a.pareto} itemLabel={a.itemLabel} channelLabel={a.label} periodLabel={p2} />,
+      a.key === 'toko' ? (
+        <ChannelParetoSection
+          key="pareto" rows={a.pareto} itemLabel="Keyword" channelLabel={a.label} periodLabel={p2} countToggle
+          emptyText={kw?.hasData ? undefined : <>Upload file <strong>Iklan Toko - Keyword</strong> di Data Collection Hub untuk melihat Pareto per keyword.</>}
+        />
+      ) : (
+        <ChannelParetoSection key="pareto" rows={a.pareto} itemLabel={a.itemLabel} channelLabel={a.label} periodLabel={p2} />
+      ),
     ];
   };
 
@@ -138,7 +156,7 @@ export function ShopeeReportSections({
   const pages = [
     {
       id: 'overall',
-      label: 'Overall',
+      label: 'Overall Performance',
       hint: roasHint(funnelReport?.roiRoot.roi.cur),
       content: (
         <SectionAccordion iconFor={sectionIcon}>
@@ -147,17 +165,6 @@ export function ShopeeReportSections({
             <FundamentalAnalysisSection values={funnelReport.values} liveGmv={funnelReport.liveGmv} tree={funnelReport.tree} symptom={funnelReport.symptom} p1={p1} p2={p2} />
           )}
           {funnelReport && funnelReport.channelMix.length > 0 && <ChannelContributionSection mix={funnelReport.channelMix} periodLabel={p2} />}
-          {report.productOverviewRows && (
-            <div className="sec-block">
-              <div className="sec-heading shopee-heading">
-                Shopee Toko <span className="sec-badge">Product Overview</span>
-                <SectionDownloadButton />
-              </div>
-              <div style={{ padding: '0 1.4rem 1.4rem' }}>
-                <KpiTable rows={report.productOverviewRows} p1={p1} p2={p2} />
-              </div>
-            </div>
-          )}
           {funnelReport && (
             <SectionGroup label="Penjualan toko · semua produk, bukan hanya iklan">
               {(['traffic', 'conversion'] as const).map((id) => {
@@ -183,6 +190,17 @@ export function ShopeeReportSections({
             </SectionGroup>
           )}
           <DailyTrendSection rows={deepDive.dailyTrendPivot} selections={deepDive.dailyTrendSelections} onSelectionsChange={onDailyTrendSelectionsChange} p1={p1} p2={p2} />
+          {report.productOverviewRows && (
+            <div className="sec-block">
+              <div className="sec-heading shopee-heading">
+                Store Overview <span className="sec-badge">Product Overview</span>
+                <SectionDownloadButton />
+              </div>
+              <div style={{ padding: '0 1.4rem 1.4rem' }}>
+                <KpiTable rows={report.productOverviewRows} p1={p1} p2={p2} />
+              </div>
+            </div>
+          )}
         </SectionAccordion>
       ),
     },
@@ -208,7 +226,6 @@ export function ShopeeReportSections({
             activeTab={(itemPivotTab === 'keyword' && !hasTokoKeywordData) || (itemPivotTab === 'performa' && !deepDive.hasPerformancePivotData) ? 'produk' : itemPivotTab}
             onTabChange={onItemPivotTabChange} p1={p1} p2={p2}
           />
-          {deepDive.tingkatkanDenganIklanRows && deepDive.tingkatkanDenganIklanRows.length > 0 && <TingkatkanDenganIklanTable rows={deepDive.tingkatkanDenganIklanRows} />}
           {deepDive.uncategorized.length > 0 && <UncategorizedNote alwaysOpen names={deepDive.uncategorized} onSave={onSaveCategory} />}
         </SectionAccordion>
       ),
@@ -225,7 +242,6 @@ export function ShopeeReportSections({
           />
           {toko?.groups && <ShopPlusGroupsSection groups={toko.groups} p1={p1} p2={p2} />}
           {channelReads(toko)}
-          {toko && <PotentialItemsSection items={toko.potentialItems} itemLabel={toko.itemLabel} channelLabel={toko.label} periodLabel={p2} />}
         </SectionAccordion>
       ) : (
         <ChannelEmptySection label="Shop+ Ads" source="Iklan Toko (Shop+ Ads Overall Data)" />

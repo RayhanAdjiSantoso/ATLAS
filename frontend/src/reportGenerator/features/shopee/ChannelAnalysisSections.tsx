@@ -9,9 +9,9 @@ import { SegmentedToggle, type SegmentedOption } from '../../components/Segmente
 import { computeDelta, deltaClassForSentiment, formatDeltaID } from '../../lib/delta';
 import { fmtPivotVal, type PivotFmt } from '../../lib/shopeeDeepDivePivot';
 import type { ParetoRow } from '../../lib/shopeeProductAnalysis';
-import { derived, type ItemSums, type PotentialItem, type ProductAdsSplit, type RoiBranch, type RoiRoot, type ShopPlusGroup, type UnadvertisedProduct } from '../../lib/shopeeChannelAnalysis';
+import { addItemSums, derived, type ItemSums, type PotentialItem, type ProductAdsSplit, type RoiBranch, type RoiRoot, type ShopPlusGroup, type UnadvertisedProduct } from '../../lib/shopeeChannelAnalysis';
 import type { Sentiment } from '../../lib/types';
-import { DataTable, type DataColumn } from './AnalysisSections';
+import { DataTable, KEYWORD_COUNTS, type DataColumn } from './AnalysisSections';
 import { UncategorizedPanel } from './DeepDiveSections';
 import './shopeeChannels.css';
 
@@ -303,14 +303,8 @@ const SPLIT_ROWS: readonly SplitRow[] = [
   { id: 'spendShare', label: 'Porsi Spend Product Ads', fmt: 'pct', sentiment: 'neutral', get: (s, t) => (t.spend > 0 ? (s.spend / t.spend) * 100 : null) },
   { id: 'gmvShare', label: 'Porsi GMV Product Ads', fmt: 'pct', sentiment: 'neutral', get: (s, t) => (t.gmv > 0 ? (s.gmv / t.gmv) * 100 : null) },
 ];
-const sumOf = (a: ItemSums, b: ItemSums): ItemSums => ({
-  impressions: a.impressions + b.impressions, clicks: a.clicks + b.clicks, atc: a.atc + b.atc, orders: a.orders + b.orders, sold: a.sold + b.sold,
-  gmv: a.gmv + b.gmv, spend: a.spend + b.spend, viewers: a.viewers + b.viewers, ordersDirect: a.ordersDirect + b.ordersDirect,
-  gmvDirect: a.gmvDirect + b.gmvDirect, productViews: a.productViews + b.productViews, productClicks: a.productClicks + b.productClicks,
-});
-
 export function ProductAdsSplitSection({ split, p1, p2 }: { split: ProductAdsSplit; p1: string; p2: string }) {
-  const total = { old: sumOf(split.individual.old, split.auto.old), cur: sumOf(split.individual.cur, split.auto.cur) };
+  const total = { old: addItemSums(split.individual.old, split.auto.old), cur: addItemSums(split.individual.cur, split.auto.cur) };
   const value = (side: 'individual' | 'auto', period: 'old' | 'cur', row: SplitRow) => row.get(split[side][period], total[period]);
   const hasAuto = split.auto.old.spend + split.auto.cur.spend + split.auto.old.gmv + split.auto.cur.gmv > 0;
   const fmt = (v: number | null, row: SplitRow) => (v === null ? '—' : fmtPivotVal(v, row.fmt));
@@ -502,7 +496,23 @@ function FlyRow({ row, split, total, p1 }: { row: SplitRow; split: ProductAdsSpl
 
 // ── Pareto per channel ───────────────────────────────────────────────────
 
-export function ChannelParetoSection({ rows, itemLabel, channelLabel, periodLabel }: { rows: ParetoRow[]; itemLabel: string; channelLabel: string; periodLabel: string }) {
+export function ChannelParetoSection({
+  rows,
+  itemLabel,
+  channelLabel,
+  periodLabel,
+  emptyText,
+  countToggle = false,
+}: {
+  rows: ParetoRow[];
+  itemLabel: string;
+  channelLabel: string;
+  periodLabel: string;
+  emptyText?: ReactNode;
+  // A "5 / 10" switch for how many items the chart draws (Shop+ keywords).
+  countToggle?: boolean;
+}) {
+  const [count, setCount] = useState<'5' | '10'>('5');
   const columns: DataColumn<ParetoRow>[] = [
     { id: 'rank', label: '#', thStyle: RANK_TH, tdStyle: RANK_TD, sortValue: (_r, i) => i, render: (_r, i) => i + 1 },
     { id: 'name', label: itemLabel, thStyle: NAME_TH, tdStyle: NAME_TD, sortValue: (r) => r.produk, render: (r) => r.produk },
@@ -514,13 +524,18 @@ export function ChannelParetoSection({ rows, itemLabel, channelLabel, periodLabe
   return (
     <Shell title="Pareto Analysis" badge={`${channelLabel} · omzet iklan per ${itemLabel.toLowerCase()} · ${periodLabel}`} excel>
       {!rows.length ? (
-        <div className="empty-note">Belum ada {itemLabel.toLowerCase()} dengan omzet iklan pada periode ini.</div>
+        <div className="empty-note">{emptyText ?? <>Belum ada {itemLabel.toLowerCase()} dengan omzet iklan pada periode ini.</>}</div>
       ) : (
         <>
           <p className="chart-caption">
             <strong>{head}</strong> dari {rows.length} {itemLabel.toLowerCase()} menghasilkan ±80% omzet {channelLabel} periode ini.
           </p>
-          <ParetoChart rows={rows} />
+          {countToggle && (
+            <div className="chart-controls">
+              <SegmentedToggle label="Tampilkan" options={KEYWORD_COUNTS} value={count} onChange={setCount} accent="var(--shopee-700)" />
+            </div>
+          )}
+          <ParetoChart rows={rows} limit={countToggle ? Number(count) : undefined} />
           <DataTable columns={columns} rows={rows} rowKey={(r) => r.key} rowStyle={(r) => (r.cumulative <= 80 ? { fontWeight: 600 } : undefined)} />
         </>
       )}

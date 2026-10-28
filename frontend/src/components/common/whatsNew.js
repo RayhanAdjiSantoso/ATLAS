@@ -26,6 +26,22 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'shopee-shopplus-keyword-charts',
+    released: '2026-10-28',
+    path: '/report-generator/shopee',
+    target: '[data-feature="shopee-keyword-charts"]',
+    title: 'Shop+ Ads per campaign dan per keyword',
+    body: 'Traffic dan Conversion Analysis Shop+ Ads kini punya dua grafik: per campaign dan per keyword dari file Iklan Toko - Keyword. Grafik keyword bisa difilter ke satu campaign, dan Pareto Shop+ kini menghitung per keyword.',
+  },
+  {
+    id: 'shopee-tren-harian-grafik',
+    released: '2026-10-28',
+    path: '/report-generator/shopee',
+    target: '[data-feature="shopee-daily-trend-chart"]',
+    title: 'Grafik Tren Harian Toko',
+    body: 'Tren Harian Toko kini dibuka dengan grafik per tanggal yang membandingkan dua periode. Pilihan metriknya mengikuti metrik di tabel di bawahnya.',
+  },
+  {
     id: 'meta-tab-per-channel',
     released: '2026-10-27',
     path: '/report-generator',
