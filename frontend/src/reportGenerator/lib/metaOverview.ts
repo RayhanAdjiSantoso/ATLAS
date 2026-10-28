@@ -145,16 +145,20 @@ const CTR: Spec = { key: 'ctr', label: 'CTR (link click-through rate)', fmt: 'pc
 const CPC: Spec = { key: 'cpc', label: 'CPC (cost per link click)', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.linkClicks), same: ['cpc', 'link'] };
 const DELIVERY = [IMPRESSIONS, CPM, LINK_CLICKS, CPC, CTR];
 
+// Boost Post: delivery first, then each brand action as count, cost and rate
+// (the rate over impressions, as the Consideration charts read it).
 const BOOST: Spec[] = [
   SPEND,
-  { key: 'profile_visits', label: 'Profile visits', fmt: 'num', sentiment: 'higher-better', value: (b) => b.profileVisits, from: 'profileVisits' },
-  { key: 'cost_per_profile_visit', label: 'Cost per profile visit', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.profileVisits), same: ['cost per', 'profile visit'] },
-  { key: 'profile_visit_rate', label: 'Profile visit rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.profileVisits, b.impressions, 100), same: ['profile visit rate'] },
   ...DELIVERY,
   { key: 'interactions', label: 'Interactions', fmt: 'num', sentiment: 'higher-better', value: (b) => b.interactions, from: 'interactions' },
   { key: 'cost_per_interaction', label: 'Cost per interaction', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.interactions), same: ['cost per', 'interaction'] },
+  { key: 'interaction_rate', label: 'Interaction rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.interactions, b.impressions, 100), same: ['interaction rate'] },
+  { key: 'profile_visits', label: 'Profile visits', fmt: 'num', sentiment: 'higher-better', value: (b) => b.profileVisits, from: 'profileVisits' },
+  { key: 'cost_per_profile_visit', label: 'Cost per profile visit', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.profileVisits), same: ['cost per', 'profile visit'] },
+  { key: 'profile_visit_rate', label: 'Profile visit rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.profileVisits, b.impressions, 100), same: ['profile visit rate'] },
   { key: 'instagram_follows', label: 'Instagram follows', fmt: 'num', sentiment: 'higher-better', value: (b) => b.follows, from: 'follows' },
   { key: 'cost_per_instagram_follow', label: 'Cost per Instagram follow', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.follows), same: ['cost per', 'follow'] },
+  { key: 'follow_rate', label: 'Follow rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.follows, b.impressions, 100), same: ['follow rate'] },
 ];
 
 // Non-Boost E-commerce and CPAS: on a CPAS file the counts resolve to the
