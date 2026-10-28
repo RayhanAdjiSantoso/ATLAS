@@ -31,6 +31,7 @@ import { buildMetaBrandFunnel, buildMetaLeadFunnel, buildMetaSalesFunnel, leadRe
 import { toISODate } from '../../lib/dateFmt';
 import { buildParsedPeriod, comparePeriodDays, daysBetweenInclusive, type ParsedPeriod } from '../../lib/periodLabel';
 import { toSummaryKpi, type SpendEntry, type SummaryKpi } from '../../lib/summary';
+import { audienceTypeOf } from '../../lib/metaAudience';
 import type { SheetRow } from '../../lib/types';
 
 export interface OverviewDetailedData {
@@ -76,6 +77,20 @@ export interface CpasSections {
   rmFunnel?: MetaFunnel;
 }
 
+// One channel read for its New Visitor or Re-Marketing campaigns alone — the
+// Performance Overview's Audiens switch. A campaign named for both ("NV RM |
+// …") cannot be split, so it counts only toward the channel's combined card.
+export type MetaAudienceKey = 'NV' | 'RM';
+
+export interface MetaAudienceSide {
+  overview: OverviewDetailedData;
+  funnel: MetaFunnel;
+  // B2B only, same as NonBoostLane.leadResults.byKind.
+  byKind?: Partial<Record<LeadResultKind, { overviewRows: KpiRowDisplay[]; funnel: MetaFunnel }>>;
+}
+
+export type MetaAudienceSides = Partial<Record<MetaAudienceKey, MetaAudienceSide>>;
+
 // Non-Boost Post read as two lanes, the way MIL plans it: Retail sells
 // (purchase funnel), B2B Leads collects leads (form leads or chats). See
 // laneOfCampaign for how each campaign is placed.
@@ -104,6 +119,7 @@ export interface NonBoostLane {
     auto: LeadResultKind;
     byKind: Partial<Record<LeadResultKind, { overviewRows: KpiRowDisplay[]; funnel: MetaFunnel }>>;
   };
+  audiences?: MetaAudienceSides;
 }
 
 export const NON_BOOST_LANE_LABEL: Record<NonBoostLaneKey, string> = { retail: 'Retail', b2b: 'B2B Leads' };
@@ -145,6 +161,7 @@ export interface MetaReport {
   nonBoostObjectives?: { key: MetaObjectiveKey; label: string; rows: SheetRow[]; spend: number | null }[];
   // The objective Boost Post was bought on (highest spend), when recognisable.
   boostObjective?: { key: MetaObjectiveKey; label: string; source: MetaObjectiveSource; mixed: boolean };
+  boostAudiences?: MetaAudienceSides;
   boostAgeDemo?: DemoData;
   boostGenderDemo?: DemoData;
   ageDemo?: DemoData;
@@ -179,6 +196,19 @@ function toDisplayRows(rows: MetaKpiRow[]): DetailedRow[] {
   return rows
     .filter((r) => r.old !== '—' || r.val !== '—')
     .map((r) => ({ col: r.col, label: displayName(r.col), old: r.old, cur: r.val, delta: r.delta, cls: r.cls }));
+}
+
+// The NV and RM slices of one channel, each only when it has rows.
+function audienceSides(oldRows: SheetRow[], curRows: SheetRow[], campCol: string | null, build: (o: SheetRow[], c: SheetRow[]) => MetaAudienceSide): MetaAudienceSides {
+  const sides: MetaAudienceSides = {};
+  if (!campCol) return sides;
+  for (const k of ['NV', 'RM'] as const) {
+    const pick = (r: SheetRow) => audienceTypeOf(r[campCol]) === k;
+    const o = oldRows.filter(pick);
+    const c = curRows.filter(pick);
+    if (o.length || c.length) sides[k] = build(o, c);
+  }
+  return sides;
 }
 
 // Default Overview rows (lib/metaOverview) as Summary Overview entries.
@@ -444,6 +474,10 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
     const boostOvRows = buildMetaOverviewRows('boost', mBoostOld, mBoostCur, !reachWarning);
     report.boost = { overviewRows: boostOvRows, detailedRows: toDisplayRows(buildKPI(mBoostOld, mBoostCur, mAllCols)), allCols: mAllCols };
     report.boostFunnel = buildMetaBrandFunnel(mBoostOld, mBoostCur);
+    report.boostAudiences = audienceSides(mBoostOld, mBoostCur, mCampCol, (o, c) => ({
+      overview: { overviewRows: buildMetaOverviewRows('boost', o, c, !reachWarning), detailedRows: toDisplayRows(buildKPI(o, c, mAllCols)), allCols: mAllCols },
+      funnel: buildMetaBrandFunnel(o, c),
+    }));
     metaKpis.push(...overviewSummary(boostOvRows, 'Boost Post'));
     if (mSpentCol) metaSpend.boost = { old: agg(mBoostOld, mSpentCol), cur: agg(mBoostCur, mSpentCol) };
   }
@@ -581,6 +615,13 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
         ageCol: mAgeCol,
         genderCol: mGenderCol,
         leadResults,
+        audiences: audienceSides(oldRows, curRows, mCampCol, (o, c) => ({
+          overview: { overviewRows: buildMetaOverviewRows(key === 'retail' ? 'ecommerce' : 'b2b', o, c, !reachWarning), detailedRows: deblend(toDisplayRows(buildKPI(o, c, mAllCols))), allCols: mAllCols },
+          funnel: key === 'retail' ? buildMetaSalesFunnel(o, c, { keepConversionBranch: true }) : buildMetaLeadFunnel(o, c),
+          byKind: key === 'b2b'
+            ? Object.fromEntries(leadKinds.map((k) => [k, { overviewRows: buildMetaOverviewRows('b2b', o, c, !reachWarning, k), funnel: buildMetaLeadFunnel(o, c, k) }]))
+            : undefined,
+        })),
       });
     }
     if (lanes.length) report.nonBoostLanes = lanes;

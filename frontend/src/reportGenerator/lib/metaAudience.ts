@@ -202,26 +202,15 @@ export const BRAND_CONVERSION_METRICS: readonly AudienceMetricDef<MetaBrandMetri
 ];
 
 // Boost Post's Consideration Analysis, per materi iklan: how often an
-// impression turned into each brand action, then what the click and each
-// action cost.
+// impression turned into each brand action.
 export const BRAND_CONSIDERATION_RATE_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
   { key: 'interactionRate', label: 'Interaction Rate', fmt: 'pct', additive: false },
   { key: 'profileVisitsRate', label: 'Profile Visit Rate', fmt: 'pct', additive: false },
   { key: 'followRate', label: 'Follow Rate', fmt: 'pct', additive: false },
 ];
-export const BRAND_CONSIDERATION_COST_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
-  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
-  { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
-  { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
-];
 
-// Boost Post's Top Content reads two questions: how much each materi iklan
-// brought in (Performance), and what each of those cost (Efficiency).
-export const BRAND_TOP_PERFORMANCE_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
-  { key: 'profileVisits', label: 'Profile Visit', fmt: 'num', additive: true },
-  { key: 'follows', label: 'Follow', fmt: 'num', additive: true },
-  { key: 'interactions', label: 'Interaction', fmt: 'num', additive: true },
-];
+// Boost Post's Top Content Analysis: what each materi iklan's click and
+// brand actions cost.
 export const BRAND_TOP_EFFICIENCY_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
   { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
   { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
@@ -246,6 +235,12 @@ export const SALES_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>
   { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
   { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
 ];
+// Traffic Analysis by Audience (Retail, CPAS) also counts the visits each ad
+// set brought.
+export const SALES_AUDIENCE_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
+  ...SALES_TRAFFIC_METRICS,
+  { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
+];
 // Exactly the two metrics the sheet lists under each chart, in its order.
 export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
@@ -266,8 +261,11 @@ export const SALES_ATC_PURCHASE_METRICS: readonly AudienceMetricDef<MetaSalesMet
   { key: 'atc', label: 'ATC', fmt: 'num', additive: true },
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
 ];
+// Conversion Analysis by Creative (Retail, CPAS): the whole conversion, then
+// its two steps.
 export const SALES_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
-  { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
   { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
 ];
 
@@ -374,6 +372,11 @@ export const B2B_TRAFFIC_METRICS: readonly B2bDef[] = [
   { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
   { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
 ];
+// Non Retail's Traffic Analysis by Audience also counts the link clicks.
+export const B2B_AUDIENCE_TRAFFIC_METRICS: readonly B2bDef[] = [
+  ...B2B_TRAFFIC_METRICS,
+  { key: 'linkClicks', label: 'Link Clicks', fmt: 'num', additive: true },
+];
 export const B2B_CONVERSION_METRICS: readonly B2bDef[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
   { key: 'purchase', label: 'Purchase / Leads', fmt: 'num', additive: true },
@@ -415,8 +418,9 @@ export function nonRetailTopContentMetrics(kinds: MessageKind[]): B2bDef[] {
     })),
   ];
 }
+// Non Retail's Conversion Analysis by Creative: the same three as Retail.
 export const B2B_CREATIVE_CONVERSION_METRICS: readonly B2bDef[] = [
-  { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
   { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
-  { key: 'leadRate', label: 'Click → Lead Rate', fmt: 'pct', additive: false },
 ];

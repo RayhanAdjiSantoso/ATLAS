@@ -498,6 +498,15 @@
 @container (max-width: 1120px) {
   .mil-ui.report-generator-app .sec-split { grid-template-columns: minmax(0, 1fr); gap: 1.2rem; }
 }
+/* Overview table beside its root cause: two equal halves of one height —
+   the table's rows spread out to meet the tree's bottom edge. */
+@media (min-width: 1181px) {
+  .mil-ui.report-generator-app .sec-split.sec-split-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; }
+  .mil-ui.report-generator-app .sec-split-even > .sec-split-main { display: flex; flex-direction: column; }
+  .mil-ui.report-generator-app .sec-split-even > .sec-split-main > :last-child { flex: 1; display: flex; flex-direction: column; padding-bottom: 0 !important; }
+  .mil-ui.report-generator-app .sec-split-even .tbl-scroll { flex: 1; display: flex; flex-direction: column; overflow: visible; }
+  .mil-ui.report-generator-app .sec-split-even .kpi-compact { flex: 1; }
+}
 
 /* ── Special Moment: period switch, side-by-side compare, per-day efficiency ── */
 .mil-ui.report-generator-app .sm-contrib-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; margin-bottom: .9rem; }

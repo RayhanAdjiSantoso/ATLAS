@@ -42,6 +42,14 @@ export const WHATS_NEW = [
     body: 'Tren Harian Toko kini dibuka dengan grafik per tanggal yang membandingkan dua periode. Pilihan metriknya mengikuti metrik di tabel di bawahnya.',
   },
   {
+    id: 'meta-overview-audiens',
+    released: '2026-10-28',
+    path: '/report-generator',
+    target: '.panel.active [data-feature="meta-overview-audience"]',
+    title: 'Filter Audiens di Performance Overview',
+    body: 'Performance Overview Boost Post dan Non-Boost Post kini punya filter Audiens seperti CPAS Shopee: Gabungan NV + RM, NV, atau RM. Tabel dan Root Cause Analysis di sebelahnya ikut membaca audiens yang dipilih.',
+  },
+  {
     id: 'meta-tab-per-channel',
     released: '2026-10-27',
     path: '/report-generator',

@@ -119,7 +119,9 @@ export function metaSalesMetrics(rows: SheetRow[]): MetaSalesMetrics {
   const orders = total(rows, ['purchases with shared', 'purchases'], ['value', 'roas', 'rate']);
   const impressions = total(rows, ['impressions']);
   const spend = total(rows, ['amount spent', 'spend']);
-  const contentViews = total(rows, ['content views', 'landing page views', 'link clicks'], ['rate', 'ratio', 'ration']);
+  // Content Views only — a file without the column leaves it blank rather
+  // than borrowing Landing Page Views or Link Clicks.
+  const contentViews = total(rows, ['content views'], ['rate', 'ratio', 'ration']);
   const atc = total(rows, ['adds to cart with shared', 'adds to cart', 'add to cart'], ['value', 'rate', 'roas']);
 
   return {
@@ -298,8 +300,16 @@ export const LEAD_RESULT: Record<LeadResultKind, { label: string; rate: string; 
   contacts: { label: 'Messaging Contacts', rate: 'Contact Rate (Messaging Contacts ÷ Link Clicks)', cost: 'Cost per Messaging Contact' },
 };
 
+// "Leads" is every lead the campaign brought in: form leads plus Messaging
+// Contacts plus Messaging Conversations Started, whichever the file has —
+// the same total the Performance Overview table shows.
+function totalLeads(o: MetaObjectiveMetrics): number | null {
+  const parts = [o.leads, o.messagingContacts, o.conversations].filter((v): v is number => v !== null);
+  return parts.length ? parts.reduce((a, v) => a + v, 0) : null;
+}
+
 const RESULT_OF: Record<LeadResultKind, (o: MetaObjectiveMetrics) => number | null> = {
-  leads: (o) => o.leads,
+  leads: totalLeads,
   conversations: (o) => o.conversations,
   contacts: (o) => o.messagingContacts,
 };

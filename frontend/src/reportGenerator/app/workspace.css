@@ -867,5 +867,5 @@
 .mil-ui.report-generator-app .gen-main#app > .panel.active :is(#report-meta, #report-shopee, #report-tiktok, #report-google, #business-container, #summary-container) { width: 100%; }
 
 /* A table control beside "Hapus Semua" (Meta › Non-Boost B2B result picker). */
-.mil-ui.report-generator-app .metric-picker-extra { display: flex; align-items: center; margin-left: .5rem; }
+.mil-ui.report-generator-app .metric-picker-extra { display: flex; align-items: center; gap: .75rem; margin-left: .5rem; }
 .mil-ui.report-generator-app .metric-picker-extra .seg-toggle { margin: 0; }
