@@ -300,8 +300,16 @@ export const LEAD_RESULT: Record<LeadResultKind, { label: string; rate: string; 
   contacts: { label: 'Messaging Contacts', rate: 'Contact Rate (Messaging Contacts ÷ Link Clicks)', cost: 'Cost per Messaging Contact' },
 };
 
+// "Leads" is every lead the campaign brought in: form leads plus Messaging
+// Contacts plus Messaging Conversations Started, whichever the file has —
+// the same total the Performance Overview table shows.
+function totalLeads(o: MetaObjectiveMetrics): number | null {
+  const parts = [o.leads, o.messagingContacts, o.conversations].filter((v): v is number => v !== null);
+  return parts.length ? parts.reduce((a, v) => a + v, 0) : null;
+}
+
 const RESULT_OF: Record<LeadResultKind, (o: MetaObjectiveMetrics) => number | null> = {
-  leads: (o) => o.leads,
+  leads: totalLeads,
   conversations: (o) => o.conversations,
   contacts: (o) => o.messagingContacts,
 };

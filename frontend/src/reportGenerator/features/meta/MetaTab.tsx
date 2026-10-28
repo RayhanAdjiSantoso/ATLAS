@@ -53,7 +53,7 @@ import {
 import { MetaCompareBars } from './MetaCompareBars';
 import { relabelMetaMenu as L, relabelMetaRows } from '../../lib/metaLabels';
 import { SymptomTreePanel } from '../shopee/AnalysisSections';
-import { LEAD_RESULT, buildMetaSalesFunnel, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
+import { buildMetaSalesFunnel, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
@@ -206,8 +206,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // The same switch on the Boost Post and Non-Boost lane overall cards.
   const [boostAud, setBoostAud] = useState<'all' | 'NV' | 'RM'>('all');
   const [laneAud, setLaneAud] = useState<Record<NonBoostLaneKey, 'all' | 'NV' | 'RM'>>({ retail: 'all', b2b: 'all' });
-  // The B2B lane's result, picked on the report (null = the automatic pick).
-  const [b2bResult, setB2bResult] = useState<LeadResultKind | null>(null);
   // Legacy — the "Custom Conversion" column picker is gone; kept so old saved
   // report configs still round-trip.
   const [customResultsCol, setCustomResultsCol] = useState<string | null>(null);
@@ -579,7 +577,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   function generate(restoredAt?: string) {
     if (!metaRows && !cpasRows) return;
     const r = buildMetaReport({ metaRows: metaRows ?? [], metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
-    setB2bResult(null);
     setReport(r);
     setGeneratedAt(formatGeneratedDate(restoredAt));
     onGenerated({ period: { old: r.p1, cur: r.p2 }, kpis: r.summary.kpis, cpasKpis: r.summary.cpasKpis, spend: r.summary.spend });
@@ -655,11 +652,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // The Audience & Creative Analysis of one channel, as the architecture
   // sheet lays them out. Selling channels (CPAS, Non-Boost Retail) read the
   // purchase funnel; B2B Leads the lead funnel; Boost Post brand actions.
-  // The B2B lane's result: the user's pick when the lane has it, else the
-  // automatic one. Null for a lane that is not B2B.
+  // The B2B lane is read on Leads — form leads, Messaging Contacts and
+  // Messaging Conversations Started together. Null for a lane that is not B2B.
   function laneLeadKind(lane: NonBoostLane): LeadResultKind | null {
-    if (!lane.leadResults) return null;
-    return b2bResult && lane.leadResults.kinds.includes(b2bResult) ? b2bResult : lane.leadResults.auto;
+    return lane.leadResults ? 'leads' : null;
   }
 
   // The Audiens switch of an overall card; none when the channel has no
@@ -801,7 +797,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     );
   }
 
-  // The Overall card of one Non-Boost lane, with the B2B result switch.
+  // The Overall card of one Non-Boost lane, with its Audiens switch.
   // Retail's root cause always draws the whole Conversion Rate branch
   // (Visit → ATC Rate and ATC → Purchase Rate), "—" where the file lacks it.
   function laneOverallCard(lane: NonBoostLane, r: MetaReport) {
@@ -816,25 +812,12 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       : lane.key === 'retail' ? buildMetaSalesFunnel(lane.oldRows, lane.curRows, { keepConversionBranch: true }) : variant?.funnel ?? lane.funnel;
     const overview = side?.overview ?? lane.overview;
     const audToggle = audienceToggle(lane.audiences, aud, (v) => setLaneAud((prev) => ({ ...prev, [lane.key]: v })));
-    const resultToggle = lane.leadResults && lane.leadResults.kinds.length > 0 ? (
-      <SegmentedToggle
-        label="Hasil B2B"
-        options={lane.leadResults.kinds.map((k) => ({ value: k, label: LEAD_RESULT[k].label }))}
-        value={kind ?? lane.leadResults.auto}
-        onChange={setB2bResult}
-        accent="var(--acc)"
-      />
-    ) : null;
-    const rcaTitle = [
-      'Root Cause Analysis',
-      lane.key === 'b2b' ? LEAD_RESULT[kind ?? 'leads'].label : null,
-      aud === 'all' ? null : aud,
-    ].filter(Boolean).join(' · ');
+    const rcaTitle = aud === 'all' ? 'Root Cause Analysis' : `Root Cause Analysis · ${aud}`;
     return (
       <OverviewDetailedCard
         fixedMetrics
-        key={`${lane.key}-${kind ?? 'auto'}-${aud}`}
-        toolbar={audToggle || resultToggle ? <>{audToggle}{resultToggle}</> : undefined}
+        key={`${lane.key}-${aud}`}
+        toolbar={audToggle ?? undefined}
         heading={lane.key === 'retail' ? 'Non-Boost Post (Retail) · Performance Overview' : 'Non-Boost Post (Non Retail) · Performance Overview'}
         badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
         overviewRows={relabelMetaRows(variant?.overviewRows ?? overview.overviewRows)}

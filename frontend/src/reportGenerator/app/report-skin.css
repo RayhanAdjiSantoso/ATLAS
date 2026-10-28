@@ -504,7 +504,7 @@
   .mil-ui.report-generator-app .sec-split.sec-split-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; }
   .mil-ui.report-generator-app .sec-split-even > .sec-split-main { display: flex; flex-direction: column; }
   .mil-ui.report-generator-app .sec-split-even > .sec-split-main > :last-child { flex: 1; display: flex; flex-direction: column; padding-bottom: 0 !important; }
-  .mil-ui.report-generator-app .sec-split-even .tbl-scroll { flex: 1; display: flex; flex-direction: column; }
+  .mil-ui.report-generator-app .sec-split-even .tbl-scroll { flex: 1; display: flex; flex-direction: column; overflow: visible; }
   .mil-ui.report-generator-app .sec-split-even .kpi-compact { flex: 1; }
 }
 

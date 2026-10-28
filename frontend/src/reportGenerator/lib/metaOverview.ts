@@ -180,20 +180,24 @@ const ECOMMERCE: Spec[] = [
 // whichever of leads / messaging conversations started / messaging contacts
 // the campaign produced (metaFunnel.leadResultKind, the same pick the Root
 // Cause Analysis makes), named in the row when it is not leads.
+// Leads on the overview are every lead the campaign brought in: form leads
+// plus Messaging Contacts plus Messaging Conversations Started, whichever the
+// file has.
+function totalLeads(b: Base): number | null {
+  const parts = [b.leads, b.messagingContacts, b.conversations].filter((v): v is number => v !== null);
+  return parts.length ? parts.reduce((a, v) => a + v, 0) : null;
+}
+
 const B2B_RESULT: Record<LeadResultKind, (b: Base) => number | null> = {
-  leads: (b) => b.leads,
+  leads: totalLeads,
   conversations: (b) => b.conversations,
   contacts: (b) => b.messagingContacts,
 };
 
 const b2bSpecs = (kind: LeadResultKind): Spec[] => [
   SPEND,
-  { key: 'leads', label: 'Leads', fmt: 'num', sentiment: 'higher-better', value: (b) => b.leads, from: 'leads' },
-  { key: 'cost_per_lead', label: 'Cost per lead', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.leads), same: ['cost per lead'] },
-  { key: 'messaging_contacts', label: 'Messaging contacts', fmt: 'num', sentiment: 'higher-better', value: (b) => b.messagingContacts, from: 'messagingContacts' },
-  { key: 'cost_per_messaging_contact', label: 'Cost per messaging contact', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.messagingContacts), same: ['cost per messaging contact'] },
-  { key: 'messaging_conversations', label: 'Messaging conversations started', fmt: 'num', sentiment: 'higher-better', value: (b) => b.conversations, from: 'conversations' },
-  { key: 'cost_per_messaging_conversation', label: 'Cost per messaging conversation started', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.conversations), same: ['cost per messaging conversation'] },
+  { key: 'leads', label: 'Leads', fmt: 'num', sentiment: 'higher-better', value: totalLeads },
+  { key: 'cost_per_lead', label: 'Cost per lead', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, totalLeads(b)) },
   ...DELIVERY,
   kind === 'leads'
     ? { key: 'lead_conversion_rate', label: 'Conversion rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.leads, b.linkClicks, 100), same: ['lead conversion rate'] }
