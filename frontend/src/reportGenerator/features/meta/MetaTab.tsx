@@ -5,7 +5,7 @@ import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
 import { ReportPages } from '../../components/ReportPages';
-import { SectionAccordion, SectionGroup } from '../../components/SectionAccordion';
+import { SectionAccordion } from '../../components/SectionAccordion';
 import { useScrollAfterGenerate } from '../../hooks/useScrollAfterGenerate';
 import MetaDatasetSpecs, { SPEC_INTRO, SPEC_NOTES } from '../../../components/brandSettings/MetaDatasetSpecs.jsx';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -31,31 +31,15 @@ import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import type { PlatformResultData } from '../../lib/summary';
 import { AiSummarySection } from '../ai/AiSummarySection';
-import { MetaSpecialMomentSection, type MomentPeriod, type MomentSource } from './MetaSpecialMomentSection';
-import { MetaBreakdownSection } from './MetaBreakdownSection';
 import {
-  BRAND_AUDIENCE_METRICS,
   BRAND_CONVERSION_METRICS,
-  BRAND_CONSIDERATION_COST_METRICS,
   BRAND_CONSIDERATION_RATE_METRICS,
-  BRAND_CREATIVE_METRICS,
   BRAND_TOP_EFFICIENCY_METRICS,
-  BRAND_TOP_PERFORMANCE_METRICS,
-  B2B_AGE_METRICS,
-  B2B_ATC_PURCHASE_METRICS,
-  B2B_CLICK_ATC_METRICS,
-  B2B_CONVERSION_METRICS,
-  B2B_CREATIVE_CONVERSION_METRICS,
-  B2B_GENDER_METRICS,
+  B2B_AUDIENCE_TRAFFIC_METRICS,
   B2B_TRAFFIC_METRICS,
-  SALES_AGE_METRICS,
-  SALES_ATC_PURCHASE_METRICS,
-  SALES_AUDIENCE_METRICS,
-  SALES_CLICK_ATC_METRICS,
-  SALES_CONVERSION_METRICS,
-  SALES_CREATIVE_CONVERSION_METRICS,
   RETAIL_AUDIENCE_CONVERSION_METRICS,
   RETAIL_TOP_CONTENT_METRICS,
+  SALES_AUDIENCE_TRAFFIC_METRICS,
   SALES_TRAFFIC_METRICS,
   findAdCol,
   findAdsetCol,
@@ -65,7 +49,6 @@ import {
   type AudienceMetricDef,
 } from '../../lib/metaAudience';
 import { MetaCompareBars } from './MetaCompareBars';
-import { MetaLaneSwitch } from './MetaLaneSwitch';
 import { relabelMetaMenu as L, relabelMetaRows } from '../../lib/metaLabels';
 import { SymptomTreePanel } from '../shopee/AnalysisSections';
 import { LEAD_RESULT, buildMetaSalesFunnel, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
@@ -83,7 +66,7 @@ import { getClients, getSavedPeriod } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
-import { buildMetaReport, isBoostRow, type MetaReport, type NonBoostLane, type NonBoostLaneKey } from './metaReport';
+import { buildMetaReport, isBoostRow, type MetaAudienceSides, type MetaReport, type NonBoostLane, type NonBoostLaneKey } from './metaReport';
 
 // Meta's export uses either a "Month" breakdown or a "Day" breakdown column
 // as the period dimension — either satisfies the requirement.
@@ -216,10 +199,11 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // still overridable.
   const [brandIndustry, setBrandIndustry] = useState<string | null | undefined>(undefined); // undefined = loading
   const industry: MetaIndustry = brandIndustry ? BRAND_INDUSTRY_TO_META[brandIndustry] ?? null : null;
-  // Which Non-Boost lane (Retail / B2B Leads) the Non-Boost page reads.
-  const [nbLane, setNbLane] = useState<NonBoostLaneKey>('retail');
   // Which audience the CPAS Shopee overall card reads: Gabungan, NV or RM.
   const [cpasAud, setCpasAud] = useState<'all' | 'NV' | 'RM'>('all');
+  // The same switch on the Boost Post and Non-Boost lane overall cards.
+  const [boostAud, setBoostAud] = useState<'all' | 'NV' | 'RM'>('all');
+  const [laneAud, setLaneAud] = useState<Record<NonBoostLaneKey, 'all' | 'NV' | 'RM'>>({ retail: 'all', b2b: 'all' });
   // The B2B lane's result, picked on the report (null = the automatic pick).
   const [b2bResult, setB2bResult] = useState<LeadResultKind | null>(null);
   // Legacy — the "Custom Conversion" column picker is gone; kept so old saved
@@ -236,34 +220,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // below still let the user trim within it.
   const dayCol = useMemo(() => (periodRows ? findCol(periodRows, ['day']) : null), [periodRows]);
 
-  // The report is read one ad source at a time (CPAS / Non-Boost / Boost), so
-  // Special Moment is too: each section's own rows, both periods, subtotal
-  // rows dropped the same way buildMetaReport drops them.
-  const nonBoostAllRows = useMemo(() => {
-    if (!metaRows) return [];
-    const leaves = stripCampaignSubtotals(metaRows);
-    const isBoost = isBoostRow(findCol(leaves, ['campaign']));
-    return leaves.filter((r) => !isBoost(r));
-  }, [metaRows]);
-  const boostAllRows = useMemo(() => {
-    if (!metaRows) return [];
-    const leaves = stripCampaignSubtotals(metaRows);
-    const isBoost = isBoostRow(findCol(leaves, ['campaign']));
-    return leaves.filter(isBoost);
-  }, [metaRows]);
-  const cpasAllRows = useMemo(() => (cpasRows ? stripCampaignSubtotals(cpasRows) : []), [cpasRows]);
-  const cpasDayCol = useMemo(() => (cpasAllRows.length ? findCol(cpasAllRows, ['day']) : null), [cpasAllRows]);
-
-  // Special Moment compares the two periods, so it needs each side's own date
-  // range: the Meta sides use the ranges shown in the date pickers, the CPAS
-  // sides their file's own first/last day.
-  const cpasRanges = useMemo(() => {
-    if (!cpasDayCol) return { old: null, cur: null };
-    return {
-      old: cpasSides.old ? metaDayRange(cpasSides.old.rows, cpasDayCol) : null,
-      cur: cpasSides.cur ? metaDayRange(cpasSides.cur.rows, cpasDayCol) : null,
-    };
-  }, [cpasSides, cpasDayCol]);
   const [oldRange, setOldRange] = useState<{ start: Date; end: Date } | null>(null);
   const [curRange, setCurRange] = useState<{ start: Date; end: Date } | null>(null);
   const oldDayBounds = useMemo(() => (dayCol && periodSides.old ? metaDayRange(periodSides.old.rows, dayCol) : null), [dayCol, periodSides.old]);
@@ -621,7 +577,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   function generate(restoredAt?: string) {
     if (!metaRows && !cpasRows) return;
     const r = buildMetaReport({ metaRows: metaRows ?? [], metaHeaders, cpasRows, cpasHeaders, industry, customResultsCol, objective, dayRanges });
-    setNbLane(r.nonBoostLanes?.[0]?.key ?? 'retail');
     setB2bResult(null);
     setReport(r);
     setGeneratedAt(formatGeneratedDate(restoredAt));
@@ -656,7 +611,6 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     setCurPickedRange(null);
     setCustomResultsCol(null);
     setObjective(null);
-    setNbLane('retail');
     objectivePrefilledFor.current = '';
     setReport(null);
     setUploadError(null);
@@ -706,135 +660,26 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     return b2bResult && lane.leadResults.kinds.includes(b2bResult) ? b2bResult : lane.leadResults.auto;
   }
 
-  function analysisSections({
-    prefix,
-    period,
-    rows,
-    kind,
-    campCol,
-    ageCol,
-    genderCol,
-    leadKind,
-  }: {
-    prefix: string;
-    period: string;
-    rows: SheetRow[];
-    kind: 'sales' | 'b2b' | 'brand';
-    campCol: string | null;
-    ageCol: string | null;
-    genderCol: string | null;
-    leadKind?: LeadResultKind;
-  }) {
-    const adCol = rows.length ? findAdCol(rows) : null;
-    const badge = `data ${period}`;
-    const noAd = 'Bagian ini membandingkan performa per materi iklan. File yang diunggah tidak dipecah per Ad — export ulang dari Meta Ads Reporting dengan breakdown Ad name.';
-    const noAge = 'File yang diunggah tidak memuat breakdown Age.';
-    const noGender = 'File yang diunggah tidak memuat breakdown Gender.';
-    if (kind === 'brand') {
-      return (
-        <>
-          <SectionGroup label="Audience Analysis">
-            <MetaCompareBars heading={`${prefix} · Age Breakdown`} badge={badge} rows={rows} kind="brand" menu={BRAND_AUDIENCE_METRICS} dimCol={ageCol} campCol={campCol} audience="none" sortable dimNoun="kelompok umur" emptyMessage={noAge} />
-            {genderCol ? (
-              <MetaBreakdownSection heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} dimCol={genderCol} kind="brand" metrics={BRAND_AUDIENCE_METRICS} prefer="pies" />
-            ) : (
-              <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind="brand" menu={BRAND_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
-            )}
-          </SectionGroup>
-          <SectionGroup label="Creative Analysis">
-            <MetaCompareBars heading={`${prefix} · Creative Performance`} badge={`per materi iklan · ${period}`} rows={rows} kind="brand" menu={BRAND_CREATIVE_METRICS} dimCol={adCol} campCol={campCol} audience="none" sortable copyLabels dimNoun="materi iklan" emptyMessage={noAd} />
-          </SectionGroup>
-        </>
-      );
-    }
-    const sales = kind === 'sales';
-    // The architecture sheet's four funnel charts, for both lanes; B2B reads
-    // them through metaB2bMetrics (a lead stands in for a purchase).
-    const funnels = [
-      { title: 'Traffic Analysis', menu: sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS },
-      { title: 'Conversion Rate', menu: sales ? SALES_CONVERSION_METRICS : B2B_CONVERSION_METRICS },
-      { title: 'Click → ATC Rate', menu: sales ? SALES_CLICK_ATC_METRICS : B2B_CLICK_ATC_METRICS },
-      { title: 'ATC → Purchase Rate', menu: sales ? SALES_ATC_PURCHASE_METRICS : B2B_ATC_PURCHASE_METRICS },
-    ];
+  // The Audiens switch of an overall card; none when the channel has no
+  // campaign named NV or RM. A side the period has no campaign for is shown
+  // disabled.
+  function audienceToggle(sides: MetaAudienceSides | undefined, value: 'all' | 'NV' | 'RM', onChange: (v: 'all' | 'NV' | 'RM') => void) {
+    if (!sides?.NV && !sides?.RM) return null;
+    const none = 'Tidak ada campaign dengan label ini di periode ini';
     return (
-      <>
-        <SectionGroup label="Audience Analysis">
-          <MetaCompareBars
-            heading={`${prefix} · Age Breakdown`}
-            badge={`NV · RM · ${period}`}
-            rows={rows}
-            kind={kind} leadKind={leadKind}
-            menu={sales ? SALES_AGE_METRICS : B2B_AGE_METRICS}
-            dimCol={ageCol}
-            campCol={campCol}
-            audience="age"
-            sortable={false}
-            dimNoun="kelompok umur"
-            emptyMessage={noAge}
-          />
-          {genderCol ? (
-            <MetaBreakdownSection
-              heading={`${prefix} · Gender Breakdown`}
-              badge={`NV · RM · ${period}`}
-              rows={rows}
-              dimCol={genderCol}
-              kind={kind} leadKind={leadKind}
-              metrics={(sales ? SALES_AUDIENCE_METRICS : B2B_GENDER_METRICS) as typeof SALES_AUDIENCE_METRICS}
-              prefer="pies"
-              campCol={campCol}
-            />
-          ) : (
-            <MetaCompareBars heading={`${prefix} · Gender Breakdown`} badge={badge} rows={rows} kind={kind} leadKind={leadKind} menu={SALES_AUDIENCE_METRICS} dimCol={null} campCol={null} audience="none" sortable={false} dimNoun="gender" emptyMessage={noGender} />
-          )}
-          {funnels.map((f) => (
-            <MetaCompareBars
-              key={f.title}
-              heading={`${prefix} · ${f.title}`}
-              badge={`per campaign · NV · RM · ${period}`}
-              rows={rows}
-              kind={kind} leadKind={leadKind}
-              menu={f.menu}
-              dimCol={campCol}
-              campCol={campCol}
-              audience="campaign"
-              sortable
-              copyLabels
-              dimNoun="campaign"
-              emptyMessage="File yang diunggah tidak memuat kolom Campaign name."
-            />
-          ))}
-        </SectionGroup>
-        <SectionGroup label="Creative Analysis">
-          <MetaCompareBars
-            heading={`${prefix} · Creative Traffic`}
-            badge={`per materi iklan · ${period}`}
-            rows={rows}
-            kind={kind} leadKind={leadKind}
-            menu={sales ? SALES_TRAFFIC_METRICS : B2B_TRAFFIC_METRICS}
-            dimCol={adCol}
-            campCol={campCol}
-            audience="creative"
-            sortable
-            copyLabels
-            dimNoun="materi iklan"
-            emptyMessage={noAd}
-          />
-          <MetaCompareBars
-            heading={`${prefix} · Creative Conversion`}
-            badge={`per materi iklan · ${period}`}
-            rows={rows}
-            kind={kind} leadKind={leadKind}
-            menu={sales ? SALES_CREATIVE_CONVERSION_METRICS : B2B_CREATIVE_CONVERSION_METRICS}
-            dimCol={adCol}
-            campCol={campCol}
-            audience="creative"
-            sortable
-            copyLabels
-            dimNoun="materi iklan"
-            emptyMessage={noAd}
-          />
-        </SectionGroup>
-      </>
+      <span data-feature="meta-overview-audience" style={{ display: 'contents' }}>
+        <SegmentedToggle
+          label="Audiens"
+          options={[
+            { value: 'all', label: 'Gabungan NV + RM', disabled: false },
+            { value: 'NV', label: 'NV', disabled: sides.NV ? false : none },
+            { value: 'RM', label: 'RM', disabled: sides.RM ? false : none },
+          ]}
+          value={value}
+          onChange={onChange}
+          accent="var(--acc)"
+        />
+      </span>
     );
   }
 
@@ -897,18 +742,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       return (
         <>
           {overall}
-          {page('Consideration Analysis', creativeBadge, (
-            <>
-              {brandBars('Consideration Rate', creativeBadge, BRAND_CONSIDERATION_RATE_METRICS, adCol, 'materi iklan', noAd, CONSIDERATION_MIN_IMPRESSIONS)}
-              {brandBars('Consideration Cost', creativeBadge, BRAND_CONSIDERATION_COST_METRICS, adCol, 'materi iklan', noAd, CONSIDERATION_MIN_IMPRESSIONS)}
-            </>
-          ))}
-          {page('Top Content Analysis', creativeBadge, (
-            <>
-              {brandBars('Top Content Performance', creativeBadge, BRAND_TOP_PERFORMANCE_METRICS, adCol, 'materi iklan', noAd)}
-              {brandBars('Top Content Efficiency', creativeBadge, BRAND_TOP_EFFICIENCY_METRICS, adCol, 'materi iklan', noAd)}
-            </>
-          ))}
+          {brandBars('Consideration Analysis', creativeBadge, BRAND_CONSIDERATION_RATE_METRICS, adCol, 'materi iklan', noAd, CONSIDERATION_MIN_IMPRESSIONS)}
+          {brandBars('Top Content Analysis', creativeBadge, BRAND_TOP_EFFICIENCY_METRICS, adCol, 'materi iklan', noAd)}
         </>
       );
     }
@@ -917,8 +752,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     // Contacts — whichever the file has, both offered when it has both.
     const messageKinds = kind === 'b2b' ? messageKindsOf(rows, oldRows) : [];
     const menus = kind === 'b2b'
-      ? { traffic: B2B_TRAFFIC_METRICS, conversion: nonRetailConversionMetrics(messageKinds), topContent: nonRetailTopContentMetrics(messageKinds) }
-      : { traffic: SALES_TRAFFIC_METRICS, conversion: RETAIL_AUDIENCE_CONVERSION_METRICS, topContent: RETAIL_TOP_CONTENT_METRICS };
+      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_TRAFFIC_METRICS, conversion: nonRetailConversionMetrics(messageKinds), topContent: nonRetailTopContentMetrics(messageKinds) }
+      : { audienceTraffic: SALES_AUDIENCE_TRAFFIC_METRICS, traffic: SALES_TRAFFIC_METRICS, conversion: RETAIL_AUDIENCE_CONVERSION_METRICS, topContent: RETAIL_TOP_CONTENT_METRICS };
     const adsetCol = rows.length ? findAdsetCol(rows) : null;
     const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
     const audienceBadge = `per ad set · NV · RM · ${period}`;
@@ -949,17 +784,17 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         {overall}
         {page('Traffic Analysis', audienceBadge, (
           <>
-            {bars('Audience Traffic', audienceBadge, menus.traffic, 'adset')}
-            {bars('Creative Traffic', creativeBadge, menus.traffic, 'creative')}
+            {bars('Traffic Analysis by Audience', audienceBadge, menus.audienceTraffic, 'adset')}
+            {bars('Traffic Analysis by Creative', creativeBadge, menus.traffic, 'creative')}
           </>
         ))}
         {page('Conversion Analysis', audienceBadge, (
           <>
-            {bars('Audience Conversion', audienceBadge, menus.conversion, 'adset')}
-            {bars('Creative Conversion', creativeBadge, menus.traffic, 'creative')}
+            {bars('Conversion Analysis by Audience', audienceBadge, menus.conversion, 'adset')}
+            {bars('Conversion Analysis by Creative', creativeBadge, menus.traffic, 'creative')}
           </>
         ))}
-        {bars('Top Content Analysis', creativeBadge, menus.topContent, 'creative')}
+        {bars('Top Content Analysis by Creative', creativeBadge, menus.topContent, 'creative')}
       </>
     );
   }
@@ -969,31 +804,43 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   // (Visit → ATC Rate and ATC → Purchase Rate), "—" where the file lacks it.
   function laneOverallCard(lane: NonBoostLane, r: MetaReport) {
     const kind = laneLeadKind(lane);
-    const variant = kind ? lane.leadResults?.byKind[kind] : undefined;
-    const funnel = lane.key === 'retail' ? buildMetaSalesFunnel(lane.oldRows, lane.curRows, { keepConversionBranch: true }) : variant?.funnel ?? lane.funnel;
+    // The audience picked on the card, back to Gabungan when this period has
+    // no campaign for it.
+    const aud = laneAud[lane.key] !== 'all' && lane.audiences?.[laneAud[lane.key] as 'NV' | 'RM'] ? laneAud[lane.key] : 'all';
+    const side = aud === 'all' ? undefined : lane.audiences?.[aud];
+    const variant = kind ? (side ? side.byKind?.[kind] : lane.leadResults?.byKind[kind]) : undefined;
+    const funnel = side
+      ? variant?.funnel ?? side.funnel
+      : lane.key === 'retail' ? buildMetaSalesFunnel(lane.oldRows, lane.curRows, { keepConversionBranch: true }) : variant?.funnel ?? lane.funnel;
+    const overview = side?.overview ?? lane.overview;
+    const audToggle = audienceToggle(lane.audiences, aud, (v) => setLaneAud((prev) => ({ ...prev, [lane.key]: v })));
+    const resultToggle = lane.leadResults && lane.leadResults.kinds.length > 0 ? (
+      <SegmentedToggle
+        label="Hasil B2B"
+        options={lane.leadResults.kinds.map((k) => ({ value: k, label: LEAD_RESULT[k].label }))}
+        value={kind ?? lane.leadResults.auto}
+        onChange={setB2bResult}
+        accent="var(--acc)"
+      />
+    ) : null;
+    const rcaTitle = [
+      'Root Cause Analysis',
+      lane.key === 'b2b' ? LEAD_RESULT[kind ?? 'leads'].label : null,
+      aud === 'all' ? null : aud,
+    ].filter(Boolean).join(' · ');
     return (
       <OverviewDetailedCard
-        key={`${lane.key}-${kind ?? 'auto'}`}
-        toolbar={lane.leadResults && lane.leadResults.kinds.length > 0 ? (
-          <SegmentedToggle
-            label="Hasil B2B"
-            options={lane.leadResults.kinds.map((k) => ({ value: k, label: LEAD_RESULT[k].label }))}
-            value={kind ?? lane.leadResults.auto}
-            onChange={setB2bResult}
-            accent="var(--acc)"
-          />
-        ) : undefined}
-        heading={lane.key === 'retail' ? 'Non-Boost Post (Retail)' : 'Non-Boost Post (Non Retail)'}
+        fixedMetrics
+        key={`${lane.key}-${kind ?? 'auto'}-${aud}`}
+        toolbar={audToggle || resultToggle ? <>{audToggle}{resultToggle}</> : undefined}
+        heading={lane.key === 'retail' ? 'Non-Boost Post (Retail) · Performance Overview' : 'Non-Boost Post (Non Retail) · Performance Overview'}
         badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
-        overviewRows={relabelMetaRows(variant?.overviewRows ?? lane.overview.overviewRows)}
-        detailedRows={relabelMetaRows(lane.overview.detailedRows)}
-        allCols={lane.overview.allCols}
+        overviewRows={relabelMetaRows(variant?.overviewRows ?? overview.overviewRows)}
+        detailedRows={relabelMetaRows(overview.detailedRows)}
+        allCols={overview.allCols}
         p1={r.p1}
         p2={r.p2}
-        aside={rcaPanel(
-          funnel, r.p1, r.p2,
-          lane.key === 'b2b' ? `Root Cause Analysis · ${LEAD_RESULT[kind ?? 'leads'].label}` : 'Root Cause Analysis',
-        )}
+        aside={rcaPanel(funnel, r.p1, r.p2, rcaTitle)}
       />
     );
   }
@@ -1281,196 +1128,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
               accent="var(--acc)"
               pages={[
                 {
-                  // Tab 1 of the architecture sheet: Special Moment, then each
-                  // channel's table with its root cause beside it.
-                  id: 'ads',
-                  label: 'Ads Performance',
-                  hidden: !report.boost && !report.nonBoostLanes?.length && !report.nonBoost && !report.cpas,
-                  content: (() => {
-                    const cpas = report.cpas;
-                    const mainPeriods = [
-                      oldRange ? { label: report.p1, ...oldRange } : null,
-                      curRange ? { label: report.p2, ...curRange } : null,
-                    ].filter(Boolean) as MomentPeriod[];
-                    const cpasPeriods = [
-                      cpasRanges.old ? { label: cpas?.p1 ?? '', start: cpasRanges.old.min, end: cpasRanges.old.max } : null,
-                      cpasRanges.cur ? { label: cpas?.p2 ?? '', start: cpasRanges.cur.min, end: cpasRanges.cur.max } : null,
-                    ].filter(Boolean) as MomentPeriod[];
-                    const sources: MomentSource[] = [
-                      { key: 'nonboost', label: 'Non-Boost', rows: nonBoostAllRows, dayCol, periods: mainPeriods },
-                      { key: 'boost', label: 'Boost', rows: boostAllRows, dayCol, periods: mainPeriods },
-                      { key: 'cpas', label: 'CPAS', rows: cpasAllRows, dayCol: cpasDayCol, periods: cpasPeriods },
-                    ];
-                    const rca = (f: MetaFunnel | undefined, p1: string, p2: string, title = 'Root Cause Analysis', badge = `${p1} → ${p2}`) =>
-                      f?.hasData ? <SymptomTreePanel tree={f.tree} p1={p1} p2={p2} title={title} badge={badge} /> : undefined;
-                    return (
-                      <SectionAccordion>
-                        <MetaSpecialMomentSection sources={sources} heading="Ads Performance · Special Moment" />
-                        {report.boost && (
-                          <SectionGroup label="Boost Post">
-                            <OverviewDetailedCard
-                              heading="Boost Post · Overall"
-                              badge={report.boostObjective ? `objective ${report.boostObjective.label}${report.boostObjective.mixed ? ' (dominan)' : ''}` : 'Meta Ads'}
-                              overviewRows={report.boost.overviewRows}
-                              detailedRows={report.boost.detailedRows}
-                              allCols={report.boost.allCols}
-                              p1={report.p1}
-                              p2={report.p2}
-                              aside={rca(report.boostFunnel, report.p1, report.p2, 'Root Cause Analysis', 'Brand Consideration')}
-                            />
-                          </SectionGroup>
-                        )}
-                        {report.nonBoostLanes?.length ? (
-                          <SectionGroup label="Non-Boost Post">
-                            {report.nonBoostLanes.map((lane) => {
-                              const kind = laneLeadKind(lane);
-                              const variant = kind ? lane.leadResults?.byKind[kind] : undefined;
-                              return (
-                                  <OverviewDetailedCard
-                                    key={`${lane.key}-${kind ?? 'auto'}`}
-                                    toolbar={lane.leadResults && lane.leadResults.kinds.length > 0 ? (
-                                      <SegmentedToggle
-                                        label="Hasil B2B"
-                                        options={lane.leadResults.kinds.map((k) => ({ value: k, label: LEAD_RESULT[k].label }))}
-                                        value={kind ?? lane.leadResults.auto}
-                                        onChange={setB2bResult}
-                                        accent="var(--acc)"
-                                      />
-                                    ) : undefined}
-                                    heading={`Non-Boost Post · ${lane.label}`}
-                                    badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
-                                    overviewRows={variant?.overviewRows ?? lane.overview.overviewRows}
-                                    detailedRows={lane.overview.detailedRows}
-                                    allCols={lane.overview.allCols}
-                                    p1={report.p1}
-                                    p2={report.p2}
-                                    aside={rca(
-                                      variant?.funnel ?? lane.funnel, report.p1, report.p2,
-                                      lane.key === 'b2b' ? `Root Cause Analysis · ${LEAD_RESULT[kind ?? 'leads'].label}` : 'Root Cause Analysis',
-                                    )}
-                                  />
-                              );
-                            })}
-                          </SectionGroup>
-                        ) : null}
-                        {cpas && (cpas.overall || cpas.nv || cpas.rm) && (
-                          <SectionGroup label="CPAS Shopee">
-                            {cpas.overall && (
-                              <OverviewDetailedCard
-                                heading="CPAS Shopee · Overall"
-                                badge="Overall"
-                                overviewRows={cpas.overall.overviewRows}
-                                detailedRows={cpas.overall.detailedRows}
-                                allCols={cpas.overall.allCols}
-                                p1={cpas.p1}
-                                p2={cpas.p2}
-                                aside={rca(cpas.funnel, cpas.p1, cpas.p2)}
-                              />
-                            )}
-                            {cpas.nv && (
-                              <OverviewDetailedCard
-                                heading="CPAS Shopee · NV"
-                                badge="New Visitor"
-                                overviewRows={cpas.nv.overviewRows}
-                                detailedRows={cpas.nv.detailedRows}
-                                allCols={cpas.nv.allCols}
-                                p1={cpas.p1}
-                                p2={cpas.p2}
-                                aside={rca(cpas.nvFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · NV')}
-                              />
-                            )}
-                            {cpas.rm && (
-                              <OverviewDetailedCard
-                                heading="CPAS Shopee · RM"
-                                badge="Re-Marketing"
-                                overviewRows={cpas.rm.overviewRows}
-                                detailedRows={cpas.rm.detailedRows}
-                                allCols={cpas.rm.allCols}
-                                p1={cpas.p1}
-                                p2={cpas.p2}
-                                aside={rca(cpas.rmFunnel, cpas.p1, cpas.p2, 'Root Cause Analysis · RM')}
-                              />
-                            )}
-                          </SectionGroup>
-                        )}
-                      </SectionAccordion>
-                    );
-                  })(),
-                },
-                {
-                  id: 'cpas',
-                  label: 'CPAS',
-                  hidden: !report.cpas || !report.curRows?.cpas.length,
-                  content: (() => {
-                    const cpas = report.cpas;
-                    const rows = report.curRows?.cpas ?? [];
-                    if (!cpas || !rows.length) return null;
-                    return (
-                      <SectionAccordion>
-                        {analysisSections({
-                          prefix: 'CPAS Shopee',
-                          period: cpas.p2,
-                          rows,
-                          kind: 'sales',
-                          campCol: report.cols?.cpasCampaign ?? null,
-                          ageCol: report.cols?.cpasAge ?? null,
-                          genderCol: report.cols?.cpasGender ?? null,
-                        })}
-                      </SectionAccordion>
-                    );
-                  })(),
-                },
-                {
-                  id: 'non-boost',
-                  label: 'Non-Boost Post',
-                  hidden: !report.nonBoostLanes?.length,
-                  content: (() => {
-                    const lanes = report.nonBoostLanes ?? [];
-                    const lane = lanes.find((l) => l.key === nbLane) ?? lanes[0];
-                    if (!lane) return null;
-                    return (
-                      <SectionAccordion key={lane.key}>
-                        {lanes.length > 0 && <MetaLaneSwitch alwaysOpen lanes={lanes} active={lane.key} onPick={setNbLane} />}
-                        {analysisSections({
-                          prefix: `Non-Boost ${lane.label}`,
-                          period: report.p2,
-                          rows: lane.curRows,
-                          kind: lane.key === 'retail' ? 'sales' : 'b2b',
-                          leadKind: laneLeadKind(lane) ?? undefined,
-                          campCol: lane.campCol,
-                          ageCol: lane.ageCol,
-                          genderCol: lane.genderCol,
-                        })}
-                      </SectionAccordion>
-                    );
-                  })(),
-                },
-                {
-                  id: 'boost',
-                  label: 'Boost Post',
-                  hidden: !report.curRows?.boost.length,
-                  content: (() => {
-                    const rows = report.curRows?.boost ?? [];
-                    if (!rows.length) return null;
-                    return (
-                      <SectionAccordion>
-                        {analysisSections({
-                          prefix: 'Boost Post',
-                          period: report.p2,
-                          rows,
-                          kind: 'brand',
-                          campCol: report.cols?.campaign ?? null,
-                          ageCol: report.cols?.age ?? null,
-                          genderCol: report.cols?.gender ?? null,
-                        })}
-                      </SectionAccordion>
-                    );
-                  })(),
-                },
-                {
                   id: 'v2-boost',
                   label: 'Boost Post',
-                  dividerBefore: true,
                   hidden: !report.boost,
                   content: report.boost ? (
                     <SectionAccordion>
@@ -1482,18 +1141,27 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                         oldRows: report.oldRows?.boost ?? [],
                         kind: 'brand',
                         campCol: report.cols?.campaign ?? null,
-                        overall: (
-                          <OverviewDetailedCard
-                            heading="Boost Post"
-                            badge={report.boostObjective ? `objective ${report.boostObjective.label}${report.boostObjective.mixed ? ' (dominan)' : ''}` : 'Meta Ads'}
-                            overviewRows={relabelMetaRows(report.boost.overviewRows)}
-                            detailedRows={relabelMetaRows(report.boost.detailedRows)}
-                            allCols={report.boost.allCols}
-                            p1={report.p1}
-                            p2={report.p2}
-                            aside={rcaPanel(report.boostFunnel, report.p1, report.p2, 'Root Cause Analysis', 'Brand Consideration')}
-                          />
-                        ),
+                        overall: (() => {
+                          const aud = boostAud !== 'all' && report.boostAudiences?.[boostAud] ? boostAud : 'all';
+                          const side = aud === 'all' ? report.boost! : report.boostAudiences![aud]!.overview;
+                          const funnel = aud === 'all' ? report.boostFunnel : report.boostAudiences![aud]!.funnel;
+                          const audToggle = audienceToggle(report.boostAudiences, aud, setBoostAud);
+                          return (
+                            <OverviewDetailedCard
+                              fixedMetrics
+                              key={aud}
+                              toolbar={audToggle ?? undefined}
+                              heading="Boost Post · Performance Overview"
+                              badge={report.boostObjective ? `objective ${report.boostObjective.label}${report.boostObjective.mixed ? ' (dominan)' : ''}` : 'Meta Ads'}
+                              overviewRows={relabelMetaRows(side.overviewRows)}
+                              detailedRows={relabelMetaRows(side.detailedRows)}
+                              allCols={side.allCols}
+                              p1={report.p1}
+                              p2={report.p2}
+                              aside={rcaPanel(funnel, report.p1, report.p2, aud === 'all' ? 'Root Cause Analysis' : `Root Cause Analysis · ${aud}`, 'Brand Consideration')}
+                            />
+                          );
+                        })(),
                       })}
                     </SectionAccordion>
                   ) : null,
@@ -1538,6 +1206,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             const none = 'Tidak ada campaign dengan label ini di periode ini';
                             return (
                               <OverviewDetailedCard
+                                fixedMetrics
                                 key={aud}
                                 toolbar={cpas.nv || cpas.rm ? (
                                   <SegmentedToggle
@@ -1552,7 +1221,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                                     accent="var(--acc)"
                                   />
                                 ) : undefined}
-                                heading="CPAS Shopee"
+                                heading="CPAS Shopee · Performance Overview"
                                 badge={aud === 'NV' ? 'New Visitor' : aud === 'RM' ? 'Re-Marketing' : 'Gabungan NV + RM'}
                                 overviewRows={relabelMetaRows(side.overviewRows)}
                                 detailedRows={relabelMetaRows(side.detailedRows)}

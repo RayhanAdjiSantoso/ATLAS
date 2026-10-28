@@ -26,6 +26,14 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'meta-overview-audiens',
+    released: '2026-10-28',
+    path: '/report-generator',
+    target: '.panel.active [data-feature="meta-overview-audience"]',
+    title: 'Filter Audiens di Performance Overview',
+    body: 'Performance Overview Boost Post dan Non-Boost Post kini punya filter Audiens seperti CPAS Shopee: Gabungan NV + RM, NV, atau RM. Tabel dan Root Cause Analysis di sebelahnya ikut membaca audiens yang dipilih.',
+  },
+  {
     id: 'meta-tab-per-channel',
     released: '2026-10-27',
     path: '/report-generator',

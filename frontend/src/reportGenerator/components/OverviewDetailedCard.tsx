@@ -22,6 +22,8 @@ interface OverviewDetailedCardProps {
   aside?: ReactNode;
   // A control for the table, shown beside "Hapus Semua".
   toolbar?: ReactNode;
+  // Shows the default metrics only, with no add / remove controls (Meta).
+  fixedMetrics?: boolean;
 }
 
 // Shared by Meta (Boost/Non-Boost/CPAS) and Shopee Ads: a single table
@@ -32,7 +34,7 @@ interface OverviewDetailedCardProps {
 // row here already carries its own resolved `.label` (from
 // displayName()/shopeeLabelFor upstream), so the full universe can be handed
 // straight to KpiTable with no separate label-resolution step needed here.
-export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRows, allCols, p1, p2, headingClassName, aside, toolbar }: OverviewDetailedCardProps) {
+export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRows, allCols, p1, p2, headingClassName, aside, toolbar, fixedMetrics }: OverviewDetailedCardProps) {
   if (!overviewRows.length && !detailedRows.length) return null;
 
   // overviewRows' underlying `col` (present on every row except a computed
@@ -67,15 +69,15 @@ export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRow
         // side by side when the card is wide enough for both, and stack —
         // still in this one card — when it is not, so no column is cut off.
         <div className="sec-split-wrap">
-          <div className="sec-split sec-split-padded">
+          <div className="sec-split sec-split-padded sec-split-even">
             <div className="sec-split-main">
-              <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} />
+              <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} fixedMetrics={fixedMetrics} />
             </div>
             {aside}
           </div>
         </div>
       ) : (
-        <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} />
+        <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} fixedMetrics={fixedMetrics} />
       )}
     </div>
   );
