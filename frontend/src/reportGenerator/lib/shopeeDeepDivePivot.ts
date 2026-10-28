@@ -166,7 +166,8 @@ export function withChannelShare<T extends { biaya: number; penjualan: number; p
 // shapes above.
 // ══════════════════════════════════════════════════════
 
-export type PivotFmt = 'rp' | 'pct' | 'roas' | 'num';
+// 'dec' is a plain ratio read to two decimals (Average Basket Size: 1,37).
+export type PivotFmt = 'rp' | 'pct' | 'roas' | 'num' | 'dec';
 
 export interface PivotMetricDef<T> {
   key: keyof T;
@@ -196,6 +197,7 @@ export function fmtPivotVal(val: number, fmt: PivotFmt): string {
   if (fmt === 'rp') return 'Rp' + Math.round(val).toLocaleString('id-ID');
   if (fmt === 'pct') return val.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
   if (fmt === 'roas') return val.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x';
+  if (fmt === 'dec') return val.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return Math.round(val).toLocaleString('id-ID');
 }
 
@@ -242,7 +244,7 @@ export const OVERALL_METRIC_DEFS: readonly PivotMetricDef<StandardChannelMetrics
   { key: 'cvr', label: 'Conversion Rate (CVR)', fmt: 'pct', sentiment: 'higher-better' },
   { key: 'produkTerjual', label: 'Items Sold', fmt: 'num', sentiment: 'higher-better' },
   { key: 'aov', label: 'Average Order Value (AOV)', fmt: 'rp', sentiment: 'higher-better' },
-  { key: 'itemsPerOrder', label: 'Average Basket Size (ABS)', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'itemsPerOrder', label: 'Average Basket Size (ABS)', fmt: 'dec', sentiment: 'higher-better' },
   { key: 'aur', label: 'Average Unit Retail (AUR)', fmt: 'rp', sentiment: 'higher-better' },
 ];
 

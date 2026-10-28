@@ -1,3 +1,4 @@
+import { Gauge, Package, Search } from 'lucide-react';
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { DeltaPill } from '../../components/DeltaPill';
 import { KpiTable, type KpiRowDisplay } from '../../components/KpiTable';
@@ -15,6 +16,7 @@ import type { FunnelTreeRow, FunnelValueRow } from '../../lib/shopeeFunnel';
 import type { SheetRow } from '../../lib/types';
 import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import { DataTable, EqualSplit, SymptomSummaryPanel, SymptomTreePanel, type DataColumn } from './AnalysisSections';
+import { DailyTrendChart } from './DailyTrendChart';
 import { parseShopeeNum } from '../../lib/shopeeAds';
 
 // ══════════════════════════════════════════════════════
@@ -52,7 +54,7 @@ export function ChannelPivotSection({
   symptom?: SymptomSummary;
 }) {
   const kpiRows: KpiRowDisplay[] = values
-    ? values.map((v) => ({ id: v.key, label: v.label, old: fmtPivotVal(v.oldNum, v.fmt), cur: fmtPivotVal(v.curNum, v.fmt), delta: v.delta, cls: v.cls }))
+    ? values.map((v) => ({ id: v.key, label: v.label, old: v.na ? '—' : fmtPivotVal(v.oldNum, v.fmt), cur: v.na ? '—' : fmtPivotVal(v.curNum, v.fmt), delta: v.delta, cls: v.cls }))
     : rows.map((r) => ({ id: r.key, label: r.label, old: r.old, cur: r.cur, delta: r.delta, cls: r.cls }));
   const table = (
     <KpiTable rows={kpiRows} p1={p1} p2={p2} emptyMessage="Semua metrik disembunyikan — pilih dari '+ Tambah metrik' untuk menampilkannya kembali." padded />
@@ -129,6 +131,7 @@ function MultiMetricTable<T extends { metrics: GenericMetricCell[] }>({
   onRenameMetric,
   onRemoveMetric,
   onReorderMetrics,
+  className = '',
 }: {
   rows: T[];
   identityHeaders: string[];
@@ -156,6 +159,7 @@ function MultiMetricTable<T extends { metrics: GenericMetricCell[] }>({
   onRenameMetric: (id: string, newLabel: string) => void;
   onRemoveMetric: (id: string) => void;
   onReorderMetrics: (fromId: string, toId: string) => void;
+  className?: string;
 }) {
   const [sort, setSort] = useState<{ col: SortColumn; dir: 'asc' | 'desc' } | null>(null);
   const editor = useInlineMetricEditor({ onRename: onRenameMetric, onReorder: onReorderMetrics });
@@ -234,7 +238,7 @@ function MultiMetricTable<T extends { metrics: GenericMetricCell[] }>({
 
   return (
     <div ref={scrollRef} style={{ maxHeight, overflow: 'auto' }}>
-      <table className="kpi-table metric-wide-table">
+      <table className={`kpi-table metric-wide-table ${className}`.trim()}>
         <thead>
           <tr style={{ position: 'sticky', top: 0, background: 'var(--s2)', zIndex: 1 }}>
             {identityHeaders.map((h, i) => {
@@ -588,23 +592,32 @@ export function ItemPivotSection({
         <SectionExcelButton />
         <SectionDownloadButton />
       </div>
-      <div style={{ padding: '1rem 1.4rem 0', display: 'flex', gap: '.5rem' }}>
-        <button type="button" className={`ind-pill${activeTab === 'produk' ? ' selected' : ''}`} onClick={() => onTabChange('produk')}>
-          <span className="ind-pill-dot" />
-          Per Produk (Iklan Produk)
-        </button>
-        {hasKeywordData && (
-          <button type="button" className={`ind-pill${activeTab === 'keyword' ? ' selected' : ''}`} onClick={() => onTabChange('keyword')}>
-            <span className="ind-pill-dot" />
-            Per Keyword (Iklan Toko)
+      {/* The store-wide read first, then the two ad breakdowns. */}
+      <div className="ipv-tabs" role="tablist" aria-label="Sudut analisis">
+        {(
+          [
+            hasPerformaData && { id: 'performa', title: 'Performance Overall', sub: 'Product Performance · semua penjualan toko', Icon: Gauge },
+            { id: 'produk', title: 'Per Produk', sub: 'Iklan Produk', Icon: Package },
+            hasKeywordData && { id: 'keyword', title: 'Per Keyword', sub: 'Iklan Toko', Icon: Search },
+          ].filter(Boolean) as { id: 'produk' | 'keyword' | 'performa'; title: string; sub: string; Icon: typeof Package }[]
+        ).map(({ id, title, sub, Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === id}
+            className={`ipv-tab${activeTab === id ? ' is-active' : ''}`}
+            onClick={() => onTabChange(id)}
+          >
+            <span className="ipv-tab-ico" aria-hidden="true">
+              <Icon size={16} strokeWidth={2.2} />
+            </span>
+            <span className="ipv-tab-text">
+              <strong>{title}</strong>
+              <small>{sub}</small>
+            </span>
           </button>
-        )}
-        {hasPerformaData && (
-          <button type="button" className={`ind-pill${activeTab === 'performa' ? ' selected' : ''}`} onClick={() => onTabChange('performa')}>
-            <span className="ind-pill-dot" />
-            Per Performa (Product Performance)
-          </button>
-        )}
+        ))}
       </div>
       <div style={{ padding: '1rem 1.4rem 0', display: 'flex', gap: '.6rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <MetricPicker allCols={pickerAllCols} activeCols={pickerActiveCols} onChange={handlePickerChange} labelFn={pickerLabel} dense />
@@ -793,144 +806,11 @@ export function UnadvertisedProductsTable({ rows, hasFile }: { rows: ProductPerf
   );
 }
 
-// Only rendered by the caller when non-empty (the real sample file has this
-// sheet empty — spec: "kalau ternyata berisi data ... tampilkan juga").
-// Columns aren't fixed ahead of time, so every key present is shown as-is.
-// Shopee's own "Tingkatkan dengan Iklan" list, read column by column off the
-// export's headers. Most of its columns come in pairs — "… (Pesanan Dibuat)"
-// and "… (Pesanan Siap Dikirim)" — under headers five lines tall; here each
-// pair is one column with both figures in the cell (dibuat above, siap
-// dikirim below), so the list fits the card and reads like the rest of the
-// report. A column the export adds later still shows, paired or on its own.
-const TK_CREATED = /\(?\s*pesanan dibuat\s*\)?/;
-const TK_SHIPPED = /\(?\s*pesanan siap dikirim\s*\)?/;
-const TK_LABELS: Record<string, string> = {
-  penjualan: 'Penjualan',
-  'tingkat konversi pesanan': 'Konversi',
-  '': 'Pesanan',
-  produk: 'Unit Terjual',
-  pembeli: 'Pembeli',
-  'jumlah produk dilihat': 'Dilihat',
-  'produk diklik': 'Diklik',
-  'persentase klik': 'CTR',
-  'dimasukkan ke keranjang (produk)': 'Masuk Keranjang',
-};
-// The columns a reader needs to decide whether to advertise a product; the
-// rest of the export's two dozen stay one click away.
-const TK_CORE = new Set(['pair:penjualan', 'pair:', 'pair:tingkat konversi pesanan', 'col:jumlah produk dilihat', 'col:produk diklik', 'col:persentase klik', 'col:dimasukkan ke keranjang (produk)']);
-type TkView = 'core' | 'all';
-
-const tkBase = (h: string) =>
-  h.toLowerCase().replace(TK_CREATED, ' ').replace(TK_SHIPPED, ' ').replace(/\(idr\)/, ' ').replace(/^\s*total\s+/, '').replace(/\s+/g, ' ').trim();
-const tkLabel = (base: string) => TK_LABELS[base] ?? base.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
-
-// The sheet writes Indonesian numerals as text ("17.419.850", "18,35%").
-function tkValue(raw: unknown, idr: boolean): { text: string; num: number | null } {
-  const str = String(raw ?? '').trim();
-  if (!str || str === '-') return { text: '—', num: null };
-  if (str.endsWith('%')) return { text: str, num: Number(str.replace('%', '').replace(/\./g, '').replace(',', '.')) };
-  const num = /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(str) ? Number(str.replace(/\./g, '').replace(',', '.')) : typeof raw === 'number' ? raw : parseShopeeNum(str);
-  return { text: fmtPivotVal(num, idr ? 'rp' : 'num'), num };
-}
-
-export function TingkatkanDenganIklanTable({ rows }: { rows: SheetRow[] }) {
-  const [view, setView] = useState<TkView>('core');
-  if (!rows.length) return null;
-  const headers = Object.keys(rows[0]);
-  const find = (name: string) => headers.find((h) => h.toLowerCase().trim() === name);
-  const codeCol = find('kode produk');
-  const nameCol = find('produk') ?? find('nama produk');
-
-  const columns: DataColumn<SheetRow>[] = [
-    {
-      id: 'produk', label: 'Produk', thStyle: { textAlign: 'left', width: 'auto' }, tdStyle: { textAlign: 'left', minWidth: '15rem' },
-      sortValue: (r) => String(nameCol ? r[nameCol] : ''),
-      render: (r) => (
-        <span className="tk-prod">
-          <span>{String(nameCol ? r[nameCol] ?? '' : '')}</span>
-          {codeCol && <small>Kode {String(r[codeCol] ?? '')}</small>}
-        </span>
-      ),
-    },
-  ];
-  const numTh: CSSProperties = { width: '1%', whiteSpace: 'normal' };
-  const numTd: CSSProperties = { whiteSpace: 'nowrap' };
-  const done = new Set<string>([codeCol, nameCol].filter((c): c is string => Boolean(c)));
-  for (const h of headers) {
-    if (done.has(h)) continue;
-    const lower = h.toLowerCase();
-    const base = tkBase(h);
-    const isCreated = TK_CREATED.test(lower);
-    const isShipped = TK_SHIPPED.test(lower);
-    const twin = isCreated || isShipped
-      ? headers.find((o) => o !== h && !done.has(o) && tkBase(o) === base && (isCreated ? TK_SHIPPED : TK_CREATED).test(o.toLowerCase()))
-      : undefined;
-    const idr = lower.includes('(idr)');
-    done.add(h);
-    if (twin) {
-      done.add(twin);
-      const created = isCreated ? h : twin;
-      const shipped = isCreated ? twin : h;
-      columns.push({
-        id: `pair:${base}`, label: tkLabel(base), sub: view === 'all' ? 'dibuat · siap dikirim' : undefined, thStyle: numTh, tdStyle: numTd,
-        sortValue: (r) => tkValue(r[created], idr).num,
-        render: (r) => (
-          <span className="tk-pair">
-            <b>{tkValue(r[created], idr).text}</b>
-            <small>{tkValue(r[shipped], idr).text}</small>
-          </span>
-        ),
-      });
-    } else {
-      columns.push({
-        id: `col:${lower.trim()}`, label: tkLabel(base) || h, thStyle: numTh, tdStyle: numTd,
-        sortValue: (r) => tkValue(r[h], idr).num,
-        render: (r) => tkValue(r[h], idr).text,
-      });
-    }
-  }
-
-  const shown = (ids: Set<string>) => columns.filter((c) => c.id === 'produk' || ids.has(c.id));
-
-  return (
-    <div className="sec-block">
-      <div className="sec-heading shopee-heading">
-        Tingkatkan dengan Iklan <span className="sec-badge">Product Performance · referensi silang</span>
-        <SectionExcelButton />
-        <SectionDownloadButton />
-      </div>
-      <div style={{ padding: '1rem 1.4rem 1.4rem' }}>
-        <div className="chart-controls">
-          <SegmentedToggle
-            label="Kolom"
-            options={[
-              { value: 'core', label: `Ringkas (${shown(TK_CORE).length - 1})` },
-              { value: 'all', label: `Semua (${columns.length - 1})` },
-            ]}
-            value={view}
-            onChange={setView}
-            accent="var(--shopee-700)"
-          />
-        </div>
-        <p className="chart-caption">
-          Produk yang disarankan Shopee untuk diiklankan. Di kolom berpasangan, angka atas = pesanan <strong>dibuat</strong>, angka bawah = pesanan{' '}
-          <strong>siap dikirim</strong>.{view === 'all' && ' Geser tabel ke samping untuk kolom lainnya — nama produk tetap terlihat.'}
-        </p>
-        <DataTable
-          columns={view === 'all' ? columns : shown(TK_CORE)}
-          rows={rows}
-          rowKey={(r, i) => `${codeCol ? String(r[codeCol]) : ''}:${i}`}
-          maxHeight={640}
-          className={view === 'all' ? 'dt-sticky-first' : ''}
-        />
-      </div>
-    </div>
-  );
-}
-
-// Tren Harian Toko — a single side-by-side pivot (day-of-month | metric p1 |
-// metric p2 | %Chg, per selected metric), same shape/scroll/metric-picker
-// pattern as the item pivots above instead of two separate stacked tables.
+// Tren Harian Toko — a line chart of the table's metrics, then a single
+// side-by-side pivot (day-of-month | metric p1 | metric p2 | %Chg, per
+// selected metric), same shape/scroll/metric-picker pattern as the item
+// pivots above. The day column stays narrow and the metric columns share the
+// rest of the width evenly.
 export function DailyTrendSection({
   rows,
   selections,
@@ -992,7 +872,9 @@ export function DailyTrendSection({
         />
       </div>
       <div style={{ padding: '1rem 1.4rem 1.4rem' }}>
+        <DailyTrendChart rows={rows} labelOf={(id, fallback) => overrides[id] ?? fallback} p1={p1} p2={p2} />
         <MultiMetricTable
+          className="dt-trend"
           rows={rows}
           identityHeaders={['Tanggal']}
           renderIdentity={(r) => [String(r.day)]}

@@ -353,30 +353,8 @@
   font-size: .66rem;
 }
 .mil-ui.report-generator-app #report-shopee .is-rich .sdeck-group::after { content: ''; flex: 1; height: 1px; background: #f0e0d9; }
-.mil-ui.report-generator-app #report-shopee .sdeck-keys {
-  display: flex;
-  align-items: center;
-  gap: .3rem;
-  margin: .15rem .55rem 0;
-  padding-top: .7rem;
-  border-top: 1px dashed #f0e0d9;
-  color: var(--rs-quiet);
-  font-size: .7rem;
-  font-weight: 600;
-}
-.mil-ui.report-generator-app #report-shopee .sdeck-keys kbd {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  background: #fff;
-  color: var(--rs-muted);
-  box-shadow: inset 0 0 0 1px #ecdcd5, 0 1px 0 #ecdcd5;
-}
-.mil-ui.report-generator-app #report-shopee .sdeck-keys kbd:nth-of-type(2) { margin-right: .2rem; }
 @media (max-width: 1100px) {
-  .mil-ui.report-generator-app #report-shopee :is(.sdeck-progress, .sdeck-keys) { display: none; }
+  .mil-ui.report-generator-app #report-shopee .sdeck-progress { display: none; }
 }
 
 /* ── Tables ───────────────────────────────────────────────────────────────── */
@@ -423,23 +401,41 @@
 .mil-ui.report-generator-app #report-shopee .kpi-table tbody tr:hover td { background: #fff3ee; }
 .mil-ui.report-generator-app #report-shopee .kpi-table th .th-sub { color: #9a8780; font-size: .62rem; letter-spacing: .04em; text-transform: none; }
 
-.mil-ui.report-generator-app #report-shopee .tk-prod { display: grid; gap: .15rem; color: var(--rs-ink); font-size: .82rem; font-weight: 650; line-height: 1.35; }
-.mil-ui.report-generator-app #report-shopee .tk-prod small { color: var(--rs-quiet); font-size: .7rem; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
-.mil-ui.report-generator-app #report-shopee .tk-pair { display: inline-grid; justify-items: end; gap: .12rem; }
-.mil-ui.report-generator-app #report-shopee .tk-pair b { color: var(--rs-ink); font-weight: 750; }
-.mil-ui.report-generator-app #report-shopee .tk-pair small { color: var(--rs-quiet); font-size: .72rem; font-weight: 600; }
+/* Pareto's month pickers sit in the control row like the toggles beside them. */
+.mil-ui.report-generator-app #report-shopee .pr-field { display: flex; align-items: center; gap: .55rem; }
+.mil-ui.report-generator-app #report-shopee .pr-select { width: 190px; }
 
-/* The full Tingkatkan list scrolls sideways; the product it describes stays. */
-.mil-ui.report-generator-app #report-shopee .dt-sticky-first :is(th, td):first-child {
-  position: sticky;
-  left: 0;
-  z-index: 1;
+/* Shop+ reads: the campaign chart and the keyword chart, one card each. */
+.mil-ui.report-generator-app #report-shopee .rk-duo { display: grid; gap: 1rem; }
+.mil-ui.report-generator-app #report-shopee .rk-card {
+  padding: .95rem 1.1rem .8rem;
+  border: 1px solid #efe3de;
+  border-radius: 16px;
   background: #fff;
-  box-shadow: 1px 0 0 #f0e4df, 8px 0 14px -12px rgba(120, 40, 20, .35);
 }
-.mil-ui.report-generator-app #report-shopee .dt-sticky-first thead th:first-child { z-index: 2; background: #fcf8f6; }
-.mil-ui.report-generator-app #report-shopee .dt-sticky-first tbody tr:nth-child(even) td:first-child { background: #fffcfb; }
-.mil-ui.report-generator-app #report-shopee .dt-sticky-first tbody tr:hover td:first-child { background: #fff3ee; }
+.mil-ui.report-generator-app #report-shopee .rk-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.25rem;
+  margin-bottom: .55rem;
+}
+.mil-ui.report-generator-app #report-shopee .rk-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: .55rem;
+  color: var(--rs-ink);
+  font-size: .9rem;
+  font-weight: 750;
+}
+.mil-ui.report-generator-app #report-shopee .rk-card-title small { color: var(--rs-quiet); font-size: .72rem; font-weight: 600; }
+.mil-ui.report-generator-app #report-shopee .rk-card-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .6rem 1rem; }
+.mil-ui.report-generator-app #report-shopee .rk-filter { width: 280px; }
+
+/* Tren Harian: a narrow day column, the metric columns sharing the rest. */
+.mil-ui.report-generator-app #report-shopee table.kpi-table.dt-trend { table-layout: fixed; width: 100%; }
+.mil-ui.report-generator-app #report-shopee table.kpi-table.dt-trend th:first-child { width: 6.5rem; }
 
 /* Item-pivot tables (Analisis Per Item, Tren Harian) share the frame. */
 .mil-ui.report-generator-app #report-shopee div:has(> table.metric-wide-table) {
@@ -449,22 +445,72 @@
   scrollbar-width: thin;
 }
 
-/* Sub-view switches (Per Produk / Per Keyword / Per Performa) in Shopee. */
-.mil-ui.report-generator-app #report-shopee .ind-pill {
-  padding: .38rem .85rem;
-  border: 1px solid #efe3de;
-  border-radius: 99px;
-  background: #fff;
-  color: var(--rs-muted);
-  font-weight: 650;
-  transition: background-color .2s ease, border-color .2s ease, color .2s ease;
+/* Analisis Per Item's three angles: a tinted track of tab cards, each with
+   its icon, name and source. The open one lifts onto white with an orange
+   tile and rule, so the current reading is never in doubt. */
+.mil-ui.report-generator-app #report-shopee .ipv-tabs {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: .35rem;
+  margin: 1rem 1.4rem 0;
+  padding: .35rem;
+  border: 1px solid #f0e0d9;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fdf6f3, #fbf0eb);
 }
-.mil-ui.report-generator-app #report-shopee .ind-pill:hover { border-color: var(--sh-line); color: var(--rs-accent); }
-.mil-ui.report-generator-app #report-shopee .ind-pill.selected {
-  border-color: transparent;
-  background: linear-gradient(120deg, #b8341a, var(--rs-accent) 60%, #d8401f);
+.mil-ui.report-generator-app #report-shopee .ipv-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-width: 0;
+  padding: .65rem .9rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--rs-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .2s ease, box-shadow .2s ease, color .2s ease;
+}
+.mil-ui.report-generator-app #report-shopee .ipv-tab:hover { background: rgba(255, 255, 255, .65); color: var(--rs-ink); }
+.mil-ui.report-generator-app #report-shopee .ipv-tab:focus-visible { outline: 2px solid var(--rs-accent); outline-offset: 1px; }
+.mil-ui.report-generator-app #report-shopee .ipv-tab-ico {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #fff;
+  color: #b9a49c;
+  box-shadow: inset 0 0 0 1px #f0e0d9;
+  transition: background-color .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.mil-ui.report-generator-app #report-shopee .ipv-tab-text { display: grid; gap: .1rem; min-width: 0; }
+.mil-ui.report-generator-app #report-shopee .ipv-tab-text strong { overflow: hidden; color: inherit; font-size: .88rem; font-weight: 750; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.mil-ui.report-generator-app #report-shopee .ipv-tab-text small { overflow: hidden; color: var(--rs-quiet); font-size: .7rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.mil-ui.report-generator-app #report-shopee .ipv-tab.is-active {
+  background: #fff;
+  color: var(--rs-ink);
+  box-shadow: 0 1px 2px rgba(120, 40, 20, .08), 0 10px 22px -16px rgba(201, 59, 28, .55), inset 0 0 0 1px #f3d9cf;
+}
+.mil-ui.report-generator-app #report-shopee .ipv-tab.is-active::after {
+  content: '';
+  position: absolute;
+  right: 1rem;
+  bottom: 0;
+  left: 1rem;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, #b8341a, var(--rs-accent), #e8582f);
+}
+.mil-ui.report-generator-app #report-shopee .ipv-tab.is-active .ipv-tab-ico {
+  background: linear-gradient(135deg, #b8341a, var(--rs-accent) 60%, #e0532c);
   color: #fff;
-  box-shadow: 0 8px 16px -10px rgba(201, 59, 28, .8);
+  box-shadow: 0 6px 14px -8px rgba(201, 59, 28, .9);
 }
 
 /* ── Individu vs Otomatis: a duel ────────────────────────────────────────── */

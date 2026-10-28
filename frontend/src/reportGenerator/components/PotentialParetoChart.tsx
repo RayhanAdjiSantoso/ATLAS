@@ -1,4 +1,5 @@
 import { Chart, type TooltipItem } from 'chart.js/auto';
+import { flatCategoryTicks } from './flatTicks';
 import { useEffect, useRef } from 'react';
 import type { PotentialProduct } from '../lib/shopeeProductAnalysis';
 
@@ -19,10 +20,6 @@ import type { PotentialProduct } from '../lib/shopeeProductAnalysis';
 // converting badly, the clearest headroom in the catalogue.
 
 const INTER = "'Inter', system-ui, sans-serif";
-
-function truncate(s: string, max = 20): string {
-  return s.length <= max ? s : s.slice(0, max - 1).trimEnd() + '…';
-}
 
 const rp = (v: number) => `Rp${Math.round(v).toLocaleString('id-ID')}`;
 const pct = (v: number) => `${v.toLocaleString('id-ID', { maximumFractionDigits: 2 })}%`;
@@ -63,7 +60,7 @@ export function PotentialParetoChart({ products, height = 380 }: { products: Pot
     chartRef.current = new Chart(el, {
       type: 'bar',
       data: {
-        labels: names.map((n) => truncate(n)),
+        labels: names,
         datasets: [
           {
             type: 'bar',
@@ -121,7 +118,7 @@ export function PotentialParetoChart({ products, height = 380 }: { products: Pot
           x: {
             grid: { display: false },
             border: { color: '#dde2ee' },
-            ticks: { font: { family: INTER, size: 11, weight: 600 }, color: '#5a6a90', maxRotation: 42, autoSkip: false },
+            ticks: { font: { family: INTER, size: 11, weight: 600 }, color: '#5a6a90', ...flatCategoryTicks(names) },
           },
           y: {
             beginAtZero: true,

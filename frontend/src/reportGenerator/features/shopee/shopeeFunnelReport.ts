@@ -1,5 +1,6 @@
 import {
   addFunnelChannelSums,
+  blankAtcRows,
   buildFunnelTree,
   buildFunnelValues,
   funnelMetrics,
@@ -37,7 +38,7 @@ import {
   type ProductChartPoint,
   type ProductPerfMonth,
 } from '../../lib/shopeeProductAnalysis';
-import { buildShopPlusFunnel } from '../../lib/shopeeShopPlus';
+import { shopPlusGroupsPoint } from '../../lib/shopeeShopPlus';
 import { findShopeeCol, parseShopeeNum } from '../../lib/shopeeAds';
 import type { SheetRow } from '../../lib/types';
 
@@ -108,8 +109,7 @@ export interface ChannelMixEntry {
 // moved *its* GMV — the account-level tree can't tell you whether a drop came
 // from Iklan Produk or Iklan Toko. Live has no impression/click columns, so it
 // only gets a tree when its export happens to carry them. Iklan Toko (Shop+)
-// gets its own metric set and tree (lib/shopeeShopPlus.ts) — its export has
-// no ATC and adds direct conversions and product clicks.
+// reads the same funnel as Iklan Produk, its Add-to-Cart rows blank.
 export interface ChannelFunnel {
   key: 'produk' | 'toko' | 'live';
   label: string;
@@ -205,13 +205,23 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
   // A channel only earns a tree if it actually reports the funnel columns —
   // Iklan Live normally reports viewers, not impressions/clicks, and an
   // all-zero tree would read as a real collapse rather than "no data".
-  const channelFunnel = (key: ChannelFunnel['key'], label: string, oldRows: SheetRow[], curRows: SheetRow[]): ChannelFunnel | null => {
+  const channelFunnel = (key: ChannelFunnel['key'], label: string, oldRows: SheetRow[], curRows: SheetRow[], extraPoint?: string | null): ChannelFunnel | null => {
     const so = sumFunnelChannel(oldRows);
     const sc = sumFunnelChannel(curRows);
     if (!(so.impressions || sc.impressions || so.clicks || sc.clicks)) return null;
     const co = funnelMetrics(so, input.omzetOld);
     const cc = funnelMetrics(sc, input.omzetCur);
-    return { key, label, values: buildFunnelValues(co, cc), tree: buildFunnelTree(co, cc), symptom: buildSymptomSummary(co, cc) };
+    const hasAtc = so.addToCart + sc.addToCart > 0;
+    const values = buildFunnelValues(co, cc);
+    const tree = buildFunnelTree(co, cc);
+    const symptom = buildSymptomSummary(co, cc);
+    return {
+      key,
+      label,
+      values: hasAtc ? values : blankAtcRows(values),
+      tree: hasAtc ? tree : blankAtcRows(tree),
+      symptom: extraPoint ? { ...symptom, points: [...symptom.points, extraPoint] } : symptom,
+    };
   };
   const channelAnalyses = buildChannelAnalyses({
     produkOld: input.produkOld,
@@ -223,11 +233,11 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     liveOld: input.liveOld,
     liveCur: input.liveCur,
   });
-  const shopPlus = buildShopPlusFunnel(input.tokoOld, input.tokoCur, channelAnalyses.find((a) => a.key === 'toko')?.groups ?? []);
+  const shopPlusPoint = shopPlusGroupsPoint(channelAnalyses.find((a) => a.key === 'toko')?.groups ?? []);
 
   const channels = [
     channelFunnel('produk', 'Iklan Produk', input.produkOld, input.produkCur),
-    shopPlus ? { key: 'toko' as const, label: 'Iklan Toko', ...shopPlus } : null,
+    channelFunnel('toko', 'Iklan Toko', input.tokoOld, input.tokoCur, shopPlusPoint),
     channelFunnel('live', 'Iklan Live', input.liveOld, input.liveCur),
   ].filter((c): c is ChannelFunnel => c !== null);
 

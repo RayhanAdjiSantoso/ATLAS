@@ -1,5 +1,4 @@
 import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp } from 'lucide-react';
 
 // A report page as a workspace: a sticky navigator of its sections on the
 // left, the chosen section on the right. Replaces a column of folded rows —
@@ -72,8 +71,8 @@ function readMeta(wrap: HTMLElement | null, fallback: string): SectionMeta {
 }
 
 // `iconFor` turns on the rich navigator a report can opt into (Shopee): an
-// icon tile per section, a progress track for the open section's place in the
-// page, and the keyboard hint. Without it the navigator is unchanged.
+// icon tile per section and a progress track for the open section's place in
+// the page. Without it the navigator is unchanged.
 export function SectionAccordion({
   children,
   defaultOpen = 0,
@@ -213,17 +212,6 @@ export function SectionAccordion({
             );
           })}
         </div>
-        {iconFor && (
-          <span className="sdeck-keys" aria-hidden="true">
-            <kbd>
-              <ArrowUp size={11} strokeWidth={2.6} />
-            </kbd>
-            <kbd>
-              <ArrowDown size={11} strokeWidth={2.6} />
-            </kbd>
-            pindah bagian
-          </span>
-        )}
       </nav>
 
       <div className="sdeck-body">

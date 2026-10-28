@@ -24,12 +24,11 @@ export interface BuildShopeeDeepDiveReportInput {
   liveCur: SheetRow[];
   // Product Performance is a single, non-compared snapshot (spec: "opsional,
   // insight tambahan, tidak ikut dibandingkan 2 periode") for unadvertised
-  // products / Tingkatkan dengan Iklan. The "Per Performa" tab below is the
+  // products. The "Per Performa" tab below is the
   // one place it IS compared old vs cur — productPerformanceOldRows feeds
   // only that.
   productPerformanceRows: SheetRow[] | null;
   productPerformanceOldRows?: SheetRow[] | null;
-  tingkatkanDenganIklanRows: SheetRow[] | null;
   overviewOldRows: SheetRow[] | null;
   overviewCurRows: SheetRow[] | null;
   productMaster: ProductMasterEntry[];
@@ -64,7 +63,6 @@ export interface ShopeeDeepDiveReport {
   uncategorized: string[];
   hasProductPerformanceData: boolean;
   unadvertisedProducts: ProductPerformanceRow[];
-  tingkatkanDenganIklanRows: SheetRow[];
   dailyTrendPivot: DailyTrendPivotRow[];
   dailyTrendSelections: readonly DailyTrendMetricSelection[];
 }
@@ -123,7 +121,6 @@ export function buildShopeeDeepDiveReport(input: BuildShopeeDeepDiveReportInput)
     uncategorized: [...new Set([...catOld.uncategorized, ...catCur.uncategorized])],
     hasProductPerformanceData: Boolean(input.productPerformanceRows),
     unadvertisedProducts: findUnadvertisedProducts(rankedProducts, advertisedCodes),
-    tingkatkanDenganIklanRows: input.tingkatkanDenganIklanRows ?? [],
     dailyTrendPivot: input.overviewOldRows || input.overviewCurRows ? buildDailyTrendPivot(input.overviewOldRows ?? [], input.overviewCurRows ?? [], dailyTrendSelections) : [],
     dailyTrendSelections,
   };

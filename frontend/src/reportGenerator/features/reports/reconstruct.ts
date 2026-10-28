@@ -89,7 +89,6 @@ export function reconstructShopeeDeepDive(detail: ReportDetail, productMaster: P
     liveOld: byChannelRole('live', 'old'),
     liveCur: byChannelRole('live', 'cur'),
     productPerformanceRows: null,
-    tingkatkanDenganIklanRows: null,
     overviewOldRows: detail.overviewOld ?? null,
     overviewCurRows: detail.overviewCur ?? null,
     productMaster,

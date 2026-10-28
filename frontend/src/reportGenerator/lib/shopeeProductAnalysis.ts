@@ -217,7 +217,7 @@ export interface ProductMetricDef {
 export const TRAFFIC_METRIC_DEFS: readonly ProductMetricDef[] = [
   { key: 'clicks', label: 'Clicks', fmt: 'num', sentiment: 'higher-better' },
   { key: 'impressions', label: 'Impressions', fmt: 'num', sentiment: 'higher-better' },
-  { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'ctr', label: 'CTR', fmt: 'pct', sentiment: 'higher-better' },
 ];
 
 export const CONVERSION_METRIC_DEFS: readonly ProductMetricDef[] = [
@@ -298,7 +298,7 @@ export function buildProductRankings(
 // Pareto and Produk Potensial are single-period by design and live below.
 
 // A chart group is a set of metrics that answer one question, not a fixed
-// pair: Traffic is read by reach (Impressions), by volume (Clicks) and by
+// pair: Traffic is read by volume (Clicks), by reach (Impressions) and by
 // efficiency (CTR). The chart draws ONE of them at a time — the one being
 // sorted by — because a second series the reader did not ask to rank is
 // noise competing with the ranking they did ask for.
@@ -321,7 +321,7 @@ const M = {
 } as const satisfies Record<string, ProductMetricDef>;
 
 export const PRODUCT_CHART_GROUPS: readonly ProductChartGroupDef[] = [
-  { id: 'traffic', title: 'Traffic Analysis', metrics: [M.impressions, M.ctr, M.clicks] },
+  { id: 'traffic', title: 'Traffic Analysis', metrics: [M.clicks, M.impressions, M.ctr] },
   // Visit → ATC and ATC → Purchase used to be two charts of two metrics each.
   // They answer one question — where conversion leaks — so they are one chart
   // whose metric picker walks the funnel: overall, then each step.

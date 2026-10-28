@@ -82,7 +82,6 @@ interface OverviewFileState {
 
 interface ProductPerformanceFileState {
   mainRows: SheetRow[];
-  tingkatkanRows: SheetRow[];
   fileName: string;
   // Absent when the rows came from the brand library via "Pilih Periode"
   // (see applyLibraryMonth) instead of a fresh upload — nothing to
@@ -167,7 +166,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // Product Performance is now a 2-slot upload (old & cur), like the other
   // channels — Traffic/Conversion Analysis compare periods. The "cur" file
   // also still drives the older single-snapshot insights (unadvertised
-  // products, Tingkatkan dengan Iklan). Pareto Analysis instead uses every
+  // products). Pareto Analysis instead uses every
   // Product Performance file already saved to this brand's library — see
   // productPerfAllMonths below — so it ranks lifetime contribution, not just
   // the newest month.
@@ -176,7 +175,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // this brand's library (independent of the old/cur slots above), fetched
   // whenever the client changes. Feeds Pareto Analysis only — buildPareto
   // sums Sales (Confirmed Order) per product across whichever months
-  // paretoRange below selects (default: all of them).
+  // paretoRange below selects (default: the newer period's month).
   const [productPerfAllMonths, setProductPerfAllMonths] = useState<ProductPerfMonth[]>([]);
   // "Semua Bulan" by default — see ParetoRangeControl in the Pareto sections.
   const [paretoRange, setParetoRange] = useState<ParetoRangeSelection>(DEFAULT_PARETO_RANGE);
@@ -252,6 +251,16 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   const [periodOldRange, setPeriodOldRange] = useState<DateRange>(EMPTY_RANGE);
   const [periodCurRange, setPeriodCurRange] = useState<DateRange>(EMPTY_RANGE);
 
+  // Pareto opens on the month(s) of the newer period — the newest data the
+  // report is about — rather than every month ever uploaded. A month with no
+  // Product Performance in the library falls back to this period's own file.
+  useEffect(() => {
+    const start = periodCurRange.start?.slice(0, 7);
+    const end = periodCurRange.end?.slice(0, 7) ?? start;
+    if (!start || !end) return;
+    setParetoRange(start === end ? { mode: 'single', start: null, end: null, single: start } : { mode: 'range', start, end, single: null });
+  }, [periodCurRange.start, periodCurRange.end]);
+
   // "Pilih Periode" — per period side, sourced straight from the brand
   // library (any month with files there, generated before or not — see
   // PeriodSourcePicker), not from report_runs. One pick fills every
@@ -290,15 +299,12 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     }
     const parts = await Promise.all(perfList.map((f) => downloadLibraryFile(brandId, f)));
     const mainRows: SheetRow[] = [];
-    const tingkatkanRows: SheetRow[] = [];
     for (const file of parts) {
       const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
       const mainSheet = wb.Sheets['Produk dengan Performa Terbaik'];
       if (mainSheet) mainRows.push(...XLSX.utils.sheet_to_json<SheetRow>(mainSheet, { defval: '' }));
-      const extraSheet = wb.Sheets['Tingkatkan dengan Iklan'];
-      if (extraSheet) tingkatkanRows.push(...XLSX.utils.sheet_to_json<SheetRow>(extraSheet, { defval: '' }));
     }
-    setProductPerfFiles((prev) => ({ ...prev, [targetRole]: mainRows.length ? { mainRows, tingkatkanRows, fileName: perfList.map((f) => f.original_filename).join(' · ') } : null }));
+    setProductPerfFiles((prev) => ({ ...prev, [targetRole]: mainRows.length ? { mainRows, fileName: perfList.map((f) => f.original_filename).join(' · ') } : null }));
   }
 
   async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
@@ -654,17 +660,14 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     }
     try {
       const mainRows: SheetRow[] = [];
-      const tingkatkanRows: SheetRow[] = [];
       for (const part of input) {
         const wb = XLSX.read(new Uint8Array(await part.arrayBuffer()), { type: 'array' });
         const mainSheet = wb.Sheets['Produk dengan Performa Terbaik'];
         if (!mainSheet) throw new Error(`Sheet Produk dengan Performa Terbaik tidak ditemukan: ${part.name}`);
         mainRows.push(...XLSX.utils.sheet_to_json<SheetRow>(mainSheet, { defval: '' }));
-        const extra = wb.Sheets['Tingkatkan dengan Iklan'];
-        if (extra) tingkatkanRows.push(...XLSX.utils.sheet_to_json<SheetRow>(extra, { defval: '' }));
       }
       setUploadError(null);
-      setProductPerfFiles((prev) => ({ ...prev, [role]: { mainRows, tingkatkanRows, fileName: input.map(f => f.name).join(' · '), file } }));
+      setProductPerfFiles((prev) => ({ ...prev, [role]: { mainRows, fileName: input.map(f => f.name).join(' · '), file } }));
       setReport(null);
       setDeepDive(null);
       setFunnelReport(null);
@@ -752,7 +755,6 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       liveCur: adsFiles['live-cur']?.rows ?? [],
       productPerformanceRows: productPerfFiles.cur?.mainRows ?? null,
       productPerformanceOldRows: productPerfFiles.old?.mainRows ?? null,
-      tingkatkanDenganIklanRows: productPerfFiles.cur?.tingkatkanRows ?? null,
       overviewOldRows: overviewFiles['overview-old']?.rows ?? null,
       overviewCurRows: overviewFiles['overview-cur']?.rows ?? null,
       productMaster: effectiveProductMaster,
@@ -787,11 +789,12 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       produkIndividualOld: adsFiles['produk-old']?.rows ?? [],
       produkOtomatisOld: adsFiles['produk-otomatis-old']?.rows ?? [],
     });
-    // Only default the open tab to the dominant channel on the very first
+    // Only default the open tab — Performance Overall when Product Performance
+    // is there, else the dominant channel — on the very first
     // Generate — a later regenerate (metric change, uncategorized-mapping
     // save) shouldn't yank the user back to a tab they've since switched
     // away from.
-    if (!report) setItemPivotTab(dd.dominantChannel === 'toko' ? 'keyword' : 'produk');
+    if (!report) setItemPivotTab(dd.hasPerformancePivotData ? 'performa' : dd.dominantChannel === 'toko' ? 'keyword' : 'produk');
     setReport(r);
     setDeepDive(dd);
     setFunnelReport(funnel);
