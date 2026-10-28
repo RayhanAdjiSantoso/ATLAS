@@ -36,8 +36,10 @@ import {
   BRAND_CONSIDERATION_RATE_METRICS,
   BRAND_TOP_EFFICIENCY_METRICS,
   B2B_AUDIENCE_TRAFFIC_METRICS,
+  B2B_CREATIVE_CONVERSION_METRICS,
   B2B_TRAFFIC_METRICS,
   RETAIL_AUDIENCE_CONVERSION_METRICS,
+  SALES_CREATIVE_CONVERSION_METRICS,
   RETAIL_TOP_CONTENT_METRICS,
   SALES_AUDIENCE_TRAFFIC_METRICS,
   SALES_TRAFFIC_METRICS,
@@ -752,8 +754,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     // Contacts — whichever the file has, both offered when it has both.
     const messageKinds = kind === 'b2b' ? messageKindsOf(rows, oldRows) : [];
     const menus = kind === 'b2b'
-      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_TRAFFIC_METRICS, conversion: nonRetailConversionMetrics(messageKinds), topContent: nonRetailTopContentMetrics(messageKinds) }
-      : { audienceTraffic: SALES_AUDIENCE_TRAFFIC_METRICS, traffic: SALES_TRAFFIC_METRICS, conversion: RETAIL_AUDIENCE_CONVERSION_METRICS, topContent: RETAIL_TOP_CONTENT_METRICS };
+      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_TRAFFIC_METRICS, conversion: nonRetailConversionMetrics(messageKinds), creativeConversion: B2B_CREATIVE_CONVERSION_METRICS, topContent: nonRetailTopContentMetrics(messageKinds) }
+      : { audienceTraffic: SALES_AUDIENCE_TRAFFIC_METRICS, traffic: SALES_TRAFFIC_METRICS, conversion: RETAIL_AUDIENCE_CONVERSION_METRICS, creativeConversion: SALES_CREATIVE_CONVERSION_METRICS, topContent: RETAIL_TOP_CONTENT_METRICS };
     const adsetCol = rows.length ? findAdsetCol(rows) : null;
     const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
     const audienceBadge = `per ad set · NV · RM · ${period}`;
@@ -791,7 +793,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         {page('Conversion Analysis', audienceBadge, (
           <>
             {bars('Conversion Analysis by Audience', audienceBadge, menus.conversion, 'adset')}
-            {bars('Conversion Analysis by Creative', creativeBadge, menus.traffic, 'creative')}
+            {bars('Conversion Analysis by Creative', creativeBadge, menus.creativeConversion, 'creative')}
           </>
         ))}
         {bars('Top Content Analysis by Creative', creativeBadge, menus.topContent, 'creative')}
