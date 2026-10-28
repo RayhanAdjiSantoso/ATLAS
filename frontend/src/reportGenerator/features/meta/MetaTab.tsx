@@ -756,7 +756,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
     const audienceBadge = `per ad set · NV · RM · ${period}`;
     // `ownLabels` keeps the menu's own short names (Conversion Analysis reads
-    // "ATC Rate", not the report-wide "Clicks → ATC Rate").
+    // "Conversion Rate", not the report-wide "Conversion Rate (CVR)").
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bars = (title: string, b: string, menu: readonly AudienceMetricDef<any>[], level: 'adset' | 'creative', ownLabels = false) => (
       <MetaCompareBars
