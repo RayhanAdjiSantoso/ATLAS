@@ -170,7 +170,7 @@ export const FUNNEL_VALUE_DEFS: readonly FunnelValueDef[] = [
   { key: 'cvr', label: 'Conversion Rate (CVR)', fmt: 'pct', sentiment: 'higher-better' },
   { key: 'itemsSold', label: 'Items Sold', fmt: 'num', sentiment: 'higher-better' },
   { key: 'aov', label: 'Average Order Value (AOV)', fmt: 'rp', sentiment: 'higher-better' },
-  { key: 'abs', label: 'Average Basket Size (ABS)', fmt: 'num', sentiment: 'higher-better' },
+  { key: 'abs', label: 'Average Basket Size (ABS)', fmt: 'dec', sentiment: 'higher-better' },
   { key: 'aur', label: 'Average Unit Retail (AUR)', fmt: 'rp', sentiment: 'higher-better' },
 ];
 
@@ -182,7 +182,8 @@ export interface FunnelValueRow {
   curNum: number;
   deltaNum: number | null;
   delta: string;
-  cls: DeltaClassName;
+  cls: DeltaClassName;  // Not measurable in this export — drawn as "—" rather than dropped.
+  na?: boolean;
 }
 
 export function buildFunnelValues(mOld: FunnelMetrics, mCur: FunnelMetrics): FunnelValueRow[] {
@@ -234,7 +235,7 @@ export const FUNNEL_TREE_DEFS: readonly FunnelTreeDef[] = [
   { key: 'clicksToAtcRate', label: 'Clicks → ATC Rate', prefix: '│     ├─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
   { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', prefix: '│     └─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
   { key: 'aov', label: 'Average Order Value', prefix: '└─ ', depth: 1, fmt: 'rp', sentiment: 'higher-better' },
-  { key: 'abs', label: 'Average Basket Size', prefix: '   ├─ ', depth: 2, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'abs', label: 'Average Basket Size', prefix: '   ├─ ', depth: 2, fmt: 'dec', sentiment: 'higher-better' },
   { key: 'aur', label: 'Average Unit Retail', prefix: '   └─ ', depth: 2, fmt: 'rp', sentiment: 'higher-better' },
 ];
 
@@ -271,4 +272,13 @@ export function buildFunnelTree(mOld: FunnelMetrics, mCur: FunnelMetrics): Funne
       cls: deltaClassForSentiment(deltaNum, def.sentiment),
     };
   });
+}
+
+// The funnel values that need Add to Cart. A channel whose export has no ATC
+// column (Shop+) keeps these rows, blank, so its table lines up row for row
+// with Product Ads instead of reading as a different report.
+const ATC_KEYS = new Set(['addToCart', 'clicksToAtcRate', 'cpAtc', 'atcToPurchaseRate']);
+
+export function blankAtcRows<T extends FunnelValueRow | FunnelTreeRow>(rows: T[]): T[] {
+  return rows.map((r) => (ATC_KEYS.has(r.key) ? { ...r, na: true, deltaNum: null, delta: '—', cls: 'delta-neutral' as DeltaClassName } : r));
 }
