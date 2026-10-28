@@ -261,8 +261,11 @@ export const SALES_ATC_PURCHASE_METRICS: readonly AudienceMetricDef<MetaSalesMet
   { key: 'atc', label: 'ATC', fmt: 'num', additive: true },
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
 ];
+// Conversion Analysis by Creative (Retail, CPAS): the whole conversion, then
+// its two steps.
 export const SALES_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
-  { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
   { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
 ];
 
@@ -415,8 +418,9 @@ export function nonRetailTopContentMetrics(kinds: MessageKind[]): B2bDef[] {
     })),
   ];
 }
+// Non Retail's Conversion Analysis by Creative: the same three as Retail.
 export const B2B_CREATIVE_CONVERSION_METRICS: readonly B2bDef[] = [
-  { key: 'visitToAtcRate', label: 'Visit → ATC Rate', fmt: 'pct', additive: false },
+  { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
   { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
-  { key: 'leadRate', label: 'Click → Lead Rate', fmt: 'pct', additive: false },
 ];
