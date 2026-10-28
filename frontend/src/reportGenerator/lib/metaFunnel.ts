@@ -119,7 +119,9 @@ export function metaSalesMetrics(rows: SheetRow[]): MetaSalesMetrics {
   const orders = total(rows, ['purchases with shared', 'purchases'], ['value', 'roas', 'rate']);
   const impressions = total(rows, ['impressions']);
   const spend = total(rows, ['amount spent', 'spend']);
-  const contentViews = total(rows, ['content views', 'landing page views', 'link clicks'], ['rate', 'ratio', 'ration']);
+  // Content Views only — a file without the column leaves it blank rather
+  // than borrowing Landing Page Views or Link Clicks.
+  const contentViews = total(rows, ['content views'], ['rate', 'ratio', 'ration']);
   const atc = total(rows, ['adds to cart with shared', 'adds to cart', 'add to cart'], ['value', 'rate', 'roas']);
 
   return {

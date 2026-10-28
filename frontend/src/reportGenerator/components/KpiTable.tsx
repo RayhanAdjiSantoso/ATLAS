@@ -36,6 +36,9 @@ interface KpiTableProps {
   padded?: boolean;
   // Shown beside "Hapus Semua" in the metric toolbar.
   toolbar?: ReactNode;
+  // The default rows only: no "+ Tambah metrik" / "Hapus Semua" and no
+  // per-row ×. Rename and reorder still work.
+  fixedMetrics?: boolean;
 }
 
 const TOTAL_ROW_STYLE = { fontWeight: 700, borderTop: '2px solid var(--border)' };
@@ -51,7 +54,7 @@ function rowId(r: KpiRowDisplay): string {
 // engine directly: click a row's label to rename it inline, hover to reveal
 // the remove (×) affordance, drag the ☰ handle to move the row to a new
 // position. Removed rows go back into "+ Tambah metrik".
-export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded, toolbar }: KpiTableProps) {
+export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded, toolbar, fixedMetrics }: KpiTableProps) {
   const metricRows = rows.filter((r) => !r.isTotal);
   const totalRow = rows.find((r) => r.isTotal);
   const rowById = new Map(metricRows.map((r) => [rowId(r), r]));
@@ -123,15 +126,17 @@ export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded
                       <span className="kpi-row-label" title="Klik untuk ganti nama" onClick={() => editor.startEdit(id, resolveLabel(id))}>
                         {resolveLabel(id)}
                       </span>
-                      <button
-                        type="button"
-                        className="metric-remove-btn"
-                        title="Hapus metrik"
-                        aria-label="Hapus metrik"
-                        onClick={() => handleRemove(id)}
-                      >
-                        ×
-                      </button>
+                      {!fixedMetrics && (
+                        <button
+                          type="button"
+                          className="metric-remove-btn"
+                          title="Hapus metrik"
+                          aria-label="Hapus metrik"
+                          onClick={() => handleRemove(id)}
+                        >
+                          ×
+                        </button>
+                      )}
                     </span>
                   )}
                 </td>
@@ -160,7 +165,13 @@ export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded
 
   return (
     <>
-      {allIds.length > 0 && <MetricPicker allCols={allIds} activeCols={visibleOrder} onChange={setOrder} labelFn={resolveLabel} dense={!padded} extra={toolbar} />}
+      {fixedMetrics ? (
+        toolbar && (
+          <div className={`metric-picker metric-picker-fixed${padded ? '' : ' metric-picker-dense'}`}>
+            <div className="metric-picker-extra">{toolbar}</div>
+          </div>
+        )
+      ) : allIds.length > 0 && <MetricPicker allCols={allIds} activeCols={visibleOrder} onChange={setOrder} labelFn={resolveLabel} dense={!padded} extra={toolbar} />}
       {padded ? <div style={{ padding: '0 1.4rem 1.4rem' }}>{tableBody}</div> : tableBody}
     </>
   );
