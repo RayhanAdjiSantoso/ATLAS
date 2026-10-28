@@ -17,8 +17,11 @@ import type { Sentiment, SheetRow } from './types';
 //                per product). Items = products.
 //   Shop+ Ads    "Shop+ Ads Overall Data" (toko: one row per Shop+ ad
 //                group — Nama Iklan, Status, Tampilan, Bidding). Items =
-//                ad groups. "Keyword Level Data" (toko_keyword) only stands
-//                in for the totals when the overall file is missing.
+//                ad groups. "Keyword Level Data" (toko_keyword: one row per
+//                Kata Pencarian inside its Nama Iklan) feeds the keyword
+//                charts and the keyword Pareto, and stands in for the totals
+//                when the overall file is missing. Neither file has an
+//                Add-to-Cart column.
 //   Live Ads     "Data Semua Iklan Live" (live: one row per live session —
 //                Penonton, Pesanan, Omzet, Biaya; no impressions/clicks).
 //                Items = sessions.
@@ -73,13 +76,20 @@ export interface ItemSums {
   gmvDirect: number;
   productViews: number;
   productClicks: number;
+  // Clicks and orders of only the rows that report Add to Cart. The auto
+  // campaign's file has no ATC column and many ads print "-" there, so the
+  // ATC steps are read off these rows alone — a row with no ATC figure would
+  // otherwise read as 0% ATC and push Purchase Rate past 100%.
+  atcClicks: number;
+  atcOrders: number;
 }
-const ZERO: ItemSums = { impressions: 0, clicks: 0, atc: 0, orders: 0, sold: 0, gmv: 0, spend: 0, viewers: 0, ordersDirect: 0, gmvDirect: 0, productViews: 0, productClicks: 0 };
-const add = (a: ItemSums, b: ItemSums): ItemSums => ({
+const ZERO: ItemSums = { impressions: 0, clicks: 0, atc: 0, orders: 0, sold: 0, gmv: 0, spend: 0, viewers: 0, ordersDirect: 0, gmvDirect: 0, productViews: 0, productClicks: 0, atcClicks: 0, atcOrders: 0 };
+export const addItemSums = (a: ItemSums, b: ItemSums): ItemSums => ({
   impressions: a.impressions + b.impressions, clicks: a.clicks + b.clicks, atc: a.atc + b.atc, orders: a.orders + b.orders,
   sold: a.sold + b.sold, gmv: a.gmv + b.gmv, spend: a.spend + b.spend, viewers: a.viewers + b.viewers,
   ordersDirect: a.ordersDirect + b.ordersDirect, gmvDirect: a.gmvDirect + b.gmvDirect,
   productViews: a.productViews + b.productViews, productClicks: a.productClicks + b.productClicks,
+  atcClicks: a.atcClicks + b.atcClicks, atcOrders: a.atcOrders + b.atcOrders,
 });
 
 function rowSums(row: SheetRow, h: Map<string, string>): ItemSums {
@@ -87,11 +97,16 @@ function rowSums(row: SheetRow, h: Map<string, string>): ItemSums {
     const col = h.get(name);
     return col ? parseShopeeNum(row[col]) : 0;
   };
+  const atcCol = h.get('tambah ke keranjang');
+  const atcRaw = atcCol ? String(row[atcCol] ?? '').trim() : '';
+  const reportsAtc = atcRaw !== '' && atcRaw !== '-';
+  const clicks = v('jumlah klik');
+  const orders = h.has('konversi') ? v('konversi') : v('pesanan');
   return {
     impressions: v('dilihat'),
-    clicks: v('jumlah klik'),
+    clicks,
     atc: v('tambah ke keranjang'),
-    orders: h.has('konversi') ? v('konversi') : v('pesanan'),
+    orders,
     sold: v('produk terjual'),
     gmv: v('omzet penjualan'),
     spend: v('biaya'),
@@ -100,12 +115,14 @@ function rowSums(row: SheetRow, h: Map<string, string>): ItemSums {
     gmvDirect: v('penjualan langsung (gmv langsung)'),
     productViews: v('jumlah produk dilihat'),
     productClicks: v('jumlah klik produk'),
+    atcClicks: reportsAtc ? clicks : 0,
+    atcOrders: reportsAtc ? orders : 0,
   };
 }
 
 export function sumRows(rows: SheetRow[]): ItemSums {
   const h = headerMap(rows);
-  return rows.reduce<ItemSums>((acc, r) => add(acc, rowSums(r, h)), { ...ZERO });
+  return rows.reduce<ItemSums>((acc, r) => addItemSums(acc, rowSums(r, h)), { ...ZERO });
 }
 
 export interface ItemAgg {
@@ -126,7 +143,7 @@ function aggregate(rows: SheetRow[], keyOf: (r: SheetRow, h: Map<string, string>
     const s = rowSums(r, h);
     const prev = out.get(id.key);
     if (prev) {
-      prev.sums = add(prev.sums, s);
+      prev.sums = addItemSums(prev.sums, s);
       prev.copies += 1;
     } else out.set(id.key, { key: id.key, name: id.name, sums: s, copies: 1 });
   }
@@ -162,7 +179,8 @@ export const derived = {
   ctr: (s: ItemSums) => (s.impressions > 0 ? (s.clicks / s.impressions) * 100 : null),
   cr: (s: ItemSums) => (s.clicks > 0 ? (s.orders / s.clicks) * 100 : null),
   liveCr: (s: ItemSums) => (s.viewers > 0 ? (s.orders / s.viewers) * 100 : null),
-  atcRate: (s: ItemSums) => (s.clicks > 0 ? (s.atc / s.clicks) * 100 : null),
+  atcRate: (s: ItemSums) => (s.atcClicks > 0 ? (s.atc / s.atcClicks) * 100 : null),
+  purchaseRate: (s: ItemSums) => (s.atc > 0 ? (s.atcOrders / s.atc) * 100 : null),
   roas: (s: ItemSums) => ratio(s.gmv, s.spend),
   cpa: (s: ItemSums) => ratio(s.spend, s.orders),
 };
@@ -298,8 +316,7 @@ export function buildUnadvertisedProducts(
   return { products: out.slice(0, count), advertisedCount, totalProducts: groups.size };
 }
 
-// Shop+ ad groups / Live sessions: what is already paying back best and could
-// take more budget.
+// Live sessions: what is already paying back best and could take more budget.
 export interface PotentialItem {
   key: string;
   name: string;
@@ -311,40 +328,43 @@ export interface PotentialItem {
   note: string;
 }
 
-function potentialItems(items: Map<string, ItemAgg>, kind: 'group' | 'session', count = 10, stopped: Set<string> = new Set()): PotentialItem[] {
+function potentialSessions(items: Map<string, ItemAgg>, count = 10): PotentialItem[] {
   const all = [...items.values()];
   const spend = all.reduce((s, it) => s + it.sums.spend, 0);
   const gmv = all.reduce((s, it) => s + it.sums.gmv, 0);
   const channelRoas = spend > 0 ? gmv / spend : 0;
   return all
     .filter((it) => it.sums.orders > 0 && it.sums.spend > 0 && it.sums.gmv / it.sums.spend >= channelRoas)
-    .map((it) => {
-      const roas = it.sums.gmv / it.sums.spend;
-      const spendShare = spend > 0 ? (it.sums.spend / spend) * 100 : 0;
-      const note = kind === 'group'
-        ? stopped.has(it.key)
-          ? 'Grup sudah berhenti padahal ROAS di atas rata-rata — pertimbangkan aktifkan lagi'
-          : spendShare < 100 / Math.max(all.length, 1) ? 'ROAS di atas rata-rata, biaya masih kecil — kandidat naikkan budget' : 'ROAS di atas rata-rata — pertahankan'
-        : 'Sesi dengan ROAS di atas rata-rata — ulangi jam & format ini';
-      return { key: it.key, name: it.name, gmv: it.sums.gmv, spend: it.sums.spend, roas, orders: it.sums.orders, spendShare, note };
-    })
+    .map((it) => ({
+      key: it.key,
+      name: it.name,
+      gmv: it.sums.gmv,
+      spend: it.sums.spend,
+      roas: it.sums.gmv / it.sums.spend,
+      orders: it.sums.orders,
+      spendShare: spend > 0 ? (it.sums.spend / spend) * 100 : 0,
+      note: 'Sesi dengan ROAS di atas rata-rata — ulangi jam & format ini',
+    }))
     .sort((a, b) => b.roas - a.roas || b.gmv - a.gmv)
     .slice(0, count);
 }
 
 // ── Channel report ───────────────────────────────────────────────────────
 
-const PRODUK_TRAFFIC: readonly ChannelMetricDef[] = [
-  { key: 'impressions', label: 'Impressions', fmt: 'num', sentiment: 'higher-better', get: (s) => s.impressions },
+const AD_TRAFFIC: readonly ChannelMetricDef[] = [
   { key: 'clicks', label: 'Clicks', fmt: 'num', sentiment: 'higher-better', get: (s) => s.clicks },
+  { key: 'impressions', label: 'Impressions', fmt: 'num', sentiment: 'higher-better', get: (s) => s.impressions },
   { key: 'ctr', label: 'CTR', fmt: 'pct', sentiment: 'higher-better', get: derived.ctr },
 ];
-const PRODUK_CONVERSION: readonly ChannelMetricDef[] = [
-  { key: 'atcRate', label: 'Klik → ATC', fmt: 'pct', sentiment: 'higher-better', get: derived.atcRate },
-  { key: 'orders', label: 'Konversi', fmt: 'num', sentiment: 'higher-better', get: (s) => s.orders },
+// Conversion Rate = Purchases ÷ Clicks, split into its two steps: Clicks →
+// ATC (ATC Rate) and ATC → Purchase (Purchase Rate).
+const AD_CONVERSION: readonly ChannelMetricDef[] = [
   { key: 'cr', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.cr },
-  { key: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better', get: derived.roas },
+  { key: 'atcRate', label: 'ATC Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.atcRate },
+  { key: 'purchaseRate', label: 'Purchase Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.purchaseRate },
 ];
+// Shop+ exports carry no Add-to-Cart, so Shop+ reads conversion by count,
+// rate and return instead of the ATC steps.
 const TOKO_CONVERSION: readonly ChannelMetricDef[] = [
   { key: 'orders', label: 'Konversi', fmt: 'num', sentiment: 'higher-better', get: (s) => s.orders },
   { key: 'cr', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.cr },
@@ -370,8 +390,65 @@ export interface ChannelAnalysis {
   conversion: { rankings: ChannelMetricRanking[]; hasOld: boolean };
   pareto: ParetoRow[];
   potentialItems: PotentialItem[];
-  // Shop+ only: every ad group of both periods, side by side.
+  // Shop+ only: every ad group of both periods, side by side, and its keywords.
   groups?: ShopPlusGroup[];
+  keywords?: ShopPlusKeywords;
+}
+
+// Shop+ keywords ("Keyword Level Data"). `all` ranks each keyword summed over
+// every campaign it runs in; `byCampaign` ranks each keyword inside its own
+// campaign (Nama Iklan), for a chart filtered to one campaign.
+export interface ShopPlusKeywordRankings {
+  all: ChannelMetricRanking[];
+  byCampaign: ChannelMetricRanking[];
+  hasOld: boolean;
+}
+export interface ShopPlusKeywords {
+  hasData: boolean;
+  campaigns: string[];
+  campaignOf: Record<string, string>; // byCampaign item key → campaign name
+  traffic: ShopPlusKeywordRankings;
+  conversion: ShopPlusKeywordRankings;
+}
+
+const keywordOnly = (r: SheetRow, h: Map<string, string>) => {
+  const kw = cell(r, h, 'kata pencarian');
+  return kw ? { key: kw.toLowerCase(), name: kw } : null;
+};
+const campaignKeyword = (r: SheetRow, h: Map<string, string>) => {
+  const campaign = cell(r, h, 'nama iklan');
+  const kw = cell(r, h, 'kata pencarian');
+  return campaign && kw ? { key: `${campaign.toLowerCase()}\u0000${kw.toLowerCase()}`, name: kw } : null;
+};
+
+function buildShopPlusKeywords(oldRows: SheetRow[], curRows: SheetRow[], defsTraffic: readonly ChannelMetricDef[], defsConversion: readonly ChannelMetricDef[]): ShopPlusKeywords {
+  const allOld = aggregate(oldRows, keywordOnly);
+  const allCur = aggregate(curRows, keywordOnly);
+  const pairOld = aggregate(oldRows, campaignKeyword);
+  const pairCur = aggregate(curRows, campaignKeyword);
+  const campaignOf: Record<string, string> = {};
+  const h = headerMap(curRows);
+  for (const r of curRows) {
+    const id = campaignKeyword(r, h);
+    if (id) campaignOf[id.key] = cell(r, h, 'nama iklan');
+  }
+  // Campaigns in this period's order of spend, biggest first.
+  const spendBy = new Map<string, number>();
+  for (const it of pairCur.values()) {
+    const c = campaignOf[it.key];
+    spendBy.set(c, (spendBy.get(c) ?? 0) + it.sums.spend);
+  }
+  const rank = (defs: readonly ChannelMetricDef[]): ShopPlusKeywordRankings => {
+    const all = rankItems(allOld, allCur, defs);
+    return { all: all.rankings, byCampaign: rankItems(pairOld, pairCur, defs).rankings, hasOld: all.hasOld };
+  };
+  return {
+    hasData: allCur.size > 0,
+    campaigns: [...spendBy.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c),
+    campaignOf,
+    traffic: rank(defsTraffic),
+    conversion: rank(defsConversion),
+  };
 }
 
 export interface ShopeeChannelInput {
@@ -391,7 +468,6 @@ export function buildChannelAnalyses(input: ShopeeChannelInput): ChannelAnalysis
   const tokoOldItems = aggregate(input.tokoOld, adKey);
   const tokoCurItems = aggregate(input.tokoCur, adKey);
   const groups = buildShopPlusGroups(input.tokoOld, input.tokoCur);
-  const stoppedGroups = new Set(groups.filter((g) => /berakhir|dijeda|berhenti/i.test(g.status)).map((g) => g.key));
   const liveOld = aggregate(input.liveOld, adKey);
   const liveCur = aggregate(input.liveCur, adKey);
 
@@ -408,8 +484,8 @@ export function buildChannelAnalyses(input: ShopeeChannelInput): ChannelAnalysis
       key: 'produk', label: 'Product Ads', itemLabel: 'Produk',
       source: 'Data Keseluruhan Iklan + Iklan Produk Otomatis',
       hasData: has(produkTotals), totals: produkTotals,
-      traffic: rankItems(produkOld, produkCur, PRODUK_TRAFFIC),
-      conversion: rankItems(produkOld, produkCur, PRODUK_CONVERSION),
+      traffic: rankItems(produkOld, produkCur, AD_TRAFFIC),
+      conversion: rankItems(produkOld, produkCur, AD_CONVERSION),
       pareto: paretoOf(produkCur, (s) => s.gmv),
       potentialItems: [],
     },
@@ -417,11 +493,13 @@ export function buildChannelAnalyses(input: ShopeeChannelInput): ChannelAnalysis
       key: 'toko', label: 'Shop+ Ads', itemLabel: 'Grup Iklan',
       source: 'Shop+ Ads Overall Data',
       hasData: has(tokoTotals), totals: tokoTotals,
-      traffic: rankItems(tokoOldItems, tokoCurItems, PRODUK_TRAFFIC),
+      traffic: rankItems(tokoOldItems, tokoCurItems, AD_TRAFFIC),
       conversion: rankItems(tokoOldItems, tokoCurItems, TOKO_CONVERSION),
-      pareto: paretoOf(tokoCurItems, (s) => s.gmv),
-      potentialItems: potentialItems(tokoCurItems, 'group', 10, stoppedGroups),
+      // Pareto reads keywords only — which search terms earn the revenue.
+      pareto: paretoOf(aggregate(input.tokoKeywordCur, keywordOnly), (s) => s.gmv),
+      potentialItems: [],
       groups,
+      keywords: buildShopPlusKeywords(input.tokoKeywordOld, input.tokoKeywordCur, AD_TRAFFIC, TOKO_CONVERSION),
     },
     {
       key: 'live', label: 'Live Ads', itemLabel: 'Sesi Live',
@@ -430,7 +508,7 @@ export function buildChannelAnalyses(input: ShopeeChannelInput): ChannelAnalysis
       traffic: rankItems(liveOld, liveCur, LIVE_TRAFFIC),
       conversion: rankItems(liveOld, liveCur, LIVE_CONVERSION),
       pareto: paretoOf(liveCur, (s) => s.gmv),
-      potentialItems: potentialItems(liveCur, 'session'),
+      potentialItems: potentialSessions(liveCur),
     },
     {
       key: 'banner', label: 'Banner Ads', itemLabel: 'Banner',
@@ -511,7 +589,7 @@ export function buildShopPlusGroups(oldRows: SheetRow[], curRows: SheetRow[]): S
       const id = adKey(r, h);
       if (!id) continue;
       const prev = out.get(id.key);
-      out.set(id.key, { row: prev?.row ?? r, h, sums: prev ? add(prev.sums, rowSums(r, h)) : rowSums(r, h) });
+      out.set(id.key, { row: prev?.row ?? r, h, sums: prev ? addItemSums(prev.sums, rowSums(r, h)) : rowSums(r, h) });
     }
     return out;
   };

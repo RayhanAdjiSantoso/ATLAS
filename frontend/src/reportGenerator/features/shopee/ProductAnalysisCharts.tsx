@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GroupedBarChart } from '../../components/GroupedBarChart';
+import { SearchSelect } from '../../components/SearchSelect';
 import { SegmentedToggle, type SegmentedOption } from '../../components/SegmentedToggle';
 import { formatMonth } from '../reports/LibraryFileSlot';
 import { rankProductPoints, type ChartDirection, type ParetoRangeSelection, type ProductChartGroupDef, type ProductChartPoint } from '../../lib/shopeeProductAnalysis';
@@ -13,50 +14,46 @@ const PARETO_MODES: readonly SegmentedOption<ParetoRangeSelection['mode']>[] = [
   { value: 'single', label: 'Satu Bulan' },
 ];
 
+// One month picker of the control: a quiet label beside the shared select.
+function MonthField({ label, value, months, onChange }: { label: string; value: string | null; months: string[]; onChange: (month: string) => void }) {
+  return (
+    <div className="pr-field">
+      <span className="seg-toggle-label">{label}</span>
+      <div className="pr-select">
+        <SearchSelect
+          options={months.map((m) => ({ id: m, name: formatMonth(m) }))}
+          value={value && months.includes(value) ? value : null}
+          onChange={(id) => onChange(String(id))}
+          placeholder="Pilih bulan"
+          searchable={months.length > 8}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function ParetoRangeControl({ range, months, onChange }: { range: ParetoRangeSelection; months: string[]; onChange: (next: ParetoRangeSelection) => void }) {
   if (months.length < 2) return null; // nothing to narrow down with 0-1 month uploaded
+  // Months newest first — the recent ones are what people pick.
+  const list = [...months].reverse();
+  const latest = list[0];
   return (
     <div className="chart-controls">
-      <SegmentedToggle label="Cakupan" options={PARETO_MODES} value={range.mode} onChange={(mode) => onChange({ ...range, mode })} accent="var(--shopee-700)" />
+      <SegmentedToggle
+        label="Cakupan"
+        options={PARETO_MODES}
+        value={range.mode}
+        // A freshly opened picker lands on the newest month, not on an empty choice.
+        onChange={(mode) => onChange({ ...range, mode, single: range.single ?? latest, start: range.start ?? latest, end: range.end ?? latest })}
+        accent="var(--shopee-700)"
+      />
       {range.mode === 'range' && (
         <>
-          <label style={{ display: 'inline-flex', flexDirection: 'column', gap: '.2rem', fontSize: '.68rem', fontWeight: 600, color: 'var(--muted)' }}>
-            Bulan Awal
-            <select className="custom-col-select" value={range.start ?? ''} onChange={(e) => onChange({ ...range, start: e.target.value || null })}>
-              <option value="">— pilih —</option>
-              {months.map((m) => (
-                <option key={m} value={m}>
-                  {formatMonth(m)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: 'inline-flex', flexDirection: 'column', gap: '.2rem', fontSize: '.68rem', fontWeight: 600, color: 'var(--muted)' }}>
-            Bulan Akhir
-            <select className="custom-col-select" value={range.end ?? ''} onChange={(e) => onChange({ ...range, end: e.target.value || null })}>
-              <option value="">— pilih —</option>
-              {months.map((m) => (
-                <option key={m} value={m}>
-                  {formatMonth(m)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <MonthField label="Dari" value={range.start} months={list} onChange={(start) => onChange({ ...range, start })} />
+          <MonthField label="Sampai" value={range.end} months={list} onChange={(end) => onChange({ ...range, end })} />
         </>
       )}
-      {range.mode === 'single' && (
-        <label style={{ display: 'inline-flex', flexDirection: 'column', gap: '.2rem', fontSize: '.68rem', fontWeight: 600, color: 'var(--muted)' }}>
-          Bulan
-          <select className="custom-col-select" value={range.single ?? ''} onChange={(e) => onChange({ ...range, single: e.target.value || null })}>
-            <option value="">— pilih —</option>
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {formatMonth(m)}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      {range.mode === 'single' && <MonthField label="Bulan" value={range.single} months={list} onChange={(single) => onChange({ ...range, single })} />}
     </div>
   );
 }

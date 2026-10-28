@@ -1,4 +1,5 @@
 import { Chart, type ChartDataset, type TooltipItem } from 'chart.js/auto';
+import { flatCategoryTicks } from './flatTicks';
 import { getRelativePosition } from 'chart.js/helpers';
 import { useEffect, useRef, useState } from 'react';
 import { copyText } from '../utils/copyText';
@@ -20,10 +21,6 @@ export interface BarSeries {
 }
 
 const INTER = "'Inter', system-ui, sans-serif";
-
-function truncate(s: string, max = 22): string {
-  return s.length <= max ? s : s.slice(0, max - 1).trimEnd() + '…';
-}
 
 export function GroupedBarChart({
   labels,
@@ -76,7 +73,7 @@ export function GroupedBarChart({
 
     chartRef.current = new Chart(el, {
       type: 'bar',
-      data: { labels: (tickLabels ?? labels).map((l) => truncate(l, tickLabels ? 26 : 22)), datasets },
+      data: { labels: tickLabels ?? labels, datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -111,7 +108,7 @@ export function GroupedBarChart({
           x: {
             grid: { display: false },
             border: { color: '#dde2ee' },
-            ticks: { font: { family: INTER, size: 11, weight: 600 }, color: '#5a6a90', maxRotation: 42, minRotation: 0, autoSkip: false },
+            ticks: { font: { family: INTER, size: 11, weight: 600 }, color: '#5a6a90', ...flatCategoryTicks(tickLabels ?? labels) },
           },
           y: {
             grid: { color: '#eef1f7' },
