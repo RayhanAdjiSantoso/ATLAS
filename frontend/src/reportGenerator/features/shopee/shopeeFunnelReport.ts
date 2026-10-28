@@ -1,5 +1,6 @@
 import {
   addFunnelChannelSums,
+  atcCoverageNote,
   blankAtcRows,
   buildFunnelTree,
   buildFunnelValues,
@@ -120,6 +121,8 @@ export interface ChannelFunnel {
   values: FunnelValueRow[];
   tree: FunnelTreeRow[];
   symptom: SymptomSummary;
+  // Reminder that the ATC steps cover only part of the traffic; null when exact.
+  atcNote: string | null;
 }
 
 export interface ShopeeFunnelReport {
@@ -129,6 +132,9 @@ export interface ShopeeFunnelReport {
   channels: ChannelFunnel[];
   // Plain-language read of the funnel movement (headline + points + verdict).
   symptom: SymptomSummary;
+  // Reminder under Fundamental Analysis when ATC covers only part of the
+  // traffic (the auto campaign and Shop+ report none); null when exact.
+  atcNote: string | null;
   // Current-period spend/GMV per ad channel (only channels with data).
   channelMix: ChannelMixEntry[];
   // Iklan Live GMV, shown as a footnote outside the funnel tree (Live has no
@@ -221,6 +227,7 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
       values: hasAtc ? values : blankAtcRows(values),
       tree: hasAtc ? tree : blankAtcRows(tree),
       symptom: extraPoint ? { ...symptom, points: [...symptom.points, extraPoint] } : symptom,
+      atcNote: atcCoverageNote(so, sc, 'Iklan Produk Otomatis dan iklan yang menulis "-" di kolom ATC'),
     };
   };
   const channelAnalyses = buildChannelAnalyses({
@@ -246,6 +253,7 @@ export function buildShopeeFunnelReport(input: BuildShopeeFunnelReportInput): Sh
     tree: buildFunnelTree(mOld, mCur),
     channels,
     symptom: buildSymptomSummary(mOld, mCur),
+    atcNote: atcCoverageNote(sumsOld, sumsCur, 'Iklan Produk Otomatis, Shop+ Ads, dan iklan yang menulis "-" di kolom ATC'),
     channelMix: channelMix.filter((e) => e.spend > 0 || e.gmv > 0),
     liveGmv: { old: liveOldGmv, cur: liveCurGmv, hasData: liveOldGmv > 0 || liveCurGmv > 0 },
     pareto: buildPareto(paretoRecords),

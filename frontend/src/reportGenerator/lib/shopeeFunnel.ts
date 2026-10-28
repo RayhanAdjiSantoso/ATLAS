@@ -51,10 +51,28 @@ export interface FunnelChannelSums {
   itemsSold: number; // Produk Terjual
   gmv: number; // Omzet Penjualan (revenue attributed to ads)
   spend: number; // Biaya
+  // Clicks of the rows that report Add to Cart. The auto campaign's file has
+  // no ATC column and some ads print "-", yet their clicks and purchases
+  // still count in the ATC steps (the reference workbook does the same);
+  // this says how much of the traffic the ATC figure actually covers. Once
+  // an export reports ATC on every row it equals `clicks` and the steps are
+  // exact, with nothing to change here.
+  atcClicks: number;
+}
+
+function sumAtcClicks(rows: SheetRow[]): number {
+  const atcCol = exactCol(rows, 'Tambah ke Keranjang');
+  const clickCol = exactCol(rows, 'Jumlah Klik');
+  if (!atcCol || !clickCol) return 0;
+  return rows.reduce((s, r) => {
+    const raw = String(r[atcCol] ?? '').trim();
+    return raw === '' || raw === '-' ? s : s + parseShopeeNum(r[clickCol]);
+  }, 0);
 }
 
 export function sumFunnelChannel(rows: SheetRow[]): FunnelChannelSums {
   return {
+    atcClicks: sumAtcClicks(rows),
     impressions: sumExact(rows, 'Dilihat'),
     clicks: sumExact(rows, 'Jumlah Klik'),
     addToCart: sumExact(rows, 'Tambah ke Keranjang'),
@@ -75,8 +93,9 @@ export function addFunnelChannelSums(...parts: FunnelChannelSums[]): FunnelChann
       itemsSold: acc.itemsSold + p.itemsSold,
       gmv: acc.gmv + p.gmv,
       spend: acc.spend + p.spend,
+      atcClicks: acc.atcClicks + p.atcClicks,
     }),
-    { impressions: 0, clicks: 0, addToCart: 0, purchases: 0, itemsSold: 0, gmv: 0, spend: 0 },
+    { impressions: 0, clicks: 0, addToCart: 0, purchases: 0, itemsSold: 0, gmv: 0, spend: 0, atcClicks: 0 },
   );
 }
 
@@ -291,4 +310,23 @@ const ATC_KEYS = new Set(['addToCart', 'clicksToAtcRate', 'cpAtc', 'atcToPurchas
 
 export function blankAtcRows<T extends FunnelValueRow | FunnelTreeRow>(rows: T[]): T[] {
   return rows.map((r) => (ATC_KEYS.has(r.key) || ATC_KEYS.has(r.key.split('.')[0]) ? { ...r, na: true, deltaNum: null, delta: '—', cls: 'delta-neutral' as DeltaClassName } : r));
+}
+
+// The reminder under a funnel whose ATC covers only part of its traffic:
+// Add to Cart Rate and Purchase Rate divide every ad's clicks and purchases
+// by the Add to Cart only some ads report. Null when there is no ATC at all
+// (those nodes are hidden) or when every clicking row reports it.
+export function atcCoverageNote(o: FunnelChannelSums, c: FunnelChannelSums, missing: string): string | null {
+  if (o.addToCart + c.addToCart <= 0) return null;
+  const cover = (s: FunnelChannelSums) => (s.clicks > 0 ? (s.atcClicks / s.clicks) * 100 : 100);
+  const co = cover(o);
+  const cc = cover(c);
+  if (co >= 99.5 && cc >= 99.5) return null;
+  const pct = (v: number) => `${v.toLocaleString('id-ID', { maximumFractionDigits: 0 })}%`;
+  return (
+    `Add to Cart Rate dan Purchase Rate memakai Clicks dan Purchases dari semua iklan, dibagi Add to Cart yang hanya dilaporkan sebagian iklan — ` +
+    `${missing} belum mencantumkan Add to Cart di export Shopee. Karena itu Add to Cart Rate cenderung lebih rendah dan Purchase Rate bisa di atas 100%. ` +
+    `Iklan yang melaporkan Add to Cart mencakup ${pct(cc)} klik periode ini (periode lalu ${pct(co)}). ` +
+    `Begitu export menyertakan Add to Cart, kedua angka ini otomatis akurat.`
+  );
 }

@@ -166,7 +166,7 @@ export function ShopeeReportSections({
         <SectionAccordion iconFor={sectionIcon}>
           {funnelReport && <RoiRootSection root={funnelReport.roiRoot} p1={p1} p2={p2} />}
           {funnelReport && (
-            <FundamentalAnalysisSection values={funnelReport.values} liveGmv={funnelReport.liveGmv} tree={funnelReport.tree} symptom={funnelReport.symptom} p1={p1} p2={p2} />
+            <FundamentalAnalysisSection values={funnelReport.values} atcNote={funnelReport.atcNote} liveGmv={funnelReport.liveGmv} tree={funnelReport.tree} symptom={funnelReport.symptom} p1={p1} p2={p2} />
           )}
           {funnelReport && funnelReport.channelMix.length > 0 && <ChannelContributionSection mix={funnelReport.channelMix} periodLabel={p2} />}
           {funnelReport && (
@@ -216,7 +216,7 @@ export function ShopeeReportSections({
         <SectionAccordion iconFor={sectionIcon}>
           <ChannelPivotSection
             title="Product Ads" badge="Iklan Produk + Iklan Produk Otomatis" rows={deepDive.produk} p1={p1} p2={p2}
-            values={channelFunnel('produk')?.values} tree={channelFunnel('produk')?.tree} symptom={channelFunnel('produk')?.symptom}
+            values={channelFunnel('produk')?.values} tree={channelFunnel('produk')?.tree} symptom={channelFunnel('produk')?.symptom} atcNote={channelFunnel('produk')?.atcNote}
           />
           {funnelReport?.produkSplit && <ProductAdsSplitSection split={funnelReport.produkSplit} p1={p1} p2={p2} />}
           {channelReads(produk)}
@@ -242,7 +242,7 @@ export function ShopeeReportSections({
         <SectionAccordion iconFor={sectionIcon}>
           <ChannelPivotSection
             title="Shop+ Ads" badge="Shop+ Ads Overall Data" rows={deepDive.toko} p1={p1} p2={p2}
-            values={channelFunnel('toko')?.values} tree={channelFunnel('toko')?.tree} symptom={channelFunnel('toko')?.symptom}
+            values={channelFunnel('toko')?.values} tree={channelFunnel('toko')?.tree} symptom={channelFunnel('toko')?.symptom} atcNote={channelFunnel('toko')?.atcNote}
           />
           {toko?.groups && <ShopPlusGroupsSection groups={toko.groups} p1={p1} p2={p2} />}
           {channelReads(toko)}
@@ -259,7 +259,7 @@ export function ShopeeReportSections({
         <SectionAccordion iconFor={sectionIcon}>
           <ChannelPivotSection
             title="Live Ads" badge="Penonton-based" rows={deepDive.live} p1={p1} p2={p2}
-            values={channelFunnel('live')?.values} tree={channelFunnel('live')?.tree} symptom={channelFunnel('live')?.symptom}
+            values={channelFunnel('live')?.values} tree={channelFunnel('live')?.tree} symptom={channelFunnel('live')?.symptom} atcNote={channelFunnel('live')?.atcNote}
           />
           {channelReads(live)}
           {live && <PotentialItemsSection items={live.potentialItems} itemLabel={live.itemLabel} channelLabel={live.label} periodLabel={p2} />}

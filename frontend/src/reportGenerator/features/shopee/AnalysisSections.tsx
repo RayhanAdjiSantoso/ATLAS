@@ -330,6 +330,7 @@ function FundamentalValuesTable({ values: allValues, p1, p2 }: { values: FunnelV
 
 export function FundamentalAnalysisSection({
   values,
+  atcNote,
   liveGmv,
   tree,
   symptom,
@@ -337,6 +338,7 @@ export function FundamentalAnalysisSection({
   p2,
 }: {
   values: FunnelValueRow[];
+  atcNote?: string | null;
   liveGmv: { old: number; cur: number; hasData: boolean };
   // The account-level funnel tree and its plain-language read. The read sits
   // under this section's own table, the same place every channel's read sits
@@ -364,11 +366,11 @@ export function FundamentalAnalysisSection({
         {symptom && <SymptomSummaryPanel summary={symptom} />}
 
       </div>
-      <div className="empty-note" style={{ padding: '.9rem 1.4rem 0' }}>
-        <strong>Catatan ATC:</strong> "Tambah ke Keranjang" hanya dilaporkan oleh Iklan Produk (Iklan Toko tidak punya kolomnya). Node
-        "Clicks → ATC Rate" &amp; "ATC → Purchase Rate" memakai ATC dari Iklan Produk saja, sementara penyebutnya (Clicks) tetap gabungan
-        Produk + Toko — sama seperti report manual, dan menjaga identitas CVR = ClicksATC × ATCPurchase tetap konsisten.
-      </div>
+      {atcNote && (
+        <div className="empty-note" style={{ padding: '.9rem 1.4rem 0' }}>
+          <strong>Catatan ATC:</strong> {atcNote}
+        </div>
+      )}
       {liveGmv.hasData ? (
         <div className="empty-note" style={{ padding: '.4rem 1.4rem 1.3rem' }}>
           <strong>Iklan Live (di luar funnel):</strong> GMV {fmtPivotVal(liveGmv.old, 'rp')} → {fmtPivotVal(liveGmv.cur, 'rp')}. Iklan Live

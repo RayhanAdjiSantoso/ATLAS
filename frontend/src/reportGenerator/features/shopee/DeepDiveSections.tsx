@@ -37,6 +37,7 @@ export function ChannelPivotSection({
   p2,
   tree,
   symptom,
+  atcNote,
 }: {
   title: string;
   badge: string;
@@ -52,6 +53,8 @@ export function ChannelPivotSection({
   // tree can't tell you whether a drop came from Produk or Toko.
   tree?: FunnelTreeRow[];
   symptom?: SymptomSummary;
+  // Reminder that the ATC steps cover only part of the traffic.
+  atcNote?: string | null;
 }) {
   const kpiRows: KpiRowDisplay[] = values
     ? values.filter((v) => !v.na).map((v) => ({ id: v.key, label: v.label, old: fmtPivotVal(v.oldNum, v.fmt), cur: fmtPivotVal(v.curNum, v.fmt), delta: v.delta, cls: v.cls }))
@@ -74,6 +77,11 @@ export function ChannelPivotSection({
           {symptom && (
             <div style={{ padding: '1.3rem 1.4rem 1.2rem' }}>
               <SymptomSummaryPanel summary={symptom} />
+            </div>
+          )}
+          {atcNote && (
+            <div className="empty-note" style={{ padding: symptom ? '0 1.4rem 1.3rem' : '1rem 1.4rem 1.3rem' }}>
+              <strong>Catatan ATC:</strong> {atcNote}
             </div>
           )}
         </>
