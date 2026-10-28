@@ -8,7 +8,7 @@ import type { DailyTrendMetricSelection } from '../../lib/shopeeDeepDiveInsights
 import type { MetricSelection } from '../../lib/shopeeDeepDiveItemPivot';
 import type { ParetoRangeSelection, PerfMetricVars } from '../../lib/shopeeProductAnalysis';
 import { ChannelPivotSection, DailyTrendSection, ItemPivotSection } from './DeepDiveSections';
-import { FundamentalAnalysisSection, ParetoAnalysisSection, ProductRankingSection, RankingChart, ShopPlusRankingCharts } from './AnalysisSections';
+import { FundamentalAnalysisSection, ParetoAnalysisSection, ProductRankingSection, RankingChart, ShopPlusReadSection } from './AnalysisSections';
 import { ProductChangeChart } from './ProductAnalysisCharts';
 import { ChannelEmptySection, ChannelParetoSection, PotentialItemsSection, ProductAdsSplitSection, RoiRootSection, ShopPlusGroupsSection, UncategorizedNote, UnadvertisedProductsSection } from './ChannelAnalysisSections';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
@@ -95,35 +95,39 @@ export function ShopeeReportSections({
 
   // Traffic, Conversion and Pareto of one channel, read off its own export —
   // each one section, its chart above its table. Live sessions never repeat
-  // across periods, so they rank without a %Change column. Shop+ draws two
-  // charts per read (per campaign and per keyword) and its Pareto ranks
-  // keywords, not campaigns.
+  // across periods, so they rank without a %Change column. Shop+ reads each
+  // twice — per campaign, then per keyword, chart above table — and its
+  // Pareto ranks keywords, not campaigns.
   const channelReads = (a: ChannelAnalysis | undefined) => {
     if (!a) return [];
     const oldMissing = <>Tidak ada {a.itemLabel.toLowerCase()} yang sama di periode lalu — ranking ditampilkan tanpa kolom %Perubahan.</>;
     // Shop+ bars wear the Shopee orange like Product Ads; Live keeps its own hue.
     const color = a.key === 'toko' ? '#c93b1c' : SHOPEE_CHANNELS.find((c) => c.key === a.key)?.color ?? 'var(--shopee)';
     const kw = a.keywords;
-    const chart = (r: ChannelAnalysis['traffic'], read: 'traffic' | 'conversion') =>
-      a.key === 'toko' ? (
-        <ShopPlusRankingCharts
-          rankings={r.rankings} hasOld={r.hasOld} keywords={kw?.hasData ? kw[read] : null}
-          campaigns={kw?.campaigns ?? []} campaignOf={kw?.campaignOf ?? {}} p1={p1} p2={p2} color={color}
+    const read = (id: 'traffic' | 'conversion', title: string) => {
+      const r = a[id];
+      if (a.key === 'toko') {
+        return (
+          <ShopPlusReadSection
+            key={id} title={title} badge={`${a.label} · per campaign & per keyword`}
+            rankings={r.rankings} hasOld={r.hasOld} keywords={kw?.hasData ? kw[id] : null}
+            campaigns={kw?.campaigns ?? []} campaignOf={kw?.campaignOf ?? {}} p1={p1} p2={p2} color={color}
+            emptyText={`Belum ada data ${a.label} periode ini.`}
+          />
+        );
+      }
+      return (
+        <ProductRankingSection
+          key={id} title={title} badge={`${a.label} · ${a.source}`} itemLabel={a.itemLabel}
+          rankings={r.rankings} hasCur={r.rankings[0]?.rows.length > 0} hasOld={r.hasOld}
+          emptyText={`Belum ada data ${a.label} periode ini.`} oldMissingText={oldMissing} p1={p1} p2={p2}
+          chart={<RankingChart rankings={r.rankings} hasOld={r.hasOld} p1={p1} p2={p2} itemLabel={a.itemLabel} color={color} />}
         />
-      ) : (
-        <RankingChart rankings={r.rankings} hasOld={r.hasOld} p1={p1} p2={p2} itemLabel={a.itemLabel} color={color} />
       );
+    };
     return [
-      <ProductRankingSection
-        key="traffic" title="Traffic Analysis" badge={`${a.label} · ${a.source}`} itemLabel={a.itemLabel}
-        rankings={a.traffic.rankings} hasCur={a.traffic.rankings[0]?.rows.length > 0} hasOld={a.traffic.hasOld}
-        emptyText={`Belum ada data ${a.label} periode ini.`} oldMissingText={oldMissing} p1={p1} p2={p2} chart={chart(a.traffic, 'traffic')}
-      />,
-      <ProductRankingSection
-        key="conversion" title="Conversion Analysis" badge={`${a.label} · ${a.source}`} itemLabel={a.itemLabel}
-        rankings={a.conversion.rankings} hasCur={a.conversion.rankings[0]?.rows.length > 0} hasOld={a.conversion.hasOld}
-        emptyText={`Belum ada data ${a.label} periode ini.`} oldMissingText={oldMissing} p1={p1} p2={p2} chart={chart(a.conversion, 'conversion')}
-      />,
+      read('traffic', 'Traffic Analysis'),
+      read('conversion', 'Conversion Analysis'),
       a.key === 'toko' ? (
         <ChannelParetoSection
           key="pareto" rows={a.pareto} itemLabel="Keyword" channelLabel={a.label} periodLabel={p2} countToggle

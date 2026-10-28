@@ -54,7 +54,7 @@ export function ChannelPivotSection({
   symptom?: SymptomSummary;
 }) {
   const kpiRows: KpiRowDisplay[] = values
-    ? values.map((v) => ({ id: v.key, label: v.label, old: v.na ? '—' : fmtPivotVal(v.oldNum, v.fmt), cur: v.na ? '—' : fmtPivotVal(v.curNum, v.fmt), delta: v.delta, cls: v.cls }))
+    ? values.filter((v) => !v.na).map((v) => ({ id: v.key, label: v.label, old: fmtPivotVal(v.oldNum, v.fmt), cur: fmtPivotVal(v.curNum, v.fmt), delta: v.delta, cls: v.cls }))
     : rows.map((r) => ({ id: r.key, label: r.label, old: r.old, cur: r.cur, delta: r.delta, cls: r.cls }));
   const table = (
     <KpiTable rows={kpiRows} p1={p1} p2={p2} emptyMessage="Semua metrik disembunyikan — pilih dari '+ Tambah metrik' untuk menampilkannya kembali." padded />

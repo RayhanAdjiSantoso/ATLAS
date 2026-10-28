@@ -2,8 +2,8 @@ import type { ShopPlusGroup } from './shopeeChannelAnalysis';
 
 // ══════════════════════════════════════════════════════
 // SHOPEE — Shop+ Ads (Iklan Toko). Its table and root cause use the same
-// funnel as Product Ads (shopeeFunnelReport.ts), with the Add-to-Cart rows
-// left blank: neither Shop+ export has the column. What the funnel cannot say
+// funnel as Product Ads (shopeeFunnelReport.ts); its Add-to-Cart rows are
+// left out while neither Shop+ export has the column. What the funnel cannot say
 // for Shop+ is what its ad groups did — that is added to the read here.
 // ══════════════════════════════════════════════════════
 

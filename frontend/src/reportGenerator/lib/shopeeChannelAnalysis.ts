@@ -366,7 +366,7 @@ const AD_CONVERSION: readonly ChannelMetricDef[] = [
 // Shop+ exports carry no Add-to-Cart, so Shop+ reads conversion by count,
 // rate and return instead of the ATC steps.
 const TOKO_CONVERSION: readonly ChannelMetricDef[] = [
-  { key: 'orders', label: 'Konversi', fmt: 'num', sentiment: 'higher-better', get: (s) => s.orders },
+  { key: 'orders', label: 'Conversion', fmt: 'num', sentiment: 'higher-better', get: (s) => s.orders },
   { key: 'cr', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.cr },
   { key: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better', get: derived.roas },
 ];

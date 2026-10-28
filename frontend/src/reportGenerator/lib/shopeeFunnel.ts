@@ -275,8 +275,9 @@ export function buildFunnelTree(mOld: FunnelMetrics, mCur: FunnelMetrics): Funne
 }
 
 // The funnel values that need Add to Cart. A channel whose export has no ATC
-// column (Shop+) keeps these rows, blank, so its table lines up row for row
-// with Product Ads instead of reading as a different report.
+// column (Shop+) marks these rows `na`; tables and trees leave `na` rows out,
+// so they appear on their own — in Product Ads' layout — the day the export
+// carries the column.
 const ATC_KEYS = new Set(['addToCart', 'clicksToAtcRate', 'cpAtc', 'atcToPurchaseRate']);
 
 export function blankAtcRows<T extends FunnelValueRow | FunnelTreeRow>(rows: T[]): T[] {

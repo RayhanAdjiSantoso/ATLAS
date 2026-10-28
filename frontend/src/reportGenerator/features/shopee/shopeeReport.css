@@ -432,6 +432,7 @@
 .mil-ui.report-generator-app #report-shopee .rk-card-title small { color: var(--rs-quiet); font-size: .72rem; font-weight: 600; }
 .mil-ui.report-generator-app #report-shopee .rk-card-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .6rem 1rem; }
 .mil-ui.report-generator-app #report-shopee .rk-filter { width: 280px; }
+.mil-ui.report-generator-app #report-shopee .rk-card .chartbox + .chart-caption { margin-top: 1.1rem; }
 
 /* Tren Harian: a narrow day column, the metric columns sharing the rest. */
 .mil-ui.report-generator-app #report-shopee table.kpi-table.dt-trend { table-layout: fixed; width: 100%; }
