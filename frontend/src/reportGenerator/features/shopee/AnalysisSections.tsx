@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Megaphone, Search } from 'lucide-react';
 import { DeltaPill } from '../../components/DeltaPill';
 import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { ParetoChart } from '../../components/ParetoChart';
@@ -913,20 +914,34 @@ export function ShopPlusReadSection({
               </div>
             )}
             <div className="rk-duo">
-              <div className="rk-card">
+              <section className="rk-card" aria-label="Per Campaign">
                 <div className="rk-card-head">
                   <span className="rk-card-title">
-                    Per Campaign <small>Grup Iklan · Shop+ Ads Overall Data</small>
+                    <span className="rk-card-ico" aria-hidden="true">
+                      <Megaphone size={16} strokeWidth={2.2} />
+                    </span>
+                    <span className="rk-card-name">
+                      <strong>Per Campaign</strong>
+                      <small>Grup Iklan · Shop+ Ads Overall Data</small>
+                    </span>
                   </span>
                 </div>
-                {!hasOld && oldNote('campaign')}
-                <RankingBars ranking={ranking} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" color={color} height={280} />
-                <RankingTable rankings={rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" />
-              </div>
-              <div className="rk-card" data-feature="shopee-keyword-charts">
+                <div className="rk-card-body">
+                  {!hasOld && oldNote('campaign')}
+                  <RankingBars ranking={ranking} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" color={color} height={280} />
+                  <RankingTable rankings={rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" />
+                </div>
+              </section>
+              <section className="rk-card" aria-label="Per Keyword" data-feature="shopee-keyword-charts">
                 <div className="rk-card-head">
                   <span className="rk-card-title">
-                    Per Keyword <small>Iklan Toko - Keyword</small>
+                    <span className="rk-card-ico" aria-hidden="true">
+                      <Search size={16} strokeWidth={2.2} />
+                    </span>
+                    <span className="rk-card-name">
+                      <strong>Per Keyword</strong>
+                      <small>Iklan Toko - Keyword</small>
+                    </span>
                   </span>
                   {keywords && (
                     <div className="rk-card-tools">
@@ -944,18 +959,20 @@ export function ShopPlusReadSection({
                     </div>
                   )}
                 </div>
-                {!keywords || !kwRanking ? (
-                  <div className="empty-note">
-                    Upload file <strong>Iklan Toko - Keyword</strong> di Data Collection Hub untuk melihat analisis per keyword.
-                  </div>
-                ) : (
-                  <>
-                    {!keywords.hasOld && oldNote('keyword')}
-                    <RankingBars ranking={kwRanking} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" color={color} height={280} count={Number(count)} />
-                    <RankingTable rankings={kwRankings} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" />
-                  </>
-                )}
-              </div>
+                <div className="rk-card-body">
+                  {!keywords || !kwRanking ? (
+                    <div className="empty-note">
+                      Upload file <strong>Iklan Toko - Keyword</strong> di Data Collection Hub untuk melihat analisis per keyword.
+                    </div>
+                  ) : (
+                    <>
+                      {!keywords.hasOld && oldNote('keyword')}
+                      <RankingBars ranking={kwRanking} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" color={color} height={280} count={Number(count)} />
+                      <RankingTable rankings={kwRankings} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" />
+                    </>
+                  )}
+                </div>
+              </section>
             </div>
           </div>
         )}

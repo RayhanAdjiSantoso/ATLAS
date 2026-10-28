@@ -406,30 +406,43 @@
 .mil-ui.report-generator-app #report-shopee .pr-select { width: 190px; }
 
 /* Shop+ reads: the campaign chart and the keyword chart, one card each. */
-.mil-ui.report-generator-app #report-shopee .rk-duo { display: grid; gap: 1rem; }
+.mil-ui.report-generator-app #report-shopee .rk-duo { display: grid; gap: 1.6rem; }
+/* Each read is its own panel: a tinted head names it, the chart and its
+   table sit together in the body, and the gap between panels keeps the
+   campaign read and the keyword read apart. */
 .mil-ui.report-generator-app #report-shopee .rk-card {
-  padding: .95rem 1.1rem .8rem;
-  border: 1px solid #efe3de;
-  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #ecdcd5;
+  border-radius: 18px;
   background: #fff;
+  box-shadow: 0 1px 2px rgba(120, 40, 20, .05), 0 14px 30px -26px rgba(120, 40, 20, .45);
 }
 .mil-ui.report-generator-app #report-shopee .rk-card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  min-height: 2.25rem;
-  margin-bottom: .55rem;
+  gap: .7rem 1rem;
+  padding: .8rem 1.1rem;
+  border-bottom: 1px solid #f0e0d9;
+  background: linear-gradient(180deg, #fdf6f3, #fbefe9);
 }
-.mil-ui.report-generator-app #report-shopee .rk-card-title {
-  display: flex;
-  align-items: baseline;
-  gap: .55rem;
-  color: var(--rs-ink);
-  font-size: .9rem;
-  font-weight: 750;
+.mil-ui.report-generator-app #report-shopee .rk-card-title { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+.mil-ui.report-generator-app #report-shopee .rk-card-ico {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #b8341a, var(--rs-accent) 60%, #e0532c);
+  color: #fff;
+  box-shadow: 0 6px 14px -8px rgba(201, 59, 28, .9);
 }
-.mil-ui.report-generator-app #report-shopee .rk-card-title small { color: var(--rs-quiet); font-size: .72rem; font-weight: 600; }
+.mil-ui.report-generator-app #report-shopee .rk-card-name { display: grid; gap: .1rem; }
+.mil-ui.report-generator-app #report-shopee .rk-card-name strong { color: var(--rs-ink); font-size: .95rem; font-weight: 780; letter-spacing: -.01em; }
+.mil-ui.report-generator-app #report-shopee .rk-card-name small { color: var(--rs-quiet); font-size: .72rem; font-weight: 600; }
+.mil-ui.report-generator-app #report-shopee .rk-card-body { padding: 1rem 1.1rem 1.1rem; }
 .mil-ui.report-generator-app #report-shopee .rk-card-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .6rem 1rem; }
 .mil-ui.report-generator-app #report-shopee .rk-filter { width: 280px; }
 .mil-ui.report-generator-app #report-shopee .rk-card .chartbox + .chart-caption { margin-top: 1.1rem; }
