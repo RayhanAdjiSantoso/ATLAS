@@ -238,8 +238,8 @@ export const SALES_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>
 // Traffic Analysis by Audience (Retail, CPAS) also counts the visits each ad
 // set brought.
 export const SALES_AUDIENCE_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
-  ...SALES_TRAFFIC_METRICS,
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
+  ...SALES_TRAFFIC_METRICS,
 ];
 // Exactly the two metrics the sheet lists under each chart, in its order.
 export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
@@ -250,8 +250,8 @@ export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetri
 // funnel, then its two steps.
 export const RETAIL_AUDIENCE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
-  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
-  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
+  { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
 ];
 export const SALES_CLICK_ATC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
@@ -265,8 +265,8 @@ export const SALES_ATC_PURCHASE_METRICS: readonly AudienceMetricDef<MetaSalesMet
 // its two steps.
 export const SALES_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
-  { key: 'visitToAtcRate', label: 'Traffic → ATC Rate', fmt: 'pct', additive: false },
-  { key: 'atcToPurchaseRate', label: 'ATC → Purchase Rate', fmt: 'pct', additive: false },
+  { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
+  { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
 ];
 
 // Non-Boost B2B Leads: the purchase steps do not exist; the lead is the
@@ -374,8 +374,8 @@ export const B2B_TRAFFIC_METRICS: readonly B2bDef[] = [
 ];
 // Non Retail's Traffic Analysis by Audience also counts the link clicks.
 export const B2B_AUDIENCE_TRAFFIC_METRICS: readonly B2bDef[] = [
-  ...B2B_TRAFFIC_METRICS,
   { key: 'linkClicks', label: 'Link Clicks', fmt: 'num', additive: true },
+  ...B2B_TRAFFIC_METRICS,
 ];
 export const B2B_CONVERSION_METRICS: readonly B2bDef[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
