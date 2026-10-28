@@ -122,6 +122,10 @@ interface LibraryFileMeta {
   period_month: string | null;
   period_start: string | null;
   period_end: string | null;
+  // Change when a file is replaced in place (same id) — part of the cache key
+  // for the Pareto months below.
+  updated_at?: string;
+  byte_size?: number;
 }
 
 async function downloadLibraryFile(clientId: number, file: LibraryFileMeta): Promise<File> {
@@ -172,30 +176,53 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   // the newest month.
   const [productPerfFiles, setProductPerfFiles] = useState<Record<ProductPerformanceRole, ProductPerformanceFileState | null>>({ old: null, cur: null });
   // Every month's "Produk dengan Performa Terbaik" sheet already uploaded to
-  // this brand's library (independent of the old/cur slots above), fetched
-  // whenever the client changes. Feeds Pareto Analysis only — buildPareto
-  // sums Sales (Confirmed Order) per product across whichever months
-  // paretoRange below selects (default: the newer period's month).
+  // this brand's library (independent of the old/cur slots above), read when
+  // the client changes and again on every Generate — a file replaced in the
+  // library meanwhile is picked up without a page reload. Feeds Pareto
+  // Analysis only — buildPareto sums Sales (Confirmed Order) per product
+  // across whichever months paretoRange below selects (default: the newer
+  // period's month). Months whose sheet is empty (a failed Shopee export)
+  // are left out and named in `emptyPerfMonths`, so Pareto can say so.
   const [productPerfAllMonths, setProductPerfAllMonths] = useState<ProductPerfMonth[]>([]);
+  const [emptyPerfMonths, setEmptyPerfMonths] = useState<string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  // Parsed sheets by file id + version, so a re-read downloads only files
+  // that were added or replaced.
+  const perfSheetCache = useRef(new Map<string, SheetRow[]>());
+  async function loadPerfMonths(brandId: number): Promise<{ months: ProductPerfMonth[]; empty: string[] }> {
+    const { data } = await api.get(`/brands/${brandId}/library`);
+    const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'shopee' && f.channel === 'product_performance' && f.period_month);
+    const months: ProductPerfMonth[] = [];
+    const empty: string[] = [];
+    for (const f of files) {
+      const key = `${f.id}:${f.updated_at ?? ''}:${f.byte_size ?? ''}`;
+      let rows = perfSheetCache.current.get(key);
+      if (!rows) {
+        const { data: blob } = await api.get(`/brands/${brandId}/library/${f.id}/download`, { responseType: 'blob' });
+        const wb = XLSX.read(new Uint8Array(await (blob as Blob).arrayBuffer()), { type: 'array' });
+        const sheet = wb.Sheets['Produk dengan Performa Terbaik'];
+        rows = sheet ? XLSX.utils.sheet_to_json<SheetRow>(sheet, { defval: '' }) : [];
+        perfSheetCache.current.set(key, rows);
+      }
+      const month = f.period_month!.slice(0, 7);
+      if (rows.length) months.push({ month, rows });
+      else empty.push(month);
+    }
+    return { months, empty };
+  }
   // "Semua Bulan" by default — see ParetoRangeControl in the Pareto sections.
   const [paretoRange, setParetoRange] = useState<ParetoRangeSelection>(DEFAULT_PARETO_RANGE);
   useEffect(() => {
     setProductPerfAllMonths([]);
+    setEmptyPerfMonths([]);
     if (!clientId) return;
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await api.get(`/brands/${clientId}/library`);
-        const files = (data.files as LibraryFileMeta[]).filter((f) => f.platform === 'shopee' && f.channel === 'product_performance' && f.period_month);
-        const months: ProductPerfMonth[] = [];
-        for (const f of files) {
-          if (cancelled) return;
-          const { data: blob } = await api.get(`/brands/${clientId}/library/${f.id}/download`, { responseType: 'blob' });
-          const wb = XLSX.read(new Uint8Array(await (blob as Blob).arrayBuffer()), { type: 'array' });
-          const sheet = wb.Sheets['Produk dengan Performa Terbaik'];
-          if (sheet) months.push({ month: f.period_month!.slice(0, 7), rows: XLSX.utils.sheet_to_json<SheetRow>(sheet, { defval: '' }) });
-        }
-        if (!cancelled) setProductPerfAllMonths(months);
+        const { months, empty } = await loadPerfMonths(clientId);
+        if (cancelled) return;
+        setProductPerfAllMonths(months);
+        setEmptyPerfMonths(empty);
       } catch {
         if (!cancelled) setProductPerfAllMonths([]);
       }
@@ -666,6 +693,8 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         if (!mainSheet) throw new Error(`Sheet Produk dengan Performa Terbaik tidak ditemukan: ${part.name}`);
         mainRows.push(...XLSX.utils.sheet_to_json<SheetRow>(mainSheet, { defval: '' }));
       }
+      // Shopee sometimes exports the workbook with every sheet empty.
+      if (!mainRows.length) throw new Error('Sheet "Produk dengan Performa Terbaik" kosong — export ulang Product Performance dari Shopee Seller Centre.');
       setUploadError(null);
       setProductPerfFiles((prev) => ({ ...prev, [role]: { mainRows, fileName: input.map(f => f.name).join(' · '), file } }));
       setReport(null);
@@ -727,7 +756,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
   // `restoredAt`: reopening the last report (useRestoreLastReport) — shown
   // with its original date and not saved a second time.
-  function generate(restoredAt?: string) {
+  function generate(restoredAt?: string, perfMonths: ProductPerfMonth[] = productPerfAllMonths) {
     const r = buildShopeeReport({
       p1: periodOld.label,
       p2: periodCur.label,
@@ -780,7 +809,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       omzetCur: omzetCur ?? 0,
       productPerfOld: productPerfFiles.old?.mainRows ?? null,
       productPerfCur: productPerfFiles.cur?.mainRows ?? null,
-      productPerfAllMonths,
+      productPerfAllMonths: perfMonths,
       paretoRange,
       tokoKeywordOld: adsFiles['toko-keyword-old']?.rows ?? [],
       tokoKeywordCur: adsFiles['toko-keyword-cur']?.rows ?? [],
@@ -1242,12 +1271,29 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           <div className="action-row">
             <button
               className="btn btn-primary"
-              onClick={() => {
-                generate();
+              disabled={generating}
+              onClick={async () => {
+                // Re-read the library's Product Performance first, so a file
+                // replaced there since the brand was picked feeds Pareto.
+                let perfMonths = productPerfAllMonths;
+                if (clientId) {
+                  setGenerating(true);
+                  try {
+                    const fresh = await loadPerfMonths(clientId);
+                    perfMonths = fresh.months;
+                    setProductPerfAllMonths(fresh.months);
+                    setEmptyPerfMonths(fresh.empty);
+                  } catch {
+                    /* library unreachable: Generate with what is already loaded */
+                  } finally {
+                    setGenerating(false);
+                  }
+                }
+                generate(undefined, perfMonths);
                 armReportScroll();
               }}
             >
-              Generate Laporan
+              {generating ? 'Membaca Perpustakaan…' : 'Generate Laporan'}
             </button>
             <button className="btn btn-ghost" onClick={reset}>
               <RotateCcw size={15} aria-hidden /> Reset
@@ -1276,6 +1322,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
           <div data-role="r-body" ref={bodyRef}>
             {deepDive && (
               <ShopeeReportSections
+                emptyParetoMonths={emptyPerfMonths}
                 report={report}
                 deepDive={deepDive}
                 funnelReport={funnelReport}

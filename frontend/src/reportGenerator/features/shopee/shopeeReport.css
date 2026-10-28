@@ -401,6 +401,20 @@
 .mil-ui.report-generator-app #report-shopee .kpi-table tbody tr:hover td { background: #fff3ee; }
 .mil-ui.report-generator-app #report-shopee .kpi-table th .th-sub { color: #9a8780; font-size: .62rem; letter-spacing: .04em; text-transform: none; }
 
+/* A library file that came out of Shopee empty: an amber line above Pareto. */
+.mil-ui.report-generator-app #report-shopee .inline-warn {
+  margin-bottom: .9rem;
+  padding: .7rem .95rem;
+  border: 1px solid #f3d38a;
+  border-left: 4px solid #d97706;
+  border-radius: 12px;
+  background: #fffaeb;
+  color: #7a4b06;
+  font-size: .82rem;
+  line-height: 1.5;
+}
+.mil-ui.report-generator-app #report-shopee .inline-warn strong { color: #6b3f02; }
+
 /* Pareto's month pickers sit in the control row like the toggles beside them. */
 .mil-ui.report-generator-app #report-shopee .pr-field { display: flex; align-items: center; gap: .55rem; }
 .mil-ui.report-generator-app #report-shopee .pr-select { width: 190px; }

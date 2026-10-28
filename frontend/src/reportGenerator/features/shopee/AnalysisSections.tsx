@@ -12,6 +12,7 @@ import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { FunnelTreeRow, FunnelValueRow } from '../../lib/shopeeFunnel';
 import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import type { ParetoRangeSelection, ParetoRow, ProductMetricRanking, ProductRankRow } from '../../lib/shopeeProductAnalysis';
+import { formatMonth } from '../reports/LibraryFileSlot';
 import { ParetoRangeControl } from './ProductAnalysisCharts';
 
 // ══════════════════════════════════════════════════════
@@ -535,12 +536,15 @@ export function ParetoAnalysisSection({
   range,
   availableMonths,
   onRangeChange,
+  emptyMonths = [],
 }: {
   rows: ParetoRow[];
   hasData: boolean;
   range: ParetoRangeSelection;
   availableMonths: string[];
   onRangeChange: (next: ParetoRangeSelection) => void;
+  // Library months whose Product Performance file came out of Shopee empty.
+  emptyMonths?: string[];
 }) {
   const vital = rows.findIndex((r) => r.cumulative >= 80);
   const columns: DataColumn<ParetoRow>[] = [
@@ -559,8 +563,16 @@ export function ParetoAnalysisSection({
         <SectionDownloadButton />
       </div>
       <div style={{ padding: '.6rem 1.4rem 1.4rem' }}>
+        {emptyMonths.length > 0 && (
+          <div className="inline-warn" role="status">
+            <strong>Product Performance {emptyMonths.map(formatMonth).join(', ')} tidak berisi data.</strong> Sheet "Produk dengan Performa
+            Terbaik" di file Perpustakaan kosong, jadi bulan itu tidak ikut dihitung. Export ulang dari Shopee Seller Centre lalu ganti filenya.
+          </div>
+        )}
         <ParetoRangeControl range={range} months={availableMonths} onChange={onRangeChange} />
-        {!hasData ? (
+        {!hasData && availableMonths.length > 0 ? (
+          <div className="empty-note">Belum ada data Product Performance untuk cakupan bulan ini — pilih bulan lain di atas.</div>
+        ) : !hasData ? (
           <div className="empty-note">Upload file Product Performance (bulan berapa pun) di Data Collection Hub untuk melihat analisis 80/20.</div>
         ) : !rows.length ? (
           <div className="empty-note">Tidak ada produk dengan penjualan pada cakupan bulan ini.</div>

@@ -68,6 +68,8 @@ interface ShopeeReportSectionsProps {
   itemPivotTab: 'produk' | 'keyword' | 'performa';
   onItemPivotTabChange: (tab: 'produk' | 'keyword' | 'performa') => void;
   onSaveCategory: (name: string, category: string, series: string) => Promise<void>;
+  // Library months whose Product Performance file holds no data.
+  emptyParetoMonths?: string[];
 }
 
 export function ShopeeReportSections({
@@ -88,6 +90,7 @@ export function ShopeeReportSections({
   itemPivotTab,
   onItemPivotTabChange,
   onSaveCategory,
+  emptyParetoMonths = [],
 }: ShopeeReportSectionsProps) {
   const channelFunnel = (key: 'produk' | 'toko' | 'live') => funnelReport?.channels.find((c) => c.key === key);
   const analysis = (key: ChannelAnalysis['key']) => funnelReport?.channelAnalyses.find((c) => c.key === key);
@@ -189,7 +192,7 @@ export function ShopeeReportSections({
               })}
               <ParetoAnalysisSection
                 rows={funnelReport.pareto} hasData={funnelReport.pareto.length > 0} range={paretoRange}
-                availableMonths={funnelReport.paretoAvailableMonths} onRangeChange={onParetoRangeChange}
+                availableMonths={funnelReport.paretoAvailableMonths} onRangeChange={onParetoRangeChange} emptyMonths={emptyParetoMonths}
               />
             </SectionGroup>
           )}
