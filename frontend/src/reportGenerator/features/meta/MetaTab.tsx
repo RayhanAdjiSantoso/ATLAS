@@ -755,8 +755,10 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const adsetCol = rows.length ? findAdsetCol(rows) : null;
     const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
     const audienceBadge = `per ad set · NV · RM · ${period}`;
+    // `ownLabels` keeps the menu's own short names (Conversion Analysis reads
+    // "Conversion Rate", not the report-wide "Conversion Rate (CVR)").
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const bars = (title: string, b: string, menu: readonly AudienceMetricDef<any>[], level: 'adset' | 'creative') => (
+    const bars = (title: string, b: string, menu: readonly AudienceMetricDef<any>[], level: 'adset' | 'creative', ownLabels = false) => (
       <MetaCompareBars
         key={title}
         heading={`${prefix} · ${title}`}
@@ -764,7 +766,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         rows={rows}
         kind={kind}
         leadKind={leadKind}
-        menu={L(menu)}
+        menu={ownLabels ? menu : L(menu)}
         dimCol={level === 'adset' ? adsetCol : adCol}
         campCol={campCol}
         audience={level === 'adset' ? 'campaign' : 'creative'}
@@ -788,8 +790,8 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         ))}
         {page('Conversion Analysis', audienceBadge, (
           <>
-            {bars('Conversion Analysis by Audience', audienceBadge, menus.conversion, 'adset')}
-            {bars('Conversion Analysis by Creative', creativeBadge, menus.creativeConversion, 'creative')}
+            {bars('Conversion Analysis by Audience', audienceBadge, menus.conversion, 'adset', true)}
+            {bars('Conversion Analysis by Creative', creativeBadge, menus.creativeConversion, 'creative', true)}
           </>
         ))}
         {bars('Top Content Analysis by Creative', creativeBadge, menus.topContent, 'creative')}
