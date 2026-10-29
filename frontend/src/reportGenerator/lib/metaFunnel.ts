@@ -371,6 +371,80 @@ const LEAD_TREE: readonly TreeDef<MetaLeadMetrics>[] = [
   { key: 'cpl', metric: 'costPerLead', label: 'Cost per Lead', prefix: '└─ ', depth: 1, fmt: 'rp', sentiment: 'lower-better' },
 ];
 
+// ── Non-Boost Post (Non Retail): deals from Brand Tracking ───────────────
+// A non-retail brand closes its sales in chat, so Meta's file stops at the
+// click. The rest comes from Brand Tracking › Leads Data for the same dates:
+// Orders are the deals, Message Started the cold leads (chats started), GMV
+// the deal value when someone entered it — "—" when not, never a guess.
+
+export interface DailyLeadsTotals {
+  coldLeads: number | null;
+  deals: number | null;
+  dealValue: number | null;
+}
+
+export interface MetaNonRetailMetrics {
+  gmv: number | null;
+  orders: number | null;
+  linkClicks: number | null;
+  impressions: number | null;
+  spend: number | null;
+  cpm: number | null;
+  ctr: number | null;
+  conversionRate: number | null;
+  messageRate: number | null;
+  messageStarted: number | null;
+  dealRate: number | null;
+  aov: number | null;
+}
+
+export function metaNonRetailMetrics(rows: SheetRow[], leads: DailyLeadsTotals | null): MetaNonRetailMetrics {
+  const o = metaObjectiveMetrics(rows);
+  const deals = leads?.deals ?? null;
+  const messageStarted = leads?.coldLeads ?? null;
+  const gmv = leads?.dealValue ?? null;
+  return {
+    gmv,
+    orders: deals,
+    linkClicks: o.linkClicks,
+    impressions: o.impressions,
+    spend: o.spend,
+    cpm: o.cpm,
+    ctr: o.ctr,
+    conversionRate: ratio(deals, o.linkClicks),
+    messageRate: ratio(messageStarted, o.linkClicks),
+    messageStarted,
+    dealRate: ratio(deals, messageStarted),
+    aov: ratio(gmv, deals, 1),
+  };
+}
+
+const NON_RETAIL_TREE: readonly TreeDef<MetaNonRetailMetrics>[] = [
+  { key: 'gmv', metric: 'gmv', label: 'Gross Merchandise Value', prefix: '', depth: 0, fmt: 'rp', sentiment: 'higher-better' },
+  { key: 'orders', metric: 'orders', label: 'Orders (Deal)', prefix: '├─ ', depth: 1, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'clicks', metric: 'linkClicks', label: 'Traffic (Link Clicks)', prefix: '│  ├─ ', depth: 2, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'impressions', metric: 'impressions', label: 'Impressions', prefix: '│  │  ├─ ', depth: 3, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'spend', metric: 'spend', label: 'Spending', prefix: '│  │  │  ├─ ', depth: 4, fmt: 'rp', sentiment: 'neutral' },
+  { key: 'cpm', metric: 'cpm', label: 'CPM', prefix: '│  │  │  └─ ', depth: 4, fmt: 'rp', sentiment: 'lower-better' },
+  { key: 'ctr', metric: 'ctr', label: 'Click-Through Rate', prefix: '│  │  └─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'cvr', metric: 'conversionRate', label: 'Conversion Rate (Deal ÷ Traffic)', prefix: '│  └─ ', depth: 2, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'msgRate', metric: 'messageRate', label: 'Traffic → Message Rate', prefix: '│     ├─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'msgClicks', metric: 'linkClicks', label: 'Traffic (Link Clicks)', prefix: '│     │  ├─ ', depth: 4, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'msgStarted', metric: 'messageStarted', label: 'Message Started (Cold Leads)', prefix: '│     │  └─ ', depth: 4, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'dealRate', metric: 'dealRate', label: 'Message → Deal Rate', prefix: '│     └─ ', depth: 3, fmt: 'pct', sentiment: 'higher-better' },
+  { key: 'dealMsg', metric: 'messageStarted', label: 'Message Started (Cold Leads)', prefix: '│        ├─ ', depth: 4, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'deal', metric: 'orders', label: 'Deal', prefix: '│        └─ ', depth: 4, fmt: 'num', sentiment: 'higher-better' },
+  { key: 'aov', metric: 'aov', label: 'Average Order Value', prefix: '└─ ', depth: 1, fmt: 'rp', sentiment: 'higher-better' },
+];
+
+// Everything read from Brand Tracking stays in the tree as "—" while it is
+// empty, so the Meta half (Traffic and below) still shows beneath it.
+const NON_RETAIL_FROM_LEADS: ReadonlySet<string> = new Set(['gmv', 'orders', 'cvr', 'msgRate', 'msgStarted', 'dealRate', 'dealMsg', 'deal', 'aov']);
+
+export function buildMetaNonRetailFunnel(oldRows: SheetRow[], curRows: SheetRow[], oldLeads: DailyLeadsTotals | null, curLeads: DailyLeadsTotals | null): MetaFunnel {
+  return assemble(NON_RETAIL_TREE, metaNonRetailMetrics(oldRows, oldLeads), metaNonRetailMetrics(curRows, curLeads), NON_RETAIL_FROM_LEADS);
+}
+
 const BRAND_TREE: readonly TreeDef<MetaBrandMetrics>[] = [
   { key: 'brand', metric: 'brandConsideration', label: 'Brand Consideration', prefix: '', depth: 0, fmt: 'num', sentiment: 'higher-better' },
 
