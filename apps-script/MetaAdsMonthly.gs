@@ -79,7 +79,7 @@ var MAM_WORKER_KEY = 'META_ADS_MONTHLY_WORKER_TS';
 var MAM_WORKER_STALE_MS = 7 * 60 * 1000;   // worker dianggap mati kalau lebih lama dari ini
 var MAM_START_BUDGET_MS = 3 * 60 * 1000;   // tidak memulai akun baru lewat batas ini
 var MAM_ROWS_PER_POST = 500;
-var MAM_PREVIEW_BATCH = 50;                // batas id per panggilan ?ids= Graph API
+var MAM_PREVIEW_BATCH = 50;                // batas permintaan per panggilan Batch API
 var MAM_WINDOW_DAYS = 3;                   // menarik per 3 hari (level ad) agar Meta tidak menolak "terlalu banyak data"
 var MAM_ITEM_DAYS = 7;                     // satu item antrean / satu run ATLAS paling banyak 7 hari
 var MAM_DAILY_LOOKBACK_DAYS = 7;           // tarikan harian: 7 hari terakhir s/d kemarin
@@ -383,13 +383,17 @@ function runMetaAdsFetchItem_(item) {
 
     // Link preview iklan: sebelum /finish supaya file library yang ditulis
     // sesudahnya sudah membawanya. Gagal di sini tidak menggagalkan run
-    // (angkanya sudah aman); cukup dicatat.
+    // (angkanya sudah aman); cukup dicatat, di ATLAS dan di log Sheet.
+    var previewNote;
     try {
-      var previews = fetchAdPreviewLinks_(tokenFor_(acct), Object.keys(adIds));
+      var adIdList = Object.keys(adIds);
+      var previews = fetchAdPreviewLinks_(tokenFor_(acct), adIdList);
       for (var p = 0; p < previews.length; p += MAM_ROWS_PER_POST) {
         atlasIngestPost_('/ads', { runId: runId, ads: previews.slice(p, p + MAM_ROWS_PER_POST) });
       }
+      previewNote = 'link preview ' + previews.length + '/' + adIdList.length + ' ad';
     } catch (e) {
+      previewNote = 'link preview GAGAL: ' + String(e.message).slice(0, 200);
       notes.push('link preview iklan gagal diambil: ' + String(e.message).slice(0, 200));
     }
     atlasIngestPost_('/finish', {
@@ -409,7 +413,7 @@ function runMetaAdsFetchItem_(item) {
     } catch (e) {
       libraryNote = ' | library GAGAL: ' + e.message;
     }
-    writeMetaAdsLog_(startedAt, 'OK', label + ': ' + total + ' baris' + libraryNote);
+    writeMetaAdsLog_(startedAt, 'OK', label + ': ' + total + ' baris | ' + previewNote + libraryNote);
   } catch (e) {
     Logger.log('[%s] Gagal: %s', label, e.message);
     if (runId) {
@@ -502,20 +506,35 @@ function fetchMetaAdsWindow_(token, accountId, fields, since, until, wanted, onR
 
 /**
  * preview_shareable_link (link fb.me/... = "Share a link" di preview Ads
- * Manager) untuk tiap ad, per MAM_PREVIEW_BATCH id sekali panggil (?ids=).
- * Ad yang tidak punya link (atau sudah dihapus) dilewati saja.
+ * Manager) untuk tiap ad, lewat Batch API: MAM_PREVIEW_BATCH ad sekali
+ * panggil. (Parameter ?ids= tidak boleh lagi sejak Graph API v26.0.) Tiap
+ * ad punya jawabannya sendiri, jadi ad yang tidak punya link atau sudah
+ * dihapus dilewati saja tanpa menggagalkan yang lain.
  */
 function fetchAdPreviewLinks_(token, adIds) {
   var out = [];
   for (var i = 0; i < adIds.length; i += MAM_PREVIEW_BATCH) {
-    var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' +
-      '?ids=' + encodeURIComponent(adIds.slice(i, i + MAM_PREVIEW_BATCH).join(',')) +
-      '&fields=preview_shareable_link' +
-      '&access_token=' + encodeURIComponent(token);
-    var body = fetchJson_(url);
-    Object.keys(body || {}).forEach(function (id) {
-      var link = body[id] && body[id].preview_shareable_link;
-      if (link) out.push({ adId: id, previewLink: link });
+    var ids = adIds.slice(i, i + MAM_PREVIEW_BATCH);
+    var batch = ids.map(function (id) {
+      return { method: 'GET', relative_url: CONFIG.API_VERSION + '/' + id + '?fields=preview_shareable_link' };
+    });
+    var res = UrlFetchApp.fetch('https://graph.facebook.com/', {
+      method: 'post',
+      payload: { access_token: token, batch: JSON.stringify(batch), include_headers: 'false' },
+      muteHttpExceptions: true
+    });
+    var body;
+    try {
+      body = JSON.parse(res.getContentText());
+    } catch (e) {
+      throw new Error('Respons batch tidak valid (HTTP ' + res.getResponseCode() + ')');
+    }
+    if (body && body.error) throw new Error(body.error.message + ' (code ' + body.error.code + ')');
+    (body || []).forEach(function (r, j) {
+      if (!r || r.code !== 200) return;
+      var ad;
+      try { ad = JSON.parse(r.body); } catch (e) { return; }
+      if (ad && ad.preview_shareable_link) out.push({ adId: ids[j], previewLink: ad.preview_shareable_link });
     });
     if (i + MAM_PREVIEW_BATCH < adIds.length) Utilities.sleep(200);
   }
