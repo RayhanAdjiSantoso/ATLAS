@@ -228,4 +228,12 @@ export const WHATS_NEW = [
     title: 'Edit & hapus ad account Meta',
     body: 'Ikon pensil kini juga mengubah ID Ad Account, dan ikon tempat sampah menghapus akun. Satu brand boleh punya lebih dari satu akun MAIN atau CPAS, dan akun MAIN bisa ditandai khusus Boost Post atau Non Boost Post tanpa kata kunci.',
   },
+  {
+    id: 'target-roas-cost-per-revenue',
+    released: '2026-10-29',
+    path: '/pengaturan-brand',
+    target: '[data-feature="target-tahunan"]',
+    title: 'Target lewat Blended ROAS',
+    body: 'Saat mengisi atau meng-update target tahunan, isi Blended ROAS atau Cost per Revenue — yang satu terhitung otomatis dari yang lain, dan budget iklan dihitung dari target sales.',
+  },
 ];

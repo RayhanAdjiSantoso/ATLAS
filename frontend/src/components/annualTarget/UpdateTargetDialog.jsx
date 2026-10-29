@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { AlertTriangle, ArrowRight, CalendarClock, Check, Loader2, Scale, X } from 'lucide-react';
 import { fmtRp, fmtRpShort } from '../../dailyTracking/lib/summary.js';
 import MonthBars from './MonthBars.jsx';
-import { MONTH_SHORT, changeFromOriginal, planMonths, runningMonth, signedPct } from './annualModel.js';
+import { MONTH_SHORT, changeFromOriginal, pct, planMonths, runningMonth, signedPct } from './annualModel.js';
 
 // The step between typing a new annual target and saving it: how the new
 // totals reach the months.
@@ -16,6 +16,7 @@ import { MONTH_SHORT, changeFromOriginal, planMonths, runningMonth, signedPct } 
 // Both show the months before → after on the same chart, so the effect is
 // visible before anything is saved.
 
+const roasX = (v) => `${v.toLocaleString('id-ID', { maximumFractionDigits: 2 })}x`;
 const range = (a, b) => (a === b ? MONTH_SHORT[a] : `${MONTH_SHORT[a]}–${MONTH_SHORT[b]}`);
 
 export default function UpdateTargetDialog({ open, year, data, draft, typo, saving, error, onCancel, onConfirm }) {
@@ -153,6 +154,13 @@ export default function UpdateTargetDialog({ open, year, data, draft, typo, savi
                   <span>Budget iklan</span>
                   <p>{annual.targetSpend != null && <><s>{fmtRpShort(annual.targetSpend)}</s><ArrowRight size={14} aria-hidden="true" /></>}<b>{fmtRp(plans.spend)}</b></p>
                   {spendChange != null && <em className="is-neutral">{signedPct(spendChange)} dari awal</em>}
+                </div>
+              )}
+              {plans.spend > 0 && (
+                <div>
+                  <span>Blended ROAS</span>
+                  <p>{annual.targetSpend > 0 && <><s>{roasX(annual.targetSales / annual.targetSpend)}</s><ArrowRight size={14} aria-hidden="true" /></>}<b>{roasX(plans.sales / plans.spend)}</b></p>
+                  <em className="is-neutral">Cost per Revenue {pct(plans.spend / plans.sales, 2)}</em>
                 </div>
               )}
               {draft.note && <q>{draft.note}</q>}

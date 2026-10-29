@@ -24,6 +24,30 @@ import './annualTarget.css';
 // history keeps every version.
 
 const ratioX = (s, b) => (s && b ? `${(s / b).toLocaleString('id-ID', { maximumFractionDigits: 2 })}x` : '—');
+// Cost per Revenue = budget ÷ sales, as the Report Generator reads it.
+const costPct = (s, b) => (s && b != null ? pct(b / s, 2) : '—');
+
+// Blended ROAS and Cost per Revenue are the same figure seen two ways
+// (CPR = 100% ÷ ROAS), so the editor keeps one exact ratio — budget ÷ sales —
+// and the budget follows from it. Typing either field rewrites the other;
+// "4,5" and "4.5" both read as four and a half.
+const fmtDec = (v) => v.toLocaleString('id-ID', { maximumFractionDigits: 2 });
+const parseDec = (s) => {
+  const n = Number(String(s).replace(',', '.'));
+  return String(s).trim() !== '' && Number.isFinite(n) && n > 0 ? n : null;
+};
+const ratioFields = (ratio) => (ratio ? { roas: fmtDec(1 / ratio), cpr: fmtDec(ratio * 100), ratio } : { roas: '', cpr: '', ratio: null });
+const spendOf = (form) => (form.ratio && Number(form.sales) > 0 ? Math.round(Number(form.sales) * form.ratio) : null);
+
+function RatioField({ label, unit, value, onChange, previous, placeholder }) {
+  return (
+    <label className="at-field">
+      <span>{label}<small>opsional</small></span>
+      <div className="at-money"><input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value.replace(/[^\d.,]/g, ''))} placeholder={placeholder} /><b>{unit}</b></div>
+      {previous && <small className="at-field-prev">Sekarang {previous}</small>}
+    </label>
+  );
+}
 const dateId = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 const chipTone = (v) => (v == null ? '' : v > 0 ? 'is-up' : v < 0 ? 'is-down' : 'is-flat');
 
@@ -49,7 +73,7 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
   const thisYear = today.getFullYear();
   const [year, setYear] = useState(thisYear);
   const [state, setState] = useState({ status: 'loading', data: null });
-  const [form, setForm] = useState(null); // { mode: 'create' | 'update', sales, spend, note }
+  const [form, setForm] = useState(null); // { mode: 'create' | 'update', sales, roas, cpr, ratio, note }
   const [dialog, setDialog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dialogError, setDialogError] = useState(null);
@@ -104,11 +128,22 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
     }).reverse();
   }, [revisions]);
 
-  const startCreate = () => { setMessage(null); setForm({ mode: 'create', sales: '', spend: '', note: '' }); };
+  const startCreate = () => { setMessage(null); setForm({ mode: 'create', sales: '', ...ratioFields(null), note: '' }); };
   const startUpdate = () => {
     setMessage(null);
-    setForm({ mode: 'update', sales: String(annual.targetSales ?? ''), spend: annual.targetSpend != null ? String(annual.targetSpend) : '', note: '' });
+    const ratio = annual.targetSales && annual.targetSpend != null ? annual.targetSpend / annual.targetSales : null;
+    setForm({ mode: 'update', sales: String(annual.targetSales ?? ''), ...ratioFields(ratio), note: '' });
   };
+  // The typed field keeps exactly what was typed; the other is recomputed.
+  const setRoas = (text) => {
+    const v = parseDec(text);
+    setForm((f) => ({ ...f, roas: text, cpr: v ? fmtDec(100 / v) : '', ratio: v ? 1 / v : null }));
+  };
+  const setCpr = (text) => {
+    const v = parseDec(text);
+    setForm((f) => ({ ...f, cpr: text, roas: v ? fmtDec(100 / v) : '', ratio: v ? v / 100 : null }));
+  };
+  const draftSpend = form ? spendOf(form) : null;
 
   // A change this size usually means the target awal was a typo (a month's
   // figure as the year's) — the dialog then suggests option A as a correction.
@@ -118,6 +153,7 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
   const invalid = (() => {
     if (!form) return null;
     if (!(Number(form.sales) > 0)) return 'Isi target sales tahunan.';
+    if ((form.roas.trim() || form.cpr.trim()) && !form.ratio) return 'Blended ROAS dan Cost per Revenue harus lebih dari 0.';
     // Same figures are allowed: re-splitting evenly, or marking a wrong
     // target awal as corrected, are updates in their own right.
     if (form.mode === 'update') {
@@ -129,7 +165,7 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
   const put = (extra) => api.put('/daily-tracking/annual-targets', {
     brandId, year,
     targetSales: Number(form.sales),
-    targetSpend: form.spend === '' ? null : Number(form.spend),
+    targetSpend: draftSpend,
     note: form.note || undefined,
     ...extra,
   });
@@ -223,8 +259,11 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
               </header>
               <div className="at-editor-grid">
                 <MoneyField label={`Target sales ${year}`} value={form.sales} onChange={(v) => setForm({ ...form, sales: v })} previous={form.mode === 'update' ? annual.targetSales : null} placeholder="4.000.000.000" autoFocus />
-                <MoneyField label={`Budget iklan ${year}`} optional value={form.spend} onChange={(v) => setForm({ ...form, spend: v })} previous={form.mode === 'update' ? annual.targetSpend : null} placeholder="720.000.000" />
-                <div className="at-roas"><span>Target ROAS</span><strong>{ratioX(Number(form.sales), Number(form.spend))}</strong><small>sales ÷ budget</small></div>
+                <RatioField label="Blended ROAS" unit="x" value={form.roas} onChange={setRoas} placeholder="5,5"
+                  previous={form.mode === 'update' && annual.targetSpend ? ratioX(annual.targetSales, annual.targetSpend) : null} />
+                <RatioField label="Cost per Revenue" unit="%" value={form.cpr} onChange={setCpr} placeholder="18"
+                  previous={form.mode === 'update' && annual.targetSpend != null ? costPct(annual.targetSales, annual.targetSpend) : null} />
+                <div className="at-roas"><span>Budget iklan</span><strong>{draftSpend != null ? fmtRpShort(draftSpend) : '—'}</strong><small>sales ÷ ROAS</small></div>
               </div>
               {form.mode === 'update' && (
                 <label className="at-field">
@@ -235,7 +274,7 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
               {createSplit && (
                 <div className="at-editor-preview">
                   <MonthBars values={createSplit} height={56} />
-                  <p>±{fmtRp(createSplit[0])} sales{Number(form.spend) > 0 ? ` · ±${fmtRp(splitEqual(Number(form.spend))[0])} budget` : ''} per bulan. <b>Pastikan ini angka setahun, bukan sebulan.</b> Target bulanan {year} yang sudah ada diganti; alokasi channel tetap.</p>
+                  <p>±{fmtRp(createSplit[0])} sales{draftSpend > 0 ? ` · ±${fmtRp(splitEqual(draftSpend)[0])} budget` : ''} per bulan. <b>Pastikan ini angka setahun, bukan sebulan.</b> Target bulanan {year} yang sudah ada diganti; alokasi channel tetap.</p>
                 </div>
               )}
               {invalid && (form.sales !== '' || form.mode === 'update') && <p className="at-hint">{invalid}</p>}
@@ -300,9 +339,9 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
                       : `±${fmtRpShort(annual.targetSpend / 12)} / bulan`}</small>
                 </div>
                 <div>
-                  <dt>Target ROAS</dt>
+                  <dt>Blended ROAS</dt>
                   <dd>{ratioX(annual.targetSales, annual.targetSpend)}</dd>
-                  <small>sales ÷ budget</small>
+                  <small>{annual.targetSpend ? `Cost per Revenue ${costPct(annual.targetSales, annual.targetSpend)}` : 'sales ÷ budget'}</small>
                 </div>
                 {canEdit && (
                   <button type="button" className="bp-primary at-hero-cta" onClick={startUpdate}><PencilLine size={15} aria-hidden="true" /> Update target</button>
@@ -386,7 +425,7 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
           open={dialog}
           year={year}
           data={data}
-          draft={form ?? { sales: '', spend: '', note: '' }}
+          draft={form ? { sales: form.sales, spend: draftSpend ?? '', note: form.note } : { sales: '', spend: '', note: '' }}
           typo={typo}
           saving={saving}
           error={dialogError}

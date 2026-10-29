@@ -168,7 +168,8 @@
 .at-editor { display: grid; gap: 14px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--at-accent) 35%, var(--at-line)); border-radius: 18px; background: #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--at-accent) 7%, transparent); }
 .at-editor-head { display: grid; gap: 3px; }
 .at-editor-head p { margin: 0; color: var(--at-muted); font-size: .8rem; line-height: 1.5; }
-.at-editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 132px; gap: 12px; align-items: start; }
+.at-editor-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 140px; gap: 12px; align-items: start; }
+@media (max-width: 1100px) { .at-editor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .at-field { display: grid; gap: 6px; }
 .at-field > span { color: var(--at-ink); font-size: .78rem; font-weight: 750; }
 .at-field > span small { margin-left: 6px; color: var(--at-muted); font-weight: 600; }
