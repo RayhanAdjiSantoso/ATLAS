@@ -38,6 +38,21 @@ export const upsertEntriesBodyValidation = [
   body('sales.*.notes').optional({ nullable: true }).isString().isLength({ max: 500 }).withMessage('notes maksimal 500 karakter'),
   body('spend').optional().isArray().withMessage('spend harus array'),
   body('spend.*.channelKey').if(body('spend').exists()).isString().notEmpty(),
+  body('leads').optional().isObject().withMessage('leads harus object'),
+];
+
+// ranges = "YYYY-MM-DD..YYYY-MM-DD", comma-separated, at most 4.
+export const leadsSummaryQueryValidation = [
+  query('brandId').isInt({ min: 1 }).withMessage('brandId wajib disertakan'),
+  query('ranges').custom((v) => {
+    const parts = String(v ?? '').split(',').filter(Boolean);
+    if (!parts.length || parts.length > 4) throw new Error('ranges wajib berisi 1–4 rentang tanggal');
+    for (const p of parts) {
+      const [start, end] = p.split('..');
+      if (!DATE_RE.test(start ?? '') || !DATE_RE.test(end ?? '') || start > end) throw new Error(`Rentang "${p}" harus YYYY-MM-DD..YYYY-MM-DD`);
+    }
+    return true;
+  }),
 ];
 
 export const importFileBodyValidation = [

@@ -41,6 +41,21 @@ const SKIP_SUBSTRINGS = [
   'revenue ga', 'success rate', 'ctr', 'cpc', 'cpm', 'impressions', 'reach', 'frequency', 'clicks',
 ];
 
+// Leads Data (migration 060): a non-retail brand's sheet tracks chats and
+// deals per day. "Cold Leads" may be one column ("Cold Leads (First chat)")
+// or one per region plus a "Total Cold Leads"; the day's figure is the total
+// when the sheet has one, else the regions added up. "Deal Leads" is the
+// deals column. Everything else about leads (hot/warm leads, their rates,
+// origin, cost per lead, where the chat came from) is derived or descriptive
+// and never imported — nor mistaken for an ad-spend channel.
+const COLD_LEADS_HEADER = /cold\s*leads?/i;
+const DEAL_HEADER = /^deal\s*leads?$/i;
+const LEAD_NOISE = /leads?\b|^keterangan$|^from\s+(facebook|instagram)/i;
+const LEAD_COLUMNS = {
+  coldLeads: 'Cold Leads (Message Started)',
+  deals: 'Deal',
+};
+
 function isSkipHeader(label) {
   const l = label.toLowerCase().trim();
   if (!l) return true;
@@ -138,6 +153,23 @@ function classifyHeaderRow(headerRow) {
     }
   }
 
+  // Leads columns come out before the spend scan below, which would
+  // otherwise take every one of them as an ad channel.
+  const leads = { totalCol: null, regionCols: [], dealCol: null };
+  for (let i = 0; i < norm.length; i += 1) {
+    if (consumed.has(i) || !norm[i]) continue;
+    const label = cleanChannelLabel(norm[i]);
+    if (COLD_LEADS_HEADER.test(label) && !/rate|cost|origin/i.test(label)) {
+      if (/total/i.test(label)) leads.totalCol = i; else leads.regionCols.push(i);
+      consumed.add(i);
+    } else if (DEAL_HEADER.test(label)) {
+      leads.dealCol = i;
+      consumed.add(i);
+    } else if (LEAD_NOISE.test(label)) {
+      consumed.add(i);
+    }
+  }
+
   const lastRevenueCol = revenueChannels.length
     ? Math.max(...revenueChannels.flatMap((c) => [c.revCol, c.qtyCol, c.txCol]))
     : dateCol;
@@ -149,7 +181,7 @@ function classifyHeaderRow(headerRow) {
     consumed.add(i);
   }
 
-  return { dateCol, revenueChannels, spendChannels };
+  return { dateCol, revenueChannels, spendChannels, leads, headers: norm };
 }
 
 const MONTHS = {
@@ -240,7 +272,17 @@ export function parseDailyTrackingFile(buffer, originalFilename = 'file') {
   let headerSeen = false;
   const salesRows = [];
   const spendRows = [];
+  const leadRows = [];
   const columns = new Map();
+  const leadColumn = (field, rawLabel) => {
+    const id = `leads:${field}`;
+    if (!columns.has(id)) {
+      columns.set(id, { id, kind: 'leads', key: field, label: LEAD_COLUMNS[field], isCustom: false, fileLabels: new Set(), rows: 0, total: 0 });
+    }
+    const e = columns.get(id);
+    e.fileLabels.add(cleanChannelLabel(rawLabel));
+    return e;
+  };
   let dataRowsParsed = 0;
 
   for (const row of raw) {
@@ -277,6 +319,24 @@ export function parseDailyTrackingFile(buffer, originalFilename = 'file') {
       col.total += amount;
       spendRows.push({ entryDate, channelKey: mapped.key, amount, columnId: col.id });
     }
+    const { leads } = currentMap;
+    const total = leads.totalCol == null ? null : parseAmount(row[leads.totalCol]);
+    const regions = leads.regionCols.map((c) => parseAmount(row[c])).filter((v) => v != null);
+    const coldLeads = total ?? (regions.length ? regions.reduce((a, v) => a + v, 0) : null);
+    const deals = leads.dealCol == null ? null : parseAmount(row[leads.dealCol]);
+    if (coldLeads != null || deals != null) {
+      anyValue = true;
+      const fields = [];
+      if (coldLeads != null) {
+        const col = leadColumn('coldLeads', currentMap.headers[leads.totalCol ?? leads.regionCols[0]]);
+        col.rows += 1; col.total += coldLeads; fields.push('coldLeads');
+      }
+      if (deals != null) {
+        const col = leadColumn('deals', currentMap.headers[leads.dealCol]);
+        col.rows += 1; col.total += deals; fields.push('deals');
+      }
+      leadRows.push({ entryDate, coldLeads, deals, fields });
+    }
     if (anyValue) dataRowsParsed += 1;
   }
 
@@ -296,6 +356,7 @@ export function parseDailyTrackingFile(buffer, originalFilename = 'file') {
   return {
     salesRows,
     spendRows,
+    leadRows,
     columns: [...columns.values()].map((c) => ({ ...c, fileLabels: [...c.fileLabels] })),
     dataRowsParsed,
   };

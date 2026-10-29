@@ -479,6 +479,8 @@
 .bt-seg-btn.is-on .bt-seg-ico { background: var(--bt-rev); color: #fff; }
 #dt-tab-spend.is-on { border-bottom-color: var(--bt-spend); }
 #dt-tab-spend.is-on .bt-seg-ico { background: var(--bt-spend); }
+#dt-tab-leads.is-on { border-bottom-color: #0e8a7e; }
+#dt-tab-leads.is-on .bt-seg-ico { background: #0e8a7e; }
 .bt-tools { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-end; gap: 8px; max-width: 58%; }
 .bt-tools .dt-import { align-items: flex-end; }
 .bt-tools .btn { min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: .8rem; box-shadow: none; }
@@ -486,6 +488,8 @@
 .bt-tools .dt-btn-danger-outline:hover { border-color: #f1b0aa; background: #fef3f2; }
 
 .bt-work-body { display: grid; grid-template-columns: 252px minmax(0, 1fr); gap: 20px; align-items: start; }
+/* Leads Data has no channels, so no rail: the sheet takes the full width. */
+.bt-work-body.is-leads { grid-template-columns: minmax(0, 1fr); }
 
 /* Channel list, boxed like the sheet: header bar, one line per channel, and
    the section total as a footer row. Pinned while the sheet scrolls; a long

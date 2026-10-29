@@ -48,7 +48,9 @@ function parseSignedThousandsInput(str) {
 }
 
 // Revenue totals carry their currency, like the revenue cells above them.
-const fmtCell = (field, v) => (field === 'revenue' && v != null ? `Rp ${fmtNum(v)}` : fmtNum(v));
+const fmtCell = (field, v) => ((field === 'revenue' || field === 'dealValue') && v != null ? `Rp ${fmtNum(v)}` : fmtNum(v));
+const FIELDS = { sales: ['revenue', 'transaksi', 'qtySold'], spend: ['amount'], leads: ['coldLeads', 'deals', 'dealValue'] };
+const MONEY_FIELDS = new Set(['revenue', 'amount', 'dealValue']);
 const isZero = (v) => v !== '' && v != null && Number(v) === 0;
 const monthOf = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', { month: 'short' });
 const weekRange = (week) => {
@@ -81,12 +83,13 @@ function SaveMark({ status }) {
 // blocks instead of one wall of numbers.
 export default function DailyEntryTable({ kind, channelKey, days, data, onCellChange, saveStatus, readOnly = false, focusDate, onFocusDone, header }) {
   const sales = kind === 'sales';
+  const leads = kind === 'leads';
   const showNotes = sales && NOTES_SALES_CHANNEL_KEYS.includes(channelKey);
   const rowStatus = (date) => saveStatus?.[`${kind}:${channelKey}:${date}`];
   const today = todayIso();
   const tableRef = useRef(null);
   const sum = (list, field) => sumMaybe(list.map((d) => data?.[d]?.[field]));
-  const fields = sales ? ['revenue', 'transaksi', 'qtySold'] : ['amount'];
+  const fields = FIELDS[kind];
 
   // Arriving from the fill map: bring that day into view, put the cursor in
   // its first cell and mark the row for a moment so the eye lands on it.
@@ -119,9 +122,9 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
       <table className={`dt-table is-${kind}`} ref={tableRef}>
         <colgroup>
           <col className="dt-col-date" />
-          {fields.map((f) => <col key={f} className={f === 'revenue' || f === 'amount' ? 'dt-col-money' : 'dt-col-count'} />)}
+          {fields.map((f) => <col key={f} className={MONEY_FIELDS.has(f) ? 'dt-col-money' : 'dt-col-count'} />)}
           {showNotes && <col className="dt-col-notes" />}
-          {!sales && <col className="dt-col-source" />}
+          {kind === 'spend' && <col className="dt-col-source" />}
           <col className="dt-col-status" />
         </colgroup>
         <thead>
@@ -133,6 +136,12 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                 <th className="is-num">Total Transactions</th>
                 <th className="is-num">Total Quantity Sold</th>
                 {showNotes && <th>Notes</th>}
+              </>
+            ) : leads ? (
+              <>
+                <th className="is-num">Cold Leads <small>Message Started</small></th>
+                <th className="is-num">Deal</th>
+                <th className="is-num">Nilai Deal <small>Rp</small></th>
               </>
             ) : (
               <>
@@ -152,7 +161,7 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
               </th>
               {fields.map((f) => <td key={f} className="is-num">{week.some((d) => d <= today) ? fmtCell(f, sum(week, f)) : ''}</td>)}
               {showNotes && <td />}
-              {!sales && <td />}
+              {kind === 'spend' && <td />}
               <td />
             </tr>
             {week.map((date) => {
@@ -178,6 +187,12 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
                       {showNotes && (
                         <td>{input(date, 'notes', row.notes ?? '', (e) => onCellChange(date, 'notes', e.target.value), { type: 'text', maxLength: 500, placeholder: 'mis. RETUR', className: 'dt-notes-input' })}</td>
                       )}
+                    </>
+                  ) : leads ? (
+                    <>
+                      <td>{input(date, 'coldLeads', row.coldLeads ?? '', (e) => onCellChange(date, 'coldLeads', e.target.value), { type: 'number', inputMode: 'numeric', min: 0 })}</td>
+                      <td>{input(date, 'deals', row.deals ?? '', (e) => onCellChange(date, 'deals', e.target.value), { type: 'number', inputMode: 'numeric', min: 0 })}</td>
+                      <td className="dt-money">{input(date, 'dealValue', formatThousands(row.dealValue), (e) => onCellChange(date, 'dealValue', parseThousandsInput(e.target.value)), { type: 'text', inputMode: 'numeric' })}</td>
                     </>
                   ) : (
                     <>
@@ -207,7 +222,7 @@ export default function DailyEntryTable({ kind, channelKey, days, data, onCellCh
             <th scope="row">Total bulan ini</th>
             {fields.map((f) => <td key={f} className="is-num">{fmtCell(f, sum(days, f))}</td>)}
             {showNotes && <td />}
-            {!sales && <td />}
+            {kind === 'spend' && <td />}
             <td />
           </tr>
         </tfoot>
