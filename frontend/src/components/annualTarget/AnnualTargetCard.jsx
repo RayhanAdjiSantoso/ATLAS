@@ -39,30 +39,22 @@ const parseDec = (s) => {
 const ratioFields = (ratio) => (ratio ? { roas: fmtDec(1 / ratio), cpr: fmtDec(ratio * 100), ratio } : { roas: '', cpr: '', ratio: null });
 const spendOf = (form) => (form.ratio && Number(form.sales) > 0 ? Math.round(Number(form.sales) * form.ratio) : null);
 
-function RatioField({ label, unit, value, onChange, previous, placeholder }) {
+function RatioField({ label, unit, value, onChange, placeholder }) {
   return (
     <label className="at-field">
-      <span>{label}<small>opsional</small></span>
+      <span>{label}</span>
       <div className="at-money"><input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value.replace(/[^\d.,]/g, ''))} placeholder={placeholder} /><b>{unit}</b></div>
-      {previous && <small className="at-field-prev">Sekarang {previous}</small>}
     </label>
   );
 }
 const dateId = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 const chipTone = (v) => (v == null ? '' : v > 0 ? 'is-up' : v < 0 ? 'is-down' : 'is-flat');
 
-function MoneyField({ label, optional, value, onChange, previous, placeholder, autoFocus }) {
-  const change = previous && Number(value) > 0 ? changeFromOriginal(Number(value), previous) : null;
+function MoneyField({ label, value, onChange, placeholder, autoFocus }) {
   return (
     <label className="at-field">
-      <span>{label}{optional && <small>opsional</small>}</span>
+      <span>{label}</span>
       <div className="at-money"><b>Rp</b><input inputMode="numeric" value={thousands(value)} onChange={(e) => onChange(digits(e.target.value))} placeholder={placeholder} autoFocus={autoFocus} /></div>
-      {previous != null && (
-        <small className="at-field-prev">
-          Sekarang {fmtRpShort(previous)}
-          {change != null && change !== 0 && <i className={`at-chip ${chipTone(change)}`}>{signedPct(change)}</i>}
-        </small>
-      )}
     </label>
   );
 }
@@ -258,12 +250,14 @@ export default function AnnualTargetCard({ brandId, canEdit }) {
                   : 'Isi angka baru. Setelah ini Anda memilih cara membaginya ke bulan — target awal tetap tersimpan.'}</p>
               </header>
               <div className="at-editor-grid">
-                <MoneyField label={`Target sales ${year}`} value={form.sales} onChange={(v) => setForm({ ...form, sales: v })} previous={form.mode === 'update' ? annual.targetSales : null} placeholder="4.000.000.000" autoFocus />
-                <RatioField label="Blended ROAS" unit="x" value={form.roas} onChange={setRoas} placeholder="5,5"
-                  previous={form.mode === 'update' && annual.targetSpend ? ratioX(annual.targetSales, annual.targetSpend) : null} />
-                <RatioField label="Cost per Revenue" unit="%" value={form.cpr} onChange={setCpr} placeholder="18"
-                  previous={form.mode === 'update' && annual.targetSpend != null ? costPct(annual.targetSales, annual.targetSpend) : null} />
-                <div className="at-roas"><span>Budget iklan</span><strong>{draftSpend != null ? fmtRpShort(draftSpend) : '—'}</strong><small>sales ÷ ROAS</small></div>
+                <MoneyField label={`Target sales ${year}`} value={form.sales} onChange={(v) => setForm({ ...form, sales: v })} placeholder="4.000.000.000" autoFocus />
+                <RatioField label="Blended ROAS" unit="x" value={form.roas} onChange={setRoas} placeholder="5,5" />
+                <RatioField label="Cost per Revenue" unit="%" value={form.cpr} onChange={setCpr} placeholder="18" />
+                {/* Read like the fields beside it, but follows from sales and ROAS. */}
+                <label className="at-field">
+                  <span>Budget iklan</span>
+                  <div className="at-money is-computed"><b>Rp</b><input readOnly tabIndex={-1} value={draftSpend != null ? thousands(draftSpend) : ''} placeholder="—" aria-label={`Budget iklan ${year}, dihitung dari target sales dan ROAS`} /></div>
+                </label>
               </div>
               {form.mode === 'update' && (
                 <label className="at-field">
