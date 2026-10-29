@@ -1,24 +1,64 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Check, History, Loader2, PencilLine, Scale, X } from 'lucide-react';
+import { ArrowUpRight, Check, History, Loader2, Scale, X } from 'lucide-react';
 import api from '../../api/client.js';
 import { fmtRp, fmtRpShort } from '../../dailyTracking/lib/summary.js';
 import { presetBrandSettings } from '../common/brandSettingsLink.js';
 import {
-  MONTH_SHORT, changeFromOriginal, digits, monthIndex, monthLong, pct, signedPct, splitEqual, thousands,
+  MONTH_LONG, MONTH_SHORT, changeFromOriginal, monthIndex, monthLong, pct, signedPct, splitByWeight, splitEqual,
 } from './annualModel.js';
 import './annualTarget.css';
 
 // Brand Tracking › Target & Budget › Rencana tahunan. The year set in Brand
 // Setting, split across its 12 months. The split starts even and can be
-// shaped by hand — heavier in campaign months, lighter elsewhere — but it
-// can only be saved when the 12 months add up to exactly the year (100%).
-// Each month's figure is that month's target in the monthly view below.
+// shaped by hand — heavier in campaign months, lighter elsewhere — by typing
+// each month's share (Porsi); its target sales and ad budget follow from the
+// year's totals. It can only be saved when the 12 shares add up to exactly
+// 100%. Each month's figure is that month's target in the monthly view below.
+
+// Shares are kept in basis points (1 = 0,01%) so twelve of them add up
+// exactly; the inputs show and take percentages ("8,5" or "8.5").
+const toBp = (s) => {
+  const t = String(s ?? '').trim().replace(',', '.');
+  if (t === '') return 0;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+};
+const bpText = (bp) => (bp / 100).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+// The current split as shares adding up to 100%: rounding leftovers go to
+// the largest month.
+function sharesOf(values, total) {
+  if (!total) return splitEqual(10000);
+  const bps = values.map((v) => Math.round(((v ?? 0) / total) * 10000));
+  const big = bps.indexOf(Math.max(...bps));
+  bps[big] += 10000 - bps.reduce((a, b) => a + b, 0);
+  return bps;
+}
+// Rupiah per month from the shares: the stored amounts while the shares are
+// untouched (no rounding drift on a save without changes), an exact split of
+// the year once they add up to 100%, a plain share before that.
+function amountsOf(bps, initial, stored, total) {
+  if (bps.every((b, i) => b === initial[i])) return stored;
+  const sum = bps.reduce((a, b) => a + (b ?? 0), 0);
+  if (sum === 10000) return splitByWeight(total, bps);
+  return bps.map((b) => Math.round((total * (b ?? 0)) / 10000));
+}
+
+// A quarter's total in the large type: one decimal and a unit (B = miliar,
+// M = juta, K = ribu), as in "Rp 1.2 B".
+function compact(v) {
+  const n = Math.abs(v);
+  const [div, unit] = n >= 1e9 ? [1e9, 'B'] : n >= 1e6 ? [1e6, 'M'] : n >= 1e3 ? [1e3, 'K'] : [1, ''];
+  return { num: (v / div).toLocaleString('id-ID', { maximumFractionDigits: 1 }), unit };
+}
 
 export default function AnnualPlan({ brandId, month, canEdit, onSaved }) {
   const year = Number(String(month).slice(0, 4));
   const [state, setState] = useState({ status: 'loading', data: null });
-  const [draft, setDraft] = useState(null); // [{ month, sales, spend }]
+  // Porsi typed in the Setting panel, per side, while it differs from what is
+  // saved (null = nothing changed).
+  const [draft, setDraft] = useState(null); // { sales: string[], spend: string[] }
+  const [metric, setMetric] = useState('sales'); // which figure the quarters show
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -38,16 +78,25 @@ export default function AnnualPlan({ brandId, month, canEdit, onSaved }) {
   const hasSpend = annual?.targetSpend != null;
   const nowYm = new Date().toISOString().slice(0, 7);
 
-  const sums = useMemo(() => {
-    if (!draft || !annual) return null;
-    const sales = draft.reduce((a, m) => a + (Number(m.sales) || 0), 0);
-    const spend = draft.reduce((a, m) => a + (Number(m.spend) || 0), 0);
-    return {
-      sales, spend,
-      salesOk: sales === annual.targetSales,
-      spendOk: !hasSpend || spend === annual.targetSpend,
+  // The saved split as shares, and the split the panels show: shares in basis
+  // points and the rupiah they give.
+  const init = useMemo(() => (data && annual ? {
+    sales: sharesOf(data.months.map((m) => m.targetSales), annual.targetSales),
+    spend: sharesOf(data.months.map((m) => m.targetSpend), annual.targetSpend),
+  } : null), [data, annual]);
+  const plan = useMemo(() => {
+    if (!init) return null;
+    const side = (key, total, field) => {
+      const bps = draft ? draft[key].map(toBp) : init[key];
+      const valid = bps.every((b) => b !== null);
+      const sum = bps.reduce((a, b) => a + (b ?? 0), 0);
+      const stored = data.months.map((m) => m[field] ?? 0);
+      return { bps, valid, sum, ok: valid && sum === 10000, amounts: amountsOf(bps, init[key], stored, total ?? 0) };
     };
-  }, [draft, annual, hasSpend]);
+    const sales = side('sales', annual.targetSales, 'targetSales');
+    const spend = hasSpend ? side('spend', annual.targetSpend, 'targetSpend') : null;
+    return { sales, spend, ok: sales.ok && (!spend || spend.ok) };
+  }, [draft, init, annual, data, hasSpend]);
 
   if (state.status === 'loading') return <p className="at-state"><Loader2 size={14} className="dt-spin" /> Memuat rencana tahunan…</p>;
   if (state.status === 'error') return <p className="at-state is-error">{state.error}</p>;
@@ -80,21 +129,23 @@ export default function AnnualPlan({ brandId, month, canEdit, onSaved }) {
   const ytdTarget = ytd.reduce((a, m) => a + (m.targetSales ?? 0), 0);
   const ytdSpend = ytd.reduce((a, m) => a + (m.actualSpend ?? 0), 0);
 
-  const startEdit = () => {
+  // The first keystroke opens a draft of both sides from the saved shares.
+  const texts = (key) => (draft ? draft[key] : init[key].map(bpText));
+  const setShare = (key, i, value) => {
     setMessage(null);
-    setDraft(months.map((m) => ({ month: m.month, sales: String(m.targetSales ?? 0), spend: String(m.targetSpend ?? 0) })));
+    setDraft((d) => {
+      const base = d ?? { sales: init.sales.map(bpText), spend: init.spend.map(bpText) };
+      return { ...base, [key]: base[key].map((v, j) => (j === i ? value.replace(/[^\d.,]/g, '') : v)) };
+    });
   };
-  const spreadEvenly = (key, total) => {
-    const shares = splitEqual(total);
-    setDraft((d) => d.map((m, i) => ({ ...m, [key]: String(shares[i]) })));
-  };
+  const spreadEvenly = (key) => setDraft((d) => ({ ...(d ?? { sales: init.sales.map(bpText), spend: init.spend.map(bpText) }), [key]: splitEqual(10000).map(bpText) }));
   const save = async () => {
     setSaving(true);
     setMessage(null);
     try {
       const { data: next } = await api.put('/daily-tracking/annual-targets/split', {
         brandId, year,
-        months: draft.map((m) => ({ month: m.month, targetSales: Number(m.sales) || 0, targetSpend: hasSpend ? Number(m.spend) || 0 : null })),
+        months: months.map((m, i) => ({ month: m.month, targetSales: plan.sales.amounts[i], targetSpend: hasSpend ? plan.spend.amounts[i] : null })),
       });
       setState({ status: 'ready', data: next });
       setDraft(null);
@@ -107,13 +158,25 @@ export default function AnnualPlan({ brandId, month, canEdit, onSaved }) {
     }
   };
 
-  const sumLine = (label, sum, total, ok) => (
-    <div className={`at-sum${ok ? ' is-ok' : sum > total ? ' is-over' : ''}`}>
-      <span className="at-sum-bar"><i style={{ transform: `scaleX(${Math.min(total ? sum / total : 0, 1)})` }} /></span>
-      <b>{label} {pct(total ? sum / total : 0, 2)}</b>
-      <small>{ok ? 'Pas 100%' : sum > total ? `Lebih ${fmtRp(sum - total)}` : `Kurang ${fmtRp(total - sum)}`}</small>
+  // Porsi of one side against 100%.
+  const sumLine = (label, side) => (
+    <div className={`at-sum${side.ok ? ' is-ok' : side.sum > 10000 ? ' is-over' : ''}`}>
+      <span className="at-sum-bar"><i style={{ transform: `scaleX(${Math.min(side.sum / 10000, 1)})` }} /></span>
+      <b>Porsi {label} {bpText(side.sum)}%</b>
+      <small>{!side.valid ? 'Ada porsi yang tidak valid' : side.ok ? 'Pas 100%' : side.sum > 10000 ? `Lebih ${bpText(side.sum - 10000)}%` : `Kurang ${bpText(10000 - side.sum)}%`}</small>
     </div>
   );
+
+  // The quarters show one figure: target sales, or the ad budget.
+  const view = metric === 'spend' && hasSpend ? 'spend' : 'sales';
+  const side = plan[view];
+  const yearTotal = view === 'sales' ? annual.targetSales : annual.targetSpend;
+  const actualOf = (m) => (view === 'sales' ? m.actualSales : m.actualSpend);
+  const quarters = [0, 1, 2, 3].map((q) => {
+    const idx = [q * 3, q * 3 + 1, q * 3 + 2];
+    return { q: q + 1, idx, total: idx.reduce((a, i) => a + (side.amounts[i] ?? 0), 0) };
+  });
+  const viewLabel = view === 'sales' ? 'Target sales' : 'Budget iklan';
 
   return (
     <section className="soft-card tb-card at-plan" data-feature="rencana-tahunan" aria-label="Rencana tahunan">
@@ -125,110 +188,107 @@ export default function AnnualPlan({ brandId, month, canEdit, onSaved }) {
             {updates > 0 && <> · <span className="at-flag-inline"><History size={13} aria-hidden="true" /> Diperbarui {updates}× · {signedPct(salesChange)} dari {baseLabel} {fmtRpShort(original.targetSales)}</span></>}
           </p>
         </div>
-        {canEdit && !draft && <button type="button" className="bp-ghost" onClick={startEdit}><PencilLine size={15} aria-hidden="true" /> Atur pembagian</button>}
       </header>
 
       {message && <p className={`tb-msg is-${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>{message.text}</p>}
 
-      {!draft && (
-        <div className="at-figures">
-          <article className="at-fig is-main">
-            <span>{year > Number(nowYm.slice(0, 4)) ? `Realisasi ${year} · belum berjalan` : year < Number(nowYm.slice(0, 4)) ? `Realisasi ${year}` : `Realisasi s.d. ${MONTH_SHORT[monthIndex(nowYm)]} ${year}`}</span>
-            <strong>{fmtRp(ytdSales)}</strong>
-            <small>{pct(annual.targetSales ? ytdSales / annual.targetSales : null)} dari target setahun · {pct(ytdTarget ? ytdSales / ytdTarget : null)} dari target s.d. bulan ini</small>
-          </article>
-          <article className="at-fig">
-            <span>Sisa target {year}</span>
-            <strong>{fmtRp(Math.max(annual.targetSales - ytdSales, 0))}</strong>
-            <small>{original && updates > 0 ? `${data.corrected ? 'Target awal (dikoreksi)' : 'Target awal'} ${fmtRp(original.targetSales)}` : 'Belum ada update target'}</small>
-          </article>
-          <article className="at-fig">
-            <span>Budget terpakai</span>
-            <strong>{fmtRp(ytdSpend)}</strong>
-            <small>{hasSpend ? `${pct(annual.targetSpend ? ytdSpend / annual.targetSpend : null)} dari budget setahun` : 'Budget tahunan belum diisi'}</small>
-          </article>
-        </div>
-      )}
-
-      <div className="tb-table-wrap">
-        <table className="tb-table at-table">
-          <thead>
-            <tr>
-              <th>Bulan</th>
-              <th className="is-num">Target sales</th><th className="is-num">Porsi</th>
-              {!draft && <><th className="is-num">Realisasi</th><th>Capaian</th></>}
-              {hasSpend && <><th className="is-num">Budget iklan</th><th className="is-num">Porsi</th></>}
-              {!draft && hasSpend && <th className="is-num">Terpakai</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {(draft ?? months).map((row, i) => {
-              const m = months[i];
-              const salesVal = draft ? Number(row.sales) || 0 : m.targetSales ?? 0;
-              const spendVal = draft ? Number(row.spend) || 0 : m.targetSpend ?? 0;
-              const ratio = m.targetSales ? (m.actualSales ?? 0) / m.targetSales : null;
-              const past = m.month < nowYm;
-              const current = m.month === nowYm;
-              const tone = ratio == null || (!past && !current) ? null : ratio >= 1 ? 'good' : ratio >= 0.9 ? 'warn' : past ? 'bad' : null;
-              return (
-                <tr key={m.month} className={`${current ? 'is-current' : ''}${past ? ' is-past' : ''}${m.month === month ? ' is-selected' : ''}`}>
-                  <th scope="row">{monthLong(m.month).split(' ')[0]}{current && <em>berjalan</em>}</th>
-                  <td className="is-num">
-                    {draft
-                      ? <span className="at-cell-money"><b>Rp</b><input inputMode="numeric" aria-label={`Target sales ${monthLong(m.month)}`} value={thousands(row.sales)} onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, sales: digits(e.target.value) } : x)))} /></span>
-                      : fmtRp(salesVal)}
-                  </td>
-                  <td className="is-num is-muted">{pct(annual.targetSales ? salesVal / annual.targetSales : null, 1)}</td>
-                  {!draft && (
-                    <>
-                      <td className="is-num is-strong">{m.actualSales != null ? fmtRp(m.actualSales) : '—'}</td>
-                      <td>
-                        <span className="at-bar"><i className={tone ? `is-${tone}` : ''} style={{ transform: `scaleX(${Math.min(ratio ?? 0, 1)})` }} /></span>
-                        <span className={`at-ratio${tone ? ` is-${tone}` : ''}`}>{m.actualSales != null && ratio != null ? pct(ratio, 0) : '—'}</span>
-                      </td>
-                    </>
-                  )}
-                  {hasSpend && (
-                    <>
-                      <td className="is-num">
-                        {draft
-                          ? <span className="at-cell-money"><b>Rp</b><input inputMode="numeric" aria-label={`Budget iklan ${monthLong(m.month)}`} value={thousands(row.spend)} onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, spend: digits(e.target.value) } : x)))} /></span>
-                          : fmtRp(spendVal)}
-                      </td>
-                      <td className="is-num is-muted">{pct(annual.targetSpend ? spendVal / annual.targetSpend : null, 1)}</td>
-                    </>
-                  )}
-                  {!draft && hasSpend && <td className="is-num">{m.actualSpend != null ? fmtRp(m.actualSpend) : '—'}</td>}
-                </tr>
-              );
-            })}
-          </tbody>
-          {!draft && (
-            <tfoot>
-              <tr>
-                <th>Total</th>
-                <td className="is-num">{fmtRp(annual.targetSales)}</td><td className="is-num">100%</td>
-                <td className="is-num">{fmtRp(months.reduce((a, m) => a + (m.actualSales ?? 0), 0))}</td><td />
-                {hasSpend && <><td className="is-num">{fmtRp(annual.targetSpend)}</td><td className="is-num">100%</td><td className="is-num">{fmtRp(months.reduce((a, m) => a + (m.actualSpend ?? 0), 0))}</td></>}
-              </tr>
-            </tfoot>
-          )}
-        </table>
+      <div className="at-figures">
+        <article className="at-fig is-main">
+          <span>{year > Number(nowYm.slice(0, 4)) ? `Realisasi ${year} · belum berjalan` : year < Number(nowYm.slice(0, 4)) ? `Realisasi ${year}` : `Realisasi s.d. ${MONTH_SHORT[monthIndex(nowYm)]} ${year}`}</span>
+          <strong>{fmtRp(ytdSales)}</strong>
+          <small>{pct(annual.targetSales ? ytdSales / annual.targetSales : null)} dari target setahun · {pct(ytdTarget ? ytdSales / ytdTarget : null)} dari target s.d. bulan ini</small>
+        </article>
+        <article className="at-fig">
+          <span>Sisa target {year}</span>
+          <strong>{fmtRp(Math.max(annual.targetSales - ytdSales, 0))}</strong>
+          <small>{original && updates > 0 ? `${data.corrected ? 'Target awal (dikoreksi)' : 'Target awal'} ${fmtRp(original.targetSales)}` : 'Belum ada update target'}</small>
+        </article>
+        <article className="at-fig">
+          <span>Budget terpakai</span>
+          <strong>{fmtRp(ytdSpend)}</strong>
+          <small>{hasSpend ? `${pct(annual.targetSpend ? ytdSpend / annual.targetSpend : null)} dari budget setahun` : 'Budget tahunan belum diisi'}</small>
+        </article>
       </div>
 
-      {draft && sums && (
+      {/* The year by quarter (left) and the share of each month (Setting). */}
+      <div className="ap-board">
+        <div className="ap-main">
+          <div className="ap-year">
+            <b>{year}</b>
+            <span><small>{viewLabel}</small>{fmtRp(yearTotal)}</span>
+          </div>
+          {quarters.map(({ q, idx, total }) => (
+            <section key={q} className="ap-quarter" aria-label={`Q${q} ${year}`}>
+              <ul className="ap-months">
+                {idx.map((i) => {
+                  const m = months[i];
+                  const amount = side.amounts[i] ?? 0;
+                  const past = m.month < nowYm;
+                  const current = m.month === nowYm;
+                  // The running month always reads its progress: nothing
+                  // entered yet is Rp0 so far, not a missing figure.
+                  const actual = actualOf(m) ?? (current ? 0 : null);
+                  const ratio = amount && actual != null ? actual / amount : null;
+                  const tone = ratio == null || view === 'spend' || (!past && !current) ? '' : ratio >= 1 ? ' is-good' : ratio >= 0.9 ? ' is-warn' : past ? ' is-bad' : '';
+                  return (
+                    <li key={m.month} className={`ap-month${current ? ' is-current' : ''}${m.month === month ? ' is-selected' : ''}`}>
+                      <b>{MONTH_LONG[i].toUpperCase()}</b>
+                      <strong>{fmtRp(amount)}</strong>
+                      <span className={`ap-month-real${tone}`}>
+                        {actual != null
+                          ? <>{view === 'sales' ? 'Realisasi' : 'Terpakai'} {fmtRpShort(actual)}{ratio != null ? ` · ${pct(ratio, 0)}` : ''}</>
+                          : past ? 'Belum ada realisasi' : ''}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="ap-qtotal">
+                <span>Q{q}</span>
+                <strong><sup>Rp</sup>{compact(total).num}<sub>{compact(total).unit}</sub></strong>
+                <small>{pct(yearTotal ? total / yearTotal : null, 1)} dari setahun</small>
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <aside className="ap-setting" aria-label="Porsi per bulan">
+          <h3>Setting</h3>
+          {/* Which split is set here — and shown by quarter on the left. */}
+          {hasSpend && (
+            <div className="at-mini-seg ap-seg" role="tablist" aria-label="Porsi yang diatur">
+              {[['sales', 'Target sales'], ['spend', 'Budget iklan']].map(([k, l]) => (
+                <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? 'is-on' : ''} onClick={() => setMetric(k)}>{l}</button>
+              ))}
+            </div>
+          )}
+          <p>Porsi {view === 'sales' ? 'target sales' : 'budget iklan'} tiap bulan. {canEdit ? 'Nominal di kiri dihitung otomatis.' : 'Diatur oleh tim MIL Digital.'}</p>
+          <ul>
+            {months.map((m, i) => (
+              <li key={m.month}>
+                <b>{MONTH_LONG[i].toUpperCase()}</b>
+                {canEdit ? (
+                  <span className="ap-pct">
+                    <input inputMode="decimal" aria-label={`Porsi ${viewLabel.toLowerCase()} ${monthLong(m.month)}`} value={texts(view)[i]} onChange={(e) => setShare(view, i, e.target.value)} />
+                    <i>%</i>
+                  </span>
+                ) : <span className="ap-pct is-read">{bpText(side.bps[i] ?? 0)}%</span>}
+              </li>
+            ))}
+          </ul>
+          {canEdit && <button type="button" className="tb-link" onClick={() => spreadEvenly(view)}><Scale size={14} aria-hidden="true" /> Bagi rata</button>}
+        </aside>
+      </div>
+
+      {draft && (
         <div className="at-edit-foot">
           <div className="at-sums">
-            {sumLine('Sales', sums.sales, annual.targetSales, sums.salesOk)}
-            {hasSpend && sumLine('Budget', sums.spend, annual.targetSpend, sums.spendOk)}
-          </div>
-          <div className="at-edit-tools">
-            <button type="button" className="tb-link" onClick={() => spreadEvenly('sales', annual.targetSales)}><Scale size={14} aria-hidden="true" /> Bagi rata sales</button>
-            {hasSpend && <button type="button" className="tb-link" onClick={() => spreadEvenly('spend', annual.targetSpend)}><Scale size={14} aria-hidden="true" /> Bagi rata budget</button>}
+            {sumLine('sales', plan.sales)}
+            {plan.spend && sumLine('budget', plan.spend)}
           </div>
           <footer className="at-actions">
             <button type="button" className="bp-ghost" onClick={() => setDraft(null)} disabled={saving}><X size={15} aria-hidden="true" /> Batal</button>
-            <button type="button" className="bp-primary" onClick={save} disabled={saving || !sums.salesOk || !sums.spendOk} title={!sums.salesOk || !sums.spendOk ? 'Total 12 bulan harus tepat 100%' : undefined}>
+            <button type="button" className="bp-primary" onClick={save} disabled={saving || !plan.ok} title={!plan.ok ? 'Total porsi 12 bulan harus tepat 100%' : undefined}>
               {saving ? <Loader2 size={15} className="dt-spin" /> : <Check size={15} />} Simpan pembagian
             </button>
           </footer>

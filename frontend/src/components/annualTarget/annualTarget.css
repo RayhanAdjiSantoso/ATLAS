@@ -3,7 +3,7 @@
    and Brand Tracking's monthly split (AnnualPlan). Soft-shell tokens with
    fallbacks, so the portalled dialog reads the same outside the page. */
 
-.at-card, .at-dlg-root {
+.at-card, .at-dlg-root, .at-plan {
   --at-ink: var(--soft-ink, #202e45);
   --at-muted: var(--soft-muted, #57677e);
   --at-accent: var(--soft-accent, #2856b6);
@@ -168,12 +168,14 @@
 .at-editor { display: grid; gap: 14px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--at-accent) 35%, var(--at-line)); border-radius: 18px; background: #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--at-accent) 7%, transparent); }
 .at-editor-head { display: grid; gap: 3px; }
 .at-editor-head p { margin: 0; color: var(--at-muted); font-size: .8rem; line-height: 1.5; }
-.at-editor-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 140px; gap: 12px; align-items: start; }
+.at-editor-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; align-items: start; }
+.at-money.is-computed { background: var(--at-wash); }
+.at-money.is-computed input { cursor: default; }
+.at-money.is-computed:focus-within { border-color: var(--at-line); box-shadow: none; }
 @media (max-width: 1100px) { .at-editor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .at-field { display: grid; gap: 6px; }
 .at-field > span { color: var(--at-ink); font-size: .78rem; font-weight: 750; }
 .at-field > span small { margin-left: 6px; color: var(--at-muted); font-weight: 600; }
-.at-field-prev { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--at-muted); font-size: .74rem; font-variant-numeric: tabular-nums; }
 .at-money { display: flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid var(--at-line); border-radius: 11px; background: #fff; transition: border-color .15s ease, box-shadow .15s ease; }
 .at-money b { color: var(--at-muted); font-size: .8rem; }
 .at-money input, .at-text { min-width: 0; width: 100%; height: 42px; border: 0; background: transparent; color: var(--at-ink); font: inherit; font-size: .95rem; font-weight: 750; font-variant-numeric: tabular-nums; outline: none; }
@@ -280,25 +282,6 @@
 
 /* Brand Tracking plan table */
 .at-plan .tb-head p { line-height: 1.6; }
-.at-table tbody tr.is-past th[scope='row'] { color: var(--soft-muted, #57677e); }
-.at-table tbody tr.is-current > * { background: color-mix(in srgb, var(--soft-accent, #2856b6) 5%, #fff); }
-.at-table tbody tr.is-selected th[scope='row'] { box-shadow: inset 3px 0 0 var(--soft-accent, #2856b6); }
-.at-table th[scope='row'] em { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--soft-accent, #2856b6); color: #fff; font-size: .64rem; font-style: normal; font-weight: 800; vertical-align: 1px; }
-.at-table .is-muted { color: var(--soft-muted, #57677e); }
-.at-table .is-strong { font-weight: 800; }
-.at-bar { display: inline-block; width: 70px; height: 6px; margin-right: 8px; border-radius: 999px; background: #edf1f7; overflow: hidden; vertical-align: 1px; }
-.at-bar i { display: block; height: 100%; border-radius: inherit; background: var(--soft-accent, #2856b6); transform-origin: left; }
-.at-bar i.is-good { background: #22a06b; }
-.at-bar i.is-warn { background: #e2a03f; }
-.at-bar i.is-bad { background: #e5484d; }
-.at-ratio { font-size: .8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.at-ratio.is-good { color: #18794e; }
-.at-ratio.is-warn { color: #9a5a0c; }
-.at-ratio.is-bad { color: #b42318; }
-.at-cell-money { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border: 1px solid var(--soft-border, #d9e2ef); border-radius: 8px; background: #fff; }
-.at-cell-money b { color: var(--soft-muted, #57677e); font-size: .72rem; }
-.at-cell-money input { width: 120px; height: 32px; border: 0; background: transparent; color: var(--soft-ink, #202e45); font: inherit; font-size: .84rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; outline: none; }
-.at-cell-money:focus-within { border-color: var(--soft-accent, #2856b6); box-shadow: 0 0 0 3px color-mix(in srgb, var(--soft-accent, #2856b6) 14%, transparent); }
 
 .at-edit-foot { display: grid; gap: 12px; }
 .at-sums { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
@@ -311,7 +294,6 @@
 .at-sum.is-over .at-sum-bar i { background: #e5484d; }
 .at-sum b { color: var(--soft-ink, #202e45); font-size: .84rem; font-variant-numeric: tabular-nums; }
 .at-sum small { color: var(--soft-muted, #57677e); font-size: .76rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.at-edit-tools { display: flex; flex-wrap: wrap; gap: 12px; }
 
 
 @media (max-width: 1100px) {
@@ -322,11 +304,67 @@
 
 /* Inside the console frame: row headers and inputs drop the global table
    and form styling (grey header cells, framed inputs). */
-.con .at-table tbody th[scope='row'], .con .at-table tfoot th { background: transparent; color: var(--soft-ink, #202e45); font-size: .8rem; font-weight: 750; letter-spacing: 0; text-transform: none; }
-.con .at-table tbody tr.is-past th[scope='row'] { color: var(--soft-muted, #57677e); }
-.con .at-table tbody tr.is-current > * { background: color-mix(in srgb, var(--soft-accent, #2856b6) 5%, #fff); }
-.con .at-cell-money input, .con .at-money input,
-.con .at-cell-money input:focus, .con .at-money input:focus { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; }
+.con .at-money input,
+.con .at-money input:focus { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; }
 .con .at-text { height: 42px; padding: 0 12px; border: 1px solid var(--at-line); border-radius: 11px; background: #fff; box-shadow: none; }
 .con .at-text:focus { border-color: var(--at-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--at-accent) 14%, transparent); outline: none; }
-.con .at-table tbody tr:nth-child(even) th[scope='row'] { background: #f8fafd; }
+
+/* ── Rencana tahunan: quarters (left) and the Setting panel (right) ────── */
+.ap-board { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.ap-main { display: grid; gap: 12px; }
+.ap-year { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border: 1px solid color-mix(in srgb, var(--at-accent) 22%, var(--at-line)); border-radius: 14px; background: linear-gradient(120deg, color-mix(in srgb, var(--at-accent) 8%, #fff), #fff); color: var(--at-ink); }
+.ap-year > b { color: var(--at-accent); font-size: 1.25rem; font-weight: 850; letter-spacing: -.01em; }
+.ap-year > span { display: grid; justify-items: end; font-size: 1.25rem; font-weight: 850; font-variant-numeric: tabular-nums; }
+.ap-year > span small { color: var(--at-muted); font-size: .68rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.ap-quarter { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 14px; align-items: center; padding: 12px; border: 1px solid var(--at-line); border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(15, 26, 58, .03); }
+.ap-months { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ap-month { display: grid; grid-template-columns: minmax(7.5rem, 1fr) auto 15.5rem; gap: 16px; align-items: center; min-height: 50px; padding: 8px 16px; border-radius: 10px; background: var(--at-wash); color: var(--at-ink); font-size: .95rem; }
+.ap-month > b { color: var(--at-muted); font-size: inherit; font-weight: 850; letter-spacing: .02em; }
+.ap-month > strong { font-size: inherit; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+/* Realisasi beside the target, the same size, in the capaian colour. */
+/* A fixed column, so the divider lines up on every month — with a long
+   realisasi, a short one, or none yet. */
+.ap-month-real { align-self: stretch; display: flex; align-items: center; justify-content: flex-end; padding-left: 16px; border-left: 1px solid color-mix(in srgb, var(--at-muted) 28%, transparent); color: var(--at-muted); font-size: inherit; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+.ap-month-real.is-good { color: var(--at-good); }
+.ap-month-real.is-warn { color: #b45309; }
+.ap-month-real.is-bad { color: var(--at-bad); }
+.ap-month.is-current { box-shadow: inset 3px 0 0 var(--at-accent); }
+.ap-month.is-current { background: color-mix(in srgb, var(--at-accent) 7%, #fff); }
+.ap-month.is-current > b { color: var(--at-accent); }
+.ap-qtotal { display: grid; justify-items: center; gap: 2px; align-self: stretch; align-content: center; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--at-accent) 6%, #fff); text-align: center; color: var(--at-accent); }
+.ap-qtotal > span { color: var(--at-ink); font-size: 1.05rem; font-weight: 850; }
+.ap-qtotal strong { display: inline-flex; align-items: baseline; font-size: 2.6rem; font-weight: 850; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.ap-qtotal sup { align-self: flex-start; margin-right: 2px; font-size: .95rem; font-weight: 800; line-height: 1.6; }
+.ap-qtotal sub { align-self: flex-end; margin-left: 2px; font-size: .95rem; font-weight: 800; }
+.ap-qtotal small { color: var(--at-muted); font-size: .72rem; font-weight: 650; }
+
+.ap-setting { position: sticky; top: 14px; display: grid; gap: 10px; padding: 16px; border: 1px solid var(--at-line); border-radius: 16px; background: #fff; box-shadow: 0 1px 2px rgba(15, 26, 58, .03); }
+.ap-setting h3 { margin: 0; color: var(--at-ink); font-size: .9rem; font-weight: 850; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+.ap-seg { display: grid; grid-template-columns: 1fr 1fr; }
+.ap-seg button { padding: 7px 10px; font-size: .78rem; }
+.ap-setting > p { margin: 0; color: var(--at-muted); font-size: .74rem; line-height: 1.45; text-align: center; }
+.ap-setting ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ap-setting li { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 10px; align-items: center; }
+.ap-setting li > b { display: grid; place-items: center; min-height: 38px; border-radius: 9px; background: var(--at-wash); color: var(--at-muted); font-size: .82rem; font-weight: 850; letter-spacing: .04em; }
+.ap-pct { display: flex; align-items: center; gap: 2px; min-height: 38px; padding: 0 10px; border: 1px solid var(--at-line); border-radius: 9px; background: #fff; color: var(--at-ink); font-weight: 800; font-variant-numeric: tabular-nums; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+.ap-pct.is-read { justify-content: center; border-color: transparent; background: var(--at-wash); font-size: .86rem; }
+.ap-pct input { width: 100%; min-width: 0; height: 36px; border: 0; background: transparent; color: inherit; font: inherit; font-size: .9rem; text-align: right; outline: none; }
+.ap-pct i { color: var(--at-muted); font-size: .8rem; font-style: normal; }
+.ap-pct:focus-within { border-color: var(--at-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--at-accent) 14%, transparent); }
+.ap-setting .tb-link { justify-self: center; }
+.con .ap-pct input, .con .ap-pct input:focus { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; }
+
+@media (max-width: 1100px) {
+  .ap-board { grid-template-columns: minmax(0, 1fr); }
+  .ap-setting { position: static; }
+  .ap-setting ul { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .ap-quarter { grid-template-columns: minmax(0, 1fr); }
+  .ap-qtotal { grid-template-columns: auto 1fr; justify-items: start; align-items: baseline; gap: 4px 10px; }
+  .ap-qtotal small { grid-column: 1 / -1; }
+  .ap-qtotal strong { font-size: 2rem; }
+  .ap-month { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 12px; }
+  .ap-month-real { grid-column: 1 / -1; justify-content: flex-start; padding: 4px 0 0; border-left: 0; border-top: 1px solid color-mix(in srgb, var(--at-muted) 28%, transparent); text-align: left; }
+  .ap-year > b, .ap-year > span { font-size: 1.05rem; }
+}

@@ -90,6 +90,9 @@ export interface MetaB2bMetrics extends MetaSalesMetrics {
   costPerFormLead: number | null;
   costPerConversation: number | null;
   costPerContact: number | null;
+  // Spend over every lead (form leads + messaging contacts + conversations
+  // started), whatever result the report picked — the Overview's CPL.
+  costPerAllLeads: number | null;
 }
 
 export function metaB2bMetrics(rows: SheetRow[], leadKind?: LeadResultKind): MetaB2bMetrics {
@@ -99,6 +102,9 @@ export function metaB2bMetrics(rows: SheetRow[], leadKind?: LeadResultKind): Met
   const per = (n: number | null, d: number | null, scale: number) => (n === null || d === null || d <= 0 ? null : (n / d) * scale);
   return {
     ...s,
+    // A lead campaign's traffic is its link clicks (the Overview and Root
+    // Cause Analysis read it so), not content views it rarely tracks.
+    ctr: o.ctr,
     purchase: s.purchase ?? l.leads,
     conversionRate: s.conversionRate ?? l.leadRate,
     leads: l.leads,
@@ -110,6 +116,7 @@ export function metaB2bMetrics(rows: SheetRow[], leadKind?: LeadResultKind): Met
     costPerFormLead: o.costPerLead,
     costPerConversation: o.costPerConversation,
     costPerContact: per(o.spend, o.messagingContacts, 1),
+    costPerAllLeads: leadKind === 'leads' ? l.costPerLead : metaLeadMetrics(rows, 'leads').costPerLead,
   };
 }
 
@@ -404,18 +411,12 @@ export function nonRetailConversionMetrics(kinds: MessageKind[]): B2bDef[] {
     additive: false,
   }));
 }
-export function nonRetailTopContentMetrics(kinds: MessageKind[]): B2bDef[] {
-  return [
-    { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
-    { key: 'costPerFormLead', label: 'Cost per Lead', fmt: 'rp', additive: false },
-    ...kinds.map((k): B2bDef => ({
-      key: k === 'conversations' ? 'costPerConversation' : 'costPerContact',
-      label: kinds.length > 1 ? `Cost per Message (${MESSAGE_NAME[k]})` : 'Cost per Message',
-      fmt: 'rp',
-      additive: false,
-    })),
-  ];
-}
+// Non Retail's Top Content: the click and what each lead cost, read the same
+// as the Performance Overview's CTR and Cost per Leads (CPL).
+export const NON_RETAIL_TOP_CONTENT_METRICS: readonly B2bDef[] = [
+  { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'costPerAllLeads', label: 'Cost per Leads (CPL)', fmt: 'rp', additive: false },
+];
 // Non Retail's Conversion Analysis by Creative: the same three as Retail.
 export const B2B_CREATIVE_CONVERSION_METRICS: readonly B2bDef[] = [
   { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },

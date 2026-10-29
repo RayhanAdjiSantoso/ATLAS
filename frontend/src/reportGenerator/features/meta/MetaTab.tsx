@@ -48,7 +48,7 @@ import {
   findAdsetCol,
   messageKindsOf,
   nonRetailConversionMetrics,
-  nonRetailTopContentMetrics,
+  NON_RETAIL_TOP_CONTENT_METRICS,
   type AudienceMetricDef,
 } from '../../lib/metaAudience';
 import { MetaCompareBars } from './MetaCompareBars';
@@ -770,7 +770,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     // Contacts — whichever the file has, both offered when it has both.
     const messageKinds = kind === 'b2b' ? messageKindsOf(rows, oldRows) : [];
     const menus = kind === 'b2b'
-      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_TRAFFIC_METRICS, conversion: nonRetailConversionMetrics(messageKinds), creativeConversion: B2B_CREATIVE_CONVERSION_METRICS, topContent: nonRetailTopContentMetrics(messageKinds) }
+      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_TRAFFIC_METRICS, conversion: nonRetailConversionMetrics(messageKinds), creativeConversion: B2B_CREATIVE_CONVERSION_METRICS, topContent: NON_RETAIL_TOP_CONTENT_METRICS }
       : { audienceTraffic: SALES_AUDIENCE_TRAFFIC_METRICS, traffic: SALES_TRAFFIC_METRICS, conversion: RETAIL_AUDIENCE_CONVERSION_METRICS, creativeConversion: SALES_CREATIVE_CONVERSION_METRICS, topContent: RETAIL_TOP_CONTENT_METRICS };
     const adsetCol = rows.length ? findAdsetCol(rows) : null;
     const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
