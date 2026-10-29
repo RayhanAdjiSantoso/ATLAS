@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
 import useActiveBrand from '../hooks/useActiveBrand.js';
 import DashboardBrandPicker from '../components/dashboard/DashboardBrandPicker.jsx';
+import BrandAvatar from '../components/common/BrandAvatar.jsx';
 import MonthPillNav from '../components/dailyTracking/MonthPillNav.jsx';
 import TrackingKpis from '../components/dailyTracking/TrackingKpis.jsx';
 import TrackingPulse from '../components/dailyTracking/TrackingPulse.jsx';
@@ -258,19 +259,24 @@ export default function DailyTrackingPage() {
   return (
     <div className="bt-page dt-page">
       <section className="soft-card bp-command bt-command" aria-label="Brand dan periode">
-        <div className="bp-command-brand">
-          <label className="bp-label" htmlFor="dt-brand">Brand</label>
-          <DashboardBrandPicker
-            id="dt-brand"
-            brands={brands}
-            value={brandId}
-            onChange={setBrandId}
-            status={brandStatus}
-            onStatusChange={setBrandStatus}
-            placeholder="Pilih klien…"
-            resultHint="Pilih untuk membuka Brand Tracking"
-            disabled={locked}
-          />
+        {/* Laid out like the Report Generator's brand field: the logo beside
+            the label and the picker. */}
+        <div className="bt-command-brand">
+          <BrandAvatar brand={brands.find((b) => b.brand_id === brandId)} />
+          <div className="bp-command-brand">
+            <label className="bp-label" htmlFor="dt-brand">Brand</label>
+            <DashboardBrandPicker
+              id="dt-brand"
+              brands={brands}
+              value={brandId}
+              onChange={setBrandId}
+              status={brandStatus}
+              onStatusChange={setBrandStatus}
+              placeholder="Pilih klien…"
+              resultHint="Pilih untuk membuka Brand Tracking"
+              disabled={locked}
+            />
+          </div>
         </div>
         <div className="bt-command-month">
           <span className="bp-label">Periode</span>

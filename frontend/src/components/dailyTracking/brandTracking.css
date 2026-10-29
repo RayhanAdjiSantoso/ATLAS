@@ -26,6 +26,24 @@
 /* ── Command: brand, month, save state ─────────────────────────────────── */
 .bt-command { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; }
 .bt-command-month { display: grid; gap: 6px; min-width: 0; }
+/* Brand field as in the Report Generator (workspace.css .rgx-field-brand):
+   a 72px logo tile spanning the label and a 46px picker. */
+.bt-command-brand { display: flex; align-items: center; gap: 14px; flex: 0 1 420px; min-width: 0; }
+.bt-command-brand .bp-command-brand { flex: 1 1 auto; gap: 8px; min-width: 0; }
+.bt-command-brand .bp-label { color: #55658a; font-size: .8rem; font-weight: 650; line-height: 18px; }
+.bt-command-brand .brand-avatar {
+  display: grid; place-items: center; flex: 0 0 72px; width: 72px; height: 72px; overflow: hidden;
+  border-radius: 16px; background: #eef1f6; color: #5a6782; font-size: 1.15rem; font-weight: 850; letter-spacing: .02em;
+  box-shadow: inset 0 0 0 1px #dfe4ef;
+}
+.bt-command-brand .brand-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bt-command-brand .brand-avatar.is-empty { background: #f5f7fb; color: #55658a; }
+.bt-command-brand .dashboard-brand-trigger {
+  min-height: 46px; padding-inline: 14px; border-radius: 13px;
+  background: #f5f7fb; font-size: .96rem; font-weight: 650;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.bt-command-brand .dashboard-brand-trigger:hover:not(:disabled) { border-color: #c9d7f6; background: #fff; box-shadow: 0 0 0 4px #eaf0fd; }
 .bt-command-state { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; align-self: center; }
 .bt-save {
   display: inline-flex; align-items: center; gap: 7px;
