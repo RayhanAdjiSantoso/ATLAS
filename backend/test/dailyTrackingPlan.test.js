@@ -119,6 +119,25 @@ test('Meta funnel: a MAIN account without keyword is reported, not guessed', () 
   assert.ok(p.warnings.some((w) => w.code === 'boost_keyword_missing' && /act_9/.test(w.message)));
 });
 
+test('Meta funnel: a Boost-only or Non-Boost-only MAIN account fills its bucket without a keyword', () => {
+  const p = plan({
+    salesRows: [sale('2026-01', 'website', 100)],
+    spendRows: [spend('2026-01', 'meta_boost_post', 10), spend('2026-01', 'meta_nonboost_post', 20)],
+    metaRows: [
+      meta('2026-01', 'MAIN', 'act_b', 'Jan - Conversion', { spend: 10, impressions: 1000 }),
+      meta('2026-01', 'MAIN', 'act_n', 'Jan - Profile Visit', { spend: 20, impressions: 4000 }),
+    ],
+    accounts: [
+      { ad_account_id: 'act_b', account_type: 'MAIN', main_kind: 'BOOST', boost_keyword: null },
+      { ad_account_id: 'act_n', account_type: 'MAIN', main_kind: 'NONBOOST', boost_keyword: null },
+    ],
+  });
+  const byP = Object.fromEntries(month(p, '2026-01').platforms.map((x) => [x.platform, x.metrics]));
+  assert.equal(byP.meta_boost.impressions, 1000, 'campaign name ignored on a Boost-only account');
+  assert.equal(byP.meta_nonboost.impressions, 4000, 'campaign name ignored on a Non-Boost-only account');
+  assert.ok(!p.warnings.some((w) => w.code === 'boost_keyword_missing'));
+});
+
 test('Meta funnel: Daily Tracking vs Meta API spend gap is flagged', () => {
   const p = plan({
     salesRows: [sale('2026-01', 'website', 100)],

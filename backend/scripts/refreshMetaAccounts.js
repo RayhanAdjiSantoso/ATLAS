@@ -28,9 +28,9 @@ try {
     console.log(`  brand ${brandId}: ${r ? `roll-up ${r.status}, ${r.rowsWritten} baris` : 'tidak ada data Daily Tracking / gagal (lihat log)'}`);
   }
   const { rows } = await pool.query(
-    `SELECT b.brand_name, a.ad_account_id, a.account_type, a.boost_keyword
+    `SELECT b.brand_name, a.ad_account_id, a.account_type, a.main_kind, a.boost_keyword
      FROM brand_ad_accounts a JOIN brands b USING (brand_id) ORDER BY 1, 3`);
-  for (const r of rows) console.log(`  ${r.brand_name.padEnd(22)} ${r.ad_account_id.padEnd(22)} ${r.account_type.padEnd(5)} ${r.boost_keyword ?? ''}`);
+  for (const r of rows) console.log(`  ${r.brand_name.padEnd(22)} ${r.ad_account_id.padEnd(22)} ${r.account_type.padEnd(5)} ${(r.main_kind ?? '').padEnd(8)} ${r.boost_keyword ?? ''}`);
 } finally {
   await pool.end();
 }

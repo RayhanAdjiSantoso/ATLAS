@@ -17,6 +17,11 @@ import { callAppsScript } from '../metaAutomationService.js';
 // skipped — they cannot be attributed to a client.
 // =====================================================================
 
+// MAIN: MIXED (Boost + Non Boost, split by the keyword) unless registered as
+// a Boost-only or Non-Boost-only account; only MIXED keeps a keyword.
+const mainKindOf = (a) => (a.type === 'CPAS' ? null : ['BOOST', 'NONBOOST'].includes(a.mainKind) ? a.mainKind : 'MIXED');
+const keywordOf = (a) => (mainKindOf(a) === 'MIXED' ? (String(a.boostMatch ?? '').trim().toLowerCase() || null) : null);
+
 export async function refreshMetaAccountsMirror({ fetchList = () => callAppsScript('brandList') } = {}) {
   const list = await fetchList();
   const linked = (Array.isArray(list) ? list : [])
@@ -25,7 +30,7 @@ export async function refreshMetaAccountsMirror({ fetchList = () => callAppsScri
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: before } = await client.query('SELECT brand_id, ad_account_id, account_type, boost_keyword FROM brand_ad_accounts');
+    const { rows: before } = await client.query('SELECT brand_id, ad_account_id, account_type, main_kind, boost_keyword FROM brand_ad_accounts');
     const { rows: brands } = await client.query('SELECT brand_id FROM brands WHERE brand_id = ANY($1::int[])', [linked.map((a) => Number(a.atlasBrandId))]);
     const known = new Set(brands.map((b) => b.brand_id));
     const usable = linked.filter((a) => known.has(Number(a.atlasBrandId)));
@@ -33,22 +38,21 @@ export async function refreshMetaAccountsMirror({ fetchList = () => callAppsScri
     await client.query('DELETE FROM brand_ad_accounts');
     for (const a of usable) {
       await client.query(
-        `INSERT INTO brand_ad_accounts (brand_id, ad_account_id, account_name, account_type, boost_keyword, is_primary, synced_at)
-         VALUES ($1, $2, $3, $4, $5, FALSE, now())
+        `INSERT INTO brand_ad_accounts (brand_id, ad_account_id, account_name, account_type, main_kind, boost_keyword, is_primary, synced_at)
+         VALUES ($1, $2, $3, $4, $5, $6, FALSE, now())
          ON CONFLICT (brand_id, ad_account_id) DO NOTHING`,
-        [Number(a.atlasBrandId), String(a.id), a.client ?? null, a.type === 'CPAS' ? 'CPAS' : 'MAIN',
-          a.type === 'CPAS' ? null : (String(a.boostMatch ?? '').trim().toLowerCase() || null)],
+        [Number(a.atlasBrandId), String(a.id), a.client ?? null, a.type === 'CPAS' ? 'CPAS' : 'MAIN', mainKindOf(a), keywordOf(a)],
       );
     }
     await client.query('COMMIT');
 
     // Brands whose accounts or keyword changed — their Meta funnel split
     // must be recomputed.
-    const sig = (rows) => new Map(rows.map((r) => [`${r.brand_id}|${r.ad_account_id}`, `${r.account_type}|${r.boost_keyword ?? ''}`]));
+    const sig = (rows) => new Map(rows.map((r) => [`${r.brand_id}|${r.ad_account_id}`, `${r.account_type}|${r.main_kind ?? ''}|${r.boost_keyword ?? ''}`]));
     const beforeSig = sig(before);
     const afterRows = usable.map((a) => ({
       brand_id: Number(a.atlasBrandId), ad_account_id: String(a.id), account_type: a.type === 'CPAS' ? 'CPAS' : 'MAIN',
-      boost_keyword: a.type === 'CPAS' ? null : (String(a.boostMatch ?? '').trim().toLowerCase() || null),
+      main_kind: mainKindOf(a), boost_keyword: keywordOf(a),
     }));
     const afterSig = sig(afterRows);
     const changedBrands = new Set();

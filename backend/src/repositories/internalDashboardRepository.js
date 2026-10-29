@@ -167,7 +167,7 @@ export async function shopeeAdsMonthly(brandId, db = pool) {
 
 export async function listBrandAdAccounts(brandId, db = pool) {
   const { rows } = await db.query(
-    'SELECT ad_account_id, account_type, boost_keyword FROM brand_ad_accounts WHERE brand_id = $1',
+    'SELECT ad_account_id, account_type, main_kind, boost_keyword FROM brand_ad_accounts WHERE brand_id = $1',
     [brandId],
   );
   return rows;

@@ -80,14 +80,15 @@ export async function listRowsInRange({ brandId, accountType, startDate, endDate
   return rows;
 }
 
-// Kata Kunci Boost Post per MAIN ad account of the brand, from the Meta Ads
-// Automation mirror (brand_ad_accounts, kept lower-case there).
-export async function listBoostKeywords(brandId, db = pool) {
+// How each MAIN ad account of the brand splits Boost / Non-Boost — its kind
+// (MIXED/BOOST/NONBOOST) and Kata Kunci Boost Post (kept lower-case) — from
+// the Meta Ads Automation mirror (brand_ad_accounts).
+export async function listMainAccountSplits(brandId, db = pool) {
   const { rows } = await db.query(
-    "SELECT ad_account_id, boost_keyword FROM brand_ad_accounts WHERE brand_id = $1 AND account_type = 'MAIN'",
+    "SELECT ad_account_id, main_kind, boost_keyword FROM brand_ad_accounts WHERE brand_id = $1 AND account_type = 'MAIN'",
     [brandId],
   );
-  return new Map(rows.map((r) => [r.ad_account_id, r.boost_keyword]));
+  return new Map(rows.map((r) => [r.ad_account_id, r]));
 }
 
 // Per account type × month: what is actually stored.

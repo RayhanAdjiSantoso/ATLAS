@@ -22,7 +22,7 @@ function writeCache(configs, accounts) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({
       configs: configs.map((c) => ({ id: c.id, label: c.label, atlasBrandId: c.atlasBrandId, accountClient: c.accountClient })),
-      accounts: accounts.map((a) => ({ client: a.client, type: a.type, atlasBrandId: a.atlasBrandId, boostMatch: a.boostMatch })),
+      accounts: accounts.map((a) => ({ client: a.client, type: a.type, mainKind: a.mainKind, atlasBrandId: a.atlasBrandId, boostMatch: a.boostMatch })),
     }));
   } catch { /* quota/private mode — the cache is optional */ }
 }
@@ -106,21 +106,31 @@ export default function MetaSyncButton({ brandId, onSynced }) {
   const coveredClients = new Set(configs.map((c) => c.accountClient));
   const brandAccounts = accounts.filter((a) => (
     Number(a.atlasBrandId) === Number(brandId)
-    && (a.type === 'CPAS' || a.boostMatch)
+    // Only a mixed MAIN account needs the keyword to split its spend.
+    && (a.type === 'CPAS' || a.boostMatch || a.mainKind === 'BOOST' || a.mainKind === 'NONBOOST')
     && !coveredClients.has(a.client)
   ));
 
+  // Keyed by client+type, not client alone: the same brand can have a MAIN
+  // and a CPAS account side by side (e.g. "Crabus"), and sending just the
+  // name would be ambiguous server-side (see the long note on findAccount_
+  // in apps-script/DailyTrackingBoostPost.gs). Several accounts of one type
+  // are one source: Apps Script sums them, since ATLAS keeps one figure per
+  // channel and day.
+  const accountSources = new Map();
+  for (const a of brandAccounts) {
+    const key = `account:${a.client}:${a.type}`;
+    const count = (accountSources.get(key)?.count ?? 0) + 1;
+    accountSources.set(key, {
+      key, count,
+      label: `${a.client} - ${a.type}${count > 1 ? ` (${count} akun)` : ''} (Meta Automation)`,
+      payload: { accountClient: a.client, accountType: a.type },
+    });
+  }
+
   const sources = [
     ...brandConfigs.map((c) => ({ key: `config:${c.id}`, label: c.label, payload: { trackingConfigId: c.id } })),
-    ...brandAccounts.map((a) => ({
-      // Keyed by client+type, not client alone: the same brand can have a
-      // MAIN and a CPAS account side by side (e.g. "Crabus"), and sending
-      // just the name would be ambiguous server-side (see the long note on
-      // findAccount_ in apps-script/DailyTrackingBoostPost.gs).
-      key: `account:${a.client}:${a.type}`,
-      label: `${a.client} - ${a.type} (Meta Automation)`,
-      payload: { accountClient: a.client, accountType: a.type },
-    })),
+    ...accountSources.values(),
   ];
 
   useEffect(() => {

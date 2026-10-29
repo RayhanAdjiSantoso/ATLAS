@@ -107,6 +107,11 @@ const ZERO_ALLOWED_FIELDS = [
 const RULE_TYPE_OPTIONS = [{ value: 'delta', label: 'Perubahan (%)' }, { value: 'zero', label: 'Berhenti (nol)' }];
 const DIRECTION_OPTIONS = [{ value: 'down', label: 'Turun' }, { value: 'up', label: 'Naik' }];
 
+// "MAIN · Boost Post": a brand can hold several MAIN accounts, so the type
+// alone does not tell them apart in the account picker.
+const MAIN_KIND_LABELS = { BOOST: 'Boost Post', NONBOOST: 'Non Boost Post', MIXED: 'Gabungan' };
+const accountKind = (b) => ((b.type || 'MAIN') === 'CPAS' ? 'CPAS' : `MAIN · ${MAIN_KIND_LABELS[b.mainKind] ?? 'Gabungan'}`);
+
 function newRule() {
   return { id: null, field: 'spend', ruleType: 'delta', direction: 'down', threshold: '' };
 }
@@ -363,7 +368,8 @@ export default function SubscriptionsSection({ brand: scope = null, readOnly = f
   const baselineDaysLabel = form.periods.baselineDays || 7;
 
   const brandNames = Array.from(new Set(brands.map((b) => b.client))).sort();
-  const typesForBrand = Array.from(new Set(brands.filter((b) => b.client === form.brand).map((b) => b.type || 'MAIN'))).sort();
+  const accountsForBrand = brands.filter((b) => b.client === form.brand)
+    .sort((x, y) => (x.type || 'MAIN').localeCompare(y.type || 'MAIN') || x.id.localeCompare(y.id));
 
   const updateWeeklyRule = (idx, next) => {
     setForm((f) => ({ ...f, weeklyMetrics: f.weeklyMetrics.map((r, i) => (i === idx ? next : r)) }));
@@ -378,7 +384,7 @@ export default function SubscriptionsSection({ brand: scope = null, readOnly = f
       return;
     }
     if (!form.brandId) {
-      setFormMessage({ type: 'error', text: scope ? 'Ad Account wajib dipilih.' : 'Brand & Tipe Ad Account wajib dipilih.' });
+      setFormMessage({ type: 'error', text: scope ? 'Ad Account wajib dipilih.' : 'Brand & Ad Account wajib dipilih.' });
       return;
     }
     if (!form.weeklyMetrics.length && !form.dailyMetrics.length) {
@@ -555,7 +561,7 @@ export default function SubscriptionsSection({ brand: scope = null, readOnly = f
                 label="Ad Account"
                 placeholder="Pilih ad account…"
                 value={form.brandId}
-                options={brands.map((b) => ({ value: b.id, label: b.id, description: b.type || 'MAIN' }))}
+                options={brands.map((b) => ({ value: b.id, label: b.id, description: accountKind(b) }))}
                 onChange={(brandId) => {
                   const match = brands.find((b) => b.id === brandId);
                   setForm((f) => ({ ...f, brandId: match ? match.id : '', brand: match ? match.client : '', type: match ? (match.type || 'MAIN') : '' }));
@@ -573,16 +579,17 @@ export default function SubscriptionsSection({ brand: scope = null, readOnly = f
             />
           </div>
           <div className="form-group">
-            <label>Tipe Ad Account</label>
+            <label>Ad Account</label>
+            {/* By account, not by type: a brand can have several MAIN or CPAS accounts. */}
             <SelectMenu
-              label="Tipe Ad Account"
-              value={form.type}
+              label="Ad Account"
+              value={form.brandId}
               disabled={!form.brand}
-              placeholder={form.brand ? 'Pilih tipe…' : 'Pilih brand dulu'}
-              options={typesForBrand.map((t) => ({ value: t, label: t }))}
-              onChange={(type) => {
-                const match = brands.find((b) => b.client === form.brand && (b.type || 'MAIN') === type);
-                setForm((f) => ({ ...f, type, brandId: match ? match.id : '' }));
+              placeholder={form.brand ? 'Pilih ad account…' : 'Pilih brand dulu'}
+              options={accountsForBrand.map((b) => ({ value: b.id, label: b.id, description: accountKind(b) }))}
+              onChange={(brandId) => {
+                const match = brands.find((b) => b.id === brandId);
+                setForm((f) => ({ ...f, brandId: match ? match.id : '', type: match ? (match.type || 'MAIN') : '' }));
               }}
             />
           </div>

@@ -7,7 +7,7 @@ import { callAppsScript } from './metaAutomationService.js';
 import * as library from './brandLibraryService.js';
 import { buildInsightsWorkbook } from './metaAdsLibraryExport.js';
 import {
-  metricCatalog, REQUIRED_ACTION_TYPES, normalizeInsightRow, isBoostCampaign,
+  metricCatalog, REQUIRED_ACTION_TYPES, normalizeInsightRow, isBoostForAccount,
 } from '../config/metaAdsMetrics.js';
 import { refreshInternalDashboard } from './internalDashboardSync/dailyTrackingSync.js';
 
@@ -154,10 +154,10 @@ async function findMonthParts(brandId, accountType, month) {
   };
 }
 
-// Boost or not for a stored MAIN row, by its account's keyword.
+// Boost or not for a stored MAIN row, by its account's kind and keyword.
 async function boostClassifier(brandId) {
-  const keywords = await repo.listBoostKeywords(brandId);
-  return (row) => isBoostCampaign(row.campaign_name, keywords.get(row.ad_account_id));
+  const accounts = await repo.listMainAccountSplits(brandId);
+  return (row) => isBoostForAccount(row.campaign_name, accounts.get(row.ad_account_id));
 }
 
 // Files the month into the library. Never touches a file someone uploaded by
