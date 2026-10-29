@@ -108,6 +108,12 @@ export const ingestRows = asyncHandler(async (req, res) => {
   res.json({ ok: true, ...(await service.ingestRows({ runId: req.body.runId, rows: req.body.rows })) });
 });
 
+// POST /api/meta-ads-insights/ingest/ads  { runId, ads: [{ adId, previewLink }] }
+export const ingestAdPreviews = asyncHandler(async (req, res) => {
+  validate(req);
+  res.json({ ok: true, ...(await service.ingestAdPreviews({ runId: req.body.runId, ads: req.body.ads })) });
+});
+
 // POST /api/meta-ads-insights/ingest/finish
 export const finishRun = asyncHandler(async (req, res) => {
   validate(req);

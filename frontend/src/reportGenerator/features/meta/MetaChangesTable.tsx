@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
+import { ExternalLink } from 'lucide-react';
 import { DeltaPill } from '../../components/DeltaPill';
 import { computeDelta, deltaClassForSentiment, formatDeltaID } from '../../lib/delta';
 import { AGE_ORDER, isAllValue } from '../../lib/meta';
@@ -11,7 +12,9 @@ import type { SheetRow } from '../../lib/types';
 // axis (campaign, materi iklan, kelompok umur, gender), and for every metric
 // of the section this period's value beside its %Chg from the last period.
 // Every metric shares one table, so one item reads across a single row; any
-// header sorts it.
+// header sorts it. Per materi iklan, a file from ATLAS's Meta API fetch also
+// links each ad's preview (`linkCol`); one ad name run in several ad sets
+// is several ads, so it can carry more than one link.
 
 const MAX_HEIGHT = 430;
 const STICKY: CSSProperties = { position: 'sticky', top: 0, background: 'var(--s2)', zIndex: 1 };
@@ -59,6 +62,7 @@ export function MetaChangesTable({
   dimNoun,
   initialSort,
   initialDir = 'desc',
+  linkCol = null,
 }: {
   rows: SheetRow[];
   oldRows: SheetRow[];
@@ -75,6 +79,8 @@ export function MetaChangesTable({
   initialSort?: string;
   // Which end that ranking opens on — the chart's Tertinggi / Terendah.
   initialDir?: 'asc' | 'desc';
+  // The column holding each row's preview link (lib/metaAudience findPreviewCol).
+  linkCol?: string | null;
 }) {
   const isAge = dimCol.toLowerCase().includes('age');
   const hasOld = oldRows.length > 0;
@@ -100,10 +106,12 @@ export function MetaChangesTable({
             cls: deltaClassForSentiment(deltaNum, lowerBetter(key) ? 'lower-better' : 'higher-better'),
           };
         }
-        return { label, cells };
+        const links = linkCol ? [...new Set(rs.map((r) => String(r[linkCol] ?? '').trim()).filter((l) => /^https?:\/\//i.test(l)))] : [];
+        return { label, cells, links };
       })
       .sort((a, b) => (isAge ? ageRank(a.label) - ageRank(b.label) : 0) || a.label.localeCompare(b.label, 'id'));
-  }, [rows, oldRows, dimCol, kind, leadKind, metrics, isAge]);
+  }, [rows, oldRows, dimCol, kind, leadKind, metrics, isAge, linkCol]);
+  const hasLinks = table.some((r) => r.links.length > 0);
 
   const firstKey = initialSort ?? (isAge ? null : metrics[0] ? String(metrics[0].key) : null);
   const [sort, setSort] = useState<SortKey>(firstKey ? { id: firstKey, dir: initialDir } : null);
@@ -153,6 +161,7 @@ export function MetaChangesTable({
                 {dimNoun}
                 {mark('__name')}
               </th>
+              {hasLinks && <th rowSpan={2} data-feature="meta-ad-preview-link" style={{ ...NUM, textAlign: 'left' }}>Preview</th>}
               {metrics.map((m) => (
                 <th key={String(m.key)} colSpan={hasOld ? 2 : 1} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                   {m.label}
@@ -176,6 +185,18 @@ export function MetaChangesTable({
               <tr key={r.label}>
                 <td style={{ textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</td>
                 <td style={{ textAlign: 'left' }}>{r.label}</td>
+                {hasLinks && (
+                  <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+                    {r.links.length
+                      ? r.links.map((href, j) => (
+                          <a key={href} href={href} target="_blank" rel="noopener noreferrer" title={href} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: 8 }}>
+                            {r.links.length > 1 ? `Lihat ${j + 1}` : 'Lihat'}
+                            <ExternalLink size={12} aria-hidden="true" />
+                          </a>
+                        ))
+                      : '—'}
+                  </td>
+                )}
                 {metrics.map((m) => {
                   const key = String(m.key);
                   const c = r.cells[key];

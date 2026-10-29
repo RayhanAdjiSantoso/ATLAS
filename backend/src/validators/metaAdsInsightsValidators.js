@@ -33,6 +33,11 @@ export const rowsValidation = [
   body('rows').isArray({ min: 1 }).withMessage('rows wajib diisi'),
 ];
 
+export const adPreviewsValidation = [
+  body('runId').isString().notEmpty().withMessage('runId wajib diisi'),
+  body('ads').isArray().withMessage('ads harus array'),
+];
+
 export const finishValidation = [
   body('runId').isString().notEmpty().withMessage('runId wajib diisi'),
   body('status').isIn(['success', 'failed']).withMessage('status harus success atau failed'),

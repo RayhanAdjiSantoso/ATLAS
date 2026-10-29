@@ -337,6 +337,23 @@ export async function ingestRows({ runId, rows }) {
   return { received: rows.length, written };
 }
 
+// The preview link of each ad the run saw (Meta's preview_shareable_link),
+// sent before /finish so the library file written after it carries them.
+export async function ingestAdPreviews({ runId, ads }) {
+  const run = await requireOpenRun(runId);
+  const byId = new Map();
+  for (const a of ads) {
+    const adId = String(a?.adId ?? '').trim();
+    const link = String(a?.previewLink ?? '').trim();
+    if (adId && /^https?:\/\//i.test(link)) byId.set(adId, link);
+  }
+  const written = await repo.upsertAdPreviews({
+    brandId: run.brand_id,
+    ads: [...byId].map(([ad_id, preview_link]) => ({ ad_id, preview_link })),
+  });
+  return { received: ads.length, written };
+}
+
 export async function finishRun({ runId, status, rowCount, note }) {
   const run = await requireOpenRun(runId);
   const { startDate, endDate } = runRange(run);

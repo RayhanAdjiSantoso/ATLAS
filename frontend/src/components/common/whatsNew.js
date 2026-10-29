@@ -26,6 +26,14 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'meta-ad-preview-link',
+    released: '2026-10-29',
+    path: '/report-generator',
+    target: '.panel.active [data-feature="meta-ad-preview-link"]',
+    title: 'Link preview iklan di tabel materi iklan',
+    body: 'Tabel per materi iklan di Meta Ads kini punya kolom Preview. Klik Lihat untuk membuka preview iklannya di Meta. Kolom ini muncul untuk data hasil tarikan otomatis ATLAS.',
+  },
+  {
     id: 'meta-bars-periode-lalu',
     released: '2026-10-28',
     path: '/report-generator',

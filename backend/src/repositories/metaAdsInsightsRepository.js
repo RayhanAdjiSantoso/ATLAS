@@ -70,14 +70,33 @@ export async function deleteMonthRows({ brandId, accountType, startDate, endDate
 // file (one month) and for the Report Generator's custom range.
 export async function listRowsInRange({ brandId, accountType, startDate, endDate }, db = pool) {
   const { rows } = await db.query(
-    `SELECT entry_date::text AS entry_date, ad_account_id, campaign_name, adset_name, ad_name, age, gender, objective,
-            amount_spent, impressions, reach, link_clicks, purchases, purchase_value, metrics
-     FROM meta_ads_insights_daily
-     WHERE brand_id = $1 AND account_type = $2 AND entry_date >= $3 AND entry_date <= $4
-     ORDER BY entry_date, campaign_name, adset_name, ad_name, age, gender`,
+    `SELECT d.entry_date::text AS entry_date, d.ad_account_id, d.campaign_name, d.adset_name, d.ad_name, d.age, d.gender, d.objective,
+            d.amount_spent, d.impressions, d.reach, d.link_clicks, d.purchases, d.purchase_value, d.metrics,
+            p.preview_link
+     FROM meta_ads_insights_daily d
+     LEFT JOIN meta_ad_previews p ON p.brand_id = d.brand_id AND p.ad_id = d.ad_id
+     WHERE d.brand_id = $1 AND d.account_type = $2 AND d.entry_date >= $3 AND d.entry_date <= $4
+     ORDER BY d.entry_date, d.campaign_name, d.adset_name, d.ad_name, d.age, d.gender`,
     [brandId, accountType, startDate, endDate],
   );
   return rows;
+}
+
+// ---------------------------------------------------------------------
+// meta_ad_previews
+// ---------------------------------------------------------------------
+export async function upsertAdPreviews({ brandId, ads }, db = pool) {
+  if (!ads.length) return 0;
+  const { rowCount } = await db.query(
+    `INSERT INTO meta_ad_previews (brand_id, ad_id, preview_link)
+     SELECT $1, r.ad_id, r.preview_link
+     FROM jsonb_to_recordset($2::jsonb) AS r(ad_id text, preview_link text)
+     ON CONFLICT (brand_id, ad_id) DO UPDATE SET
+       preview_link = EXCLUDED.preview_link,
+       updated_at   = now()`,
+    [brandId, JSON.stringify(ads)],
+  );
+  return rowCount;
 }
 
 // How each MAIN ad account of the brand splits Boost / Non-Boost — its kind
