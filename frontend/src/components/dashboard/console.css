@@ -228,16 +228,23 @@
 /* The label is the field; .con's generic input box would draw a second one inside it. */
 .con .brand-picker .brand-picker-search input { min-height:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .brand-picker-search:focus-within { border-color:var(--acc); box-shadow:0 0 0 3px rgba(30,62,184,.1); }
-.brand-picker-menu-body { display:grid; grid-template-columns:180px minmax(0,1fr); min-height:310px; max-height:min(52vh,430px); }
+/* A fixed height and a bounded row, not just a max-height: otherwise the row
+   grows to fit every brand, the menu clips it and the list never scrolls. */
+.brand-picker-menu-body { display:grid; grid-template-columns:180px minmax(0,1fr); grid-template-rows:minmax(0,1fr); height:min(52vh,430px); min-height:310px; }
 .brand-picker-filters { padding:1rem .8rem; border-right:1px solid var(--rule); background:linear-gradient(160deg,#f8faff,#f3f6ff); }
 .brand-picker-section-label { display:block; color:var(--text); font-size:.75rem; font-weight:800; letter-spacing:.055em; text-transform:uppercase; }
 .brand-picker-filters .brand-status-filter { display:grid; gap:.3rem; margin-top:.65rem; }
 .brand-picker-filters .brand-status-filter button { justify-content:flex-start; width:100%; min-height:36px; padding:.48rem .62rem; border-radius:9px; }
 .brand-picker-filters .brand-status-filter button.is-selected { background:#fff; border-color:var(--acc-300); box-shadow:0 4px 12px rgba(30,62,184,.09); }
-.brand-picker-results { display:flex; min-width:0; flex-direction:column; padding:.9rem .75rem .7rem; }
+.brand-picker-results { display:flex; min-width:0; min-height:0; overflow:hidden; flex-direction:column; padding:.9rem .75rem .7rem; }
 .brand-picker-results-head { display:flex; flex:0 0 auto; align-items:baseline; justify-content:space-between; gap:.8rem; padding:0 .35rem .6rem; }
 .brand-picker-results-head small { color:var(--text-muted); font-size:.75rem; }
-.brand-picker-results ul { flex:1 1 auto; overflow-y:auto; display:grid; align-content:start; gap:2px; list-style:none; margin:0; padding:0 .2rem 0 0; scrollbar-width:thin; }
+.brand-picker-results ul { flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; align-content:start; gap:2px; list-style:none; margin:0; padding:0 .35rem 0 0; }
+.brand-picker-results ul::-webkit-scrollbar { width:8px; }
+.brand-picker-results ul::-webkit-scrollbar-track { border-radius:8px; background:#eef1f8; }
+.brand-picker-results ul::-webkit-scrollbar-thumb { border-radius:8px; background:#b8c5f5; }
+.brand-picker-results ul::-webkit-scrollbar-thumb:hover { background:#8fa3e8; }
+@supports not selector(::-webkit-scrollbar) { .brand-picker-results ul { scrollbar-width:thin; scrollbar-color:#b8c5f5 #eef1f8; } }
 .brand-picker-results button { display:flex; width:100%; align-items:center; gap:.65rem; min-height:48px; padding:.48rem .65rem; color:var(--text); border:1px solid transparent; border-radius:10px; background:transparent; font:inherit; text-align:left; cursor:pointer; transition:background .14s ease,border-color .14s ease,color .14s ease; }
 .brand-picker-results button:hover { border-color:rgba(206,215,236,.8); background:#f8faff; }
 .brand-picker-results button.is-active { color:var(--acc); border-color:var(--acc-300); background:var(--primary-light); }
@@ -561,11 +568,11 @@
   .brand-picker-menu { right:0; width:100%; min-width:0; transform-origin:top center; }
   .brand-picker-menu-head { align-items:stretch; flex-direction:column; gap:.45rem; }
   .brand-picker-menu-head>span { padding-left:.15rem; }
-  .brand-picker-menu-body { grid-template-columns:1fr; min-height:0; max-height:min(62vh,480px); }
+  .brand-picker-menu-body { grid-template-columns:1fr; grid-template-rows:auto auto; height:auto; min-height:0; max-height:min(62vh,480px); overflow-y:auto; }
   .brand-picker-filters { padding:.7rem .8rem; border-right:0; border-bottom:1px solid var(--rule); }
   .brand-picker-filters .brand-status-filter { display:flex; margin-top:.45rem; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:none; }
   .brand-picker-filters .brand-status-filter button { width:auto; flex:0 0 auto; }
-  .brand-picker-results { min-height:220px; }
+  .brand-picker-results { min-height:220px; overflow:visible; }
   .brand-new { width:fit-content; }
   .section-nav-shell { margin-top:1.1rem; }
   .brand-view-tab { min-height:50px; padding:.45rem .55rem; gap:.5rem; }
