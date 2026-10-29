@@ -236,4 +236,12 @@ export const WHATS_NEW = [
     title: 'Target lewat Blended ROAS',
     body: 'Saat mengisi atau meng-update target tahunan, isi Blended ROAS atau Cost per Revenue — yang satu terhitung otomatis dari yang lain, dan budget iklan dihitung dari target sales.',
   },
+  {
+    id: 'brand-tracking-leads-data',
+    released: '2026-10-29',
+    path: '/brand-tracking',
+    target: '#dt-tab-leads',
+    title: 'Leads Data',
+    body: 'Untuk brand non-retail: isi Cold Leads, Deal, dan nilai deal per hari (atau impor dari file Daily Tracking). Root Cause Analysis Meta Non-Boost Post (Non Retail) membacanya sebagai Orders, Message Started, dan GMV.',
+  },
 ];

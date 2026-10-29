@@ -15,6 +15,7 @@ export function todayIso() {
 export function rowFilled(kind, row) {
   if (!row) return false;
   if (kind === 'spend') return toNum(row.amount) != null;
+  if (kind === 'leads') return toNum(row.coldLeads) != null || toNum(row.deals) != null || toNum(row.dealValue) != null;
   return toNum(row.revenue) != null || toNum(row.transaksi) != null || toNum(row.qtySold) != null;
 }
 

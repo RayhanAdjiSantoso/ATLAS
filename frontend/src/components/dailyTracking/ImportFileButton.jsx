@@ -9,7 +9,7 @@ const monthLabel = (ym) => {
   return `${MONTH_LABELS[m - 1]} ${String(y).slice(2)}`;
 };
 const fmt = (n) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n);
-const KIND_TITLE = { sales: 'Revenue Data', spend: 'Spending Data' };
+const KIND_TITLE = { sales: 'Revenue Data', spend: 'Spending Data', leads: 'Leads Data' };
 
 // Two-step import. 1) The file is read by the backend without saving
 // anything (POST /import/preview) and every column it recognised is listed
@@ -96,7 +96,7 @@ export default function ImportFileButton({ brandId, onImported }) {
         <div className="alert alert-success dt-import-alert">
           <div>
             <div>
-              Berhasil mengimpor <strong>{result.fileName}</strong>: {result.salesSaved} entri revenue, {result.spendSaved} entri spend
+              Berhasil mengimpor <strong>{result.fileName}</strong>: {result.salesSaved} entri revenue, {result.spendSaved} entri spend{result.leadsSaved ? `, ${result.leadsSaved} hari leads` : ''}
               {result.monthsAffected?.length ? <> — bulan {result.monthsAffected.map(monthLabel).join(', ')}</> : null}.
             </div>
             {result.ignoredColumns?.length > 0 && (
@@ -127,7 +127,7 @@ export default function ImportFileButton({ brandId, onImported }) {
             )}
 
             <div className="dt-import-columns">
-              {['sales', 'spend'].map((kind) => {
+              {['sales', 'spend', 'leads'].map((kind) => {
                 const list = columns.filter((c) => c.kind === kind);
                 if (!list.length) return null;
                 return (

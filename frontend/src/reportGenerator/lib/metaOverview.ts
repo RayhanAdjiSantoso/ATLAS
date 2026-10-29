@@ -1,6 +1,6 @@
 import { computeDelta, deltaClassForSentiment, formatDeltaID } from './delta';
 import { agg, resolveConceptCount } from './meta';
-import { LEAD_RESULT, leadResultKind, type LeadResultKind } from './metaFunnel';
+import type { DailyLeadsTotals } from './metaFunnel';
 import type { DeltaClassName, Sentiment, SheetRow } from './types';
 
 // ══════════════════════════════════════════════════════
@@ -12,7 +12,9 @@ import type { DeltaClassName, Sentiment, SheetRow } from './types';
 // needs cannot sum reach, so it would read "—" on every card.
 //   • Non-Boost Post & CPAS, E-commerce — the full sales funnel, content view
 //                                     → add to cart → purchase;
-//   • Non-Boost Post, B2B           — leads and delivery.
+//   • Non-Boost Post, Non Retail (B2B) — delivery, then leads → messages →
+//                                     deals, the last two (and GMV) read
+//                                     from Brand Tracking › Leads Data.
 //
 // A Meta export carries only some of these as columns (Cost per Content View,
 // Content View Rate, Purchase Rate, AOV… usually are not), so every row is
@@ -39,6 +41,11 @@ interface Base {
   leads: number | null;
   conversations: number | null;
   messagingContacts: number | null;
+  // Brand Tracking › Leads Data for the period (Non Retail only): chats
+  // started (cold leads), deals closed and what they were worth.
+  messages: number | null;
+  deals: number | null;
+  dealValue: number | null;
 }
 
 const NOISE = ['cost per', 'cost/', 'rate', 'ratio', 'roas', 'cpc', 'cpm', 'ctr', 'per ', 'value'];
@@ -88,7 +95,7 @@ const BASE_PICK: Record<BaseKey, { kw: string[]; concept?: string; allow?: strin
 };
 const sumBase = (rows: SheetRow[], key: BaseKey) => sumOf(rows, BASE_PICK[key].kw, BASE_PICK[key].concept, BASE_PICK[key].allow);
 
-function base(rows: SheetRow[], allowReach: boolean): Base {
+function base(rows: SheetRow[], allowReach: boolean, leads: DailyLeadsTotals | null = null): Base {
   const impressions = sumBase(rows, 'impressions');
   const reach = allowReach ? sumOf(rows, ['reach']) : null;
   const freqCol = allowReach ? Object.keys(rows[0] || {}).find((h) => h.toLowerCase().includes('frequency')) : undefined;
@@ -108,6 +115,9 @@ function base(rows: SheetRow[], allowReach: boolean): Base {
     leads: sumBase(rows, 'leads'),
     conversations: sumBase(rows, 'conversations'),
     messagingContacts: sumBase(rows, 'messagingContacts'),
+    messages: leads?.coldLeads ?? null,
+    deals: leads?.deals ?? null,
+    dealValue: leads?.dealValue ?? null,
   };
 }
 
@@ -135,6 +145,8 @@ interface Spec {
   from?: BaseKey;
   same?: string[];
   not?: string[];
+  // Shown as written, never replaced by the file's column name.
+  fixedLabel?: boolean;
 }
 
 const SPEND: Spec = { key: 'spend', label: 'Amount spent', fmt: 'rp', sentiment: 'neutral', value: (b) => b.spend, from: 'spend' };
@@ -180,35 +192,36 @@ const ECOMMERCE: Spec[] = [
   { key: 'aov', label: 'Average order value', fmt: 'rp', sentiment: 'higher-better', value: (b) => div(b.purchaseValue, b.purchases), same: ['average order value'] },
 ];
 
-// B2B's conversion rate is its result over link clicks — and that result is
-// whichever of leads / messaging conversations started / messaging contacts
-// the campaign produced (metaFunnel.leadResultKind, the same pick the Root
-// Cause Analysis makes), named in the row when it is not leads.
-// Leads on the overview are every lead the campaign brought in: form leads
+// Non Retail (B2B), in the order MIL asked for. The chat and the deal happen
+// after the click, outside Meta: Messages are Brand Tracking's cold leads
+// (Message Started), Deals its deals, GMV the deal value entered there — the
+// same figures the Root Cause Analysis reads. Leads stay Meta's: form leads
 // plus Messaging Contacts plus Messaging Conversations Started, whichever the
-// file has.
+// file has. Every row carries the name it was asked for.
 function totalLeads(b: Base): number | null {
   const parts = [b.leads, b.messagingContacts, b.conversations].filter((v): v is number => v !== null);
   return parts.length ? parts.reduce((a, v) => a + v, 0) : null;
 }
 
-const B2B_RESULT: Record<LeadResultKind, (b: Base) => number | null> = {
-  leads: totalLeads,
-  conversations: (b) => b.conversations,
-  contacts: (b) => b.messagingContacts,
-};
-
-const b2bSpecs = (kind: LeadResultKind): Spec[] => [
-  SPEND,
-  { key: 'leads', label: 'Leads', fmt: 'num', sentiment: 'higher-better', value: totalLeads },
-  { key: 'cost_per_lead', label: 'Cost per lead', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, totalLeads(b)) },
-  ...DELIVERY,
-  kind === 'leads'
-    ? { key: 'lead_conversion_rate', label: 'Conversion rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.leads, b.linkClicks, 100), same: ['lead conversion rate'] }
-    : {
-      key: 'lead_conversion_rate', label: `Conversion rate (${LEAD_RESULT[kind].label.toLowerCase()} ÷ link clicks)`, fmt: 'pct', sentiment: 'higher-better',
-      value: (b) => div(B2B_RESULT[kind](b), b.linkClicks, 100),
-    },
+const named = (s: Spec, label: string): Spec => ({ ...s, label, fixedLabel: true });
+const B2B: Spec[] = [
+  { key: 'gmv', label: 'GMV', fmt: 'rp', sentiment: 'higher-better', value: (b) => b.dealValue, fixedLabel: true },
+  { key: 'roas', label: 'ROAS', fmt: 'x', sentiment: 'higher-better', value: (b) => div(b.dealValue, b.spend), fixedLabel: true },
+  named(SPEND, 'Amount Spent'),
+  named(IMPRESSIONS, 'Impressions'),
+  named(CPM, 'Cost per Mille (CPM)'),
+  named(LINK_CLICKS, 'Clicks'),
+  named(CPC, 'Cost per Clicks (CPC)'),
+  named(CTR, 'Click-Through Rate (CTR)'),
+  { key: 'leads', label: 'Leads', fmt: 'num', sentiment: 'higher-better', value: totalLeads, fixedLabel: true },
+  { key: 'cost_per_lead', label: 'Cost per Leads (CPL)', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, totalLeads(b)), fixedLabel: true },
+  { key: 'messages', label: 'Messages', fmt: 'num', sentiment: 'higher-better', value: (b) => b.messages, fixedLabel: true },
+  { key: 'cost_per_message', label: 'Cost per Message', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.messages), fixedLabel: true },
+  { key: 'message_rate', label: 'Message Rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.messages, b.linkClicks, 100), fixedLabel: true },
+  { key: 'deals', label: 'Deals', fmt: 'num', sentiment: 'higher-better', value: (b) => b.deals, fixedLabel: true },
+  { key: 'cost_per_deal', label: 'Cost per Deal', fmt: 'rp', sentiment: 'lower-better', value: (b) => div(b.spend, b.deals), fixedLabel: true },
+  { key: 'deal_rate', label: 'Deal Rate', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.deals, b.messages, 100), fixedLabel: true },
+  { key: 'conversion_rate', label: 'Conversion Rate (CVR)', fmt: 'pct', sentiment: 'higher-better', value: (b) => div(b.deals, b.linkClicks, 100), fixedLabel: true },
 ];
 
 export type MetaOverviewKind = 'boost' | 'ecommerce' | 'b2b';
@@ -252,12 +265,15 @@ function format(v: number | null, f: Fmt): string {
 // `allowReach` is false for a multi-day Day-breakdown selection, whose reach
 // cannot be summed (see buildMetaReport's reachWarning) — Frequency then
 // shows "—" instead of an inflated figure.
-// `leadKind` picks the B2B result (leads / conversations / contacts); the
-// default is metaFunnel.leadResultKind's automatic pick.
-export function buildMetaOverviewRows(kind: MetaOverviewKind, old: SheetRow[], cur: SheetRow[], allowReach = true, leadKind?: LeadResultKind): MetaOverviewRow[] {
-  const bo = base(old, allowReach);
-  const bc = base(cur, allowReach);
-  const specs = kind === 'boost' ? BOOST : kind === 'ecommerce' ? ECOMMERCE : b2bSpecs(leadKind ?? leadResultKind(old, cur));
+// `leads` (B2B only) = Brand Tracking › Leads Data totals of each period;
+// without them GMV, ROAS, Messages and Deals and their rates read "—".
+export function buildMetaOverviewRows(
+  kind: MetaOverviewKind, old: SheetRow[], cur: SheetRow[], allowReach = true,
+  leads: { old: DailyLeadsTotals | null; cur: DailyLeadsTotals | null } | null = null,
+): MetaOverviewRow[] {
+  const bo = base(old, allowReach, leads?.old);
+  const bc = base(cur, allowReach, leads?.cur);
+  const specs = kind === 'boost' ? BOOST : kind === 'ecommerce' ? ECOMMERCE : B2B;
   const sample = old.length ? old : cur;
   return specs.map((s) => {
     const v1 = s.value(bo);
@@ -266,7 +282,7 @@ export function buildMetaOverviewRows(kind: MetaOverviewKind, old: SheetRow[], c
     const cols = sameColumns(s, sample);
     return {
       key: s.key,
-      label: cols.length ? cols[0] : s.label,
+      label: cols.length && !s.fixedLabel ? cols[0] : s.label,
       old: format(v1, s.fmt), cur: format(v2, s.fmt), delta: formatDeltaID(deltaNum, deltaStr), deltaNum,
       cls: deltaClassForSentiment(deltaNum, s.sentiment),
       // A computed row that came out empty does not stand in for the column:

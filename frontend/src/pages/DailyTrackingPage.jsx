@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { BadgeDollarSign, CheckCircle2, Eye, Loader2, PencilLine, PieChart, Receipt, Target, TriangleAlert, UsersRound } from 'lucide-react';
+import { BadgeDollarSign, CheckCircle2, Eye, Loader2, MessagesSquare, PencilLine, PieChart, Receipt, Target, TriangleAlert, UsersRound } from 'lucide-react';
 import api from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
@@ -27,7 +27,7 @@ import DeleteChannelButton from '../components/dailyTracking/DeleteChannelButton
 import MinutesOfMeeting from '../components/mom/MinutesOfMeeting.jsx';
 import useAutoSave from '../dailyTracking/lib/useAutoSave.js';
 import { coverage, monthName, shiftMonth, sliceGrid, todayIso } from '../dailyTracking/lib/daily.js';
-import { channelTotal, fmtNum, fmtRp, fmtRpShort, totalForKind } from '../dailyTracking/lib/summary.js';
+import { channelTotal, fmtNum, fmtRp, fmtRpShort, sumMaybe, totalForKind } from '../dailyTracking/lib/summary.js';
 import { FIXED_SALES_CHANNELS, FIXED_SPEND_CHANNELS, NOTES_SALES_CHANNEL_KEYS } from '../dailyTracking/lib/constants.js';
 import '../components/dailyTracking/dailyTracking.css';
 import '../components/dailyTracking/brandTracking.css';
@@ -89,7 +89,7 @@ export default function DailyTrackingPage() {
   const [activeSalesTab, setActiveSalesTab] = useSessionState('daily-tracking:sales-tab', FIXED_SALES_CHANNELS[0].key);
   const [activeSpendTab, setActiveSpendTab] = useSessionState('daily-tracking:spend-tab', FIXED_SPEND_CHANNELS[0].key);
   const [channels, setChannels] = useState({ sales: [], spend: [] });
-  const [grid, setGrid] = useState({ days: [], sales: {}, spend: {} });
+  const [grid, setGrid] = useState({ days: [], sales: {}, spend: {}, leads: {} });
   const [prevGrid, setPrevGrid] = useState({ days: [], sales: {}, spend: {} });
   const [loading, setLoading] = useState(false);
   const [modalKind, setModalKind] = useState(null); // 'sales' | 'spend' | null
@@ -152,6 +152,19 @@ export default function DailyTrackingPage() {
   const { schedule, status: saveStatus } = useAutoSave(saveRow);
 
   const onCellChange = (kind, channelKey, date, field, value) => {
+    // Leads Data is one row per day, no channels; the row is saved whole so
+    // clearing a cell clears it in the database too.
+    if (kind === 'leads') {
+      setGrid((g) => {
+        const row = { ...(g.leads?.[date] || {}), [field]: value };
+        schedule(`leads:${channelKey}:${date}`, {
+          brandId, entryDate: date,
+          leads: { coldLeads: row.coldLeads ?? null, deals: row.deals ?? null, dealValue: row.dealValue ?? null },
+        });
+        return { ...g, leads: { ...(g.leads || {}), [date]: row } };
+      });
+      return;
+    }
     setGrid((g) => {
       const kindGrid = { ...(g[kind] || {}) };
       const channelGrid = { ...(kindGrid[channelKey] || {}) };
@@ -224,6 +237,7 @@ export default function DailyTrackingPage() {
     return <div className="bt-page dt-page"><p className="bt-wait"><Loader2 size={15} className="dt-spin" /> Memuat daftar klien…</p></div>;
   }
 
+  const leadsTab = activeTab === 'leads';
   const sales = activeTab === 'sales';
   const kind = sales ? 'sales' : 'spend';
   // A remembered channel this brand no longer has (deleted, moved, or a
@@ -251,9 +265,18 @@ export default function DailyTrackingPage() {
       { label: 'Avg. Daily Spend', value: chCov?.filled ? fmtRpShort(chTotal('amount') / chCov.filled) : '—' },
       { label: 'Terisi', value: filledLabel, tone: filledTone },
     ];
+  // Leads Data: chats and deals of a brand that sells through leads.
+  const leadTotal = (field) => sumMaybe((grid.days || []).map((d) => grid.leads?.[d]?.[field]));
+  const leadStats = [
+    { label: 'Cold Leads', value: fmtNum(leadTotal('coldLeads')) },
+    { label: 'Deal', value: fmtNum(leadTotal('deals')) },
+    { label: 'Message → Deal', value: leadTotal('coldLeads') ? `${((leadTotal('deals') ?? 0) / leadTotal('coldLeads') * 100).toLocaleString('id-ID', { maximumFractionDigits: 2 })}%` : '—' },
+    { label: 'Nilai Deal', value: leadTotal('dealValue') != null ? fmtRpShort(leadTotal('dealValue')) : '—' },
+  ];
   const sectionTabs = [
-    { kind: 'sales', label: 'Revenue Data', Icon: Receipt, total: totalForKind(grid, channels, 'sales', 'revenue'), count: channels.sales.length },
-    { kind: 'spend', label: 'Spending Data', Icon: BadgeDollarSign, total: totalForKind(grid, channels, 'spend', 'amount'), count: channels.spend.length },
+    { kind: 'sales', label: 'Revenue Data', Icon: Receipt, sub: `${channels.sales.length} channel · ${fmtRpShort(totalForKind(grid, channels, 'sales', 'revenue'))}` },
+    { kind: 'spend', label: 'Spending Data', Icon: BadgeDollarSign, sub: `${channels.spend.length} channel · ${fmtRpShort(totalForKind(grid, channels, 'spend', 'amount'))}` },
+    { kind: 'leads', label: 'Leads Data', Icon: MessagesSquare, sub: `${fmtNum(leadTotal('coldLeads') ?? 0)} leads · ${fmtNum(leadTotal('deals') ?? 0)} deal` },
   ];
 
   return (
@@ -357,7 +380,7 @@ export default function DailyTrackingPage() {
                     <span className="bt-seg-ico"><t.Icon size={16} aria-hidden="true" /></span>
                     <span className="bt-seg-text">
                       <strong>{t.label}</strong>
-                      <small>{t.count} channel · {fmtRpShort(t.total)}</small>
+                      <small>{t.sub}</small>
                     </span>
                   </button>
                 ))}
@@ -370,54 +393,92 @@ export default function DailyTrackingPage() {
               )}
             </header>
 
-            <div className="bt-work-body" role="tabpanel" id="dt-panel" aria-labelledby={`dt-tab-${activeTab}`}>
-              <ChannelRail
-                kind={kind} grid={grid} channels={channels} coverage={cov}
-                activeKey={activeKey} onSelect={setActiveKey}
-                onAdd={canEdit ? () => setModalKind(kind) : undefined}
-                deleteAction={canEditSpend && <DeleteChannelButton brandId={brandId} kind={kind} channel={channel} onDeleted={handleChannelChanged} />}
-              />
-              <div className="bt-sheet">
-                <div className="bt-sheet-body">
-                  <DailyEntryTable
-                    kind={kind} channelKey={activeKey} days={grid.days}
-                    data={grid[kind][activeKey]}
-                    onCellChange={(date, field, value) => onCellChange(kind, activeKey, date, field, value)}
-                    saveStatus={saveStatus}
-                    readOnly={!canEdit}
-                    focusDate={focusDate}
-                    onFocusDone={clearFocus}
-                    header={(
-                      <div className="bt-sheet-head">
-                        <div className="bt-sheet-title">
-                          <h3>{channel?.label ?? 'Pilih channel'}</h3>
-                          <span className="bt-sheet-hint">
-                            {canEdit
-                              ? <><kbd>Enter</kbd> turun · <kbd>Shift</kbd> <kbd>Enter</kbd> naik</>
-                              : 'Hanya dapat dibaca untuk akun ini'}
-                          </span>
+            {leadsTab ? (
+              <div className="bt-work-body is-leads" role="tabpanel" id="dt-panel" aria-labelledby="dt-tab-leads">
+                <div className="bt-sheet">
+                  <div className="bt-sheet-body">
+                    <DailyEntryTable
+                      kind="leads" channelKey="all" days={grid.days}
+                      data={grid.leads}
+                      onCellChange={(date, field, value) => onCellChange('leads', 'all', date, field, value)}
+                      saveStatus={saveStatus}
+                      readOnly={!canEditSales}
+                      focusDate={focusDate}
+                      onFocusDone={clearFocus}
+                      header={(
+                        <div className="bt-sheet-head">
+                          <div className="bt-sheet-title">
+                            <h3>Leads &amp; Deal</h3>
+                            <span className="bt-sheet-hint">
+                              {canEditSales
+                                ? 'Cold Leads = chat masuk (Message Started). Nilai deal opsional — dipakai sebagai GMV di Root Cause Analysis Meta Non Retail.'
+                                : 'Hanya dapat dibaca untuk akun ini'}
+                            </span>
+                          </div>
+                          <dl className="bt-sheet-stats">
+                            {leadStats.map((st) => (
+                              <div key={st.label}>
+                                <dt>{st.label}</dt>
+                                <dd>{st.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
                         </div>
-                        <dl className="bt-sheet-stats">
-                          {sheetStats.map((st) => (
-                            <div key={st.label} className={st.tone ? `is-${st.tone}` : undefined}>
-                              <dt>{st.label}</dt>
-                              <dd>{st.value}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                        {canEditSpend && <ChannelActions brandId={brandId} kind={kind} channel={channel} onChanged={handleChannelChanged} />}
-                        {!sales && isAdmin && canEditSpend && <div className="bt-sheet-sync"><MetaSyncButton brandId={brandId} onSynced={loadEntries} /></div>}
-                      </div>
-                    )}
-                  />
-                  <ChannelInsight
-                    kind={kind} channel={channel} days={grid.days}
-                    data={grid[kind][activeKey]} prevData={prevSame[kind]?.[activeKey]}
-                    prevMonthLabel={compareLabel} onFocusDate={setFocusDate}
-                  />
+                      )}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="bt-work-body" role="tabpanel" id="dt-panel" aria-labelledby={`dt-tab-${activeTab}`}>
+                <ChannelRail
+                  kind={kind} grid={grid} channels={channels} coverage={cov}
+                  activeKey={activeKey} onSelect={setActiveKey}
+                  onAdd={canEdit ? () => setModalKind(kind) : undefined}
+                  deleteAction={canEditSpend && <DeleteChannelButton brandId={brandId} kind={kind} channel={channel} onDeleted={handleChannelChanged} />}
+                />
+                <div className="bt-sheet">
+                  <div className="bt-sheet-body">
+                    <DailyEntryTable
+                      kind={kind} channelKey={activeKey} days={grid.days}
+                      data={grid[kind][activeKey]}
+                      onCellChange={(date, field, value) => onCellChange(kind, activeKey, date, field, value)}
+                      saveStatus={saveStatus}
+                      readOnly={!canEdit}
+                      focusDate={focusDate}
+                      onFocusDone={clearFocus}
+                      header={(
+                        <div className="bt-sheet-head">
+                          <div className="bt-sheet-title">
+                            <h3>{channel?.label ?? 'Pilih channel'}</h3>
+                            <span className="bt-sheet-hint">
+                              {canEdit
+                                ? <><kbd>Enter</kbd> turun · <kbd>Shift</kbd> <kbd>Enter</kbd> naik</>
+                                : 'Hanya dapat dibaca untuk akun ini'}
+                            </span>
+                          </div>
+                          <dl className="bt-sheet-stats">
+                            {sheetStats.map((st) => (
+                              <div key={st.label} className={st.tone ? `is-${st.tone}` : undefined}>
+                                <dt>{st.label}</dt>
+                                <dd>{st.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                          {canEditSpend && <ChannelActions brandId={brandId} kind={kind} channel={channel} onChanged={handleChannelChanged} />}
+                          {!sales && isAdmin && canEditSpend && <div className="bt-sheet-sync"><MetaSyncButton brandId={brandId} onSynced={loadEntries} /></div>}
+                        </div>
+                      )}
+                    />
+                    <ChannelInsight
+                      kind={kind} channel={channel} days={grid.days}
+                      data={grid[kind][activeKey]} prevData={prevSame[kind]?.[activeKey]}
+                      prevMonthLabel={compareLabel} onFocusDate={setFocusDate}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       )}

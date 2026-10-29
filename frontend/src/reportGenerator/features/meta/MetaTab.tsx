@@ -43,6 +43,7 @@ import {
   RETAIL_TOP_CONTENT_METRICS,
   SALES_AUDIENCE_TRAFFIC_METRICS,
   SALES_TRAFFIC_METRICS,
+  audienceTypeOf,
   findAdCol,
   findAdsetCol,
   messageKindsOf,
@@ -52,8 +53,9 @@ import {
 } from '../../lib/metaAudience';
 import { MetaCompareBars } from './MetaCompareBars';
 import { relabelMetaMenu as L, relabelMetaRows } from '../../lib/metaLabels';
+import { buildMetaOverviewRows } from '../../lib/metaOverview';
 import { SymptomTreePanel } from '../shopee/AnalysisSections';
-import { buildMetaSalesFunnel, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
+import { buildMetaNonRetailFunnel, buildMetaSalesFunnel, type DailyLeadsTotals, type LeadResultKind, type MetaFunnel } from '../../lib/metaFunnel';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
@@ -239,6 +241,24 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
   }, [curDayBounds]);
 
   const [report, setReport] = useState<MetaReport | null>(null);
+
+  // Non-Boost Post (Non Retail): deals and cold leads of both periods from
+  // Brand Tracking › Leads Data, for its Root Cause Analysis. null until
+  // read (or when the periods have no dates) — the tree then shows "—".
+  const [leadTotals, setLeadTotals] = useState<{ old: DailyLeadsTotals; cur: DailyLeadsTotals } | null>(null);
+  const hasNonRetail = Boolean(report?.nonBoostLanes?.some((l) => l.key === 'b2b'));
+  useEffect(() => {
+    setLeadTotals(null);
+    const r = report;
+    if (!clientId || !hasNonRetail || !r?.periodOldStart || !r.periodOldEnd || !r.periodCurStart || !r.periodCurEnd) return undefined;
+    let alive = true;
+    api.get('/daily-tracking/leads-summary', {
+      params: { brandId: clientId, ranges: `${r.periodOldStart}..${r.periodOldEnd},${r.periodCurStart}..${r.periodCurEnd}` },
+    })
+      .then(({ data }: { data: { ranges: DailyLeadsTotals[] } }) => { if (alive) setLeadTotals({ old: data.ranges[0], cur: data.ranges[1] }); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [clientId, hasNonRetail, report]);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [generatedAt, setGeneratedAt] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -809,9 +829,15 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const aud = laneAud[lane.key] !== 'all' && lane.audiences?.[laneAud[lane.key] as 'NV' | 'RM'] ? laneAud[lane.key] : 'all';
     const side = aud === 'all' ? undefined : lane.audiences?.[aud];
     const variant = kind ? (side ? side.byKind?.[kind] : lane.leadResults?.byKind[kind]) : undefined;
-    const funnel = side
-      ? variant?.funnel ?? side.funnel
-      : lane.key === 'retail' ? buildMetaSalesFunnel(lane.oldRows, lane.curRows, { keepConversionBranch: true }) : variant?.funnel ?? lane.funnel;
+    // Non Retail: deals and chats come from Brand Tracking, which counts the
+    // whole brand — an NV or RM slice gets its own Meta half and "—" for them.
+    const audRows = (rows: SheetRow[]) => (side && lane.campCol ? rows.filter((row) => audienceTypeOf(row[lane.campCol!]) === aud) : rows);
+    const laneLeads = side ? null : leadTotals;
+    const funnel = lane.key === 'b2b'
+      ? buildMetaNonRetailFunnel(audRows(lane.oldRows), audRows(lane.curRows), laneLeads?.old ?? null, laneLeads?.cur ?? null)
+      : side
+        ? variant?.funnel ?? side.funnel
+        : buildMetaSalesFunnel(lane.oldRows, lane.curRows, { keepConversionBranch: true });
     const overview = side?.overview ?? lane.overview;
     const audToggle = audienceToggle(lane.audiences, aud, (v) => setLaneAud((prev) => ({ ...prev, [lane.key]: v })));
     const rcaTitle = aud === 'all' ? 'Root Cause Analysis' : `Root Cause Analysis · ${aud}`;
@@ -822,7 +848,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         toolbar={audToggle ?? undefined}
         heading={lane.key === 'retail' ? 'Non-Boost Post (Retail) · Performance Overview' : 'Non-Boost Post (Non Retail) · Performance Overview'}
         badge={lane.objectives.length ? `objective ${lane.objectives.join(', ')}` : 'Meta Ads'}
-        overviewRows={relabelMetaRows(variant?.overviewRows ?? overview.overviewRows)}
+        overviewRows={relabelMetaRows(lane.key === 'b2b'
+          ? buildMetaOverviewRows('b2b', audRows(lane.oldRows), audRows(lane.curRows), !r.reachWarning, laneLeads)
+          : variant?.overviewRows ?? overview.overviewRows)}
         detailedRows={relabelMetaRows(overview.detailedRows)}
         allCols={overview.allCols}
         p1={r.p1}

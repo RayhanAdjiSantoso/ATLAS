@@ -55,6 +55,7 @@ export const upsertEntries = asyncHandler(async (req, res) => {
     entryDate: req.body.entryDate,
     sales: req.body.sales,
     spend: req.body.spend,
+    leads: req.body.leads,
     userId: req.user.userId,
   });
   res.json(result);
@@ -144,6 +145,16 @@ export const ingestFromAppsScript = asyncHandler(async (req, res) => {
     entries: req.body.entries,
   });
   res.json({ ok: true, ...result });
+});
+
+// GET /api/daily-tracking/leads-summary?brandId=&ranges=YYYY-MM-DD..YYYY-MM-DD,…
+export const getLeadsSummary = asyncHandler(async (req, res) => {
+  validate(req);
+  const ranges = String(req.query.ranges).split(',').filter(Boolean).map((p) => {
+    const [start, end] = p.split('..');
+    return { start, end };
+  });
+  res.json(await service.getLeadsSummary({ brandId: Number(req.query.brandId), ranges }));
 });
 
 // GET /api/daily-tracking/targets?brandId=&month=YYYY-MM

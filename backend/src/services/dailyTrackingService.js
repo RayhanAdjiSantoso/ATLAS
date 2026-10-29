@@ -180,9 +180,10 @@ export async function getMonthEntries(brandId, month) {
   const startDate = days[0];
   const endDate = days[days.length - 1];
 
-  const [salesRows, spendRows] = await Promise.all([
+  const [salesRows, spendRows, leadRows] = await Promise.all([
     repo.listSalesForMonth(brandId, startDate, endDate),
     repo.listSpendForMonth(brandId, startDate, endDate),
+    repo.listLeadsInRange(brandId, startDate, endDate),
   ]);
 
   const sales = {};
@@ -205,7 +206,35 @@ export async function getMonthEntries(brandId, month) {
     };
   }
 
-  return { days, sales, spend };
+  // Leads Data: one row per day, no channels.
+  const leads = {};
+  for (const r of leadRows) {
+    leads[r.entry_date] = {
+      coldLeads: r.cold_leads,
+      deals: r.deals,
+      dealValue: r.deal_value == null ? null : Number(r.deal_value),
+    };
+  }
+
+  return { days, sales, spend, leads };
+}
+
+// Leads totals for each requested date range — what Report Generator ›
+// Meta › Non-Boost Post (Non Retail) reads for its Root Cause Analysis.
+// A total no day filled comes back null, not 0.
+export async function getLeadsSummary({ brandId, ranges }) {
+  await assertBrand(brandId);
+  const out = [];
+  for (const { start, end } of ranges) {
+    const r = await repo.sumLeadsInRange(brandId, start, end);
+    out.push({
+      start, end, days: r.days,
+      coldLeads: r.cold_leads,
+      deals: r.deals,
+      dealValue: r.deal_value == null ? null : Number(r.deal_value),
+    });
+  }
+  return { ranges: out };
 }
 
 // ---------------------------------------------------------------------
@@ -223,6 +252,7 @@ export async function deleteMonthEntries({ brandId, month, userId }) {
   const result = await inTransaction(async (db) => {
     const salesDeleted = await repo.deleteSalesForMonth(brandId, startDate, endDate, db);
     const spendDeleted = await repo.deleteSpendForMonth(brandId, startDate, endDate, db);
+    const leadsDeleted = await repo.deleteLeadsForMonth(brandId, startDate, endDate, db);
 
     const note = `Hapus data bulan ${month}`;
     if (salesDeleted) {
@@ -237,7 +267,13 @@ export async function deleteMonthEntries({ brandId, month, userId }) {
         source: 'manual', rowCount: spendDeleted, status: 'success', note, performedBy: userId,
       }, db);
     }
-    return { month, deleted: { sales: salesDeleted, spend: spendDeleted } };
+    if (leadsDeleted) {
+      await repo.logIngestion({
+        brandId, targetTable: 'daily_leads', entryDate: startDate,
+        source: 'manual', rowCount: leadsDeleted, status: 'success', note, performedBy: userId,
+      }, db);
+    }
+    return { month, deleted: { sales: salesDeleted, spend: spendDeleted, leads: leadsDeleted } };
   });
   // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
@@ -257,11 +293,20 @@ const num = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-export async function upsertEntries({ brandId, entryDate, sales, spend, userId }) {
+// `leads` = the day's Leads Data row ({ coldLeads, deals, dealValue }); only
+// the fields it carries are written.
+const LEAD_FIELDS = ['coldLeads', 'deals', 'dealValue'];
+
+export async function upsertEntries({ brandId, entryDate, sales, spend, leads, userId }) {
   await assertBrand(brandId);
   if (!Array.isArray(sales) || !sales.length) sales = [];
   if (!Array.isArray(spend) || !spend.length) spend = [];
-  if (!sales.length && !spend.length) throw new AppError('Tidak ada data untuk disimpan', 400);
+  const leadFields = leads && typeof leads === 'object' ? LEAD_FIELDS.filter((f) => f in leads) : [];
+  if (!sales.length && !spend.length && !leadFields.length) throw new AppError('Tidak ada data untuk disimpan', 400);
+  for (const f of leadFields) {
+    const v = num(leads[f]);
+    if (v != null && v < 0) throw new AppError('Leads, deal, dan nilai deal tidak boleh negatif', 400);
+  }
 
   const result = await inTransaction(async (db) => {
     let salesCount = 0;
@@ -296,7 +341,18 @@ export async function upsertEntries({ brandId, entryDate, sales, spend, userId }
       }, db);
     }
 
-    return { saved: { sales: salesCount, spend: spendCount } };
+    if (leadFields.length) {
+      await repo.upsertLeadsEntry({
+        brandId, entryDate, fields: leadFields, userId,
+        coldLeads: num(leads.coldLeads), deals: num(leads.deals), dealValue: num(leads.dealValue),
+      }, db);
+      await repo.logIngestion({
+        brandId, targetTable: 'daily_leads', entryDate,
+        source: 'manual', rowCount: 1, status: 'success', performedBy: userId,
+      }, db);
+    }
+
+    return { saved: { sales: salesCount, spend: spendCount, leads: leadFields.length ? 1 : 0 } };
   });
   // Keep the Business Insight's monthly tables in step with this write.
   await refreshInternalDashboard(brandId);
@@ -477,7 +533,7 @@ export async function previewImport({ brandId, buffer, filename }) {
     isNew: c.isCustom && !existingCustom.has(`${c.kind}|${c.key}`),
     previouslyIgnored: c.fileLabels.some((l) => ignoredSet.has(`${c.kind}|${l}`)),
   }));
-  const months = [...new Set([...parsed.salesRows, ...parsed.spendRows].map((r) => r.entryDate.slice(0, 7)))].sort();
+  const months = [...new Set([...parsed.salesRows, ...parsed.spendRows, ...parsed.leadRows].map((r) => r.entryDate.slice(0, 7)))].sort();
   return {
     fileName: filename,
     dataRowsParsed: parsed.dataRowsParsed,
@@ -496,11 +552,17 @@ export async function importFromFile({ brandId, buffer, filename, userId, select
   const chosen = Array.isArray(selected) ? new Set(selected) : new Set(parsed.columns.map((c) => c.id));
   const salesRows = parsed.salesRows.filter((r) => chosen.has(r.columnId));
   const spendRows = parsed.spendRows.filter((r) => chosen.has(r.columnId));
+  // A day's leads row carries cold leads and deals side by side; each is
+  // its own column in the picker, so drop the unchosen half.
+  const leadRows = parsed.leadRows
+    .map((r) => ({ ...r, fields: r.fields.filter((f) => chosen.has(`leads:${f}`)) }))
+    .filter((r) => r.fields.length);
   const keptColumns = parsed.columns.filter((c) => chosen.has(c.id));
   const skippedColumns = parsed.columns.filter((c) => !chosen.has(c.id));
 
   const result = await inTransaction(async (db) => {
     for (const c of keptColumns) {
+      if (c.kind === 'leads') { for (const l of c.fileLabels) await repo.forgetIgnoredColumn(brandId, c.kind, l, db); continue; }
       if (c.isCustom) await repo.upsertCustomChannelIfMissing({ brandId, kind: c.kind, channelKey: c.key, label: c.label, userId }, db);
       else await repo.unhideFixedChannel(brandId, c.kind, c.key, db);
       for (const l of c.fileLabels) await repo.forgetIgnoredColumn(brandId, c.kind, l, db);
@@ -521,7 +583,11 @@ export async function importFromFile({ brandId, buffer, filename, userId, select
       }, db);
     }
 
-    const monthsAffected = [...new Set([...salesRows, ...spendRows].map((r) => r.entryDate.slice(0, 7)))].sort();
+    for (const r of leadRows) {
+      await repo.upsertLeadsEntry({ brandId, entryDate: r.entryDate, fields: r.fields, coldLeads: r.coldLeads, deals: r.deals, userId }, db);
+    }
+
+    const monthsAffected = [...new Set([...salesRows, ...spendRows, ...leadRows].map((r) => r.entryDate.slice(0, 7)))].sort();
     for (const month of monthsAffected) {
       const entryDate = `${month}-01`;
       const salesCount = salesRows.filter((r) => r.entryDate.startsWith(month)).length;
@@ -539,6 +605,13 @@ export async function importFromFile({ brandId, buffer, filename, userId, select
           rowCount: spendCount, status: 'success', note, performedBy: userId,
         }, db);
       }
+      const leadsCount = leadRows.filter((r) => r.entryDate.startsWith(month)).length;
+      if (leadsCount) {
+        await repo.logIngestion({
+          brandId, targetTable: 'daily_leads', entryDate, source: 'manual',
+          rowCount: leadsCount, status: 'success', note, performedBy: userId,
+        }, db);
+      }
     }
 
     const pick = (kind) => keptColumns.filter((c) => c.kind === kind).map((c) => ({ key: c.key, label: c.label, isCustom: c.isCustom }));
@@ -547,6 +620,7 @@ export async function importFromFile({ brandId, buffer, filename, userId, select
       dataRowsParsed: parsed.dataRowsParsed,
       salesSaved: salesRows.length,
       spendSaved: spendRows.length,
+      leadsSaved: leadRows.length,
       recognizedSales: pick('sales'),
       recognizedSpend: pick('spend'),
       ignoredColumns: skippedColumns.map((c) => ({ kind: c.kind, label: c.label })),

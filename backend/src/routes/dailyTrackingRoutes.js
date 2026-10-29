@@ -20,6 +20,7 @@ import {
   ingestBodyValidation,
   targetQueryValidation,
   targetBodyValidation,
+  leadsSummaryQueryValidation,
 } from '../validators/dailyTrackingValidators.js';
 
 // Daily Tracking — unlike every other brand-scoped router, client accounts
@@ -95,6 +96,14 @@ router.post(
   '/import',
   authenticate, dailyTracking, clientRevenueOnly, uploadDataFile.single('file'), requireBrandAccess((req) => req.body.brandId),
   importFileBodyValidation, ctrl.importFile,
+);
+// Leads totals per date range — also read by Report Generator › Meta ›
+// Non-Boost Post (Non Retail) for its Root Cause Analysis, so the Report
+// Generator module opens it too.
+router.get(
+  '/leads-summary',
+  authenticate, requireModule('daily_tracking', 'report_generator'), requireBrandAccess((req) => req.query.brandId),
+  leadsSummaryQueryValidation, ctrl.getLeadsSummary,
 );
 // Targets & budget: everyone with the module reads them (a client sees its
 // own achievement); only the team sets them — they are spend decisions.

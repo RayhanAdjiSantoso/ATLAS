@@ -148,6 +148,58 @@ export async function upsertApiSpendEntry(v, db = pool) {
 }
 
 // ---------------------------------------------------------------------
+// daily_leads (migration 060) — one row per brand per day
+// ---------------------------------------------------------------------
+export async function listLeadsInRange(brandId, startDate, endDate, db = pool) {
+  const { rows } = await db.query(
+    `SELECT entry_date::text AS entry_date, cold_leads, deals, deal_value
+     FROM daily_leads
+     WHERE brand_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
+    [brandId, startDate, endDate],
+  );
+  return rows;
+}
+
+// Totals over a date range. A column no day filled stays NULL (not 0), so a
+// reader can tell "nothing entered" from "zero".
+export async function sumLeadsInRange(brandId, startDate, endDate, db = pool) {
+  const { rows } = await db.query(
+    `SELECT SUM(cold_leads)::int AS cold_leads, SUM(deals)::int AS deals, SUM(deal_value) AS deal_value,
+            COUNT(*)::int AS days
+     FROM daily_leads
+     WHERE brand_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
+    [brandId, startDate, endDate],
+  );
+  return rows[0];
+}
+
+// `fields` names the columns this save carries; the others keep what is
+// stored (the file import has no deal value, so it never clears one).
+export async function upsertLeadsEntry(v, db = pool) {
+  const has = (f) => v.fields.includes(f);
+  await db.query(
+    `INSERT INTO daily_leads (brand_id, entry_date, cold_leads, deals, deal_value, created_by, updated_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $6)
+     ON CONFLICT (brand_id, entry_date) DO UPDATE SET
+       cold_leads = CASE WHEN $7::boolean THEN EXCLUDED.cold_leads ELSE daily_leads.cold_leads END,
+       deals      = CASE WHEN $8::boolean THEN EXCLUDED.deals      ELSE daily_leads.deals      END,
+       deal_value = CASE WHEN $9::boolean THEN EXCLUDED.deal_value ELSE daily_leads.deal_value END,
+       updated_by = EXCLUDED.updated_by,
+       updated_at = now()`,
+    [v.brandId, v.entryDate, v.coldLeads ?? null, v.deals ?? null, v.dealValue ?? null, v.userId ?? null,
+      has('coldLeads'), has('deals'), has('dealValue')],
+  );
+}
+
+export async function deleteLeadsForMonth(brandId, startDate, endDate, db = pool) {
+  const { rowCount } = await db.query(
+    'DELETE FROM daily_leads WHERE brand_id = $1 AND entry_date >= $2 AND entry_date <= $3',
+    [brandId, startDate, endDate],
+  );
+  return rowCount;
+}
+
+// ---------------------------------------------------------------------
 // daily_tracking_ingestion_log
 // ---------------------------------------------------------------------
 export async function logIngestion(v, db = pool) {

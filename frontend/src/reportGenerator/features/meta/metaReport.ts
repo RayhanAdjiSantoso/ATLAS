@@ -597,7 +597,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
           kinds: leadKinds,
           auto: leadResultKind(oldRows, curRows),
           byKind: Object.fromEntries(leadKinds.map((k) => [k, {
-            overviewRows: buildMetaOverviewRows('b2b', oldRows, curRows, !reachWarning, k),
+            overviewRows: buildMetaOverviewRows('b2b', oldRows, curRows, !reachWarning),
             funnel: buildMetaLeadFunnel(oldRows, curRows, k),
           }])),
         }
@@ -619,7 +619,7 @@ export function buildMetaReport({ metaRows, metaHeaders, cpasRows, cpasHeaders, 
           overview: { overviewRows: buildMetaOverviewRows(key === 'retail' ? 'ecommerce' : 'b2b', o, c, !reachWarning), detailedRows: deblend(toDisplayRows(buildKPI(o, c, mAllCols))), allCols: mAllCols },
           funnel: key === 'retail' ? buildMetaSalesFunnel(o, c, { keepConversionBranch: true }) : buildMetaLeadFunnel(o, c),
           byKind: key === 'b2b'
-            ? Object.fromEntries(leadKinds.map((k) => [k, { overviewRows: buildMetaOverviewRows('b2b', o, c, !reachWarning, k), funnel: buildMetaLeadFunnel(o, c, k) }]))
+            ? Object.fromEntries(leadKinds.map((k) => [k, { overviewRows: buildMetaOverviewRows('b2b', o, c, !reachWarning), funnel: buildMetaLeadFunnel(o, c, k) }]))
             : undefined,
         })),
       });
