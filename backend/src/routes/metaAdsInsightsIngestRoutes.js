@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
 import { verifyIngestKey } from '../middlewares/dailyTrackingIngestAuth.js';
 import * as ctrl from '../controllers/metaAdsInsightsController.js';
-import { startRunValidation, rowsValidation, finishValidation, libraryRunValidation } from '../validators/metaAdsInsightsValidators.js';
+import { startRunValidation, rowsValidation, adPreviewsValidation, finishValidation, libraryRunValidation } from '../validators/metaAdsInsightsValidators.js';
 
 // Machine-to-machine: Apps Script's monthly trigger (apps-script/MetaAdsMonthly.gs)
 // reports one run through start -> rows (repeated) -> finish. No user JWT;
@@ -17,6 +17,7 @@ router.use(verifyIngestKey);
 
 router.post('/start', startRunValidation, ctrl.startRun);
 router.post('/rows', rowsValidation, ctrl.ingestRows);
+router.post('/ads', adPreviewsValidation, ctrl.ingestAdPreviews);
 router.post('/finish', finishValidation, ctrl.finishRun);
 router.post('/library', libraryRunValidation, ctrl.syncLibraryFromRun);
 

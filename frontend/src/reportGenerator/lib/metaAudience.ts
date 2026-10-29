@@ -318,6 +318,12 @@ export function findAdCol(rows: SheetRow[]): string | null {
   );
 }
 
+// The ad's preview link (fb.me/…), written by ATLAS's Meta API fetch
+// (backend metaAdsLibraryExport.js); a manual export has none.
+export function findPreviewCol(rows: SheetRow[]): string | null {
+  return Object.keys(rows[0] || {}).find((h) => /^ad preview link$/i.test(h.trim())) ?? null;
+}
+
 // Non-Boost Post read per objective. Sales keeps the sales-funnel menus above;
 // the others are judged on what they were bought for.
 // Listed in order of preference; the section shows the first four the file

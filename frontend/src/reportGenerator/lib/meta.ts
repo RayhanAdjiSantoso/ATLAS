@@ -41,7 +41,9 @@ export const DEFS = {
   ],
 } as const;
 
-export const SKIP_COLS = ['reporting starts', 'reporting ends', 'attribution setting', 'starts', 'ends'];
+// 'ad preview link' is the ATLAS auto-fetch's per-ad fb.me link — text, but
+// its name reads like a metric ("view"), so it is skipped by name.
+export const SKIP_COLS = ['reporting starts', 'reporting ends', 'attribution setting', 'starts', 'ends', 'ad preview link'];
 // 'day' covers Meta's per-day breakdown export (see parseMetaDayValue) —
 // listed alongside 'month' since a file uses one or the other, never both.
 export const DIM_NAMES = ['month', 'day', 'campaign name', 'age', 'gender'];

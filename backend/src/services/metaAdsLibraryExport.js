@@ -15,20 +15,26 @@ import { exportColumns, storedValue } from '../config/metaAdsMetrics.js';
 // — a function row -> 'Boost Post' | 'Non Boost Post' — adds a Campaign type
 // column, which the Report Generator's Boost/Non-Boost split reads before
 // falling back to campaign names (features/meta/metaReport.ts isBoostRow).
+// An "Ad preview link" column (Meta's preview_shareable_link per ad, from
+// meta_ad_previews) follows whenever any row has one; the Report Generator
+// links its per-materi-iklan tables to it (lib/metaAudience.ts findPreviewCol).
 
 const num = (v) => (v == null ? '' : Number(v));
 
 export function buildInsightsWorkbook({ start, end, rows, sections, campaignType = null }) {
   const columns = exportColumns(sections);
+  const withPreview = rows.some((r) => r.preview_link);
   const headers = [
     'Campaign name', 'Ad set name', 'Ad name', 'Age', 'Gender', 'Objective', 'Day',
     ...(campaignType ? ['Campaign type'] : []),
+    ...(withPreview ? ['Ad preview link'] : []),
     'Currency', ...columns.map((c) => c.header), 'Reporting starts', 'Reporting ends',
   ];
 
   const body = rows.map((r) => [
     r.campaign_name, r.adset_name ?? '', r.ad_name ?? '', r.age, r.gender, r.objective ?? '', r.entry_date,
     ...(campaignType ? [campaignType(r)] : []),
+    ...(withPreview ? [r.preview_link ?? ''] : []),
     'IDR', ...columns.map(({ key }) => num(storedValue(r, key))),
     start, end,
   ]);

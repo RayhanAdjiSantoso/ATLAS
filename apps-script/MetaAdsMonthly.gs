@@ -44,6 +44,8 @@
  * satu bulan dengan breakdown sedetail ini bisa puluhan ribu baris):
  *   POST /meta-ads-insights/ingest/start   -> runId + action type yang perlu disimpan
  *   POST /meta-ads-insights/ingest/rows    -> berulang, per ~500 baris
+ *   POST /meta-ads-insights/ingest/ads     -> link preview tiap ad yang muncul
+ *                                             (preview_shareable_link, fb.me/...)
  *   POST /meta-ads-insights/ingest/finish  -> sukses/gagal; saat sukses ATLAS
  *                                             menghapus baris bulan itu yang
  *                                             tidak ikut ditulis run ini
@@ -77,6 +79,7 @@ var MAM_WORKER_KEY = 'META_ADS_MONTHLY_WORKER_TS';
 var MAM_WORKER_STALE_MS = 7 * 60 * 1000;   // worker dianggap mati kalau lebih lama dari ini
 var MAM_START_BUDGET_MS = 3 * 60 * 1000;   // tidak memulai akun baru lewat batas ini
 var MAM_ROWS_PER_POST = 500;
+var MAM_PREVIEW_BATCH = 50;                // batas id per panggilan ?ids= Graph API
 var MAM_WINDOW_DAYS = 3;                   // menarik per 3 hari (level ad) agar Meta tidak menolak "terlalu banyak data"
 var MAM_ITEM_DAYS = 7;                     // satu item antrean / satu run ATLAS paling banyak 7 hari
 var MAM_DAILY_LOOKBACK_DAYS = 7;           // tarikan harian: 7 hari terakhir s/d kemarin
@@ -353,6 +356,7 @@ function runMetaAdsFetchItem_(item) {
     runId = started.runId;
 
     var buffer = [];
+    var adIds = {};
     var flush = function () {
       if (!buffer.length) return;
       atlasIngestPost_('/rows', { runId: runId, rows: buffer });
@@ -361,6 +365,7 @@ function runMetaAdsFetchItem_(item) {
     };
 
     var fetched = fetchMetaAdsRange_(tokenFor_(acct), acct.id, range, started.actionTypes || [], Boolean(started.catalogSegments), function (rows) {
+      rows.forEach(function (r) { if (r.adId) adIds[r.adId] = true; });
       buffer = buffer.concat(rows);
       while (buffer.length >= MAM_ROWS_PER_POST) {
         var chunk = buffer.slice(0, MAM_ROWS_PER_POST);
@@ -375,6 +380,18 @@ function runMetaAdsFetchItem_(item) {
     if (fetched.withoutResults) notes.push('results/cost_per_result ditolak Meta; Profile visits tidak terisi');
     if (fetched.withoutFollows) notes.push('instagram_profile_follow ditolak Meta; Instagram follows tidak terisi');
     if (fetched.withoutCatalog) notes.push('field shared items (catalog_segment_*) ditolak Meta; metrik CPAS shared items tidak terisi');
+
+    // Link preview iklan: sebelum /finish supaya file library yang ditulis
+    // sesudahnya sudah membawanya. Gagal di sini tidak menggagalkan run
+    // (angkanya sudah aman); cukup dicatat.
+    try {
+      var previews = fetchAdPreviewLinks_(tokenFor_(acct), Object.keys(adIds));
+      for (var p = 0; p < previews.length; p += MAM_ROWS_PER_POST) {
+        atlasIngestPost_('/ads', { runId: runId, ads: previews.slice(p, p + MAM_ROWS_PER_POST) });
+      }
+    } catch (e) {
+      notes.push('link preview iklan gagal diambil: ' + String(e.message).slice(0, 200));
+    }
     atlasIngestPost_('/finish', {
       runId: runId, status: 'success', rowCount: total,
       note: notes.length ? notes.join(' · ') : null
@@ -481,6 +498,28 @@ function fetchMetaAdsWindow_(token, accountId, fields, since, until, wanted, onR
     if (url) Utilities.sleep(200);
   }
   if (url) throw new Error('Terlalu banyak halaman untuk ' + since + ' s/d ' + until + ' -- dihentikan.');
+}
+
+/**
+ * preview_shareable_link (link fb.me/... = "Share a link" di preview Ads
+ * Manager) untuk tiap ad, per MAM_PREVIEW_BATCH id sekali panggil (?ids=).
+ * Ad yang tidak punya link (atau sudah dihapus) dilewati saja.
+ */
+function fetchAdPreviewLinks_(token, adIds) {
+  var out = [];
+  for (var i = 0; i < adIds.length; i += MAM_PREVIEW_BATCH) {
+    var url = 'https://graph.facebook.com/' + CONFIG.API_VERSION + '/' +
+      '?ids=' + encodeURIComponent(adIds.slice(i, i + MAM_PREVIEW_BATCH).join(',')) +
+      '&fields=preview_shareable_link' +
+      '&access_token=' + encodeURIComponent(token);
+    var body = fetchJson_(url);
+    Object.keys(body || {}).forEach(function (id) {
+      var link = body[id] && body[id].preview_shareable_link;
+      if (link) out.push({ adId: id, previewLink: link });
+    });
+    if (i + MAM_PREVIEW_BATCH < adIds.length) Utilities.sleep(200);
+  }
+  return out;
 }
 
 /** Satu baris Marketing API -> bentuk mentah yang dibaca normalizeInsightRow() di ATLAS. */

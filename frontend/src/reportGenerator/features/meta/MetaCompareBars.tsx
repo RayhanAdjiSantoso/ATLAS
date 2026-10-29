@@ -4,7 +4,7 @@ import { GroupedBarChart, type BarSeries } from '../../components/GroupedBarChar
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { AGE_ORDER, isAllValue } from '../../lib/meta';
-import { AUDIENCE_TYPE_LABEL, audienceTypeOf, leadMenuFor, metricsFor, type AudienceMetricDef, type AudienceType, type MetaMetricKind } from '../../lib/metaAudience';
+import { AUDIENCE_TYPE_LABEL, audienceTypeOf, findAdCol, findPreviewCol, leadMenuFor, metricsFor, type AudienceMetricDef, type AudienceType, type MetaMetricKind } from '../../lib/metaAudience';
 import { leadResultKind, type LeadResultKind } from '../../lib/metaFunnel';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
@@ -397,6 +397,7 @@ export function MetaCompareBars({
             dimNoun={dimNoun}
             initialSort={sortable ? String(metric.key) : undefined}
             initialDir={order === 'asc' ? 'asc' : 'desc'}
+            linkCol={dimCol === findAdCol(rows) ? findPreviewCol(rows) : null}
           />
         )}
       </div>
