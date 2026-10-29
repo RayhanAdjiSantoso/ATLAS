@@ -385,7 +385,7 @@ export function MetaCompareBars({
         {missing.length > 0 && metrics.length > 0 && groups.length > 0 && <p className="chart-foot">Tidak ditampilkan karena kolomnya tidak ada di file: {missing.map((m) => m.label).join(', ')}.</p>}
         {changes && dimCol && metric && view && view.total > 0 && (
           <MetaChangesTable
-            key={`${String(metric.key)}-${aud}`}
+            key={`${String(metric.key)}-${aud}-${order}`}
             rows={scoped}
             oldRows={(aud === 'NV' || aud === 'RM' ? changes.oldRows.filter((r) => typeOf(r) === aud) : changes.oldRows).filter(inFloor)}
             dimCol={dimCol}
@@ -396,6 +396,7 @@ export function MetaCompareBars({
             p2={changes.p2}
             dimNoun={dimNoun}
             initialSort={sortable ? String(metric.key) : undefined}
+            initialDir={order === 'asc' ? 'asc' : 'desc'}
           />
         )}
       </div>

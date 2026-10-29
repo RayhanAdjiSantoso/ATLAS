@@ -488,8 +488,10 @@
 .bt-tools .dt-btn-danger-outline:hover { border-color: #f1b0aa; background: #fef3f2; }
 
 .bt-work-body { display: grid; grid-template-columns: 252px minmax(0, 1fr); gap: 20px; align-items: start; }
-/* Leads Data has no channels, so no rail: the sheet takes the full width. */
+/* Leads Data has no channels, so no rail and no channel summary beside the
+   sheet: the table takes the full width. */
 .bt-work-body.is-leads { grid-template-columns: minmax(0, 1fr); }
+.bt-work-body.is-leads .bt-sheet-body { grid-template-columns: minmax(0, 1fr); }
 
 /* Channel list, boxed like the sheet: header bar, one line per channel, and
    the section total as a footer row. Pinned while the sheet scrolls; a long
