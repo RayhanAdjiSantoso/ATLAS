@@ -289,6 +289,16 @@ export function isBoostCampaign(campaignName, keyword) {
   return isBoostByName(name);
 }
 
+// Boost or Non-Boost for a row of one MAIN account ({ main_kind,
+// boost_keyword } from brand_ad_accounts, migration 059). An account that
+// holds only one kind of campaign decides on its own; a MIXED one (or one
+// not in the mirror) is split by its keyword as above.
+export function isBoostForAccount(campaignName, account) {
+  if (account?.main_kind === 'BOOST') return true;
+  if (account?.main_kind === 'NONBOOST') return false;
+  return isBoostCampaign(campaignName, account?.boost_keyword);
+}
+
 export function isBoostByName(campaignName) {
   const v = String(campaignName ?? '').toLowerCase();
   return v.includes('profile visit') || v.includes('instagram post') || /\bpv\b/.test(v) || /\bpost\b/.test(v);

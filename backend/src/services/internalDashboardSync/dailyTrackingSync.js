@@ -88,23 +88,26 @@ const META_FUNNEL = ['impressions', 'link_clicks', 'purchase', 'purchase_value',
 const META_SPEND_TOLERANCE = 0.02;
 
 // Meta insights rows -> { 'YYYY-MM': { platform: {spend, …funnel} } }.
-// A MAIN account without a Boost keyword cannot be split — its rows are
-// reported, not guessed into one bucket.
+// A Boost-only or Non-Boost-only MAIN account fills its one bucket; a MIXED
+// one without a Boost keyword cannot be split — its rows are reported, not
+// guessed into one bucket.
 function metaFunnelByMonth(metaRows, accounts, warnings) {
-  const keywordOf = new Map(accounts.filter((a) => a.account_type === 'MAIN').map((a) => [a.ad_account_id, a.boost_keyword]));
+  const mainOf = new Map(accounts.filter((a) => a.account_type === 'MAIN').map((a) => [a.ad_account_id, a]));
   const out = {};
   const missing = new Map();
   for (const r of metaRows) {
     let platform;
     if (r.account_type === 'CPAS') platform = 'meta_cpas';
     else {
-      const kw = keywordOf.get(r.ad_account_id);
-      if (!kw) {
+      const account = mainOf.get(r.ad_account_id);
+      const kw = account?.boost_keyword;
+      if (account?.main_kind === 'BOOST') platform = 'meta_boost';
+      else if (account?.main_kind === 'NONBOOST') platform = 'meta_nonboost';
+      else if (!kw) {
         const k = `${r.period}|${r.ad_account_id}`;
         missing.set(k, (missing.get(k) ?? 0) + (n(r.spend) ?? 0));
         continue;
-      }
-      platform = String(r.campaign_name ?? '').toLowerCase().includes(kw) ? 'meta_boost' : 'meta_nonboost';
+      } else platform = String(r.campaign_name ?? '').toLowerCase().includes(kw) ? 'meta_boost' : 'meta_nonboost';
     }
     const bucket = ((out[r.period] ??= {})[platform] ??= { spend: null });
     const add = (key, v) => { if (v !== null) bucket[key] = (bucket[key] ?? 0) + v; };

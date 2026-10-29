@@ -220,4 +220,12 @@ export const WHATS_NEW = [
     title: 'Satu akun, beberapa brand',
     body: 'Akun User (Internal) kini bisa diberi lebih dari satu brand: centang semua brand yang ditanganinya. Akun client tetap dibatasi ke satu brand.',
   },
+  {
+    id: 'meta-kelola-akun',
+    released: '2026-10-29',
+    path: '/data-brand',
+    target: '[data-feature="meta-kelola-akun"]',
+    title: 'Edit & hapus ad account Meta',
+    body: 'Ikon pensil kini juga mengubah ID Ad Account, dan ikon tempat sampah menghapus akun. Satu brand boleh punya lebih dari satu akun MAIN atau CPAS, dan akun MAIN bisa ditandai khusus Boost Post atau Non Boost Post tanpa kata kunci.',
+  },
 ];

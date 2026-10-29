@@ -206,7 +206,8 @@ function doGet(e) {
  *   brandList                | -                | list semua brand (hardcoded + dinamis), TANPA
  *                          |                   | setelan notifikasi apa pun -- lihat uiListBrands_
  *   brandSave                | object brand     | tambah/update 1 brand DINAMIS -- id, client, type,
- *                          |                   | token, boostMatch, atlasBrandId. Lihat uiSaveBrand_.
+ *                          |                   | token, boostMatch, atlasBrandId, originalId
+ *                          |                   | (ganti ID akun). Lihat uiSaveBrand_.
  *                          |                   | TIDAK ADA lagi threshold/metrik/override di sini
  *                          |                   | sejak v6 -- itu semua pindah ke Langganan.
  *   brandDelete              | { id }           | hapus 1 brand dinamis + CASCADE hapus semua
@@ -268,9 +269,13 @@ function doGet(e) {
  *                    config-nya sendiri.
  *
  * action `brandSave` -> payload: { id (act_..., wajib, unik), client (nama
- *                    brand, wajib, unik), type ('MAIN'|'CPAS'), token (WAJIB
+ *                    brand, wajib -- boleh sama untuk beberapa akun, juga
+ *                    yang setipe), type ('MAIN'|'CPAS'), token (WAJIB
  *                    untuk brand baru; kosongkan saat edit kalau tidak mau
- *                    ganti token). HANYA brand dinamis yang bisa diedit/
+ *                    ganti token), originalId (opsional: ID lama saat ID
+ *                    akun diganti -- langganan ikut pindah), mainKind
+ *                    (akun MAIN: 'MIXED' gabungan | 'BOOST' | 'NONBOOST',
+ *                    lihat mainKindOf_ -- cuma MIXED yang butuh boostMatch). HANYA brand dinamis yang bisa diedit/
  *                    dihapus lewat action ini — brand hardcoded di
  *                    CONFIG.ACCOUNTS (Weekly.gs) sama sekali tidak tersentuh.
  *
@@ -722,9 +727,28 @@ function uiListBrands_() {
       // Tab Daily Tracking tetap ada untuk brand yang masih menulis ke Google
       // Sheet -- dua jalur ini independen, salah satu cukup.
       boostMatch: a.boostMatch || null,
+      mainKind: mainKindOf_(a),
       atlasBrandId: a.atlasBrandId || null
     };
   });
+}
+
+/**
+ * Isi campaign akun MAIN: 'MIXED' (Boost Post + Non Boost Post, dipisah
+ * lewat Kata Kunci Boost Post -- satu-satunya bentuk sebelum field ini ada,
+ * jadi juga default akun lama/hardcoded), 'BOOST' (khusus Boost Post) atau
+ * 'NONBOOST' (khusus Non Boost Post). Akun BOOST/NONBOOST tidak butuh kata
+ * kunci: seluruh spend-nya masuk satu sisi. null untuk CPAS.
+ */
+var MAIN_KINDS = ['MIXED', 'BOOST', 'NONBOOST'];
+function mainKindOf_(acct) {
+  if ((acct.type || 'MAIN').toUpperCase() === 'CPAS') return null;
+  return MAIN_KINDS.indexOf(acct.mainKind) > -1 ? acct.mainKind : 'MIXED';
+}
+
+/** Akun ini butuh Kata Kunci Boost Post untuk memisahkan spend-nya? */
+function needsBoostMatch_(acct) {
+  return mainKindOf_(acct) === 'MIXED';
 }
 
 /**
@@ -734,8 +758,16 @@ function uiListBrands_() {
  * payload.id = Meta Ads Ad Account ID (act_...), dipakai juga sebagai
  * kunci untuk tahu ini tambah baru atau edit yang sudah ada. Token
  * cuma wajib diisi saat tambah baru; saat edit, kosongkan kalau tidak
- * mau ganti token yang sudah tersimpan. Nama brand harus unik lintas
- * SEMUA brand (hardcoded + dinamis lain).
+ * mau ganti token yang sudah tersimpan.
+ *
+ * payload.originalId (opsional) = ID lama saat ID akun diganti (mis. salah
+ * ketik). Entri yang sama dipindah ke ID baru -- token, langganan, dan
+ * cpasAccountId config Daily Tracking yang menunjuk ID lama ikut pindah.
+ *
+ * Satu brand boleh punya beberapa akun dengan tipe yang sama (mis. dua
+ * MAIN, dua CPAS) -- yang unik cuma ID akunnya. Spend harian akun-akun
+ * setipe dijumlah per brand sebelum dikirim ke ATLAS (lihat
+ * processAutoAccountTracking_).
  */
 function uiSaveBrand_(payload) {
   payload = payload || {};
@@ -743,6 +775,9 @@ function uiSaveBrand_(payload) {
   var id = String(payload.id || '').trim();
   if (!id) throw new Error('ID akun (act_...) wajib diisi.');
   if (id.indexOf('act_') !== 0) id = 'act_' + id;
+  if (!/^act_\d+$/.test(id)) throw new Error('ID akun harus berupa angka, mis. act_123456789012345.');
+  var originalId = String(payload.originalId || '').trim() || id;
+  if (originalId.indexOf('act_') !== 0) originalId = 'act_' + originalId;
 
   var client = String(payload.client || '').trim();
   if (!client) throw new Error('Nama brand wajib diisi.');
@@ -752,34 +787,34 @@ function uiSaveBrand_(payload) {
     throw new Error('Tipe ad account harus MAIN atau CPAS.');
   }
 
-  var isHardcoded = CONFIG.ACCOUNTS.some(function (a) { return a.id === id; });
-  if (isHardcoded) {
-    throw new Error('Akun "' + id + '" sudah terdaftar sebagai akun hardcoded di kode (CONFIG.ACCOUNTS) — tidak bisa diedit lewat ATLAS, ubah manual di Apps Script kalau perlu.');
-  }
+  [id, originalId].forEach(function (checkId) {
+    if (CONFIG.ACCOUNTS.some(function (a) { return a.id === checkId; })) {
+      throw new Error('Akun "' + checkId + '" sudah terdaftar sebagai akun hardcoded di kode (CONFIG.ACCOUNTS) — tidak bisa diedit lewat ATLAS, ubah manual di Apps Script kalau perlu.');
+    }
+  });
 
   var list = getDynamicAccounts_();
   var idx = -1;
   for (var i = 0; i < list.length; i++) {
-    if (list[i].id === id) idx = i;
+    if (list[i].id === originalId) idx = i;
   }
   var existing = idx > -1 ? list[idx] : null;
-
-  // Unik per KOMBINASI nama+tipe (bukan nama saja) -- satu brand boleh
-  // punya lebih dari satu ad account (mis. MAIN dan CPAS) dengan nama
-  // yang sama, dibedakan lewat tipe. Form Langganan di ATLAS memilihnya
-  // lewat dua langkah: Brand (nama) lalu Tipe.
-  var nameTypeTaken = getAllAccounts_().some(function (a) {
-    return a.id !== id && a.client.toLowerCase() === client.toLowerCase() && (a.type || 'MAIN') === type;
-  });
-  if (nameTypeTaken) {
-    throw new Error('Brand "' + client + '" tipe ' + type + ' sudah ada — kombinasi nama+tipe harus unik.');
+  var renaming = originalId !== id;
+  if (renaming && !existing) {
+    throw new Error('Akun "' + originalId + '" tidak ditemukan — tidak ada yang bisa diganti ID-nya.');
+  }
+  if (renaming && list.some(function (a) { return a.id === id; })) {
+    throw new Error('ID akun "' + id + '" sudah terdaftar. Gunakan ID lain.');
   }
 
   var token = String(payload.token || '').trim();
   if (!token && !existing) {
     throw new Error('Token wajib diisi untuk brand baru.');
   }
-  var tokenKey = existing ? existing.tokenKey : slugifyForTokenKey_(client);
+  // Per akun, bukan per nama brand: dua akun satu brand (MAIN + CPAS, atau
+  // dua MAIN) dulu berbagi satu property, jadi menghapus satu akun ikut
+  // menghapus token akun lainnya. Akun lama tetap memakai key-nya.
+  var tokenKey = existing ? existing.tokenKey : slugifyForTokenKey_(client + '_' + id.slice(4));
   if (token) {
     PropertiesService.getScriptProperties().setProperty(tokenKey, token);
   }
@@ -791,6 +826,18 @@ function uiSaveBrand_(payload) {
   // brand yang dipakai cuma untuk Weekly/Daily alert (bukan Daily Tracking)
   // boleh dibiarkan kosong.
   var boostMatch = String(payload.boostMatch || '').trim().toLowerCase();
+
+  // mainKind: lihat mainKindOf_. Tidak dikirim = tetap seperti sebelumnya.
+  var mainKind = null;
+  if (type === 'MAIN') {
+    mainKind = payload.mainKind === undefined || payload.mainKind === null || payload.mainKind === ''
+      ? mainKindOf_(existing || {}) : String(payload.mainKind).trim().toUpperCase();
+    if (MAIN_KINDS.indexOf(mainKind) === -1) {
+      throw new Error('Jenis akun MAIN harus MIXED (gabungan), BOOST, atau NONBOOST.');
+    }
+    // Kata kunci cuma berarti untuk akun gabungan.
+    if (mainKind !== 'MIXED') boostMatch = '';
+  }
 
   // atlasBrandId: opsional juga, tapi WAJIB diisi (dari sisi form ATLAS,
   // yang otomatis mencocokkan `client` ke brand_id ATLAS) supaya boostMatch
@@ -804,11 +851,23 @@ function uiSaveBrand_(payload) {
 
   var normalized = {
     id: id, client: client, type: type, tokenKey: tokenKey, source: 'dynamic',
-    boostMatch: boostMatch || null, atlasBrandId: atlasBrandId
+    mainKind: mainKind, boostMatch: boostMatch || null, atlasBrandId: atlasBrandId
   };
 
   if (idx > -1) list[idx] = normalized; else list.push(normalized);
   saveDynamicAccounts_(list);
+
+  if (renaming) {
+    // Langganan dan config Daily Tracking menunjuk akun lewat ID-nya.
+    var subs = getSubscriptions_();
+    var subsMoved = false;
+    subs.forEach(function (s) { if (s.brandId === originalId) { s.brandId = id; subsMoved = true; } });
+    if (subsMoved) saveSubscriptions_(subs);
+    var configs = getTrackingConfigs_();
+    var configsMoved = false;
+    configs.forEach(function (c) { if (c.cpasAccountId === originalId) { c.cpasAccountId = id; configsMoved = true; } });
+    if (configsMoved) saveTrackingConfigs_(configs);
+  }
 
   return uiListBrands_().filter(function (a) { return a.id === id; })[0];
 }
@@ -829,7 +888,17 @@ function uiDeleteBrand_(id) {
     throw new Error('Brand dinamis dengan id "' + id + '" tidak ditemukan (brand hardcoded tidak bisa dihapus lewat sini).');
   }
 
-  var usedByTracking = getTrackingConfigs_().filter(function (c) { return c.accountClient === target.client; });
+  // Config Daily Tracking menunjuk akun lewat nama+tipe (accountClient +
+  // accountType) atau lewat cpasAccountId. Lewat nama+tipe, config baru
+  // kehilangan akunnya kalau yang dihapus ini satu-satunya akun nama+tipe itu.
+  var targetType = target.type || 'MAIN';
+  var sameNameType = getAllAccounts_().filter(function (a) {
+    return a.id !== id && a.client === target.client && (a.type || 'MAIN') === targetType;
+  }).length;
+  var usedByTracking = getTrackingConfigs_().filter(function (c) {
+    if (c.cpasAccountId === id) return true;
+    return !sameNameType && c.accountClient === target.client && String(c.accountType || 'MAIN').toUpperCase() === targetType;
+  });
   if (usedByTracking.length) {
     throw new Error('Brand "' + target.client + '" masih dipakai ' + usedByTracking.length +
       ' config Daily Tracking (' + usedByTracking.map(function (c) { return c.label; }).join(', ') +
@@ -843,7 +912,9 @@ function uiDeleteBrand_(id) {
 
   var remainingAccounts = list.filter(function (a) { return a.id !== id; });
   saveDynamicAccounts_(remainingAccounts);
-  if (target.tokenKey) {
+  // Akun lama satu brand bisa berbagi key (dulu dibuat dari nama brand saja).
+  var tokenShared = getAllAccounts_().some(function (a) { return a.tokenKey === target.tokenKey; });
+  if (target.tokenKey && !tokenShared) {
     PropertiesService.getScriptProperties().deleteProperty(target.tokenKey);
   }
 
@@ -1030,16 +1101,20 @@ function updateAllDailyTrackingSpend() {
   var configuredClients = {};
   configs.forEach(function (c) { configuredClients[c.accountClient] = true; });
 
-  getAllAccounts_().forEach(function (acct) {
-    if (configuredClients[acct.client]) return;
-    var isCpas = (acct.type || 'MAIN').toUpperCase() === 'CPAS';
-    if (!acct.atlasBrandId || (!isCpas && !acct.boostMatch)) return;
+  // Dijumlah per brand ATLAS + tipe (lihat processAutoAccountTracking_).
+  autoAccountGroups_(configuredClients).forEach(function (group) {
+    var first = group.accounts[0];
+    var groupLabel = first.client + ' - ' + (first.type || 'MAIN');
+    if (group.blocked) {
+      failed.push({ label: groupLabel, status: 'FAILED', error: group.blocked });
+      return;
+    }
     try {
-      var r2 = processAutoAccountTracking_(acct, false);
+      var r2 = processAutoAccountTracking_(group.accounts, false);
       if (r2.status === 'OK') ok.push(r2); else failed.push(r2);
     } catch (e) {
-      failed.push({ label: acct.client, status: 'FAILED', error: e.message });
-      Logger.log('[%s] Unexpected error (auto account): %s', acct.client, e.message);
+      failed.push({ label: groupLabel, status: 'FAILED', error: e.message });
+      Logger.log('[%s] Unexpected error (auto account): %s', groupLabel, e.message);
     }
     Utilities.sleep(300);
   });
@@ -1325,35 +1400,50 @@ function postToAtlas_(cfg, dateStr, boostSpend, nonBoostSpend, cpasSpend) {
  * CPAS) sudah dicek oleh pemanggil; fungsi ini tidak mengecek ulang supaya
  * bisa juga dipanggil untuk dry-run preview sebelum boostMatch tentu terisi.
  */
-function processAutoAccountTracking_(acct, dryRun) {
+function processAutoAccountTracking_(accts, dryRun) {
+  // Satu brand bisa punya beberapa akun setipe (mis. dua MAIN). ATLAS
+  // menyimpan SATU angka per brand+tanggal+channel dan menimpanya setiap
+  // push, jadi akun-akun itu dijumlah di sini dan dikirim sekali -- push per
+  // akun membuat akun terakhir menghapus angka akun sebelumnya.
+  var acct = accts[0];
   var tz = tz_();
   var targetDate = new Date();
   targetDate.setDate(targetDate.getDate() - 1); // H-1
   var dateStr = Utilities.formatDate(targetDate, tz, 'yyyy-MM-dd');
-  var label = acct.client + ' - ' + (acct.type || 'MAIN') + ' (Brand & Langganan)';
-
-  var rows;
-  try {
-    rows = fetchCampaignSpend_(tokenFor_(acct), acct.id, dateStr);
-  } catch (e) {
-    return { label: label, date: dateStr, status: 'FAILED', error: 'Gagal menarik data Meta Ads (' + acct.client + '): ' + e.message };
-  }
+  var label = acct.client + ' - ' + (acct.type || 'MAIN') +
+    (accts.length > 1 ? ' (' + accts.length + ' akun)' : '') + ' (Brand & Langganan)';
 
   var isCpas = (acct.type || 'MAIN').toUpperCase() === 'CPAS';
-  var boostSpend = null, nonBoostSpend = null, cpasSpend = null, nCampaign = 0;
-  var boostMatch = String(acct.boostMatch || '').toLowerCase();
+  // Channel yang tidak dipegang akun mana pun di grup dikirim null (tidak
+  // disentuh), bukan 0: brand yang cuma punya akun khusus Boost Post tidak
+  // boleh menimpa Non Boost Post-nya dengan nol.
+  var kinds = accts.map(mainKindOf_);
+  var hasBoost = !isCpas && kinds.some(function (k) { return k !== 'NONBOOST'; });
+  var hasNonBoost = !isCpas && kinds.some(function (k) { return k !== 'BOOST'; });
+  var boostSpend = hasBoost ? 0 : null, nonBoostSpend = hasNonBoost ? 0 : null, cpasSpend = isCpas ? 0 : null, nCampaign = 0;
 
-  if (isCpas) {
-    // Sama seperti akun CPAS primer di processTrackingConfig_: TIDAK ADA
-    // pembagian nama sama sekali, semua campaign akun ini dijumlah apa adanya.
-    cpasSpend = 0;
-    Object.keys(rows).forEach(function (id) { cpasSpend += num_(rows[id].spend); nCampaign++; });
-  } else {
-    boostSpend = 0; nonBoostSpend = 0;
-    Object.keys(rows).forEach(function (id) {
-      var name = rows[id].campaign_name || '';
-      var spend = num_(rows[id].spend);
+  for (var i = 0; i < accts.length; i++) {
+    var a = accts[i];
+    var rows;
+    try {
+      rows = fetchCampaignSpend_(tokenFor_(a), a.id, dateStr);
+    } catch (e) {
+      // Satu akun gagal = tidak push sama sekali: angka sebagian akan
+      // menimpa angka lengkap yang mungkin sudah ada di ATLAS.
+      return { label: label, date: dateStr, status: 'FAILED', error: 'Gagal menarik data Meta Ads (' + a.client + ', ' + a.id + '): ' + e.message };
+    }
+    var boostMatch = String(a.boostMatch || '').toLowerCase();
+    var kind = mainKindOf_(a);
+    Object.keys(rows).forEach(function (cid) {
+      var spend = num_(rows[cid].spend);
       nCampaign++;
+      // CPAS: TIDAK ADA pembagian nama sama sekali, semua campaign dijumlah
+      // apa adanya (sama seperti akun CPAS primer di processTrackingConfig_).
+      // Akun khusus Boost/Non Boost Post juga tidak dipilah nama.
+      if (isCpas) { cpasSpend += spend; return; }
+      if (kind === 'BOOST') { boostSpend += spend; return; }
+      if (kind === 'NONBOOST') { nonBoostSpend += spend; return; }
+      var name = rows[cid].campaign_name || '';
       if (boostMatch && name.toLowerCase().indexOf(boostMatch) > -1) boostSpend += spend;
       else nonBoostSpend += spend;
     });
@@ -1362,6 +1452,7 @@ function processAutoAccountTracking_(acct, dryRun) {
   var result = {
     label: label, date: dateStr, status: dryRun ? 'DRY RUN OK' : 'OK',
     boostSpend: boostSpend, nonBoostSpend: nonBoostSpend, cpasSpend: cpasSpend, campaigns: nCampaign,
+    accounts: accts.map(function (x) { return x.id; }),
     // Dikembalikan supaya ATLAS bisa memverifikasi tautan brand dari hasil
     // preview ini sendiri, tanpa panggilan brandList tambahan.
     atlasBrandId: acct.atlasBrandId || null
@@ -1374,33 +1465,66 @@ function processAutoAccountTracking_(acct, dryRun) {
 }
 
 /**
- * Cari akun (hardcoded/dinamis) yang eligible untuk processAutoAccountTracking_,
- * dipakai action accountTrackingPreview/accountTrackingRun. `type` WAJIB
- * disertakan pemanggil (dari payload ATLAS) -- lihat catatan panjang di
- * findAccount_ soal kenapa client SAJA ambigu kalau brand yang sama punya
- * akun MAIN dan CPAS berdampingan (persis kasus Crabus).
+ * Akun-akun Brand & Langganan per brand ATLAS + tipe, siap untuk
+ * processAutoAccountTracking_. Akun MAIN gabungan tanpa Kata Kunci Boost
+ * Post (dipakai cuma untuk Weekly/Daily alert) tidak membentuk grup -- tapi kalau
+ * akun MAIN lain di brand yang sama sudah diisi, grupnya ditandai `blocked`:
+ * menjumlah tanpa akun itu akan menimpa spend brand dengan angka sebagian.
+ * `skipClients` = accountClient yang sudah dicakup config Daily Tracking.
  */
-function findEligibleAutoAccount_(client, type) {
-  var acct = findAccount_(client, type);
-  if (!acct) throw new Error('Akun "' + client + '" tipe ' + (type || 'MAIN') + ' tidak ditemukan.');
-  if (!acct.atlasBrandId) {
-    throw new Error('Brand "' + client + '" belum ditautkan ke brand ATLAS manapun (isi lewat form Brand & Langganan).');
-  }
-  var isCpas = (acct.type || 'MAIN').toUpperCase() === 'CPAS';
-  if (!isCpas && !acct.boostMatch) {
-    throw new Error('Brand "' + client + '" belum diisi Kata Kunci Boost Post (wajib untuk akun MAIN, lihat form Brand & Langganan).');
-  }
-  return acct;
+function autoAccountGroups_(skipClients) {
+  var groups = {}, order = [];
+  getAllAccounts_().forEach(function (acct) {
+    if (!acct.atlasBrandId || (skipClients && skipClients[acct.client])) return;
+    var type = (acct.type || 'MAIN').toUpperCase();
+    var key = acct.atlasBrandId + '|' + type;
+    if (!groups[key]) { groups[key] = { accounts: [], missingBoost: [] }; order.push(key); }
+    if (needsBoostMatch_(acct) && !acct.boostMatch) groups[key].missingBoost.push(acct.id);
+    else groups[key].accounts.push(acct);
+  });
+  return order.map(function (key) { return groups[key]; }).filter(function (g) { return g.accounts.length; })
+    .map(function (g) {
+      return {
+        accounts: g.accounts,
+        blocked: g.missingBoost.length
+          ? 'Akun gabungan ' + g.missingBoost.join(', ') + ' belum diisi Kata Kunci Boost Post, padahal akun MAIN lain di brand ini sudah siap. ' +
+            'Isi kata kuncinya (atau hapus akunnya) supaya spend brand ini dijumlah lengkap.'
+          : null
+      };
+    });
 }
 
-/** Dry run satu akun Brand & Langganan (dipanggil tombol "Sync Meta Sekarang" ATLAS sebelum benar-benar menulis). */
+/**
+ * Cari akun-akun (hardcoded/dinamis) yang eligible untuk
+ * processAutoAccountTracking_, dipakai action accountTrackingPreview/
+ * accountTrackingRun. `type` WAJIB disertakan pemanggil (dari payload ATLAS)
+ * -- lihat catatan panjang di findAccount_ soal kenapa client SAJA ambigu
+ * kalau brand yang sama punya akun MAIN dan CPAS berdampingan (persis kasus
+ * Crabus). Semua akun nama+tipe itu dikembalikan supaya spend-nya dijumlah.
+ */
+function findEligibleAutoAccounts_(client, type) {
+  var wantType = String(type || 'MAIN').toUpperCase();
+  var accts = getAllAccounts_().filter(function (a) { return a.client === client && (a.type || 'MAIN') === wantType; });
+  if (!accts.length) throw new Error('Akun "' + client + '" tipe ' + wantType + ' tidak ditemukan.');
+  accts.forEach(function (acct) {
+    if (!acct.atlasBrandId) {
+      throw new Error('Akun ' + acct.id + ' (' + client + ') belum ditautkan ke brand ATLAS manapun (isi lewat form Brand & Langganan).');
+    }
+    if (needsBoostMatch_(acct) && !acct.boostMatch) {
+      throw new Error('Akun ' + acct.id + ' (' + client + ') belum diisi Kata Kunci Boost Post (wajib untuk akun MAIN gabungan, lihat form Brand & Langganan).');
+    }
+  });
+  return accts;
+}
+
+/** Dry run satu brand+tipe Brand & Langganan (dipanggil tombol "Sync Meta Sekarang" ATLAS sebelum benar-benar menulis). */
 function uiPreviewAccountTracking_(client, type) {
-  return processAutoAccountTracking_(findEligibleAutoAccount_(client, type), true);
+  return processAutoAccountTracking_(findEligibleAutoAccounts_(client, type), true);
 }
 
-/** Run sungguhan satu akun Brand & Langganan -- push ke ATLAS, TIDAK ada Sheet untuk ditulis sama sekali. */
+/** Run sungguhan satu brand+tipe Brand & Langganan -- push ke ATLAS, TIDAK ada Sheet untuk ditulis sama sekali. */
 function uiRunAccountTracking_(client, type) {
-  return processAutoAccountTracking_(findEligibleAutoAccount_(client, type), false);
+  return processAutoAccountTracking_(findEligibleAutoAccounts_(client, type), false);
 }
 
 function failTracking_(cfg, dateStr, dryRun, message) {

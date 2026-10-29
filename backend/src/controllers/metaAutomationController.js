@@ -76,8 +76,13 @@ export const brandCreate = asyncHandler(async (req, res) => {
   res.status(201).json({ brand });
 });
 
+// The URL names the account being edited; body.id, when sent, is its new ID
+// (a mistyped act_ fixed) — Apps Script moves the entry and its
+// subscriptions over to it.
 export const brandUpdate = asyncHandler(async (req, res) => {
-  const brand = await metaAutomationService.callAppsScript('brandSave', { ...req.body, id: req.params.id });
+  const brand = await metaAutomationService.callAppsScript('brandSave', {
+    ...req.body, id: req.body?.id || req.params.id, originalId: req.params.id,
+  });
   await syncMetaAccountsToDashboard();
   res.json({ brand });
 });
@@ -98,7 +103,7 @@ async function brandAccounts(brandId) {
   const all = await metaAutomationService.callAppsScript('brandList');
   return (all ?? [])
     .filter((a) => Number(a.atlasBrandId) === Number(brandId))
-    .map(({ id, client, type, atlasBrandId }) => ({ id, client, type: type || 'MAIN', atlasBrandId }));
+    .map(({ id, client, type, mainKind, atlasBrandId }) => ({ id, client, type: type || 'MAIN', mainKind: mainKind ?? null, atlasBrandId }));
 }
 
 // Sequential, never Promise.all: two overlapping calls to the same Apps
