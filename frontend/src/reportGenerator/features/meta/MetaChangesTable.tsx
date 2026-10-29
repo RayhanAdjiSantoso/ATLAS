@@ -58,6 +58,7 @@ export function MetaChangesTable({
   p2,
   dimNoun,
   initialSort,
+  initialDir = 'desc',
 }: {
   rows: SheetRow[];
   oldRows: SheetRow[];
@@ -72,6 +73,8 @@ export function MetaChangesTable({
   // The metric the table opens ranked on (highest first); omitted, an age
   // axis keeps its own order and anything else ranks on the first metric.
   initialSort?: string;
+  // Which end that ranking opens on — the chart's Tertinggi / Terendah.
+  initialDir?: 'asc' | 'desc';
 }) {
   const isAge = dimCol.toLowerCase().includes('age');
   const hasOld = oldRows.length > 0;
@@ -103,7 +106,7 @@ export function MetaChangesTable({
   }, [rows, oldRows, dimCol, kind, leadKind, metrics, isAge]);
 
   const firstKey = initialSort ?? (isAge ? null : metrics[0] ? String(metrics[0].key) : null);
-  const [sort, setSort] = useState<SortKey>(firstKey ? { id: firstKey, dir: 'desc' } : null);
+  const [sort, setSort] = useState<SortKey>(firstKey ? { id: firstKey, dir: initialDir } : null);
 
   const sorted = useMemo(() => {
     if (!sort) return table;
