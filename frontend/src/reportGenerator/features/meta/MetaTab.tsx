@@ -36,7 +36,6 @@ import {
   BRAND_CONSIDERATION_RATE_METRICS,
   BRAND_TOP_EFFICIENCY_METRICS,
   B2B_AUDIENCE_TRAFFIC_METRICS,
-  B2B_CREATIVE_CONVERSION_METRICS,
   B2B_TRAFFIC_METRICS,
   RETAIL_AUDIENCE_CONVERSION_METRICS,
   SALES_CREATIVE_CONVERSION_METRICS,
@@ -46,8 +45,6 @@ import {
   audienceTypeOf,
   findAdCol,
   findAdsetCol,
-  messageKindsOf,
-  nonRetailConversionMetrics,
   NON_RETAIL_TOP_CONTENT_METRICS,
   type AudienceMetricDef,
 } from '../../lib/metaAudience';
@@ -93,7 +90,7 @@ const BRAND_INDUSTRY_TO_META: Record<string, Exclude<MetaIndustry, 'custom' | nu
   'B2B Services': 'b2b',
   'B2B + Services': 'b2b',
 };
-const CONSIDERATION_MIN_IMPRESSIONS = 1000;
+const CONSIDERATION_MIN_IMPRESSIONS = 3000;
 // Audience Analysis reads only ad sets that spent more than this.
 const AUDIENCE_MIN_SPEND = 100000;
 
@@ -755,7 +752,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       const brandBars = (title: string, b: string, menu: typeof BRAND_CONVERSION_METRICS, dimCol: string | null, dimNoun: string, emptyMessage: string, minImpressions?: number) => (
         <MetaCompareBars key={title} heading={`${prefix} · ${title}`} badge={b} rows={rows} kind="brand" menu={L(menu)} dimCol={dimCol} campCol={campCol} audience="none" sortable hideDefaultOrder copyLabels dimNoun={dimNoun} emptyMessage={empty(emptyMessage)} changes={changes} minImpressions={minImpressions} />
       );
-      // Consideration reads per materi iklan, only ads that reached 1,000
+      // Consideration reads per materi iklan, only ads that reached 3,000
       // impressions — a rate over fewer is noise.
       return (
         <>
@@ -766,11 +763,9 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
       );
     }
 
-    // Non Retail reads the chat that follows a lead as Conversations or
-    // Contacts — whichever the file has, both offered when it has both.
-    const messageKinds = kind === 'b2b' ? messageKindsOf(rows, oldRows) : [];
+    // Non Retail has no Conversion Analysis.
     const menus = kind === 'b2b'
-      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_TRAFFIC_METRICS, conversion: nonRetailConversionMetrics(messageKinds), creativeConversion: B2B_CREATIVE_CONVERSION_METRICS, topContent: NON_RETAIL_TOP_CONTENT_METRICS }
+      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_TRAFFIC_METRICS, conversion: null, creativeConversion: null, topContent: NON_RETAIL_TOP_CONTENT_METRICS }
       : { audienceTraffic: SALES_AUDIENCE_TRAFFIC_METRICS, traffic: SALES_TRAFFIC_METRICS, conversion: RETAIL_AUDIENCE_CONVERSION_METRICS, creativeConversion: SALES_CREATIVE_CONVERSION_METRICS, topContent: RETAIL_TOP_CONTENT_METRICS };
     const adsetCol = rows.length ? findAdsetCol(rows) : null;
     const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
@@ -808,7 +803,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             {bars('Traffic Analysis by Creative', creativeBadge, menus.traffic, 'creative')}
           </>
         ))}
-        {page('Conversion Analysis', audienceBadge, (
+        {menus.conversion && menus.creativeConversion && page('Conversion Analysis', audienceBadge, (
           <>
             {bars('Conversion Analysis by Audience', audienceBadge, menus.conversion, 'adset', true)}
             {bars('Conversion Analysis by Creative', creativeBadge, menus.creativeConversion, 'creative', true)}
