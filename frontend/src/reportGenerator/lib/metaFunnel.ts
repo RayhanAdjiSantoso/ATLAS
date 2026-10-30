@@ -107,6 +107,7 @@ export interface MetaSalesMetrics {
   visitToAtcRate: number | null;
   purchase: number | null;
   atcToPurchaseRate: number | null;
+  costPerContentView: number | null;
   costPerAtc: number | null;
   costPerPurchase: number | null;
 }
@@ -142,6 +143,7 @@ export function metaSalesMetrics(rows: SheetRow[]): MetaSalesMetrics {
     visitToAtcRate: rateOr(ratio(atc, contentViews), rows, ['content views to atc rate', 'atc rate']),
     purchase: orders,
     atcToPurchaseRate: rateOr(ratio(orders, atc), rows, ['atc to pur', 'purchase rate']),
+    costPerContentView: ratio(spend, contentViews, 1),
     costPerAtc: ratio(spend, atc, 1),
     costPerPurchase: ratio(spend, orders, 1),
   };
@@ -190,6 +192,7 @@ export interface MetaBrandMetrics {
   followRate: number | null;
   linkClicks: number | null;
   ctr: number | null;
+  cpc: number | null;
   costPerProfileVisit: number | null;
   costPerFollow: number | null;
   costPerInteraction: number | null;
@@ -221,6 +224,7 @@ export function metaBrandMetrics(rows: SheetRow[]): MetaBrandMetrics {
     followRate: ratio(follows, impressions),
     linkClicks,
     ctr: rateOr(ratio(linkClicks, impressions), rows, ['ctr']),
+    cpc: ratio(spend, linkClicks, 1),
     costPerProfileVisit: ratio(spend, profileVisits, 1),
     costPerFollow: ratio(spend, follows, 1),
     costPerInteraction: ratio(spend, interactions, 1),

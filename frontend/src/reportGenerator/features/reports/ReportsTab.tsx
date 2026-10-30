@@ -4,7 +4,7 @@ import { SectionNav } from '../../components/SectionNav';
 import { InlineNotice } from '../../components/InlineNotice';
 import { KpiTable } from '../../components/KpiTable';
 import { OverviewDetailedCard } from '../../components/OverviewDetailedCard';
-import { PeriodCompareChip } from '../../components/PeriodCompareChip';
+import { PerformanceReportHeader } from '../../components/PerformanceReportHeader';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { ShopeeReportSections } from '../shopee/ShopeeReportSections';
@@ -196,12 +196,12 @@ function ShopeeDetailView({ detail }: { detail: ReportDetail }) {
 
   return (
     <div id="report-shopee-history">
-      <div className="report-top">
-        <div className="report-title">Performance Report</div>
-        <div className="report-period">
-          <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
-        </div>
-      </div>
+      <PerformanceReportHeader
+        platform={PLATFORM_LABELS[detail.report.platform]}
+        oldPeriod={report.p1}
+        currentPeriod={report.p2}
+        generatedAt={new Date(detail.report.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+      />
       <div data-role="r-body" ref={bodyRef}>
         <ShopeeReportSections
           report={report}
@@ -238,12 +238,12 @@ function MetaDetailView({ detail }: { detail: ReportDetail }) {
   );
   return (
     <div id="report-meta-history">
-      <div className="report-top">
-        <div className="report-title">Performance Report</div>
-        <div className="report-period">
-          <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
-        </div>
-      </div>
+      <PerformanceReportHeader
+        platform={PLATFORM_LABELS[detail.report.platform]}
+        oldPeriod={report.p1}
+        currentPeriod={report.p2}
+        generatedAt={new Date(detail.report.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+      />
       <SectionNav bodyRef={bodyRef} scanKey={detail} accent="var(--acc)" />
       <div data-role="r-body" ref={bodyRef}>
         <PeriodWarningBanner message={report.periodWarning} />
@@ -304,12 +304,12 @@ function TiktokDetailView({ detail }: { detail: ReportDetail }) {
   const report = reconstructTiktokReport(detail);
   return (
     <div id="report-tiktok-history">
-      <div className="report-top">
-        <div className="report-title">Performance Report</div>
-        <div className="report-period">
-          <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
-        </div>
-      </div>
+      <PerformanceReportHeader
+        platform={PLATFORM_LABELS[detail.report.platform]}
+        oldPeriod={report.p1}
+        currentPeriod={report.p2}
+        generatedAt={new Date(detail.report.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+      />
       <div data-role="r-body">
         <PeriodWarningBanner message={report.periodWarning} />
         <div className="sec-block">

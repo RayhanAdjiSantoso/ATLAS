@@ -6,7 +6,7 @@ import { combineManualPeriods } from '../../lib/manualPeriod';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { InlineNotice } from '../../components/InlineNotice';
 import { KpiTable } from '../../components/KpiTable';
-import { PeriodCompareChip } from '../../components/PeriodCompareChip';
+import { PerformanceReportHeader } from '../../components/PerformanceReportHeader';
 import { SetupBoard, SetupGrid, SetupRow, SetupTextInput } from '../../components/SetupBoard';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
@@ -490,13 +490,12 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
 
       {report && (
         <div id="report-tiktok">
-          <div className="report-top">
-            <div className="report-title">Performance Report</div>
-            <div className="report-period">
-              <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
-            </div>
-            <div className="report-meta num">Generated {generatedAt}</div>
-          </div>
+          <PerformanceReportHeader
+            platform="TikTok GMV Max"
+            oldPeriod={report.p1}
+            currentPeriod={report.p2}
+            generatedAt={generatedAt}
+          />
           <div data-role="r-body">
             <PeriodWarningBanner message={report.periodWarning} />
             <div className="sec-block">

@@ -8,7 +8,7 @@ import { combineManualPeriods } from '../../lib/manualPeriod';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { InlineNotice } from '../../components/InlineNotice';
 import { OmzetField } from '../../components/OmzetField';
-import { PeriodCompareChip } from '../../components/PeriodCompareChip';
+import { PerformanceReportHeader } from '../../components/PerformanceReportHeader';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import { usePeriodLabel } from '../../hooks/usePeriodLabel';
@@ -1310,13 +1310,12 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
 
       {report && (
         <div id="report-shopee">
-          <div className="report-top">
-            <div className="report-title">Performance Report</div>
-            <div className="report-period">
-              <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
-            </div>
-            <div className="report-meta num">Generated {generatedAt}</div>
-          </div>
+          <PerformanceReportHeader
+            platform="Shopee Ads"
+            oldPeriod={report.p1}
+            currentPeriod={report.p2}
+            generatedAt={generatedAt}
+          />
           {/* SectionNav removed — ShopeeReportSections now pages the report into
               its own tab bar, so a sticky scroll-to-anchor nav is redundant. */}
           <div data-role="r-body" ref={bodyRef}>

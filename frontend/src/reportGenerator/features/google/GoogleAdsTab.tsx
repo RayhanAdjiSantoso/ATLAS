@@ -5,7 +5,7 @@ import { DeltaPill } from '../../components/DeltaPill';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { InlineNotice } from '../../components/InlineNotice';
 import { KpiTable, type KpiRowDisplay } from '../../components/KpiTable';
-import { PeriodCompareChip } from '../../components/PeriodCompareChip';
+import { PerformanceReportHeader } from '../../components/PerformanceReportHeader';
 import { SetupBoard, SetupGrid, SetupRow, SetupTextInput } from '../../components/SetupBoard';
 import { PieChartCanvas } from '../../components/PieChartCanvas';
 import { ReportPages } from '../../components/ReportPages';
@@ -408,14 +408,15 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
       <small>{view === 'internal' ? 'Confidence, aturan, rekonsiliasi data, dan tombol review terlihat.' : 'Temuan, dampak, tindakan, dan pemantauan — bahasa untuk klien. Pilih ini sebelum download PDF untuk klien.'}</small>
     </div>
     <div id="report-google" style={{ '--band-a': '#1a73e8', '--band-b': '#1557b0', '--band-c': '#34a853' } as CSSProperties}>
-      <div className="report-top">
-        <div className="report-title">Google Ads Performance Report</div>
-        <div className="report-period"><PeriodCompareChip old={p1} cur={p2} onBrand /></div>
-        <div className="report-meta num">
-          Generated {generatedAt} · {report.accounts.map((a) => a.name || a.label || a.customerId).join(', ')}
-        </div>
+      <PerformanceReportHeader
+        platform="Google Ads"
+        oldPeriod={p1}
+        currentPeriod={p2}
+        generatedAt={generatedAt}
+        description={report.accounts.map((a) => a.name || a.label || a.customerId).join(', ')}
+      >
         <FreshnessLine report={report} coverageEnd={coverageEnd} />
-      </div>
+      </PerformanceReportHeader>
       <div data-role="r-body">
         {report.mixedCurrency && (
           <InlineNotice title="Akun memakai mata uang berbeda" tone="info">

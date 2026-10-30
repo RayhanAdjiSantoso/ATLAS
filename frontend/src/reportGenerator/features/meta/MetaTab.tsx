@@ -26,7 +26,7 @@ import { requireColumns, validateFileBasics } from '../../lib/validation';
 import type { SheetRow } from '../../lib/types';
 import { OverviewDetailedCard } from '../../components/OverviewDetailedCard';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
-import { PeriodCompareChip } from '../../components/PeriodCompareChip';
+import { PerformanceReportHeader } from '../../components/PerformanceReportHeader';
 import { PeriodWarningBanner } from '../../components/PeriodWarningBanner';
 import { StepIndicator, type Step } from '../../components/StepIndicator';
 import type { PlatformResultData } from '../../lib/summary';
@@ -1122,13 +1122,12 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
       {report && (
         <div id="report-meta">
-          <div className="report-top">
-            <div className="report-title">Performance Report</div>
-            <div className="report-period">
-              <PeriodCompareChip old={report.p1} cur={report.p2} onBrand />
-            </div>
-            <div className="report-meta num">Generated {generatedAt}</div>
-          </div>
+          <PerformanceReportHeader
+            platform="Meta Ads"
+            oldPeriod={report.p1}
+            currentPeriod={report.p2}
+            generatedAt={generatedAt}
+          />
           <div data-role="r-body" ref={bodyRef}>
             <PeriodWarningBanner message={report.periodWarning} />
             <PeriodWarningBanner message={report.reachWarning} />
