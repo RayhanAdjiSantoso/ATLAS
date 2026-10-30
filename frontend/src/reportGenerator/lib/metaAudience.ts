@@ -82,6 +82,7 @@ export interface MetaB2bMetrics extends MetaSalesMetrics {
   leads: number | null;
   leadRate: number | null;
   linkClicks: number | null;
+  cpc: number | null;
   costPerLead: number | null;
   // Read on the form lead itself, whatever result the report picked: how
   // many leads went on to a chat, and what each step cost.
@@ -110,6 +111,7 @@ export function metaB2bMetrics(rows: SheetRow[], leadKind?: LeadResultKind): Met
     leads: l.leads,
     leadRate: l.leadRate,
     linkClicks: l.linkClicks,
+    cpc: o.cpc,
     costPerLead: l.costPerLead,
     leadToConversationRate: per(o.conversations, o.leads, 100),
     leadToContactRate: per(o.messagingContacts, o.leads, 100),
@@ -209,17 +211,23 @@ export const BRAND_CONVERSION_METRICS: readonly AudienceMetricDef<MetaBrandMetri
 ];
 
 // Boost Post's Consideration Analysis, per materi iklan: how often an
-// impression turned into each brand action.
+// impression turned into each brand action, then what that action cost —
+// every analysis reads its rate beside its cost, so a high rate bought
+// dearly is not mistaken for a win.
 export const BRAND_CONSIDERATION_RATE_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
   { key: 'interactionRate', label: 'Interaction Rate', fmt: 'pct', additive: false },
   { key: 'profileVisitsRate', label: 'Profile Visit Rate', fmt: 'pct', additive: false },
   { key: 'followRate', label: 'Follow Rate', fmt: 'pct', additive: false },
+  { key: 'costPerInteraction', label: 'Cost per Interaction', fmt: 'rp', additive: false },
+  { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
+  { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
 ];
 
 // Boost Post's Top Content Analysis: what each materi iklan's click and
 // brand actions cost.
 export const BRAND_TOP_EFFICIENCY_METRICS: readonly AudienceMetricDef<MetaBrandMetrics>[] = [
   { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'cpc', label: 'Cost per Click (CPC)', fmt: 'rp', additive: false },
   { key: 'costPerInteraction', label: 'Cost per Interaction', fmt: 'rp', additive: false },
   { key: 'costPerProfileVisit', label: 'Cost per Profile Visit', fmt: 'rp', additive: false },
   { key: 'costPerFollow', label: 'Cost per Follow', fmt: 'rp', additive: false },
@@ -228,6 +236,7 @@ export const BRAND_TOP_EFFICIENCY_METRICS: readonly AudienceMetricDef<MetaBrandM
 // what each step of the funnel cost.
 export const RETAIL_TOP_CONTENT_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'costPerContentView', label: 'Cost per Content Views', fmt: 'rp', additive: false },
   { key: 'costPerAtc', label: 'Cost per ATC', fmt: 'rp', additive: false },
   { key: 'costPerPurchase', label: 'Cost per Purchase', fmt: 'rp', additive: false },
 ];
@@ -239,10 +248,12 @@ export const SALES_AGE_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] =
   { key: 'aov', label: 'Average Order Value', fmt: 'rp', additive: false },
 ];
 // Traffic Analysis (Retail, CPAS), by audience and by creative alike: the
-// visits each item brought, then its delivery.
+// visits each item brought, then its delivery, each with what it cost.
 export const SALES_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
+  { key: 'costPerContentView', label: 'Cost per Content Views', fmt: 'rp', additive: false },
   { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'cpm', label: 'Cost per Mille (CPM)', fmt: 'rp', additive: false },
   { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
 ];
 export const SALES_AUDIENCE_TRAFFIC_METRICS = SALES_TRAFFIC_METRICS;
@@ -252,11 +263,13 @@ export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetri
   { key: 'purchase', label: 'Purchase', fmt: 'num', additive: true },
 ];
 // Non-Boost Post (Retail)'s Conversion Analysis, per ad set: the whole
-// funnel, then its two steps.
+// funnel, then its two steps, then what each step's result cost.
 export const RETAIL_AUDIENCE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
   { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
+  { key: 'costPerAtc', label: 'Cost per ATC', fmt: 'rp', additive: false },
+  { key: 'costPerPurchase', label: 'Cost per Purchase', fmt: 'rp', additive: false },
 ];
 export const SALES_CLICK_ATC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
@@ -267,11 +280,13 @@ export const SALES_ATC_PURCHASE_METRICS: readonly AudienceMetricDef<MetaSalesMet
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
 ];
 // Conversion Analysis by Creative (Retail, CPAS): the whole conversion, then
-// its two steps.
+// its two steps, then what each step's result cost.
 export const SALES_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'conversionRate', label: 'Conversion Rate', fmt: 'pct', additive: false },
   { key: 'visitToAtcRate', label: 'ATC Rate', fmt: 'pct', additive: false },
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
+  { key: 'costPerAtc', label: 'Cost per ATC', fmt: 'rp', additive: false },
+  { key: 'costPerPurchase', label: 'Cost per Purchase', fmt: 'rp', additive: false },
 ];
 
 // Non-Boost B2B Leads: the purchase steps do not exist; the lead is the
@@ -381,7 +396,9 @@ export const B2B_GENDER_METRICS: readonly B2bDef[] = [
 ];
 export const B2B_TRAFFIC_METRICS: readonly B2bDef[] = [
   { key: 'impressions', label: 'Impressions', fmt: 'num', additive: true },
+  { key: 'cpm', label: 'Cost per Mille (CPM)', fmt: 'rp', additive: false },
   { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'cpc', label: 'Cost per Click (CPC)', fmt: 'rp', additive: false },
 ];
 // Non Retail's Traffic Analysis by Audience also counts the link clicks.
 export const B2B_AUDIENCE_TRAFFIC_METRICS: readonly B2bDef[] = [
@@ -421,6 +438,7 @@ export function nonRetailConversionMetrics(kinds: MessageKind[]): B2bDef[] {
 // as the Performance Overview's CTR and Cost per Leads (CPL).
 export const NON_RETAIL_TOP_CONTENT_METRICS: readonly B2bDef[] = [
   { key: 'ctr', label: 'CTR', fmt: 'pct', additive: false },
+  { key: 'cpc', label: 'Cost per Click (CPC)', fmt: 'rp', additive: false },
   { key: 'costPerAllLeads', label: 'Cost per Leads (CPL)', fmt: 'rp', additive: false },
 ];
 // Non Retail's Conversion Analysis by Creative: the same three as Retail.
