@@ -1,0 +1,191 @@
+/* The header wears each channel's band colours (--band-a/b/c, set on the
+   report wrapper — see #report-shopee etc. in shell.css), same gradient and
+   decorative circles as .report-top, with white type on top. Every channel's
+   band is chosen to keep white text at AA. */
+.mil-ui.report-generator-app .performance-report-header {
+  padding: 24px 28px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(120deg, var(--band-a, var(--acc)) 0%, var(--band-b, #2f54d4) 60%, var(--band-c, #0099bb) 100%);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(15, 26, 58, .06);
+  break-inside: avoid;
+}
+
+/* Keep content above the decorative circles from .report-top::before/::after. */
+.mil-ui.report-generator-app .performance-report-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Title block left, metadata right; both share a baseline row. */
+.mil-ui.report-generator-app .prh-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+}
+
+.mil-ui.report-generator-app .prh-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Platform as an eyebrow label, not a bordered chip that looks clickable. */
+.mil-ui.report-generator-app .prh-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: rgba(255, 255, 255, .82);
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.mil-ui.report-generator-app .prh-platform::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.mil-ui.report-generator-app .prh-title {
+  margin: 0;
+  color: #fff;
+  font-size: 1.625rem;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+
+.mil-ui.report-generator-app .prh-generated {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 0;
+  text-align: right;
+}
+
+.mil-ui.report-generator-app .prh-generated-label {
+  color: rgba(255, 255, 255, .78);
+  font-size: .75rem;
+  line-height: 1.4;
+}
+
+.mil-ui.report-generator-app .prh-date {
+  color: #fff;
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Period comparison: one compact "before → now" strip sized to its content
+   instead of two full-width boxes with mostly empty space. */
+.mil-ui.report-generator-app .prh-periods {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  margin: 20px 0 0;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .08);
+  overflow: hidden;
+}
+
+.mil-ui.report-generator-app .prh-period {
+  position: relative;
+  min-width: 0;
+  padding: 10px 20px;
+}
+
+.mil-ui.report-generator-app .prh-period dt {
+  margin: 0 0 2px;
+  color: rgba(255, 255, 255, .78);
+  font-size: .75rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.mil-ui.report-generator-app .prh-period dd {
+  margin: 0;
+  color: rgba(255, 255, 255, .92);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mil-ui.report-generator-app .prh-period-current {
+  padding-left: 44px;
+  border-left: 1px solid rgba(255, 255, 255, .22);
+  background: rgba(255, 255, 255, .18);
+}
+
+/* Direction arrow; decorative, the dt labels already carry the meaning. */
+.mil-ui.report-generator-app .prh-period-current::before {
+  content: '→';
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, .7);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.mil-ui.report-generator-app .prh-period-current dt {
+  color: rgba(255, 255, 255, .88);
+}
+
+.mil-ui.report-generator-app .prh-period-current dd {
+  color: #fff;
+  font-weight: 700;
+}
+
+.mil-ui.report-generator-app .prh-details {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .22);
+  color: rgba(255, 255, 255, .85);
+  font-size: .75rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.mil-ui.report-generator-app .prh-details p {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .mil-ui.report-generator-app .performance-report-header { padding: 20px 18px; }
+  .mil-ui.report-generator-app .prh-heading { align-items: flex-start; flex-direction: column; }
+  .mil-ui.report-generator-app .prh-title { font-size: 1.375rem; }
+  .mil-ui.report-generator-app .prh-generated { flex-direction: row; gap: 6px; text-align: left; }
+  .mil-ui.report-generator-app .prh-periods { width: 100%; margin-top: 16px; }
+  .mil-ui.report-generator-app .prh-period { flex: 1 1 0; padding: 10px 14px; }
+  .mil-ui.report-generator-app .prh-period-current { padding-left: 36px; }
+  .mil-ui.report-generator-app .prh-period-current::before { left: 12px; }
+  .mil-ui.report-generator-app .prh-period dd { font-size: .875rem; white-space: normal; }
+}
+
+@media print {
+  .mil-ui.report-generator-app .performance-report-header {
+    /* index.css forces every .report-top to Meta blue in print; keep the
+       channel colour instead. */
+    background: var(--band-a, var(--acc)) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
