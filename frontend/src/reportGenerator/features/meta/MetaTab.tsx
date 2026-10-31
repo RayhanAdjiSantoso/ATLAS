@@ -854,6 +854,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     return (
       <OverviewDetailedCard
         fixedMetrics
+        reorderable={false}
         key={`${lane.key}-${aud}`}
         toolbar={audToggle ?? undefined}
         heading={lane.key === 'retail' ? 'Non-Boost Post (Retail) · Performance Overview' : 'Non-Boost Post (Non Retail) · Performance Overview'}
@@ -1173,6 +1174,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                           return (
                             <OverviewDetailedCard
                               fixedMetrics
+                              reorderable={false}
                               key={aud}
                               toolbar={audToggle ?? undefined}
                               heading="Boost Post · Performance Overview"
@@ -1231,6 +1233,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                             return (
                               <OverviewDetailedCard
                                 fixedMetrics
+                                reorderable={false}
                                 key={aud}
                                 toolbar={cpas.nv || cpas.rm ? (
                                   <SegmentedToggle

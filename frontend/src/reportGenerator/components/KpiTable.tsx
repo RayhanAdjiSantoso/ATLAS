@@ -37,8 +37,10 @@ interface KpiTableProps {
   // Shown beside "Hapus Semua" in the metric toolbar.
   toolbar?: ReactNode;
   // The default rows only: no "+ Tambah metrik" / "Hapus Semua" and no
-  // per-row ×. Rename and reorder still work.
+  // per-row ×. Rename (and reorder, unless `reorderable` is false) still work.
   fixedMetrics?: boolean;
+  // false: rows keep their given order — no ☰ handle, no drag-and-drop.
+  reorderable?: boolean;
 }
 
 const TOTAL_ROW_STYLE = { fontWeight: 700, borderTop: '2px solid var(--border)' };
@@ -54,7 +56,7 @@ function rowId(r: KpiRowDisplay): string {
 // engine directly: click a row's label to rename it inline, hover to reveal
 // the remove (×) affordance, drag the ☰ handle to move the row to a new
 // position. Removed rows go back into "+ Tambah metrik".
-export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded, toolbar, fixedMetrics }: KpiTableProps) {
+export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded, toolbar, fixedMetrics, reorderable = true }: KpiTableProps) {
   const metricRows = rows.filter((r) => !r.isTotal);
   const totalRow = rows.find((r) => r.isTotal);
   const rowById = new Map(metricRows.map((r) => [rowId(r), r]));
@@ -99,7 +101,7 @@ export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded
             const id = rowId(r);
             const isEditing = editor.editingId === id;
             return (
-              <tr key={id} className={`kpi-row-editable${editor.dragClass(id)}`} {...editor.dropZoneProps(id)}>
+              <tr key={id} className={`kpi-row-editable${reorderable ? editor.dragClass(id) : ''}`} {...(reorderable ? editor.dropZoneProps(id) : {})}>
                 <td>
                   {isEditing ? (
                     <input
@@ -115,14 +117,16 @@ export function KpiTable({ rows, defaultVisibleIds, p1, p2, emptyMessage, padded
                     />
                   ) : (
                     <span className="kpi-row-label-wrap">
-                      <span
-                        className="metric-drag-handle"
-                        title="Tarik untuk mengubah urutan"
-                        aria-label="Tarik untuk mengubah urutan"
-                        {...editor.dragHandleProps(id)}
-                      >
-                        ☰
-                      </span>
+                      {reorderable && (
+                        <span
+                          className="metric-drag-handle"
+                          title="Tarik untuk mengubah urutan"
+                          aria-label="Tarik untuk mengubah urutan"
+                          {...editor.dragHandleProps(id)}
+                        >
+                          ☰
+                        </span>
+                      )}
                       <span className="kpi-row-label" title="Klik untuk ganti nama" onClick={() => editor.startEdit(id, resolveLabel(id))}>
                         {resolveLabel(id)}
                       </span>

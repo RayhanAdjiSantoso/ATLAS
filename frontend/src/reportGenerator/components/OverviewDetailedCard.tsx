@@ -24,6 +24,8 @@ interface OverviewDetailedCardProps {
   toolbar?: ReactNode;
   // Shows the default metrics only, with no add / remove controls (Meta).
   fixedMetrics?: boolean;
+  // false: the table rows can't be dragged into a new order (Meta).
+  reorderable?: boolean;
 }
 
 // Shared by Meta (Boost/Non-Boost/CPAS) and Shopee Ads: a single table
@@ -34,7 +36,7 @@ interface OverviewDetailedCardProps {
 // row here already carries its own resolved `.label` (from
 // displayName()/shopeeLabelFor upstream), so the full universe can be handed
 // straight to KpiTable with no separate label-resolution step needed here.
-export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRows, allCols, p1, p2, headingClassName, aside, toolbar, fixedMetrics }: OverviewDetailedCardProps) {
+export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRows, allCols, p1, p2, headingClassName, aside, toolbar, fixedMetrics, reorderable }: OverviewDetailedCardProps) {
   if (!overviewRows.length && !detailedRows.length) return null;
 
   // overviewRows' underlying `col` (present on every row except a computed
@@ -71,13 +73,13 @@ export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRow
         <div className="sec-split-wrap">
           <div className="sec-split sec-split-padded sec-split-even">
             <div className="sec-split-main">
-              <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} fixedMetrics={fixedMetrics} />
+              <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} fixedMetrics={fixedMetrics} reorderable={reorderable} />
             </div>
             {aside}
           </div>
         </div>
       ) : (
-        <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} fixedMetrics={fixedMetrics} />
+        <KpiTable rows={rows} defaultVisibleIds={overviewIds} p1={p1} p2={p2} emptyMessage="Tidak ada data." padded toolbar={toolbar} fixedMetrics={fixedMetrics} reorderable={reorderable} />
       )}
     </div>
   );
