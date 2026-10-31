@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { BadgeDollarSign, CheckCircle2, Eye, Loader2, MessagesSquare, PencilLine, PieChart, Receipt, Target, TriangleAlert, UsersRound } from 'lucide-react';
+import { BadgeDollarSign, CheckCircle2, Eye, Loader2, MessagesSquare, PencilLine, Receipt, Target, TriangleAlert, UsersRound } from 'lucide-react';
 import api from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useSessionState from '../hooks/useSessionState.js';
@@ -8,11 +8,7 @@ import useActiveBrand from '../hooks/useActiveBrand.js';
 import DashboardBrandPicker from '../components/dashboard/DashboardBrandPicker.jsx';
 import BrandAvatar from '../components/common/BrandAvatar.jsx';
 import MonthPillNav from '../components/dailyTracking/MonthPillNav.jsx';
-import TrackingKpis from '../components/dailyTracking/TrackingKpis.jsx';
-import TrackingPulse from '../components/dailyTracking/TrackingPulse.jsx';
 import CoverageMap from '../components/dailyTracking/CoverageMap.jsx';
-import { ChannelMix, PaceChart, WeekdayChart, defaultMetric } from '../components/dailyTracking/TrackingInsights.jsx';
-import TrackingCompare from '../components/dailyTracking/TrackingCompare.jsx';
 import TargetBudget from '../components/dailyTracking/TargetBudget.jsx';
 import AnnualPlan from '../components/annualTarget/AnnualPlan.jsx';
 import ChannelRail from '../components/dailyTracking/ChannelRail.jsx';
@@ -39,10 +35,10 @@ function currentMonth() {
 
 // Brand Tracking — Brand Setting's third section, and a client's whole ATLAS:
 // what a brand sold and spent, per channel, per day. Views under one brand
-// and month: Performance Overview reads the month (six numbers against last
-// month, any two periods side by side, the daily chart, pace, weekday
-// pattern, channel mix); Input Daily Tracking is where the days are typed in,
-// led by the map of which days are still empty; Minutes of Meeting keeps the
+// and month: Target & Budget holds the plan; Input Daily Tracking is where the
+// days are typed in, led by the map of which days are still empty. Reading
+// the month lives in Brand Overview's Executive Snapshot, which counts the
+// same rows over any range. Minutes of Meeting keeps the
 // brand's meeting notes beside those numbers. MoM carries MIL's internal to
 // do list, so client accounts never get that view.
 // The frame and masthead are BrandSettingLayout's.
@@ -50,7 +46,6 @@ function currentMonth() {
 // and month are lost by the rename.
 
 const VIEWS = [
-  { id: 'overview', label: 'Performance Overview', hint: 'Grafik & pembacaan bulan ini', Icon: PieChart },
   { id: 'target', label: 'Target & Budget', hint: 'Target, alokasi & pencapaian', Icon: Target },
   { id: 'input', label: 'Input Daily Tracking', hint: 'Isi revenue & spend harian', Icon: PencilLine },
   { id: 'mom', label: 'Minutes of Meeting', hint: 'Recap & to do list', Icon: UsersRound, internal: true },
@@ -76,8 +71,9 @@ export default function DailyTrackingPage() {
 
   const reduced = useReducedMotion();
   const views = VIEWS.filter((v) => !v.internal || !isClient);
-  const [storedView, setView] = useSessionState('daily-tracking:view', 'overview');
-  const view = views.some((v) => v.id === storedView) ? storedView : 'overview';
+  // A session that remembered the retired Performance Overview lands on Input.
+  const [storedView, setView] = useSessionState('daily-tracking:view', 'input');
+  const view = views.some((v) => v.id === storedView) ? storedView : 'input';
   const [activeTab, setActiveTab] = useSessionState('daily-tracking:tab', 'sales');
   const [brands, setBrands] = useState([]);
   const [storedBrandId, setBrandId] = useActiveBrand();
@@ -134,8 +130,8 @@ export default function DailyTrackingPage() {
 
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
-  // Last month, for every comparison in Performance Overview. Read-only, so it
-  // loads once per brand/month and never blocks the sheet.
+  // Last month, for each channel's comparison beside its sheet. Read-only, so
+  // it loads once per brand/month and never blocks the sheet.
   useEffect(() => {
     if (!brandId || !month) return undefined;
     let alive = true;
@@ -343,22 +339,6 @@ export default function DailyTrackingPage() {
         <div className="bt-view" key="target">
           <AnnualPlan brandId={brandId} month={month} canEdit={canEditSpend} onSaved={() => setTargetRefresh((n) => n + 1)} />
           <TargetBudget brandId={brandId} month={month} grid={grid} channels={channels} canEdit={canEditSpend} refreshKey={targetRefresh} />
-        </div>
-      ) : view === 'overview' ? (
-        <div className="bt-view" key="overview">
-          <TrackingKpis grid={grid} channels={channels} loading={loading} prev={prevSame} compareLabel={compareLabel} />
-          <p className="bt-compare-note">Perubahan dibanding <b>{compareLabel}</b>{running ? ' — rentang tanggal yang sama, karena bulan ini masih berjalan.' : '.'}</p>
-          <TrackingCompare brandId={brandId} channels={channels} month={month} />
-          <TrackingPulse grid={grid} channels={channels} loading={loading} />
-          <div className="bt-duo">
-            <PaceChart
-              key={`pace:${brandId}:${month}:${defaultMetric(grid, channels)}`}
-              grid={grid} prevGrid={prevGrid} channels={channels} month={month} prevMonth={prevMonth} running={running}
-              initialMetric={defaultMetric(grid, channels)}
-            />
-            <WeekdayChart key={`week:${brandId}:${month}:${defaultMetric(grid, channels)}`} grid={grid} channels={channels} initialMetric={defaultMetric(grid, channels)} />
-          </div>
-          <ChannelMix grid={grid} prevSame={prevSame} channels={channels} prevMonth={prevMonth} />
         </div>
       ) : (
         <div className="bt-view" key="input">

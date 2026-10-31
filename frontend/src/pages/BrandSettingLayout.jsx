@@ -14,7 +14,7 @@ import './brandPages.css';
 //      folder tabs on the deep-blue header band, the loudest thing on the
 //      page; the open one takes the colour of the floor below, so it reads
 //      as the page it opened;
-//   2. a section's own views (Performance Overview / Target & Budget /
+//   2. a section's own views (Target & Budget /
 //      Input / Minutes of Meeting) — a compact white segmented control on
 //      the floor (brandPages.css re-skins .soft-tabs inside .bs);
 //   3. anything inside a view (platforms, Revenue / Spending) — underline
