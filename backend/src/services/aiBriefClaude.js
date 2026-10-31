@@ -122,7 +122,7 @@ export async function gatherBrandContext(brandId, period) {
         const m = Object.fromEntries(s.metrics.map((k) => [k.key, k]));
         const line = (key, label, fmt) => (m[key] ? `- ${label}: ${fmt(m[key].compare)} → ${fmt(m[key].current)}${m[key].growthCompare != null ? ` (${pct(m[key].growthCompare)})` : ''}` : null);
         const lines = [
-          line('revenueAll', 'Total penjualan semua channel', rp),
+          line('revenue', 'Total penjualan semua channel', rp),
           line('amountSpent', 'Total belanja iklan semua channel', rp),
           line('roas', 'ROAS blended (penjualan ÷ belanja iklan)', x),
           line('trx', 'Transaksi', (v) => (v == null ? '—' : Math.round(v).toLocaleString('id-ID'))),

@@ -20,10 +20,13 @@ import * as executiveSummary from '../services/executiveSummaryService.js';
 // Executive Snapshot: one cross-channel reading (Daily Tracking), unlike every
 // other dashboard endpoint below, which reads the Shopee fact tables.
 export const getExecutiveSummary = asyncHandler(async (req, res) => {
-  const { brandId, startDate, endDate, compareStartDate, compareEndDate } = req.query;
+  const { brandId, startDate, endDate, compareStartDate, compareEndDate, excludeChannels, excludeSpendChannels } = req.query;
   if (!brandId || !startDate || !endDate) throw new AppError('brandId, startDate, dan endDate wajib diisi', 400);
+  // Channels the reader left out of the totals, as "drc,website".
+  const keys = (v) => String(v ?? '').split(',').map((k) => k.trim()).filter((k) => /^[a-z0-9_]+$/.test(k));
   res.json(await executiveSummary.getExecutiveSummary({
     brandId: Number(brandId), startDate, endDate, compareStartDate, compareEndDate,
+    excludeChannels: keys(excludeChannels), excludeSpendChannels: keys(excludeSpendChannels),
   }));
 });
 
