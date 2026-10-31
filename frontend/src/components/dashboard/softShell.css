@@ -292,8 +292,6 @@
 /* Glass chips on the band: white text on translucent white, opening the same
    light menus as before. */
 .band-tools .dashboard-brand-trigger,
-.band-tools .bo-chip-period > div > button,
-.band-tools .bo-chip-custom > div > button,
 .band-tools .atlas-field-trigger {
   min-height: 40px !important;
   padding: 0 14px !important;
@@ -308,19 +306,10 @@
   transition: background .15s ease, border-color .15s ease;
 }
 .band-tools .dashboard-brand-trigger:hover,
-.band-tools .bo-chip-period > div > button:hover,
-.band-tools .bo-chip-custom > div > button:hover,
 .band-tools .atlas-field-trigger:hover { background: rgba(255, 255, 255, .2) !important; border-color: rgba(255, 255, 255, .42) !important; }
 .band-tools .dashboard-brand-trigger svg,
-.band-tools .atlas-field-trigger svg,
-.band-tools .bo-chip-period svg,
-.band-tools .bo-chip-custom svg { color: #cfe0ff; }
-.band-tools .bo-chip-period > div > button > span,
-.band-tools .bo-chip-custom > div > button > span { white-space: nowrap !important; }
+.band-tools .atlas-field-trigger svg { color: #cfe0ff; }
 .band-tools .atlas-field-value { color: #fff; font-weight: 700; }
-.bo-chip-compare .atlas-field-trigger { min-width: 196px; }
-.bo-chip-compare.is-on .atlas-field-trigger { border-color: rgba(255, 255, 255, .6) !important; background: rgba(255, 255, 255, .22) !important; }
-.bo-chip-caption { padding: 0 4px; color: #cddcfb; font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .band-icon-btn {
   display: grid; flex: 0 0 auto; place-items: center;
   width: 40px; height: 40px; padding: 0;
@@ -382,10 +371,6 @@
 .bo-shell .band-copy { flex: 1 1 320px; }
 .bo-shell .band-tools { flex: 0 0 auto; }
 .bo-shell .bo-band-filters { flex-wrap: nowrap; }
-.bo-chip-period { width: 272px; }
-.bo-chip-compare { width: 214px; }
-.bo-chip-compare .atlas-field-trigger { min-width: 0; }
-.bo-chip-custom > div > button { font-size: .76rem !important; }
 @media (max-width: 1240px) { .bo-shell .bo-band-filters { flex-wrap: wrap; } }
 
 /* ── Stand-out chips: solid white controls on the band ────────────────────
@@ -394,8 +379,6 @@
    — the brightest things on the band after the title. */
 .bo-chip-label { padding: 0 4px; color: rgba(255, 255, 255, .78); font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .band-tools .dashboard-brand-trigger,
-.band-tools .bo-chip-period > div > button,
-.band-tools .bo-chip-custom > div > button,
 .band-tools .atlas-field-trigger {
   min-height: 42px !important;
   border: 1px solid rgba(255, 255, 255, .9) !important;
@@ -404,17 +387,11 @@
   box-shadow: 0 10px 24px -14px rgba(5, 12, 40, .7) !important;
 }
 .band-tools .dashboard-brand-trigger:hover,
-.band-tools .bo-chip-period > div > button:hover,
-.band-tools .bo-chip-custom > div > button:hover,
 .band-tools .atlas-field-trigger:hover { background: #f3f6fd !important; border-color: #fff !important; }
 .band-tools .dashboard-brand-trigger svg,
-.band-tools .atlas-field-trigger svg,
-.band-tools .bo-chip-period svg,
-.band-tools .bo-chip-custom svg { color: var(--band-accent, var(--soft-accent)); }
+.band-tools .atlas-field-trigger svg { color: var(--band-accent, var(--soft-accent)); }
 .band-tools .atlas-field-value { color: var(--soft-ink); }
-.bo-chip-compare.is-on .atlas-field-trigger { border-color: #fff !important; background: #fff !important; box-shadow: 0 0 0 3px rgba(255, 255, 255, .28), 0 10px 24px -14px rgba(5, 12, 40, .7) !important; }
 .band-icon-btn { width: 42px; height: 42px; margin-top: 22px; }
-.bo-chip-caption { color: rgba(255, 255, 255, .85); }
 
 /* ── Band colour per channel (a finishing touch) ──────────────────────────
    Executive Snapshot keeps ATLAS blue; Meta, Shopee and TikTok take their
@@ -443,9 +420,6 @@
    ran into its neighbour), with room between them. */
 .bo-shell .bo-band-filters { gap: 14px; }
 .bo-shell .band-tools { gap: 14px; }
-.bo-chip-period { width: auto; }
-.bo-chip-period > div { width: auto !important; }
-.band-tools .bo-chip-period > div > button { width: auto !important; }
 
 /* ── ROAS strip on a channel tab ───────────────────────────────────────── */
 .roas-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 16px 22px; }
@@ -467,3 +441,22 @@
 .bo-chip-brand { width: auto; max-width: 420px; }
 .band-tools .bo-chip-brand .dashboard-brand-trigger { width: auto; }
 .band-tools .bo-chip-brand .dashboard-brand-trigger span { overflow: visible; text-overflow: clip; white-space: normal; line-height: 1.25; padding: 4px 0; }
+
+/* The period chip: one white control on the band, the comparison as a
+   second, smaller line under the range when it is on. */
+.band-tools .pcp-trigger {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 42px; padding: 4px 14px;
+  border: 1px solid rgba(255, 255, 255, .9); border-radius: 12px;
+  background: #fff; color: var(--soft-ink);
+  font: inherit; font-size: .84rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: left; white-space: nowrap;
+  box-shadow: 0 10px 24px -14px rgba(5, 12, 40, .7);
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.band-tools .pcp-trigger:hover { background: #f3f6fd; }
+.band-tools .pcp-trigger[aria-expanded='true'] { box-shadow: 0 0 0 3px rgba(255, 255, 255, .35); }
+.band-tools .pcp-trigger svg { flex: 0 0 auto; color: var(--band-accent, var(--soft-accent)); }
+.band-tools .pcp-trigger .pcp-trigger-chev { color: var(--soft-muted); }
+.pcp-trigger-text { display: grid; line-height: 1.25; }
+.pcp-trigger-text small { color: var(--soft-muted); font-size: .72rem; font-weight: 600; }

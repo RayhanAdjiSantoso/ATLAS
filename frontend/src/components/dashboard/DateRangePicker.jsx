@@ -25,7 +25,7 @@ const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
 const addMonths = (d, n) => { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; };
 
-const PRESETS = [
+export const PRESETS = [
   { label: 'Hari Ini', range: (today) => [today, today] },
   { label: 'Kemarin', range: (today) => { const y = addDays(today, -1); return [y, y]; } },
   { label: '1 Minggu Terakhir', range: (today) => [addDays(today, -6), today] },
