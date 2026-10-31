@@ -1,6 +1,6 @@
 import { resolveMetaMonth } from '../../lib/metaSources';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { FileBarChart, Gauge, Heart, MousePointerClick, RotateCcw, ShoppingCart, Sparkles, type LucideIcon } from 'lucide-react';
 import api from '../../../api/client.js';
 import { LibraryFileSlot } from '../reports/LibraryFileSlot';
 import { ManualFileSlot } from '../reports/ManualFileSlot';
@@ -68,6 +68,21 @@ import { formatChannelCoverage } from '../reports/savedPeriodLabels';
 import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SavedPeriod, SaveReportPayload } from '../reports/types';
 import { buildMetaReport, isBoostRow, type MetaAudienceSides, type MetaReport, type NonBoostLane, type NonBoostLaneKey } from './metaReport';
+import '../../app/channel-report.css';
+
+// The navigator's icon for a section, read off its title — the same rich
+// navigator the Shopee report uses (see ShopeeReportSections).
+const SECTION_ICONS: readonly [RegExp, LucideIcon][] = [
+  [/overview/i, Gauge],
+  [/traffic/i, MousePointerClick],
+  [/conversion/i, ShoppingCart],
+  [/consideration/i, Heart],
+  [/top content/i, Sparkles],
+];
+const sectionIcon = (title: string) => {
+  const Icon = SECTION_ICONS.find(([re]) => re.test(title))?.[1] ?? FileBarChart;
+  return <Icon size={15} strokeWidth={2.2} />;
+};
 
 // Meta's export uses either a "Month" breakdown or a "Day" breakdown column
 // as the period dimension — either satisfies the requirement.
@@ -859,7 +874,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     const lane = r.nonBoostLanes?.find((l) => l.key === key);
     if (!lane) return null;
     return (
-      <SectionAccordion key={`v2-${lane.key}`}>
+      <SectionAccordion key={`v2-${lane.key}`} iconFor={sectionIcon}>
         {channelSections({
           prefix: key === 'retail' ? 'Non-Boost Post (Retail)' : 'Non-Boost Post (Non Retail)',
           period: r.p2,
@@ -1067,7 +1082,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
             </InlineNotice>
           )}
         {dayCol && oldRange && curRange && Math.abs(daysBetweenInclusive(oldRange.start, oldRange.end) - daysBetweenInclusive(curRange.start, curRange.end)) > 1 && (
-          <div className="period-warning" style={{ marginTop: '.8rem', marginBottom: 0 }}>
+          <div className="period-warning">
             Panjang periode berbeda: {daysBetweenInclusive(oldRange.start, oldRange.end)} hari vs {daysBetweenInclusive(curRange.start, curRange.end)} hari — bandingkan dengan hati-hati.
           </div>
         )}
@@ -1141,7 +1156,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                   label: 'Boost Post',
                   hidden: !report.boost,
                   content: report.boost ? (
-                    <SectionAccordion>
+                    <SectionAccordion iconFor={sectionIcon}>
                       {channelSections({
                         prefix: 'Boost Post',
                         period: report.p2,
@@ -1195,7 +1210,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
                     const cpas = report.cpas;
                     if (!cpas) return null;
                     return (
-                      <SectionAccordion>
+                      <SectionAccordion iconFor={sectionIcon}>
                         {channelSections({
                           prefix: 'CPAS Shopee',
                           period: cpas.p2,

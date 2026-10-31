@@ -34,6 +34,7 @@ import type { LibraryFile } from '../reports/LibraryFileSlot';
 import { PeriodSourceSwitch, SavedSlotCard, type PeriodSourceKind, type SlotSource } from '../../components/SlotSourceTabs';
 import type { PeriodRole, RawFileEntry, SaveReportPayload, SavedPeriod } from '../reports/types';
 import { buildTiktokReport, type TiktokReport } from './tiktokReport';
+import '../../app/channel-report.css';
 
 type FileKey = 'tiktok-old' | 'tiktok-cur';
 

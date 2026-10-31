@@ -1,0 +1,469 @@
+/* ============================================================================
+   CHANNEL REPORTS — Meta, TikTok and Google cut to the Shopee report's
+   pattern (features/shopee/shopeeReport.css): the same page tabs, navigator,
+   root cause, tables, cards and opening moment, each in its own colour.
+   Only parts these reports actually render are carried over; Shopee keeps
+   its own file and is untouched.
+
+   Every colour below is a token, set once per report in the blocks that
+   follow. --rs-accent is the shade white text sits on (all ≥ 6:1); --cr-to
+   is only ever a gradient stop beside it.
+
+   Visual only; no selector here changes what a section contains or does.
+   Animations are backwards-filled and switched off for exports, exactly as
+   in the Shopee skin.
+   ========================================================================= */
+
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
+.mil-ui.report-generator-app #report-meta {
+  --rs-accent: #1e3eb8;
+  --rs-accent-soft: #eaf0fd;
+  --cr-from: #16308f;
+  --cr-to: #2f54d4;
+  --cr-glow: rgba(30, 62, 184, .9);
+  --cr-tint: 20, 40, 120;
+  --cr-line: #c9d7f6;
+  --cr-wash: #f5f8ff;
+  --cr-border: #e1e7f4;
+  --cr-border-strong: #d3dcf1;
+  --cr-rule: #dce4f4;
+  --cr-row: #edf1f8;
+  --cr-head: #f7f9fd;
+  --cr-zebra: #fbfcff;
+  --cr-hover: #eef3ff;
+  --cr-panel: #edf2ff;
+  --cr-panel-top: #f9fbff;
+  --cr-panel-bottom: #f4f7fe;
+  --cr-icon-bg: #f0f4ff;
+  --cr-icon-fg: #2f4fbf;
+  --cr-icon-ring: #d6e0f8;
+  --cr-icon-hover: #e3eafd;
+  --cr-ring: #dfe7ff;
+  --cr-track: #e6ecf8;
+  --cr-spark: #5b7ff0;
+  --cr-label: #56628a;
+  --cr-tree: #c8d4ee;
+  --cr-ease: cubic-bezier(.22, 1, .36, 1);
+}
+.mil-ui.report-generator-app #report-tiktok {
+  --rs-accent: #111111;
+  --rs-accent-soft: #f1f1f2;
+  --cr-from: #000000;
+  --cr-to: #2a2a30;
+  --cr-glow: rgba(0, 0, 0, .75);
+  --cr-tint: 17, 17, 17;
+  --cr-line: #d4d4d8;
+  --cr-wash: #f7f7f8;
+  --cr-border: #e4e4e7;
+  --cr-border-strong: #d4d4d8;
+  --cr-rule: #e1e1e4;
+  --cr-row: #efeff1;
+  --cr-head: #f8f8f9;
+  --cr-zebra: #fcfcfc;
+  --cr-hover: #f1f1f3;
+  --cr-panel: #eefcfc;
+  --cr-panel-top: #fbfbfc;
+  --cr-panel-bottom: #f6f6f7;
+  --cr-icon-bg: #f4f4f5;
+  --cr-icon-fg: #111111;
+  --cr-icon-ring: #e4e4e7;
+  --cr-icon-hover: #e9e9ec;
+  --cr-ring: #dff9f8;
+  --cr-track: #ececef;
+  --cr-spark: #25f4ee;
+  --cr-label: #5b5b66;
+  --cr-tree: #d4d4d8;
+  --cr-ease: cubic-bezier(.22, 1, .36, 1);
+}
+.mil-ui.report-generator-app #report-google {
+  --rs-accent: #1557b0;
+  --rs-accent-soft: #e8f0fe;
+  --cr-from: #0b3f8c;
+  --cr-to: #1a73e8;
+  --cr-glow: rgba(21, 87, 176, .9);
+  --cr-tint: 16, 60, 130;
+  --cr-line: #c4d8fb;
+  --cr-wash: #f4f8ff;
+  --cr-border: #e0e8f5;
+  --cr-border-strong: #cfdcf3;
+  --cr-rule: #d9e4f6;
+  --cr-row: #ecf1f9;
+  --cr-head: #f6f9fe;
+  --cr-zebra: #fbfdff;
+  --cr-hover: #edf3fe;
+  --cr-panel: #e8f0fe;
+  --cr-panel-top: #f8fbff;
+  --cr-panel-bottom: #f2f6fe;
+  --cr-icon-bg: #eef4fe;
+  --cr-icon-fg: #1557b0;
+  --cr-icon-ring: #d2e1fb;
+  --cr-icon-hover: #e1ebfd;
+  --cr-ring: #dce8fd;
+  --cr-track: #e3ebf8;
+  --cr-spark: #4c94f0;
+  --cr-label: #4f6182;
+  --cr-tree: #c6d6f0;
+  --cr-ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* ── Page tabs ───────────────────────────────────────────────────────────── */
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .report-tab-hint {
+  margin-left: .1rem;
+  padding: .1rem .42rem;
+  border-radius: 7px;
+  background: var(--rs-canvas);
+  color: var(--rs-muted);
+  font-size: .72rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums lining-nums;
+  transition: background-color .2s ease, color .2s ease;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .report-tab.active .report-tab-hint { background: rgba(255, 255, 255, .2); color: #fff; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .report-tab.is-empty:not(.active) { color: var(--rs-quiet); font-weight: 600; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .report-tab.is-empty:not(.active) .report-tab-dot { background: transparent; box-shadow: inset 0 0 0 1.5px #c3ccdc; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .report-tab:hover:not(.active) { background: var(--cr-wash); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .report-tab-pill {
+  background: linear-gradient(120deg, var(--cr-from) 0%, var(--rs-accent) 55%, var(--cr-to) 100%);
+  box-shadow: 0 10px 20px -12px var(--cr-glow);
+  transition: transform .42s var(--cr-ease), width .42s var(--cr-ease);
+}
+
+/* ── Navigator: titles only, the open section names itself ───────────────── */
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-nav { gap: .7rem; padding: 1rem .6rem .75rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-ink {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  display: block;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--cr-from) 0%, var(--rs-accent) 60%, var(--cr-to) 100%);
+  box-shadow: 0 14px 28px -18px var(--cr-glow);
+  pointer-events: none;
+  transition: transform .42s var(--cr-ease), height .42s var(--cr-ease);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-tab { z-index: 1; padding: .6rem .8rem; border-radius: 14px; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-tab:hover:not(.is-on) { background: var(--cr-wash); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-tab.is-on { background: transparent; box-shadow: none; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-tab-text { gap: 0; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-tab-text small {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height .36s var(--cr-ease), opacity .2s ease, margin-top .36s var(--cr-ease);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-tab.is-on .sdeck-tab-text small { max-height: 5em; margin-top: .2rem; opacity: 1; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-dot { margin-top: .4rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-group { margin-top: .9rem; }
+
+/* Rich navigator: an icon tile per section and a progress track. */
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-nav.is-rich {
+  gap: .6rem;
+  padding: 1rem .65rem .8rem;
+  border-color: var(--cr-border);
+  background: radial-gradient(140% 45% at 0% 0%, var(--cr-panel) 0%, #fff 60%);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .is-rich .sdeck-nav-label { align-items: center; color: var(--cr-label); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .is-rich .sdeck-count {
+  padding: .12rem .5rem;
+  border-radius: 99px;
+  background: var(--rs-accent-soft);
+  color: var(--rs-accent);
+  font-size: .7rem;
+  font-weight: 800;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-progress {
+  display: block;
+  height: 3px;
+  margin: -.1rem .55rem .25rem;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--cr-track);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-progress i {
+  display: block;
+  width: calc(var(--sdeck-progress, 0) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cr-spark), var(--cr-to) 45%, var(--rs-accent));
+  transition: width .46s var(--cr-ease);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .is-rich .sdeck-tab { align-items: center; gap: .7rem; padding: .5rem .7rem .5rem .5rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--cr-icon-bg);
+  color: var(--cr-icon-fg);
+  box-shadow: inset 0 0 0 1px var(--cr-icon-ring);
+  transition: background-color .2s ease, color .2s ease, box-shadow .2s ease, transform .25s var(--cr-ease);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-tab:hover:not(.is-on) .sdeck-icon { background: var(--cr-icon-hover); transform: scale(1.06); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-tab.is-on .sdeck-icon {
+  background: rgba(255, 255, 255, .17);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .is-rich .sdeck-tab-text strong { font-size: .85rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .is-rich .sdeck-ink {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 14px 28px -16px var(--cr-glow);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .is-rich .sdeck-group {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  margin: .85rem .55rem .25rem;
+  padding-top: 0;
+  border-top: 0;
+  font-size: .66rem;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .is-rich .sdeck-group::after { content: ''; flex: 1; height: 1px; background: var(--cr-border); }
+@media (max-width: 1100px) {
+  .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-progress { display: none; }
+}
+
+/* ── Section heading: the descriptor is a caption, not another chip ──────── */
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sec-heading > .sec-badge {
+  padding: 0;
+  background: transparent;
+  color: var(--rs-quiet);
+  font-weight: 600;
+}
+
+/* ── Root cause: a signal tree ────────────────────────────────────────────── */
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sympt-panel {
+  padding: 1.15rem 1.15rem 1.25rem;
+  border-color: var(--cr-border);
+  background:
+    radial-gradient(120% 60% at 0% 0%, var(--cr-panel) 0%, transparent 60%),
+    linear-gradient(180deg, var(--cr-panel-top) 0%, var(--cr-panel-bottom) 100%);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sympt-panel-title::before {
+  background: linear-gradient(135deg, var(--rs-accent), var(--cr-spark));
+  box-shadow: 0 0 0 4px var(--cr-ring);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .symptom-tree {
+  --st-line: var(--cr-tree);
+  --st-good: #2f9e5b;
+  --st-bad: #df4a32;
+  --st-flat: #9aa7bf;
+  --st-node-h: 58px;
+  --st-elbow: calc(var(--st-node-h) / 2 + .35rem);
+  --st-indent: 22px;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .symptom-tree-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "node delta" "vals delta";
+  row-gap: .15rem;
+  padding: 0 .35rem .6rem;
+  border-bottom-color: var(--cr-rule);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .symptom-tree-head > span:first-child { grid-area: node; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .symptom-tree-head .st-vals {
+  display: flex;
+  grid-area: vals;
+  justify-content: flex-start;
+  color: var(--rs-quiet);
+  font-size: .66rem;
+  letter-spacing: .06em;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .symptom-tree-head .st-head-delta { grid-area: delta; align-self: end; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .symptom-tree .st-children { margin-left: 16px; }
+
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-item::before { width: 2px; background: var(--st-line); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-item > .st-node::before { height: 2.5px; background: var(--st-tone, var(--st-line)); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-item > .st-node:not(.st-root)::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--st-elbow) - 4px);
+  left: -5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--st-tone, var(--st-flat));
+  box-shadow: 0 0 0 3px #fff, 0 0 0 4px var(--st-tone-soft, #e6eaf2);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="good"] { --st-tone: var(--st-good); --st-tone-soft: #cdebd8; --st-tone-wash: rgba(47, 158, 91, .07); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="bad"] { --st-tone: var(--st-bad); --st-tone-soft: #f6cdc4; --st-tone-wash: rgba(223, 74, 50, .07); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="flat"] { --st-tone: var(--st-flat); --st-tone-soft: #e1e6ef; --st-tone-wash: rgba(122, 136, 159, .06); }
+
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "label pill" "vals pill";
+  align-items: center;
+  row-gap: .2rem;
+  column-gap: .8rem;
+  min-height: var(--st-node-h);
+  margin: .35rem 0;
+  padding: .6rem .8rem .6rem .95rem;
+  border: 1px solid var(--cr-border);
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--st-tone-wash, transparent) 0%, #fff 46%);
+  box-shadow: 0 1px 2px rgba(var(--cr-tint), .04), 0 10px 22px -20px rgba(var(--cr-tint), .35);
+  transition: transform .2s var(--cr-ease), box-shadow .2s var(--cr-ease), border-color .2s ease;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node:hover {
+  transform: translateY(-1px);
+  border-color: var(--st-tone-soft, var(--cr-line));
+  box-shadow: 0 2px 4px rgba(var(--cr-tint), .05), 0 16px 30px -20px rgba(var(--cr-tint), .45);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node .st-label { grid-area: label; color: var(--rs-ink); font-size: .84rem; font-weight: 700; line-height: 1.25; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node .st-vals { grid-area: vals; justify-content: flex-start; font-size: .76rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node .delta-pill { grid-area: pill; width: auto; min-width: 5.4rem; padding: .3rem .6rem; font-size: .76rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-depth="1"] { border-color: var(--cr-border-strong); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-depth="1"] .st-label { font-size: .9rem; font-weight: 800; }
+
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node.st-root {
+  min-height: 70px;
+  padding: .85rem 1rem .85rem 1.1rem;
+  border: 0;
+  background: linear-gradient(120deg, var(--cr-from) 0%, var(--rs-accent) 50%, var(--cr-to) 100%);
+  box-shadow: 0 18px 36px -20px var(--cr-glow);
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node.st-root:hover { transform: none; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node.st-root .st-label { color: #fff; font-size: 1rem; font-weight: 800; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node.st-root .st-vals { color: rgba(255, 255, 255, .8); font-size: .8rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node.st-root .st-cur { color: #fff; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node.st-root .delta-pill { background: #fff; }
+
+@container symptree (max-width: 430px) {
+  .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .symptom-tree { --st-indent: 16px; }
+  .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node { grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+/* ── Table beside root cause: the table gets the room ───────────────────── */
+@media (min-width: 1181px) {
+  .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sec-split { grid-template-columns: minmax(0, 1.25fr) minmax(380px, 1fr); }
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sec-split-main .kpi-compact :is(th, td):nth-child(2),
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sec-split-main .kpi-compact :is(th, td):nth-child(3) { width: 23%; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sec-split-main .kpi-compact :is(th, td):nth-child(4) { width: 17%; padding-left: .25rem; padding-right: .6rem; text-align: right; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sec-split-main .kpi-compact td.num { font-size: .76rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sec-split-main .kpi-compact :is(th, td):is(:nth-child(2), :nth-child(3)) { padding-left: .4rem; padding-right: .4rem; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .kpi-compact tbody tr:hover td { background: var(--cr-wash); }
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+/* Wide tables share the Shopee frame: bordered, rounded, thin scrollbar. */
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) :is(.dt-wrap, div:has(> table.metric-wide-table)) {
+  border: 1px solid var(--cr-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(var(--cr-tint), .03);
+  scrollbar-width: thin;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .kpi-table thead th {
+  padding-top: .78rem;
+  padding-bottom: .72rem;
+  border-bottom: 1px solid var(--cr-rule);
+  background: var(--cr-head);
+  color: #66707f;
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+  line-height: 1.35;
+  vertical-align: bottom;
+  text-wrap: balance;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .kpi-table thead th.th-group {
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--cr-rule);
+  color: var(--rs-ink);
+  letter-spacing: .05em;
+  vertical-align: middle;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .kpi-table tbody td {
+  padding-top: .74rem;
+  padding-bottom: .74rem;
+  border-bottom: 1px solid var(--cr-row);
+  font-size: .82rem;
+  vertical-align: middle;
+}
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .kpi-table tbody tr:last-child td { border-bottom: 0; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .kpi-table tbody tr:nth-child(even):not(.group-divider) td { background: var(--cr-zebra); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .kpi-table tbody tr:hover td { background: var(--cr-hover); }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .kpi-table th .th-sub { color: #8390a8; font-size: .62rem; letter-spacing: .04em; text-transform: none; }
+
+/* ── Google: figures and cards in the Shopee card language ──────────────── */
+/* KPI tiles read like the Shopee duel cards' figures (small tracked label,
+   heavy number); chart and stat cards take the Shopee panel frame. Only
+   radius, border, surface and type change — never a card's own tone rule
+   (a finding's left border keeps its severity colour). */
+.mil-ui.report-generator-app #report-google .gads-kpi {
+  gap: .25rem;
+  padding: .95rem 1.05rem 1rem;
+  border-color: var(--cr-border);
+  border-radius: 16px;
+  background: radial-gradient(120% 90% at 0% 0%, var(--rs-accent-soft) 0%, #fff 62%);
+  box-shadow: 0 1px 2px rgba(var(--cr-tint), .04), 0 14px 30px -26px rgba(var(--cr-tint), .45);
+}
+.mil-ui.report-generator-app #report-google .gads-kpi-label { color: var(--rs-quiet); font-size: .66rem; font-weight: 800; letter-spacing: .08em; }
+.mil-ui.report-generator-app #report-google .gads-kpi-value { color: var(--rs-ink); font-size: 1.45rem; font-weight: 850; letter-spacing: -.03em; }
+.mil-ui.report-generator-app #report-google .gads-kpi-old { color: var(--rs-muted); font-size: .72rem; font-weight: 600; }
+.mil-ui.report-generator-app #report-google :is(.gads-card, .gads-stat, .gads-health-score, .gads-exp-form) {
+  border-color: var(--cr-border);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(var(--cr-tint), .05), 0 14px 30px -26px rgba(var(--cr-tint), .45);
+}
+.mil-ui.report-generator-app #report-google .gads-card h4 { color: var(--rs-ink); font-size: .86rem; font-weight: 780; letter-spacing: -.01em; }
+.mil-ui.report-generator-app #report-google .gads-finding {
+  border-top-color: var(--cr-border);
+  border-right-color: var(--cr-border);
+  border-bottom-color: var(--cr-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(var(--cr-tint), .04);
+}
+.mil-ui.report-generator-app #report-google .gads-alert-panel li { border-color: var(--cr-border); border-radius: 14px; }
+
+/* ── The one moment ───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-item.is-active:not(.is-static) {
+    animation: cr-settle .46s var(--cr-ease) backwards;
+  }
+  .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sdeck-item.is-active .st-node {
+    animation: cr-grow .5s var(--cr-ease) backwards;
+    animation-delay: calc(140ms + var(--st-i, 0) * 34ms);
+  }
+}
+@keyframes cr-settle {
+  from { opacity: 0; transform: translateY(12px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes cr-grow {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) :is(.sdeck-ink, .report-tab-pill, .sdeck-tab-text small) { transition: none; }
+}
+.mil-ui.report-generator-app.pdf-export-mode :is(#report-meta, #report-tiktok, #report-google) :is(.sdeck-item, .st-node) { animation: none !important; }
+
+/* ── Google setup: period presets as the Shopee source switch ───────────── */
+/* Same segmented track and lifted white chip as the Sumber switch above it
+   (workspace.css .src-switch), so the board reads as one set of controls. */
+.mil-ui.report-generator-app .gen-main#app[data-platform='google'] .setup-cell .gads-presets {
+  width: fit-content;
+  max-width: 100%;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 13px;
+  background: var(--rx-soft);
+}
+.mil-ui.report-generator-app .gen-main#app[data-platform='google'] .setup-cell .gads-preset {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rx-muted);
+  font-size: .84rem;
+  font-weight: 650;
+  transition: background .2s ease, color .2s ease, box-shadow .25s var(--rx-ease);
+}
+.mil-ui.report-generator-app .gen-main#app[data-platform='google'] .setup-cell .gads-preset:hover:not(.is-active):not(.is-static) { color: var(--rx-ink); background: rgba(255, 255, 255, .7); }
+.mil-ui.report-generator-app .gen-main#app[data-platform='google'] .setup-cell .gads-preset.is-active { background: #fff; color: var(--pf-ink); box-shadow: 0 2px 8px rgba(15, 26, 58, .1), inset 0 0 0 1px var(--pf-line); }
+.mil-ui.report-generator-app .gen-main#app[data-platform='google'] .setup-cell .gads-preset:focus-visible { outline: 2px solid var(--pf); outline-offset: 1px; }

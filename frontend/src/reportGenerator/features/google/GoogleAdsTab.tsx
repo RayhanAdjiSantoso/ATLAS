@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { FileSpreadsheet, Loader2, RotateCcw } from 'lucide-react';
+import {
+  BellRing, FileBarChart, FileSpreadsheet, FlaskConical, Gauge, Gavel, History, KeyRound, Layers, Link2, Loader2, MapPin, Megaphone,
+  MonitorSmartphone, RotateCcw, Search, ShoppingCart, Sparkles, Stethoscope, type LucideIcon,
+} from 'lucide-react';
 import { DeltaPill } from '../../components/DeltaPill';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { InlineNotice } from '../../components/InlineNotice';
@@ -39,6 +42,31 @@ import {
   type GadsOverview, type GadsReport, type GadsSearchTerm, type PeriodPair,
 } from './googleAds';
 import './google.css';
+import '../../app/channel-report.css';
+
+// The navigator's icon for a section, read off its title — the same rich
+// navigator the Shopee report uses (see ShopeeReportSections).
+const SECTION_ICONS: readonly [RegExp, LucideIcon][] = [
+  [/overall|ringkasan/i, Gauge],
+  [/search term|negative/i, Search],
+  [/setting|change history/i, History],
+  [/keyword/i, KeyRound],
+  [/campaign|ad group/i, Layers],
+  [/ad performance|headline|description/i, Megaphone],
+  [/conversion|konversi|tujuan/i, ShoppingCart],
+  [/device|jam|waktu/i, MonitorSmartphone],
+  [/city|kota/i, MapPin],
+  [/auction/i, Gavel],
+  [/landing/i, Link2],
+  [/diagnos|kesehatan|catatan/i, Stethoscope],
+  [/alert|perhatian/i, BellRing],
+  [/optimization|peluang/i, Sparkles],
+  [/experiment/i, FlaskConical],
+];
+const sectionIcon = (title: string) => {
+  const Icon = SECTION_ICONS.find(([re]) => re.test(title))?.[1] ?? FileBarChart;
+  return <Icon size={15} strokeWidth={2.2} />;
+};
 
 interface GoogleAdsTabProps {
   isActive: boolean;
@@ -436,7 +464,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               id: 'overall',
               label: 'Overall',
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <div className="sec-block">
                     {heading('Overall Campaign Performance', `${p1} → ${p2}`, false)}
                     <div className="sec-inner">
@@ -488,7 +516,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: urgent ? `Diagnostics (${urgent})` : 'Diagnostics',
               hidden: !report.diagnostics,
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <DiagnosticsSection report={report} p1={p1} p2={p2} />
                 </SectionAccordion>
               ),
@@ -498,7 +526,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Search Terms',
               hidden: !cur.searchTerms.length,
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <div className="sec-block">
                     {heading('Top Search Terms', `berdasarkan cost · ${p2}${cur.searchTermsSource === 'upload' ? ' · file unggahan' : cur.searchTermsSource === 'mixed' ? ' · sebagian file unggahan' : ''}`)}
                     <GoogleAdsTable columns={termCols} rows={cur.searchTerms} sortKey="cost" limit={TABLE_ROWS} />
@@ -518,7 +546,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Campaign & Ad Group',
               hidden: !cur.campaigns.length,
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <CampaignIntelSection report={report} f={f} p1={p1} p2={p2} />
                   <div className="sec-block">
                     {heading('Campaign Performance', `urut cost · ${p2}`)}
@@ -536,7 +564,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Keyword',
               hidden: !cur.keywords.length,
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <div className="sec-block">
                     {heading('Best Performing Keyword', `berdasarkan konversi · ${p2}`)}
                     <GoogleAdsTable columns={keywordCols} rows={cur.keywords} sortKey="conversions" limit={TABLE_ROWS} />
@@ -563,7 +591,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Ad Performance',
               hidden: !cur.ads,
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <AdPerformanceSection report={report} f={f} p2={p2} copy={clientId ? { clientId, range } : undefined} />
                 </SectionAccordion>
               ),
@@ -573,7 +601,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Konversi',
               hidden: !cur.conversionActions,
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <ConversionSection report={report} f={f} p1={p1} p2={p2} />
                 </SectionAccordion>
               ),
@@ -583,7 +611,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Device & Waktu',
               hidden: !cur.devices && !cur.schedule,
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <DeviceTimeSection report={report} f={f} p2={p2} />
                 </SectionAccordion>
               ),
@@ -593,7 +621,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Kota',
               hidden: !searchCities.length,
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <div className="sec-block">
                     {heading('Search Campaign · City Performance', `urut konversi · ${p2}`)}
                     <GoogleAdsTable columns={cityCols} rows={searchCities} sortKey="conversions" limit={TABLE_ROWS} numbered />
@@ -605,7 +633,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               id: 'auction',
               label: 'Auction Insights',
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <AuctionInsightsSection data={report.auctionInsights} p1={p1} p2={p2} />
                 </SectionAccordion>
               ),
@@ -614,7 +642,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               id: 'changes',
               label: 'Change History',
               content: (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <ChangeHistorySection data={report.changeHistory} settingChanges={report.campaignSettingChanges ?? []} p2={p2} />
                 </SectionAccordion>
               ),
@@ -624,7 +652,7 @@ function GoogleAdsReportView({ report, clientId, range, p1, p2, generatedAt, onR
               label: 'Optimasi',
               hidden: !clientId,
               content: clientId ? (
-                <SectionAccordion>
+                <SectionAccordion iconFor={sectionIcon}>
                   <OptimizationCenter clientId={clientId} range={range}
                     onExperiment={(r) => {
                       const c = r.entity_type === 'campaign' ? report.cur.campaigns.find((x) => x.campaign_id === r.entity_id) : undefined;
