@@ -8,6 +8,7 @@ import ChannelRoasStrip from './ChannelRoasStrip.jsx';
 import { STRIP_METRICS, formatStripValue } from './domains.js';
 import { Delta, Figure, InfoTip } from './figures.jsx';
 import PageBand from '../common/PageBand.jsx';
+import { BRAND_KEYS, BrandLogo } from '../../reportGenerator/components/BrandLogo';
 import './softShell.css';
 
 // Brand Overview, Soft Blue — a calmer, more systematic
@@ -85,8 +86,13 @@ export default function SoftShell({
           kicker="Workspace · Analisis"
           title="Brand Overview"
           desc="Satu pandangan untuk memahami performa brand di seluruh channel."
+          // A channel wears its platform's own mark, as in Report Generator;
+          // Executive Snapshot, which is no platform, keeps its icon.
           tabs={views.map((v) => ({
-            key: v.id, label: v.label, hint: v.ready || v.readable ? v.hint : 'Belum ada data', icon: <v.Icon size={19} />, onSelect: () => setViewId(v.id),
+            key: v.id, label: v.label, hint: v.ready || v.readable ? v.hint : 'Belum ada data',
+            logo: BRAND_KEYS.includes(v.id),
+            icon: BRAND_KEYS.includes(v.id) ? <BrandLogo name={v.id} size={20} /> : <v.Icon size={19} />,
+            onSelect: () => setViewId(v.id),
           }))}
           activeKey={view.id}
           layoutId="bo-tab-sheet"
