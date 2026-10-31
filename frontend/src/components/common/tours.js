@@ -146,15 +146,9 @@ export const TOURS = {
       padding: 6,
     },
     {
-      target: '.bo-chip-period',
-      title: 'Periode',
-      body: 'Rentang tanggal yang dianalisis.',
-      padding: 6,
-    },
-    {
-      target: '.bo-chip-compare',
-      title: 'Bandingkan',
-      body: 'Pilih pembanding — periode sebelumnya, bulan lalu, tahun lalu, atau rentang sendiri — supaya setiap angka punya arah naik atau turun.',
+      target: '.bo-chip-range',
+      title: 'Periode & pembanding',
+      body: 'Klik untuk memilih rentang tanggal yang dianalisis. Centang "Bandingkan" di panelnya untuk menambah periode pembanding — periode sebelumnya, bulan lalu, tahun lalu, atau rentang sendiri — supaya setiap angka punya arah naik atau turun.',
       padding: 6,
     },
     {

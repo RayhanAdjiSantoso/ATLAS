@@ -2,6 +2,7 @@ import useSessionState from '../../hooks/useSessionState.js';
 import { useState, useEffect } from 'react';
 import api from '../../api/client.js';
 import DateRangePicker from './DateRangePicker.jsx';
+import PeriodComparePicker from './PeriodComparePicker.jsx';
 import DashboardBrandPicker from './DashboardBrandPicker.jsx';
 import SelectMenu from '../common/SelectMenu.jsx';
 
@@ -115,25 +116,15 @@ export default function FilterPanel({ filters, onChange, variant }) {
     handleChange('compare', next);
   };
 
-  // Header (Brand Overview's soft layout): the controls as chips in the
-  // page header's corner, the way analytics dashboards carry their context.
-  // The comparison's switch and basis are one menu — "Tanpa pembanding" is
-  // the switch off, any basis turns it on — with the compared range as a
-  // caption. Same state and the same range rules as the classic panel below.
+  // Header (Brand Overview's soft layout): brand, then one period chip whose
+  // panel holds the period and the comparison together, laid out like an ads
+  // manager's (presets, two months, "Bandingkan" rows). Same state and the
+  // same range rules as the classic panel below.
   if (variant === 'band') {
-    const compareValue = showCompare ? compareType : 'none';
-    const pickCompare = (type) => {
-      if (type === 'none') {
-        setShowCompare(false);
-        handleChange('compare', false);
-        return;
-      }
-      setShowCompare(true);
+    const applyPeriod = ({ compareType: type, ...next }) => {
+      setShowCompare(next.compare);
       setCompareType(type);
-      // Kustom starts from the previous period, then is edited by hand.
-      const base = type === 'custom' ? (filters.compare ? {} : computeCompareRange('previous_period', filters.startDate, filters.endDate))
-        : computeCompareRange(type, filters.startDate, filters.endDate);
-      onChange({ ...filters, compare: true, ...base });
+      onChange({ ...filters, ...next });
     };
     return (
       <div className="bo-band-filters">
@@ -147,30 +138,19 @@ export default function FilterPanel({ filters, onChange, variant }) {
             onChange={(val) => handleChange('brandId', val)}
           />
         </div>
-        <div className="bo-chip bo-chip-period">
+        <div className="bo-chip bo-chip-range">
           <span className="bo-chip-label">Periode</span>
-          <DateRangePicker startDate={filters.startDate} endDate={filters.endDate} onChange={handleRangeChange} />
-        </div>
-        <div className={`bo-chip bo-chip-compare${showCompare ? ' is-on' : ''}`}>
-          <label htmlFor="compare-type-select" className="bo-chip-label">Bandingkan</label>
-          <SelectMenu
-            id="compare-type-select"
-            label="Bandingkan dengan"
-            value={compareValue}
-            onChange={pickCompare}
-            options={[{ value: 'none', label: 'Tanpa pembanding' }, ...COMPARE_TYPES.map((t) => ({ ...t, label: `vs ${t.label}` }))]}
+          <PeriodComparePicker
+            startDate={filters.startDate}
+            endDate={filters.endDate}
+            compare={showCompare}
+            compareStartDate={filters.compareStartDate}
+            compareEndDate={filters.compareEndDate}
+            compareType={compareType}
+            compareTypes={COMPARE_TYPES}
+            computeCompare={computeCompareRange}
+            onApply={applyPeriod}
           />
-          {showCompare && compareType === 'custom' && (
-            <div className="bo-chip-custom">
-              <span className="sr-only">Periode pembanding</span>
-              <DateRangePicker startDate={filters.compareStartDate} endDate={filters.compareEndDate} onChange={handleCompareRangeChange} />
-            </div>
-          )}
-          {showCompare && compareType !== 'custom' && (
-            <small className="bo-chip-caption" title="Periode pembanding">
-              {formatDMY(filters.compareStartDate)} – {formatDMY(filters.compareEndDate)}
-            </small>
-          )}
         </div>
       </div>
     );
