@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -9,37 +10,60 @@ function shiftMonth(ym, delta) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+function monthsBetween(from, to) {
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
 function monthLabel(ym) {
   const [y, m] = ym.split('-').map(Number);
   return `${MONTH_LABELS[m - 1]} ${String(y).slice(2)}`;
 }
 
-// A sliding window of WINDOW_SIZE month pills that always keeps the selected
-// month visible: it defaults to the WINDOW_SIZE most recent months ending at
-// "now", but slides forward for a future selection and BACKWARD for a past
-// one outside that default range (e.g. backfilling January while "now" is
-// September) — sliding only forward here was the original bug: paging back
-// past the default window's start left no pill active at all.
+function currentYm() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// The WINDOW_SIZE-month page that holds `month`. Pages are counted back from
+// the current month, so the first page always ends at "now" — the same paging
+// as Data Collection Hub's month rail. A future month (left over in session
+// storage) gets a page of its own ending on it.
+function windowEndFor(month, nowYm) {
+  const back = monthsBetween(month, nowYm);
+  if (back <= 0) return month;
+  return shiftMonth(nowYm, -WINDOW_SIZE * Math.floor(back / WINDOW_SIZE));
+}
+
+// WINDOW_SIZE month pills. The arrows page the whole window by WINDOW_SIZE
+// months without changing the selection; picking a pill selects that month.
+// Paging forward stops at the page ending on the current month.
 export default function MonthPillNav({ month, onChange }) {
-  const nowYm = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
-  const defaultStart = shiftMonth(nowYm, -(WINDOW_SIZE - 1));
-  let windowStart;
-  if (month > nowYm) windowStart = shiftMonth(month, -(WINDOW_SIZE - 1));
-  else if (month < defaultStart) windowStart = month;
-  else windowStart = defaultStart;
+  const nowYm = currentYm();
+  const [windowEnd, setWindowEnd] = useState(() => windowEndFor(month, nowYm));
+
+  // A month chosen from outside (session restore, brand switch) that sits off
+  // the visible page brings its page into view.
+  useEffect(() => {
+    setWindowEnd((end) => {
+      const offset = monthsBetween(month, end);
+      return offset >= 0 && offset < WINDOW_SIZE ? end : windowEndFor(month, currentYm());
+    });
+  }, [month]);
+
+  const latest = windowEnd > nowYm ? windowEnd : nowYm;
+  const canNext = windowEnd < latest;
   const months = [];
-  for (let i = 0; i < WINDOW_SIZE; i += 1) months.push(shiftMonth(windowStart, i));
+  for (let i = WINDOW_SIZE - 1; i >= 0; i -= 1) months.push(shiftMonth(windowEnd, -i));
 
   return (
     <div className="dt-month-nav" role="tablist" aria-label="Pilih bulan">
       <button
         type="button"
         className="dt-month-arrow"
-        onClick={() => onChange(shiftMonth(month, -1))}
-        aria-label="Bulan sebelumnya"
+        onClick={() => setWindowEnd(shiftMonth(windowEnd, -WINDOW_SIZE))}
+        aria-label={`${WINDOW_SIZE} bulan sebelumnya`}
       >
         <ChevronLeft size={16} />
       </button>
@@ -58,8 +82,12 @@ export default function MonthPillNav({ month, onChange }) {
       <button
         type="button"
         className="dt-month-arrow"
-        onClick={() => onChange(shiftMonth(month, 1))}
-        aria-label="Bulan berikutnya"
+        onClick={() => {
+          const next = shiftMonth(windowEnd, WINDOW_SIZE);
+          setWindowEnd(next > latest ? latest : next);
+        }}
+        disabled={!canNext}
+        aria-label={`${WINDOW_SIZE} bulan berikutnya`}
       >
         <ChevronRight size={16} />
       </button>

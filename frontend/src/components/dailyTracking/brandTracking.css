@@ -82,7 +82,8 @@
   cursor: pointer;
   transition: background .18s ease, color .18s ease;
 }
-.bt-page .dt-month-arrow:hover { background: #fff; color: var(--soft-accent); }
+.bt-page .dt-month-arrow:hover:not(:disabled) { background: #fff; color: var(--soft-accent); }
+.bt-page .dt-month-arrow:disabled { opacity: .35; cursor: not-allowed; }
 .bt-page .dt-month-pill {
   flex: 0 0 auto;
   padding: 8px 14px;
@@ -97,7 +98,7 @@
   background: #fff; color: var(--soft-accent); font-weight: 800;
   box-shadow: 0 1px 2px rgba(25, 40, 65, .06), inset 0 0 0 1px rgba(40, 86, 182, .18);
 }
-.bt-page .dt-month-arrow:active, .bt-page .dt-month-pill:active { transform: scale(.97); }
+.bt-page .dt-month-arrow:active:not(:disabled), .bt-page .dt-month-pill:active { transform: scale(.97); }
 
 /* ── Views: Target & Budget / Input Daily Tracking / MoM ─────────────────── */
 .bt-views { grid-template-columns: repeat(2, minmax(0, 1fr)); }
