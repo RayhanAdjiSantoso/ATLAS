@@ -23,6 +23,7 @@ import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { useRestoreLastReport } from '../reports/useRestoreLastReport';
+import { RestoreOffer } from '../reports/RestoreOffer';
 import { forgetLastReport } from '../reports/lastReportStore';
 import { mapTiktokRows } from '../reports/rowMapping';
 import { getSavedPeriod } from '../reports/api';
@@ -270,7 +271,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     if (!restoredAt) autoSave.save(clientId, buildSavePayload(), buildSaveFiles());
   }
 
-  const restoring = useRestoreLastReport({
+  const lastReport = useRestoreLastReport({
     platform: 'tiktok',
     clientId,
     apply: async (old, cur) => {
@@ -495,11 +496,12 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
         </div>
       )}
 
-      {restoring && (
+      {lastReport.restoring && (
         <div className="setup-applying" role="status">
           <span className="setup-spinner" aria-hidden="true" /> Membuka laporan terakhir…
         </div>
       )}
+      {lastReport.offered && !report && <RestoreOffer onRestore={lastReport.restore} onDismiss={lastReport.dismiss} />}
 
       {report && (
         <div id="report-tiktok">

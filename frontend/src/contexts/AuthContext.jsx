@@ -18,10 +18,19 @@ const idleExpired = () => {
   const last = lastActive();
   return last > 0 && Date.now() - last > IDLE_MS;
 };
+// What the pages remember for this browser tab (useSessionState — the brand
+// in view, the last report generated) belongs to one sign-in: a new session
+// starts empty, rather than reopening, and re-fetching, the last one's work.
+function forgetNavigation() {
+  try {
+    Object.keys(sessionStorage).filter((k) => k.startsWith('atlas:')).forEach((k) => sessionStorage.removeItem(k));
+  } catch { /* storage blocked — nothing was kept either */ }
+}
 function clearSession() {
   localStorage.removeItem('atlas_token');
   localStorage.removeItem('atlas_user');
   localStorage.removeItem(LAST_ACTIVE);
+  forgetNavigation();
 }
 
 export function AuthProvider({ children }) {
@@ -60,6 +69,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
+    forgetNavigation();
     localStorage.setItem('atlas_token', res.data.token);
     localStorage.setItem('atlas_user', JSON.stringify(res.data.user));
     markActive();

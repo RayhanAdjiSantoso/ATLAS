@@ -60,6 +60,7 @@ import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { useRestoreLastReport } from '../reports/useRestoreLastReport';
+import { RestoreOffer } from '../reports/RestoreOffer';
 import { forgetLastReport } from '../reports/lastReportStore';
 import { mapMetaCpasRows, mapMetaMainRows } from '../reports/rowMapping';
 import { PeriodSourcePicker, type LibraryMonth, type PeriodSourceTab, type PickScopeOption } from '../reports/PeriodSourcePicker';
@@ -632,7 +633,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     if (!restoredAt) autoSave.save(clientId, buildSavePayload(r), buildSaveFiles());
   }
 
-  const restoring = useRestoreLastReport({
+  const lastReport = useRestoreLastReport({
     platform: 'meta',
     clientId,
     apply: async (old, cur) => {
@@ -1149,11 +1150,12 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         </div>
       )}
 
-      {restoring && (
+      {lastReport.restoring && (
         <div className="setup-applying" role="status">
           <span className="setup-spinner" aria-hidden="true" /> Membuka laporan terakhir…
         </div>
       )}
+      {lastReport.offered && !report && <RestoreOffer onRestore={lastReport.restore} onDismiss={lastReport.dismiss} />}
 
       {report && (
         <div id="report-meta">

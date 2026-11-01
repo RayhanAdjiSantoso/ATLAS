@@ -1,0 +1,27 @@
+/* The last report of this session, offered (features/reports/RestoreOffer). */
+.mil-ui .restore-offer {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  margin: 1rem 0 0;
+  padding: .8rem .9rem .8rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.mil-ui .restore-offer-ico {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--acc-100);
+  color: var(--acc);
+}
+.mil-ui .restore-offer p { display: grid; flex: 1 1 auto; gap: .1rem; min-width: 0; }
+.mil-ui .restore-offer strong { color: var(--text); font-size: .88rem; font-weight: 700; }
+.mil-ui .restore-offer small { color: var(--muted); font-size: .78rem; }
+.mil-ui .restore-offer-actions { display: flex; flex: 0 0 auto; gap: .5rem; }
+.mil-ui .restore-offer .btn { padding: .5rem .9rem; font-size: .82rem; }

@@ -26,6 +26,7 @@ import { AiSummarySection } from '../ai/AiSummarySection';
 import { SaveStatus } from '../reports/SaveStatus';
 import { useAutoSave } from '../reports/useAutoSave';
 import { useRestoreLastReport } from '../reports/useRestoreLastReport';
+import { RestoreOffer } from '../reports/RestoreOffer';
 import { forgetLastReport } from '../reports/lastReportStore';
 import { getProductMaster, getSavedPeriod, getSavedPeriods, saveProductMasterEntry } from '../reports/api';
 import { formatChannelCoverage } from '../reports/savedPeriodLabels';
@@ -212,24 +213,12 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
   }
   // "Semua Bulan" by default — see ParetoRangeControl in the Pareto sections.
   const [paretoRange, setParetoRange] = useState<ParetoRangeSelection>(DEFAULT_PARETO_RANGE);
+  // Read on Generate only (both the button and reopening the last report):
+  // reading them as soon as a brand was picked downloaded and parsed every
+  // month's file before anyone asked for a report.
   useEffect(() => {
     setProductPerfAllMonths([]);
     setEmptyPerfMonths([]);
-    if (!clientId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { months, empty } = await loadPerfMonths(clientId);
-        if (cancelled) return;
-        setProductPerfAllMonths(months);
-        setEmptyPerfMonths(empty);
-      } catch {
-        if (!cancelled) setProductPerfAllMonths([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [clientId]);
   // The uploaded "Referensi Kategori Produk" file for this session. On upload
   // it's also persisted to the backend (full replace of this client's
@@ -843,7 +832,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     if (!restoredAt) autoSave.save(clientId, buildSavePayload(), buildSaveFiles());
   }
 
-  const restoring = useRestoreLastReport({
+  const lastReport = useRestoreLastReport({
     platform: 'shopee',
     clientId,
     apply: async (old, cur) => {
@@ -854,7 +843,17 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
       }
     },
     ready: ready && !applyingRole,
-    generate,
+    // Pareto's months come from the library, read now as the button does.
+    generate: (restoredAt) => {
+      if (!clientId) return generate(restoredAt);
+      loadPerfMonths(clientId)
+        .then((fresh) => {
+          setProductPerfAllMonths(fresh.months);
+          setEmptyPerfMonths(fresh.empty);
+          generate(restoredAt, fresh.months);
+        })
+        .catch(() => generate(restoredAt));
+    },
   });
 
   // Re-runs Generate after the user completes an "Uncategorized" mapping or
@@ -1314,11 +1313,12 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
         </div>
       )}
 
-      {restoring && (
+      {lastReport.restoring && (
         <div className="setup-applying" role="status">
           <span className="setup-spinner" aria-hidden="true" /> Membuka laporan terakhir…
         </div>
       )}
+      {lastReport.offered && !report && <RestoreOffer onRestore={lastReport.restore} onDismiss={lastReport.dismiss} />}
 
       {report && (
         <div id="report-shopee">
