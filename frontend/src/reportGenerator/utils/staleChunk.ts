@@ -3,10 +3,13 @@
 // before a deploy re-hashed the chunk filenames. The only fix is to reload
 // so the browser fetches the current index.html + chunk map. Returns true if
 // it handled the error (caller should stop), false if it's an unrelated error.
+// Safari words it differently when the old chunk's URL answers with HTML, which
+// vercel.json's catch-all rewrite to index.html does: "'text/html' is not a
+// valid JavaScript MIME type."
 export function handleStaleChunk(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   const isStale =
-    /dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(msg);
+    /dynamically imported module|Importing a module script failed|error loading dynamically imported module|not a valid JavaScript MIME type/i.test(msg);
   if (!isStale) return false;
   if (sessionStorage.getItem('chunk-reload') !== '1') {
     sessionStorage.setItem('chunk-reload', '1');
