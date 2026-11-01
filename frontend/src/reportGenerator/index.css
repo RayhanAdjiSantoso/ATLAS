@@ -359,20 +359,6 @@
      during export — the on-screen pill keeps its flex layout. */
   &.pdf-export-mode .delta-pill{display:inline-block}
   &.pdf-export-mode .delta-pill .delta-arrow{margin-right:.3rem}
-  /* ── Section PNG export ("⬇ PNG" on a section card) — size every column to its
-     content. On screen the wide tables sit in horizontal-scroll wrappers and
-     stretch to fill the card, so a plain snapshot clips or squeezes columns.
-     For the duration of the capture only, let each table shrink-wrap to its
-     content and each wrapper widen to fit. Vertical row caps (max-height on the
-     Analisis Per Item / Tren Harian scroll areas) are left untouched. ── */
-  &.png-fit-content .sec-block{overflow:visible!important;width:max-content!important;max-width:none!important}
-  &.png-fit-content .tbl-scroll, &.png-fit-content .fg-scroll, &.png-fit-content .fg-group, &.png-fit-content .fg-wrap, &.png-fit-content .sec-block [style*="overflow"]{width:max-content!important;max-width:none!important;overflow-x:visible!important;overflow:visible!important}
-  /* Tables normally stretch to fill the card (width:100%) and the label column
-     is pinned to a fixed 44% — both spread the columns far past their content.
-     Drop them so every column collapses to its natural width. */
-  &.png-fit-content .sec-block table{width:auto!important}
-  &.png-fit-content .sec-block .kpi-table th:first-child, &.png-fit-content .sec-block .kpi-table td:first-child{width:auto!important}
-  &.png-fit-content .sec-block th, &.png-fit-content .sec-block td{white-space:nowrap!important}
   /* html2canvas paints a header row's own background over the cells that
      span into it from the row above, hiding a two-row header's "#" and
      "Produk". In a capture the rows carry no background; their cells do. */
@@ -382,8 +368,8 @@
      spill rows past the rounded box), while the whole list can run to a
      hundred rows: the PNG carries its first 15 rows whole — the Excel export
      has every row. */
-  &.png-fit-content .sec-block :is(.dt-wrap, .meta-changes > div){max-height:none!important}
-  &.png-fit-content .sec-block :is(.dt-wrap, .meta-changes > div) tbody tr:nth-child(n+16){display:none}
+  &.png-export .sec-block :is(.dt-wrap, .meta-changes > div){max-height:none!important}
+  &.png-export .sec-block :is(.dt-wrap, .meta-changes > div) tbody tr:nth-child(n+16){display:none}
   /* ── Period input ── */
   .period-input-row{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem}
   .period-input-field{background:var(--surface);border-radius:10px;border:1.5px solid var(--border);padding:.7rem 1rem;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:4px}

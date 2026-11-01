@@ -93,7 +93,7 @@ export async function exportElementToPDF(rootEl: HTMLElement | null, filename: s
 
   // Was document.body.classList. This app is one page inside ATLAS now rather
   // than the whole document: index.css scopes its &.pdf-export-mode and
-  // &.png-fit-content rules under .report-generator-app, so the class has to
+  // &.png-export rules under .report-generator-app, so the class has to
   // land on that element — on <body> it would match nothing at all.
   const scopeEl = rootEl.closest<HTMLElement>('.report-generator-app') ?? document.body;
   scopeEl.classList.add('pdf-export-mode');
@@ -160,30 +160,59 @@ export async function exportElementToPDF(rootEl: HTMLElement | null, filename: s
   }
 }
 
-export async function downloadSectionPNG(block: HTMLElement): Promise<void> {
+// What is cut off on screen behind a horizontal scroll still belongs in the
+// image: the section is widened, for the capture only, by what its widest
+// scrolled box hides — nothing else changes, so the image is laid out as the
+// section is on screen. A box in a split column gets only its share of the
+// extra width, hence a few passes.
+function widenForScrolledContent(block: HTMLElement): void {
+  for (let pass = 0; pass < 4; pass += 1) {
+    let hidden = 0;
+    block.querySelectorAll<HTMLElement>('*').forEach((el) => {
+      if (el.scrollWidth <= el.clientWidth + 1) return;
+      const { overflowX } = getComputedStyle(el);
+      if (overflowX === 'auto' || overflowX === 'scroll') hidden = Math.max(hidden, el.scrollWidth - el.clientWidth);
+    });
+    if (!hidden) return;
+    block.style.maxWidth = 'none';
+    block.style.width = `${Math.ceil(block.getBoundingClientRect().width + hidden)}px`;
+  }
+}
+
+const settle = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
+// One section card as an image, as it looks on screen (2× for sharpness).
+// `part` narrows it to one piece of the card — Fundamental Analysis's table or
+// its Root Cause — with a little white margin around it.
+export async function downloadSectionPNG(block: HTMLElement, part?: { el: HTMLElement; name: string }): Promise<void> {
   const heading = block.querySelector('.sec-heading');
   const title = (heading?.childNodes[0]?.textContent || '').trim();
   const badge = heading?.querySelector('.sec-badge')?.textContent?.trim();
-  const filename = sanitizeFilename(`${title || 'Section'}${badge ? ' - ' + badge : ''}`) + '.png';
+  const filename = sanitizeFilename(`${title || 'Section'}${part ? ' - ' + part.name : ''}${badge ? ' - ' + badge : ''}`) + '.png';
 
-  // `png-fit-content` (see index.css) is added only for the section-PNG path:
-  // it lets every table shrink-wrap to its content and each horizontal-scroll
-  // wrapper widen to fit, so the exported image sizes each column to its
-  // content instead of clipping/squeezing the on-screen scroll view. Vertical
-  // row caps are deliberately left untouched.
-  // See exportElementToPDF above on why this is not document.body.
+  // `png-export` (see index.css): a ranking table shows its first rows whole
+  // instead of its scroll cap. See exportElementToPDF above on why this is not
+  // document.body.
   const scopeEl = block.closest<HTMLElement>('.report-generator-app') ?? document.body;
+  const before = { width: block.style.width, maxWidth: block.style.maxWidth };
   scopeEl.classList.add('pdf-export-mode');
-  scopeEl.classList.add('png-fit-content');
+  scopeEl.classList.add('png-export');
   try {
     const { default: html2canvas } = await import('html2canvas');
-    // Let the fit-content relayout settle before html2canvas measures the node.
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    const canvas = await html2canvas(block, {
+    await settle();
+    widenForScrolledContent(block);
+    await settle();
+    const target = part?.el ?? block;
+    const pad = part ? 20 : 0;
+    const box = target.getBoundingClientRect();
+    const canvas = await html2canvas(target, {
       scale: 2,
       backgroundColor: '#ffffff',
       useCORS: true,
-      windowWidth: Math.max(document.documentElement.clientWidth, Math.ceil(block.scrollWidth)),
+      // The copy is laid out in a window this wide: the page's own width, or
+      // more when the section was widened past it.
+      windowWidth: Math.max(document.documentElement.clientWidth, Math.ceil(block.getBoundingClientRect().right + 24)),
+      ...(pad ? { x: -pad, y: -pad, width: Math.ceil(box.width) + pad * 2, height: Math.ceil(box.height) + pad * 2 } : {}),
       onclone: inlineStylesOnClone,
     });
     const link = document.createElement('a');
@@ -195,7 +224,9 @@ export async function downloadSectionPNG(block: HTMLElement): Promise<void> {
     if (handleStaleChunk(err)) return;
     alert('Gagal membuat gambar: ' + (err as Error).message);
   } finally {
+    block.style.width = before.width;
+    block.style.maxWidth = before.maxWidth;
     scopeEl.classList.remove('pdf-export-mode');
-    scopeEl.classList.remove('png-fit-content');
+    scopeEl.classList.remove('png-export');
   }
 }

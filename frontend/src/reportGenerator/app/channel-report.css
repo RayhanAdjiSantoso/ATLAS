@@ -239,7 +239,7 @@
   padding: 1.15rem 1.15rem 1.25rem;
   border-color: var(--cr-border);
   background:
-    radial-gradient(120% 60% at 0% 0%, var(--cr-panel) 0%, transparent 60%),
+    radial-gradient(120% 60% at 0% 0%, var(--cr-panel) 0%, rgba(255, 255, 255, 0) 60%), /* not `transparent`: grey in a PNG (html2canvas) */
     linear-gradient(180deg, var(--cr-panel-top) 0%, var(--cr-panel-bottom) 100%);
 }
 .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .sympt-panel-title::before {
@@ -287,9 +287,12 @@
   background: var(--st-tone, var(--st-flat));
   box-shadow: 0 0 0 3px #fff, 0 0 0 4px var(--st-tone-soft, #e6eaf2);
 }
-.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="good"] { --st-tone: var(--st-good); --st-tone-soft: #cdebd8; --st-tone-wash: rgba(47, 158, 91, .07); }
-.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="bad"] { --st-tone: var(--st-bad); --st-tone-soft: #f6cdc4; --st-tone-wash: rgba(223, 74, 50, .07); }
-.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="flat"] { --st-tone: var(--st-flat); --st-tone-soft: #e1e6ef; --st-tone-wash: rgba(122, 136, 159, .06); }
+/* Washes are the tone already mixed into white (7%), not a see-through
+   colour: html2canvas draws an alpha inside a gradient far heavier than the
+   screen does, so the section PNG came out with thick green/red bands. */
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="good"] { --st-tone: var(--st-good); --st-tone-soft: #cdebd8; --st-tone-wash: #f0f8f4; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="bad"] { --st-tone: var(--st-bad); --st-tone-soft: #f6cdc4; --st-tone-wash: #fdf2f1; }
+.mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node[data-tone="flat"] { --st-tone: var(--st-flat); --st-tone-soft: #e1e6ef; --st-tone-wash: #f7f8f9; }
 
 .mil-ui.report-generator-app :is(#report-meta, #report-tiktok, #report-google) .st-node {
   grid-template-columns: minmax(0, 1fr) auto;

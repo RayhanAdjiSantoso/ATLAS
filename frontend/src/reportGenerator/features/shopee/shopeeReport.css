@@ -95,8 +95,10 @@
 .mil-ui.report-generator-app #report-shopee .sympt-panel {
   padding: 1.15rem 1.15rem 1.25rem;
   border-color: #f4ddd4;
+  /* Fades to a clear tint of its own colour, not to `transparent`:
+     html2canvas reads that as clear black and the PNG got a grey smudge. */
   background:
-    radial-gradient(120% 60% at 0% 0%, #fff0ea 0%, transparent 60%),
+    radial-gradient(120% 60% at 0% 0%, #fff0ea 0%, rgba(255, 240, 234, 0) 60%),
     linear-gradient(180deg, #fffaf8 0%, #fff6f2 100%);
 }
 .mil-ui.report-generator-app #report-shopee .sympt-panel-title::before {
@@ -147,9 +149,12 @@
   background: var(--st-tone, var(--st-flat));
   box-shadow: 0 0 0 3px #fff, 0 0 0 4px var(--st-tone-soft, #e6eaf2);
 }
-.mil-ui.report-generator-app #report-shopee .st-node[data-tone="good"] { --st-tone: var(--st-good); --st-tone-soft: #cdebd8; --st-tone-wash: rgba(47, 158, 91, .07); }
-.mil-ui.report-generator-app #report-shopee .st-node[data-tone="bad"] { --st-tone: var(--st-bad); --st-tone-soft: #f6cdc4; --st-tone-wash: rgba(223, 74, 50, .07); }
-.mil-ui.report-generator-app #report-shopee .st-node[data-tone="flat"] { --st-tone: var(--st-flat); --st-tone-soft: #e1e6ef; --st-tone-wash: rgba(122, 136, 159, .06); }
+/* Washes are the tone already mixed into white (7%), not a see-through
+   colour: html2canvas draws an alpha inside a gradient far heavier than the
+   screen does, so the section PNG came out with thick green/red bands. */
+.mil-ui.report-generator-app #report-shopee .st-node[data-tone="good"] { --st-tone: var(--st-good); --st-tone-soft: #cdebd8; --st-tone-wash: #f0f8f4; }
+.mil-ui.report-generator-app #report-shopee .st-node[data-tone="bad"] { --st-tone: var(--st-bad); --st-tone-soft: #f6cdc4; --st-tone-wash: #fdf2f1; }
+.mil-ui.report-generator-app #report-shopee .st-node[data-tone="flat"] { --st-tone: var(--st-flat); --st-tone-soft: #e1e6ef; --st-tone-wash: #f7f8f9; }
 
 /* Cards: name + pill on top, the two periods beneath. */
 .mil-ui.report-generator-app #report-shopee .st-node {
