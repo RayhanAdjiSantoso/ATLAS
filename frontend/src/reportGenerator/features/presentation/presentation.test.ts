@@ -3,6 +3,7 @@ import test from 'node:test';
 import { fromDisplayRow, shortMiddle, tableBlock, L } from './data/helpers';
 import { defaultFileName, formatCell, formatCompact, formatDelta, formatValue, parseCell, parseDelta, periodLabelFromDates } from './format';
 import { mergeDocuments } from './merge';
+import { differingPeriods, lastFinishedMonths, mostCommonPeriod, newestRun, runPeriod, samePeriod, validPeriod } from './periods';
 import { LAYOUTS, MAX_TABLE_PAGES, applyLanguage, planDocument, visibleSlides } from './plan';
 import type { KpiBlock, PresentationConfig, Snapshot, TableBlock } from './types';
 import { exportableSlides, factsForSlide, isEmptySlide, reviewDocument } from './validate';
@@ -282,4 +283,33 @@ test('editing a slide a teammate deleted is a conflict, not a silent loss', () =
   mine.slides[2].headline = 'Masih saya kerjakan';
   theirs.slides.splice(2, 1);
   assert.deepEqual(mergeDocuments(base, mine, theirs).conflicts, [base.slides[2].title]);
+});
+
+const SEP = { curStart: '2026-09-01', curEnd: '2026-09-30', oldStart: '2026-08-01', oldEnd: '2026-08-31' };
+const OCT = { curStart: '2026-10-01', curEnd: '2026-10-31', oldStart: '2026-09-01', oldEnd: '2026-09-30' };
+
+test('the deck takes the period most channels use; a tie takes the newest', () => {
+  assert.deepEqual(mostCommonPeriod([SEP, SEP, OCT]), SEP);
+  assert.deepEqual(mostCommonPeriod([SEP, OCT]), OCT);
+  assert.equal(mostCommonPeriod([]), null);
+  assert.equal(mostCommonPeriod([{ ...SEP, curStart: '' }]), null, 'an unfinished date range decides nothing');
+});
+
+test('channels on different periods are all named; agreeing ones raise nothing', () => {
+  const meta = { name: 'Meta', period: SEP };
+  const shopee = { name: 'Shopee', period: OCT };
+  assert.deepEqual(differingPeriods([meta, { name: 'Google', period: { ...SEP } }]), []);
+  assert.deepEqual(differingPeriods([meta, shopee]).map((c) => c.name), ['Meta', 'Shopee']);
+  assert.deepEqual(differingPeriods([meta]), []);
+});
+
+test('a default report is the newest, and the fullest of those', () => {
+  const run = (id: number, p: typeof SEP) => ({ id, periodCurStart: p.curStart, periodCurEnd: p.curEnd, periodOldStart: p.oldStart, periodOldEnd: p.oldEnd });
+  const check = run(1, { curStart: '2026-10-29', curEnd: '2026-10-31', oldStart: '2026-10-26', oldEnd: '2026-10-28' });
+  assert.equal(newestRun([run(3, SEP), check, run(2, OCT)])?.id, 2);
+  assert.equal(newestRun([{ id: 9, periodCurStart: null, periodCurEnd: null, periodOldStart: null, periodOldEnd: null }]), null);
+  assert.equal(runPeriod({ periodCurStart: 'x', periodCurEnd: null, periodOldStart: null, periodOldEnd: null }), null);
+  assert.ok(samePeriod(SEP, { ...SEP }));
+  assert.ok(!validPeriod({ ...SEP, curStart: '2026-12-01' }), 'start after end');
+  assert.deepEqual(lastFinishedMonths(new Date(2026, 10, 1)), { curStart: '2026-10-01', curEnd: '2026-10-31', oldStart: '2026-09-01', oldEnd: '2026-09-30' });
 });
