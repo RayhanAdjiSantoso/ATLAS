@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { SESSION_EXPIRED_FLAG, useAuth } from '../contexts/AuthContext.jsx';
+import MilLoader from './common/MilLoader.jsx';
 
 // `roles` limits a route to certain roles; `module` to roles that Pengaturan
 // Akses lets open that module. The server enforces both on every request —
@@ -11,13 +12,7 @@ export function ProtectedRoute({ roles, module, guestHome }) {
   const { user, loading, can, mustChangePassword } = useAuth();
   const location = useLocation();
 
-  if (loading) {
-    return (
-      <div className="auth-page">
-        <p>Memuat...</p>
-      </div>
-    );
-  }
+  if (loading) return <MilLoader />;
 
   if (!user) {
     // A session that ended for inactivity goes straight back to the form.
@@ -43,7 +38,7 @@ export function ProtectedRoute({ roles, module, guestHome }) {
 
 export function PublicRoute() {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <MilLoader />;
   // Every account lands on Beranda after signing in — the front door that
   // shows the day's pulse and leads on to each module.
   if (user) return <Navigate to="/" replace />;

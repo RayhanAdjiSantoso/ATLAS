@@ -13,9 +13,38 @@
          silently falling back to system-ui. Loading it here is what makes those
          pages render as their own stylesheet intends. -->
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Inter:wght@400..800&display=swap" rel="stylesheet" />
+    <!-- The MIL loader (components/common/MilLoader.jsx). Its styles live here,
+         not in a stylesheet, because the first loader is the markup inside
+         #root below: it shows while the app's own JS and CSS are still on the
+         way, and React replaces it on its first render. It stays invisible for
+         its first 300ms, so a fast load never flashes it. -->
+    <style>
+      .mil-loader{position:fixed;inset:0;z-index:50;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(ellipse at top,#eff6ff 0%,#fff 60%);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;--mil-t:0ms;animation:mil-in .26s cubic-bezier(.23,1,.32,1) .3s both}
+      .mil-loader.is-shown{animation:none}
+      .mil-loader-tile{position:relative;display:grid;place-items:center;width:64px;height:64px;border-radius:19px;background:linear-gradient(160deg,#2f54d4,#1e3eb8);box-shadow:0 18px 40px -18px rgba(30,62,184,.6),inset 0 1px 0 rgba(255,255,255,.18)}
+      .mil-loader-tile::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:0 0 0 0 rgba(47,84,212,.35);animation:mil-ring 1.6s cubic-bezier(.23,1,.32,1) calc(var(--mil-t) + .62s) infinite}
+      .mil-loader svg{width:34px;height:34px;fill:#fff;overflow:visible}
+      .mil-loader rect,.mil-loader circle{transform-box:fill-box;transform-origin:50% 100%}
+      .mil-loader rect{animation:mil-bar 1.6s cubic-bezier(.23,1,.32,1) infinite}
+      .mil-loader rect:nth-of-type(1){animation-delay:var(--mil-t)}
+      .mil-loader rect:nth-of-type(2){animation-delay:calc(var(--mil-t) + 90ms)}
+      .mil-loader rect:nth-of-type(3){animation-delay:calc(var(--mil-t) + 180ms)}
+      .mil-loader rect:nth-of-type(4){animation-delay:calc(var(--mil-t) + 270ms)}
+      .mil-loader circle{transform-origin:50% 50%;animation:mil-dot 1.6s cubic-bezier(.23,1,.32,1) var(--mil-t) infinite}
+      .mil-loader-text{margin:0;color:#57677e;font-size:12.5px;font-weight:600;letter-spacing:.02em}
+      @keyframes mil-in{from{opacity:0}to{opacity:1}}
+      @keyframes mil-bar{0%{transform:scaleY(.3)}26%{transform:scaleY(1.07)}34%,70%{transform:scaleY(1)}88%,100%{transform:scaleY(.3)}}
+      @keyframes mil-dot{0%,24%{opacity:0;transform:translateY(-70%) scale(.6)}38%{opacity:1;transform:translateY(12%) scale(1.08,.9)}46%,70%{opacity:1;transform:none}86%,100%{opacity:0;transform:scale(.5)}}
+      @keyframes mil-ring{0%{box-shadow:0 0 0 0 rgba(47,84,212,.35)}60%,100%{box-shadow:0 0 0 14px rgba(47,84,212,0)}}
+      @media (prefers-reduced-motion:reduce){
+        .mil-loader rect,.mil-loader circle,.mil-loader-tile::after{animation:none}
+        .mil-loader-tile{animation:mil-breathe 1.8s ease-in-out infinite alternate}
+        @keyframes mil-breathe{from{opacity:1}to{opacity:.6}}
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="mil-loader" role="status"><span class="mil-loader-tile"><svg viewBox="96 50 328 358" aria-hidden="true" focusable="false"><rect x="120" y="300" width="52" height="92" rx="20"/><rect x="196" y="244" width="52" height="148" rx="20"/><rect x="272" y="188" width="52" height="204" rx="20"/><rect x="348" y="132" width="52" height="260" rx="20"/><circle cx="374" cy="96" r="30"/></svg></span><p class="mil-loader-text">Menyiapkan ATLAS…</p></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
