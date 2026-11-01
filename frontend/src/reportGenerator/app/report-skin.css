@@ -66,6 +66,43 @@
 }
 .mil-ui.report-generator-app .sec-download-btn:hover { border-color: var(--rs-accent); background: var(--rs-accent-soft); color: var(--rs-accent); }
 
+/* PNG with a choice: the whole card or one piece of it (SectionDownloadButton `parts`). */
+.mil-ui.report-generator-app .sec-download-menu-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.mil-ui.report-generator-app .sec-download-btn[aria-expanded='true'] { border-color: var(--rs-accent); background: var(--rs-accent-soft); color: var(--rs-accent); }
+.mil-ui.report-generator-app .sec-download-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--rs-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 36px -18px rgba(15, 26, 58, .45);
+  transform-origin: top right;
+  animation: sec-dl-menu-in .14s cubic-bezier(.23, 1, .32, 1);
+}
+.mil-ui.report-generator-app .sec-download-menu button {
+  padding: .5rem .7rem;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--rs-ink);
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.mil-ui.report-generator-app .sec-download-menu button:hover,
+.mil-ui.report-generator-app .sec-download-menu button:focus-visible { background: var(--rs-accent-soft); color: var(--rs-accent); outline: none; }
+@keyframes sec-dl-menu-in { from { opacity: 0; transform: scale(.97) translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) {
+  .mil-ui.report-generator-app .sec-download-menu { animation: none; }
+}
+
 /* ── Section workspace: navigator left, one section right ─────────────────── */
 .mil-ui.report-generator-app .sdeck {
   display: grid;

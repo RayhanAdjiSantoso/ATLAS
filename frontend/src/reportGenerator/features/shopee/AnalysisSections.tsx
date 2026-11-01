@@ -6,7 +6,8 @@ import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { ParetoChart } from '../../components/ParetoChart';
 import { SearchSelect } from '../../components/SearchSelect';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
-import { SectionDownloadButton } from '../../components/SectionDownloadButton';
+import { SectionDownloadButton, type SectionPart } from '../../components/SectionDownloadButton';
+import { growTableType, resetTableType } from '../../components/fitTableType';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
 import { useInlineMetricEditor } from '../../hooks/useInlineMetricEditor';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
@@ -224,8 +225,9 @@ export function DataTable<T>({
 
 // ── Table changes beside root cause, one height ──────────────────────────
 // The values table and the symptom tree sit side by side; whichever is
-// shorter grows to the other's height. A short table gets taller rows (the
-// table's height is raised and the browser spreads it over its rows); a short
+// shorter grows to the other's height. A short table first gets bigger type
+// (fitTableType), then taller rows for what is left (the table's height is
+// raised and the browser spreads it over its rows); a short
 // tree gets taller nodes (--st-node-h, which the connector elbows are drawn
 // from, so the rails stay aligned). Re-measured whenever either side resizes
 // — a section opened from hidden, a metric added or removed, the window
@@ -245,6 +247,7 @@ export function EqualSplit({ className = '', children }: { className?: string; c
       if (!main || !aside || !table || !tree) return;
       busy = true;
       table.style.height = '';
+      resetTableType(table);
       tree.style.removeProperty('--st-node-h');
       const mainBox = main.getBoundingClientRect();
       const asideBox = aside.getBoundingClientRect();
@@ -252,7 +255,10 @@ export function EqualSplit({ className = '', children }: { className?: string; c
       if (sideBySide) {
         const gap = asideBox.height - mainBox.height;
         if (gap > 2) {
-          table.style.height = `${table.getBoundingClientRect().height + gap}px`;
+          // The slack goes to bigger type first, then to the rows.
+          const target = table.getBoundingClientRect().height + gap;
+          growTableType(table, target);
+          table.style.height = `${target}px`;
         } else if (gap < -2) {
           const nodes = tree.querySelectorAll<HTMLElement>('.st-node');
           let nodeH = parseFloat(getComputedStyle(tree).getPropertyValue('--st-node-h')) || 38;
@@ -337,6 +343,12 @@ function FundamentalValuesTable({ values: allValues, p1, p2 }: { values: FunnelV
   );
 }
 
+// The table and the Root Cause card can each be downloaded on their own.
+const FA_PNG_PARTS: SectionPart[] = [
+  { label: 'Tabel saja', name: 'Tabel', selector: '.fa-values' },
+  { label: 'Root Cause saja', name: 'Root Cause', selector: '.sympt-panel' },
+];
+
 export function FundamentalAnalysisSection({
   values,
   atcNote,
@@ -363,7 +375,7 @@ export function FundamentalAnalysisSection({
       <div className="sec-heading shopee-heading">
         Fundamental Analysis <span className="sec-badge">Semua Iklan · Product Ads + Shop+ Ads · funnel decomposition</span>
         <SectionExcelButton />
-        <SectionDownloadButton />
+        <SectionDownloadButton parts={FA_PNG_PARTS} />
       </div>
       <div style={{ padding: '1.1rem 1.4rem 0' }}>
         <EqualSplit>
