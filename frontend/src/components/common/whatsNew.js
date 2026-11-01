@@ -26,6 +26,22 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'shopee-cost-lens',
+    released: '2026-11-01',
+    path: '/report-generator/shopee',
+    target: '[data-feature="shopee-cost-lens"]',
+    title: 'Biaya di Traffic dan Conversion Analysis',
+    body: 'Pilih metrik di toggle, misalnya Conversion Rate. Grafik dan tabel lalu menampilkan biayanya di sebelahnya, seperti Cost per Conversion dan CPC, lengkap dengan periode lalu. Grafik menyorot 5 teratas, tabel memuat semuanya.',
+  },
+  {
+    id: 'archive-run-cards',
+    released: '2026-11-01',
+    path: '/report-generator',
+    target: '.panel.active .saved-src-card',
+    title: 'Satu klik untuk dua periode dari Arsip',
+    body: 'Di Arsip Laporan, klik satu kartu analisa untuk mengisi Periode Lalu dan Periode Ini sekaligus. Kartu juga bisa diberi nama, misalnya "Week 2 report", supaya mudah ditemukan lagi.',
+  },
+  {
     id: 'meta-ad-preview-link',
     released: '2026-10-29',
     path: '/report-generator',
