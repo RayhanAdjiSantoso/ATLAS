@@ -136,6 +136,7 @@ because adding different periods would mean nothing.
 | Source fails to load | Other sources continue; Review shows an error |
 | Block removed after a refresh | Slide shows "Data not available"; Review lists it |
 | Saved report's dates differ from the deck | Its columns use its own period labels; Review warns |
+| Google Ads or Revenue Data stops before the period ends | Review warns, so a partial month is not read as a real decline |
 
 Offline sales, organic social, activations and client data have no ATLAS source. They
 go on Supporting Data slides, entered manually and tagged with their source so they
