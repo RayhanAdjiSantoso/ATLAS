@@ -44,6 +44,7 @@ function ageRank(label: string): number {
 }
 
 interface Cell {
+  old: number | null;
   cur: number | null;
   deltaNum: number | null;
   delta: string;
@@ -63,6 +64,7 @@ export function MetaChangesTable({
   initialSort,
   initialDir = 'desc',
   linkCol = null,
+  withOld = false,
 }: {
   rows: SheetRow[];
   oldRows: SheetRow[];
@@ -81,6 +83,10 @@ export function MetaChangesTable({
   initialDir?: 'asc' | 'desc';
   // The column holding each row's preview link (lib/metaAudience findPreviewCol).
   linkCol?: string | null;
+  // A chart pick's table: last period's value written under this one (its
+  // own column in the Excel export), and only the picked metric — the first
+  // — judged green or red; its costs read neutral.
+  withOld?: boolean;
 }) {
   const isAge = dimCol.toLowerCase().includes('age');
   const hasOld = oldRows.length > 0;
@@ -100,6 +106,7 @@ export function MetaChangesTable({
           const o = mOld ? ((mOld[key] ?? null) as number | null) : null;
           const { deltaNum, deltaStr } = prev ? computeDelta(o, c) : { deltaNum: null, deltaStr: 'New' };
           cells[key] = {
+            old: o,
             cur: c,
             deltaNum,
             delta: c === null ? '—' : formatDeltaID(deltaNum, deltaStr),
@@ -112,6 +119,7 @@ export function MetaChangesTable({
       .sort((a, b) => (isAge ? ageRank(a.label) - ageRank(b.label) : 0) || a.label.localeCompare(b.label, 'id'));
   }, [rows, oldRows, dimCol, kind, leadKind, metrics, isAge, linkCol]);
   const hasLinks = table.some((r) => r.links.length > 0);
+  const showOld = withOld && hasOld;
 
   const firstKey = initialSort ?? (isAge ? null : metrics[0] ? String(metrics[0].key) : null);
   const [sort, setSort] = useState<SortKey>(firstKey ? { id: firstKey, dir: initialDir } : null);
@@ -151,6 +159,7 @@ export function MetaChangesTable({
       <p className="chart-caption">
         Klik judul kolom mana pun untuk mengurutkan — {metrics.map((m) => m.label).join(', ')} berbagi satu tabel agar satu {dimNoun} bisa dibaca sekaligus
         {hasOld ? <>; %Chg dibandingkan {p1}.</> : '.'}
+        {showOld && <> Angka tebal = {p2}; angka abu-abu di bawahnya = {p1}.</>}
       </p>
       <div style={{ maxHeight: MAX_HEIGHT, overflow: 'auto' }}>
         <table className="kpi-table meta-changes-table">
@@ -163,7 +172,7 @@ export function MetaChangesTable({
               </th>
               {hasLinks && <th rowSpan={2} data-feature="meta-ad-preview-link" style={{ ...NUM, textAlign: 'left' }}>Preview</th>}
               {metrics.map((m) => (
-                <th key={String(m.key)} colSpan={hasOld ? 2 : 1} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th key={String(m.key)} colSpan={hasOld ? 2 : 1} data-xl-colspan={showOld ? 3 : undefined} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                   {m.label}
                 </th>
               ))}
@@ -173,6 +182,7 @@ export function MetaChangesTable({
                 const key = String(m.key);
                 return (
                   <Fragment key={key}>
+                    {showOld && <th className="xl-only">{p1}</th>}
                     {th(key, p2)}
                     {hasOld && th(`${key}__d`, '%Chg')}
                   </Fragment>
@@ -184,7 +194,7 @@ export function MetaChangesTable({
             {sorted.map((r, i) => (
               <tr key={r.label}>
                 <td style={{ textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</td>
-                <td style={{ textAlign: 'left' }}>{r.label}</td>
+                <td style={{ textAlign: 'left', minWidth: '14rem' }}>{r.label}</td>
                 {hasLinks && (
                   <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                     {r.links.length
@@ -197,13 +207,21 @@ export function MetaChangesTable({
                       : '—'}
                   </td>
                 )}
-                {metrics.map((m) => {
+                {metrics.map((m, mi) => {
                   const key = String(m.key);
                   const c = r.cells[key];
                   return (
                     <Fragment key={key}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{c?.cur === null || c?.cur === undefined ? '—' : fmtPivotVal(c.cur, m.fmt)}</td>
-                      {hasOld && <td style={{ whiteSpace: 'nowrap' }}>{c ? <DeltaPill cls={c.cls}>{c.delta}</DeltaPill> : '—'}</td>}
+                      {showOld && <td className="xl-only">{c?.old === null || c?.old === undefined ? '—' : fmtPivotVal(c.old, m.fmt)}</td>}
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {showOld ? (
+                          <span className="dt-was">
+                            <b>{c?.cur === null || c?.cur === undefined ? '—' : fmtPivotVal(c.cur, m.fmt)}</b>
+                            <small className="xl-skip">{c?.old === null || c?.old === undefined ? '—' : fmtPivotVal(c.old, m.fmt)}</small>
+                          </span>
+                        ) : c?.cur === null || c?.cur === undefined ? '—' : fmtPivotVal(c.cur, m.fmt)}
+                      </td>
+                      {hasOld && <td style={{ whiteSpace: 'nowrap' }}>{c ? <DeltaPill cls={showOld && mi > 0 ? 'delta-neutral' : c.cls}>{c.delta}</DeltaPill> : '—'}</td>}
                     </Fragment>
                   );
                 })}

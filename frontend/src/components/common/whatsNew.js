@@ -26,6 +26,14 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'meta-cost-lens',
+    released: '2026-11-01',
+    path: '/report-generator/meta',
+    target: '.panel.active [data-feature="meta-cost-lens"]',
+    title: 'Biaya di Traffic dan Conversion Analysis Meta',
+    body: 'Pilih metrik di toggle, misalnya Conversion Rate. Grafik dan tabel lalu menampilkan biayanya di sebelahnya, seperti Cost per Purchase dan Cost per Content View, lengkap dengan periode lalu. Grafik menyorot 5 teratas, tabel memuat semuanya.',
+  },
+  {
     id: 'shopee-cost-lens',
     released: '2026-11-01',
     path: '/report-generator/shopee',

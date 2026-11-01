@@ -36,17 +36,20 @@ import {
   BRAND_CONSIDERATION_RATE_METRICS,
   BRAND_TOP_EFFICIENCY_METRICS,
   B2B_AUDIENCE_TRAFFIC_METRICS,
-  B2B_TRAFFIC_METRICS,
+  B2B_TRAFFIC_VIEWS,
   RETAIL_AUDIENCE_CONVERSION_METRICS,
   SALES_CREATIVE_CONVERSION_METRICS,
   RETAIL_TOP_CONTENT_METRICS,
   SALES_AUDIENCE_TRAFFIC_METRICS,
   SALES_TRAFFIC_METRICS,
+  SALES_TRAFFIC_VIEWS,
+  SALES_CONVERSION_VIEWS,
   audienceTypeOf,
   findAdCol,
   findAdsetCol,
   NON_RETAIL_TOP_CONTENT_METRICS,
   type AudienceMetricDef,
+  type AudienceMetricViews,
 } from '../../lib/metaAudience';
 import { MetaCompareBars } from './MetaCompareBars';
 import { relabelMetaMenu as L, relabelMetaRows } from '../../lib/metaLabels';
@@ -794,15 +797,15 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
 
     // Non Retail has no Conversion Analysis.
     const menus = kind === 'b2b'
-      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_TRAFFIC_METRICS, conversion: null, creativeConversion: null, topContent: NON_RETAIL_TOP_CONTENT_METRICS }
-      : { audienceTraffic: SALES_AUDIENCE_TRAFFIC_METRICS, traffic: SALES_TRAFFIC_METRICS, conversion: RETAIL_AUDIENCE_CONVERSION_METRICS, creativeConversion: SALES_CREATIVE_CONVERSION_METRICS, topContent: RETAIL_TOP_CONTENT_METRICS };
+      ? { audienceTraffic: B2B_AUDIENCE_TRAFFIC_METRICS, traffic: B2B_AUDIENCE_TRAFFIC_METRICS, trafficViews: B2B_TRAFFIC_VIEWS, conversion: null, creativeConversion: null, topContent: NON_RETAIL_TOP_CONTENT_METRICS }
+      : { audienceTraffic: SALES_AUDIENCE_TRAFFIC_METRICS, traffic: SALES_TRAFFIC_METRICS, trafficViews: SALES_TRAFFIC_VIEWS, conversion: RETAIL_AUDIENCE_CONVERSION_METRICS, creativeConversion: SALES_CREATIVE_CONVERSION_METRICS, topContent: RETAIL_TOP_CONTENT_METRICS };
     const adsetCol = rows.length ? findAdsetCol(rows) : null;
     const noAdset = 'Bagian ini membandingkan performa per ad set. File yang diunggah tidak dipecah per Ad Set — export ulang dari Meta Ads Reporting dengan breakdown Ad set name.';
     const audienceBadge = `per ad set · NV · RM · ${period}`;
     // `ownLabels` keeps the menu's own short names (Conversion Analysis reads
     // "Conversion Rate", not the report-wide "Conversion Rate (CVR)").
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const bars = (title: string, b: string, menu: readonly AudienceMetricDef<any>[], level: 'adset' | 'creative', ownLabels = false) => (
+    const bars = (title: string, b: string, menu: readonly AudienceMetricDef<any>[], level: 'adset' | 'creative', ownLabels = false, views?: AudienceMetricViews) => (
       <MetaCompareBars
         key={title}
         heading={`${prefix} · ${title}`}
@@ -821,6 +824,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         emptyMessage={empty(level === 'adset' ? noAdset : noAd)}
         changes={changes}
         minSpend={level === 'adset' ? AUDIENCE_MIN_SPEND : undefined}
+        views={views}
       />
     );
     return (
@@ -828,14 +832,14 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
         {overall}
         {page('Traffic Analysis', audienceBadge, (
           <>
-            {bars('Traffic Analysis by Audience', audienceBadge, menus.audienceTraffic, 'adset')}
-            {bars('Traffic Analysis by Creative', creativeBadge, menus.traffic, 'creative')}
+            {bars('Traffic Analysis by Audience', audienceBadge, menus.audienceTraffic, 'adset', false, menus.trafficViews)}
+            {bars('Traffic Analysis by Creative', creativeBadge, menus.traffic, 'creative', false, menus.trafficViews)}
           </>
         ))}
         {menus.conversion && menus.creativeConversion && page('Conversion Analysis', audienceBadge, (
           <>
-            {bars('Conversion Analysis by Audience', audienceBadge, menus.conversion, 'adset', true)}
-            {bars('Conversion Analysis by Creative', creativeBadge, menus.creativeConversion, 'creative', true)}
+            {bars('Conversion Analysis by Audience', audienceBadge, menus.conversion, 'adset', true, SALES_CONVERSION_VIEWS)}
+            {bars('Conversion Analysis by Creative', creativeBadge, menus.creativeConversion, 'creative', true, SALES_CONVERSION_VIEWS)}
           </>
         ))}
         {bars('Top Content Analysis by Creative', creativeBadge, menus.topContent, 'creative')}

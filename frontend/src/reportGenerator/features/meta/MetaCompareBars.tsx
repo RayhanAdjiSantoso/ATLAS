@@ -1,10 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Copy } from 'lucide-react';
+import { CostLensChart } from '../../components/CostLensChart';
 import { GroupedBarChart, type BarSeries } from '../../components/GroupedBarChart';
 import { SectionDownloadButton } from '../../components/SectionDownloadButton';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { AGE_ORDER, isAllValue } from '../../lib/meta';
-import { AUDIENCE_TYPE_LABEL, audienceTypeOf, findAdCol, findPreviewCol, leadMenuFor, metricsFor, type AudienceMetricDef, type AudienceType, type MetaMetricKind } from '../../lib/metaAudience';
+import { AUDIENCE_TYPE_LABEL, audienceTypeOf, findAdCol, findPreviewCol, leadMenuFor, metricsFor, type AudienceMetricDef, type AudienceMetricViews, type AudienceType, type MetaMetricKind } from '../../lib/metaAudience';
 import { leadResultKind, type LeadResultKind } from '../../lib/metaFunnel';
 import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { SheetRow } from '../../lib/types';
@@ -44,8 +45,12 @@ const TYPE_COLOR: Record<TypeKey | 'all', string> = {
 const TYPE_ORDER: TypeKey[] = ['NV', 'RM', 'NV+RM', 'other'];
 const SHORT: Record<TypeKey, string> = { NV: 'NV', RM: 'RM', 'NV+RM': 'NV + RM', other: 'Lainnya' };
 const MAX_BARS = 15;
+// The cost lens shows the top few only — the changes table holds every item.
+const LENS_ITEMS = 5;
 // The previous period's bar sits beside each item in the same hue, faded.
 const fade = (c: string | string[]) => (Array.isArray(c) ? c.map((x) => `${x}66`) : `${c}66`);
+// A cost going up is bad news (the changes table reads it the same way).
+const isCost = (key: string) => /^cost|^cpm$|^cpc$/i.test(key);
 
 function ageRank(label: string): number {
   const i = AGE_ORDER.findIndex((a) => a.toLowerCase() === label.toLowerCase());
@@ -86,6 +91,7 @@ export function MetaCompareBars({
   hideDefaultOrder = false,
   minImpressions,
   minSpend,
+  views,
 }: {
   heading: string;
   badge: string;
@@ -116,6 +122,10 @@ export function MetaCompareBars({
   // Only items that spent more than this (Rp) this period — the same floor,
   // read on spend.
   minSpend?: number;
+  // The switch's picks as menu keys, the result first and its costs after —
+  // the chart then reads each item across its result and costs
+  // (CostLensChart) and the changes table holds just those metrics.
+  views?: AudienceMetricViews;
 }) {
   const typeOf = (r: SheetRow): TypeKey => (campCol ? audienceTypeOf(r[campCol]) : null) ?? 'other';
   const leadKind = useMemo(() => leadKindProp ?? leadResultKind(rows), [leadKindProp, rows]);
@@ -211,11 +221,21 @@ export function MetaCompareBars({
 
   const metrics = useMemo(() => menu.filter((m) => groups.some((g) => g.total[m.key as string] !== null && g.total[m.key as string] !== undefined)), [menu, groups]);
   const missing = menu.filter((m) => !metrics.includes(m));
+  // Each pick resolved to the metrics this file can compute; a pick whose
+  // result it cannot compute is dropped.
+  const picks = useMemo(() => {
+    if (!views) return null;
+    return views
+      .map((keys) => ({ keys, defs: keys.map((k) => metrics.find((m) => String(m.key) === k)).filter((m): m is (typeof metrics)[number] => !!m) }))
+      .filter((v) => v.defs.length > 0 && String(v.defs[0].key) === v.keys[0])
+      .map((v) => v.defs);
+  }, [views, metrics]);
 
   const [pick, setPick] = useState('0');
   const [order, setOrder] = useState<Order>(sortable ? 'desc' : 'default');
   const [copied, setCopied] = useState<string | null>(null);
-  const metric = metrics[Number(pick)] ?? metrics[0];
+  const picked = picks ? picks[Number(pick)] ?? picks[0] ?? null : null;
+  const metric = picks ? picked?.[0] : metrics[Number(pick)] ?? metrics[0];
   const val = (m: Record<string, unknown> | null | undefined) => (metric && m ? ((m[metric.key as string] ?? null) as number | null) : null);
   const fmt = (v: number) => fmtPivotVal(v, metric?.fmt ?? 'num');
 
@@ -223,7 +243,8 @@ export function MetaCompareBars({
     if (!metric) return null;
     const usable = groups.filter((g) => val(g.total) !== null);
     const sorted = order === 'default' ? usable : [...usable].sort((a, b) => (order === 'desc' ? (val(b.total) as number) - (val(a.total) as number) : (val(a.total) as number) - (val(b.total) as number)));
-    const shown = order !== 'default' && sorted.length > MAX_BARS ? sorted.slice(0, MAX_BARS) : sorted;
+    const cap = picked && !(aud === 'split' && canSplit) ? LENS_ITEMS : MAX_BARS;
+    const shown = order !== 'default' && sorted.length > cap ? sorted.slice(0, cap) : sorted;
     const labels = shown.map((g) => g.label);
     let series: BarSeries[];
     let legend: TypeKey[] = [];
@@ -244,6 +265,7 @@ export function MetaCompareBars({
     }
     const ranked = [...usable].sort((a, b) => (val(b.total) as number) - (val(a.total) as number));
     return {
+      shown,
       labels,
       ticks: compactLabels(labels),
       series,
@@ -254,8 +276,10 @@ export function MetaCompareBars({
       low: ranked.length > 1 ? ranked[ranked.length - 1] : null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, oldGroups, hasOld, changes, metric, order, aud, canSplit, typesPresent, audience]);
+  }, [groups, oldGroups, hasOld, changes, metric, order, aud, canSplit, typesPresent, audience, picked]);
 
+  // NV vs RM side by side already doubles every bar; it keeps the plain chart.
+  const lens = picked && !(aud === 'split' && canSplit) ? picked : null;
   const mixedOnly = typesPresent.includes('NV+RM') && !hasNV && !hasRM;
   const noSide = mixedOnly ? 'Campaign di sini memakai NV dan RM dalam satu campaign — tidak bisa dipisah' : 'Tidak ada campaign dengan label ini di periode ini';
   const off = (ok: boolean): string | false => (ok ? false : noSide);
@@ -298,8 +322,14 @@ export function MetaCompareBars({
       {(metrics.length > 1 || audience !== 'none' || sortable) && (
         <div className="chart-controls" style={{ padding: '1.1rem 1.4rem 0' }}>
           {audience !== 'none' && campCol && <SegmentedToggle label="Audiens" options={audOptions} value={aud} onChange={setAud} accent="var(--acc)" />}
-          {metrics.length > 1 && (
-            <SegmentedToggle label="Metrik" options={metrics.map((m, i) => ({ value: String(i), label: m.label }))} value={pick} onChange={setPick} accent="var(--acc)" />
+          {(picks ? picks.length > 1 : metrics.length > 1) && (
+            <SegmentedToggle
+              label="Metrik"
+              options={(picks ? picks.map((v) => v[0]) : metrics).map((m, i) => ({ value: String(i), label: m.label }))}
+              value={pick}
+              onChange={setPick}
+              accent="var(--acc)"
+            />
           )}
           {sortable && (
             <SegmentedToggle
@@ -339,7 +369,7 @@ export function MetaCompareBars({
                 <End tone="low" g={view.low} />
               </div>
             )}
-            {(view.legend.length > 0 || (hasOld && changes)) && (
+            {(view.legend.length > 0 || (hasOld && changes && !lens)) && (
               <ul className="cb-legend" aria-label="Audiens">
                 {view.legend.map((t) => (
                   <li key={t}>
@@ -347,7 +377,7 @@ export function MetaCompareBars({
                     {AUDIENCE_TYPE_LABEL[t]}
                   </li>
                 ))}
-                {hasOld && changes && (
+                {hasOld && changes && !lens && (
                   <>
                     <li data-feature="meta-bars-periode-lalu">
                       <span style={{ background: fade('#5A6A90') as string }} aria-hidden="true" />
@@ -361,23 +391,56 @@ export function MetaCompareBars({
                 )}
               </ul>
             )}
-            <GroupedBarChart
-              labels={view.labels}
-              series={view.series}
-              formatValue={fmt}
-              height={320}
-              ariaLabel={`${heading}: ${metric.label} per ${dimNoun}`}
-              copyLabels={copyLabels}
-              legend={false}
-              tickLabels={view.ticks}
-            />
+            {lens ? (
+              <div data-feature="meta-cost-lens">
+              <CostLensChart
+                items={view.shown.map((g, i) => ({
+                  key: g.label,
+                  label: g.label,
+                  tick: view.ticks[i],
+                  color: aud === 'NV' || aud === 'RM' ? TYPE_COLOR[aud] : (audience === 'campaign' || audience === 'creative') && typesPresent.length ? TYPE_COLOR[g.type] : TYPE_COLOR.all,
+                }))}
+                metrics={lens.map((m) => {
+                  const key = String(m.key);
+                  const at = (x: Record<string, unknown> | null | undefined) => (x ? ((x[key] ?? null) as number | null) : null);
+                  return {
+                    key,
+                    label: m.label,
+                    format: (v: number) => fmtPivotVal(v, m.fmt),
+                    tone: isCost(key) ? 'lower-better' : 'higher-better',
+                    cur: view.shown.map((g) => at(g.total)),
+                    old: view.shown.map((g) => at(oldGroups.get(g.label)?.total)),
+                  };
+                })}
+                hasOld={hasOld && !!changes}
+                p1={changes?.p1 ?? ''}
+                p2={changes?.p2 ?? ''}
+                itemNoun={dimNoun}
+                color={TYPE_COLOR.all}
+                onLabelClick={copyLabels ? (it) => copy(it.label) : undefined}
+                copiedKey={copied}
+              />
+              </div>
+            ) : (
+              <GroupedBarChart
+                labels={view.labels}
+                series={view.series}
+                formatValue={fmt}
+                height={320}
+                ariaLabel={`${heading}: ${metric.label} per ${dimNoun}`}
+                copyLabels={copyLabels}
+                legend={false}
+                tickLabels={view.ticks}
+              />
+            )}
             <p className="chart-foot">
               {metric.label} per {dimNoun}
-              {hasOld && changes ? ` · batang pudar = ${changes.p1}` : ''}
+              {lens && lens.length > 1 ? `, dibaca bersama ${lens.slice(1).map((m) => m.label).join(' dan ')}` : ''}
+              {hasOld && changes && !lens ? ` · batang pudar = ${changes.p1}` : ''}
               {aud === 'NV' || aud === 'RM' ? ` · hanya campaign ${aud}` : aud === 'all' && audience !== 'none' && campCol ? ' · gabungan NV + RM' : ''}
               {eligible ? ` · hanya ${dimNoun} dengan ${floorText}` : ''}
-              {view.cut ? ` — ${MAX_BARS} ${order === 'asc' ? 'terendah' : 'tertinggi'} dari ${view.total} ditampilkan` : ''}.
-              {copyLabels ? ' Klik batang, nama di bawah grafik, atau nama Tertinggi/Terendah untuk menyalin nama lengkapnya.' : ''}
+              {view.cut ? ` — ${view.shown.length} ${order === 'asc' ? 'terendah' : 'tertinggi'} dari ${view.total} ditampilkan` : ''}.
+              {copyLabels ? (lens ? ' Klik nama di grafik atau nama Tertinggi/Terendah untuk menyalin nama lengkapnya.' : ' Klik batang, nama di bawah grafik, atau nama Tertinggi/Terendah untuk menyalin nama lengkapnya.') : ''}
               {note ? <> {note}</> : null}
             </p>
           </>
@@ -391,7 +454,8 @@ export function MetaCompareBars({
             dimCol={dimCol}
             kind={kind}
             leadKind={leadKind}
-            metrics={metrics}
+            metrics={picked ?? metrics}
+            withOld={!!picked}
             p1={changes.p1}
             p2={changes.p2}
             dimNoun={dimNoun}

@@ -257,6 +257,26 @@ export const SALES_TRAFFIC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>
   { key: 'ctr', label: 'Click-Through Rate', fmt: 'pct', additive: false },
 ];
 export const SALES_AUDIENCE_TRAFFIC_METRICS = SALES_TRAFFIC_METRICS;
+// The picks of a Traffic / Conversion switch: the result it ranks by, then
+// what that result cost — chart and changes table read exactly these keys.
+// On Retail and CPAS the click IS the content view (CTR is content views
+// over impressions), so its cost is Cost per Content Views.
+export type AudienceMetricViews = readonly (readonly string[])[];
+export const SALES_TRAFFIC_VIEWS: AudienceMetricViews = [
+  ['contentViews', 'costPerContentView'],
+  ['impressions', 'ctr', 'cpm'],
+  ['ctr', 'costPerContentView', 'cpm'],
+];
+export const SALES_CONVERSION_VIEWS: AudienceMetricViews = [
+  ['conversionRate', 'costPerPurchase', 'costPerContentView'],
+  ['visitToAtcRate', 'costPerAtc', 'costPerContentView'],
+  ['atcToPurchaseRate', 'costPerPurchase', 'costPerAtc'],
+];
+export const B2B_TRAFFIC_VIEWS: AudienceMetricViews = [
+  ['linkClicks', 'cpc'],
+  ['impressions', 'ctr', 'cpm'],
+  ['ctr', 'cpc', 'cpm'],
+];
 // Exactly the two metrics the sheet lists under each chart, in its order.
 export const SALES_CONVERSION_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
@@ -270,6 +290,7 @@ export const RETAIL_AUDIENCE_CONVERSION_METRICS: readonly AudienceMetricDef<Meta
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
   { key: 'costPerAtc', label: 'Cost per ATC', fmt: 'rp', additive: false },
   { key: 'costPerPurchase', label: 'Cost per Purchase', fmt: 'rp', additive: false },
+  { key: 'costPerContentView', label: 'Cost per Content Views', fmt: 'rp', additive: false },
 ];
 export const SALES_CLICK_ATC_METRICS: readonly AudienceMetricDef<MetaSalesMetrics>[] = [
   { key: 'contentViews', label: 'Content Views', fmt: 'num', additive: true },
@@ -287,6 +308,7 @@ export const SALES_CREATIVE_CONVERSION_METRICS: readonly AudienceMetricDef<MetaS
   { key: 'atcToPurchaseRate', label: 'Purchase Rate', fmt: 'pct', additive: false },
   { key: 'costPerAtc', label: 'Cost per ATC', fmt: 'rp', additive: false },
   { key: 'costPerPurchase', label: 'Cost per Purchase', fmt: 'rp', additive: false },
+  { key: 'costPerContentView', label: 'Cost per Content Views', fmt: 'rp', additive: false },
 ];
 
 // Non-Boost B2B Leads: the purchase steps do not exist; the lead is the
