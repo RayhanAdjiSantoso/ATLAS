@@ -14,6 +14,7 @@ import BrandDataPage from './pages/BrandDataPage.jsx';
 import BrandSettingLayout from './pages/BrandSettingLayout.jsx';
 import BrandTrackingLayout from './pages/BrandTrackingLayout.jsx';
 import AccessSettingsPage from './pages/AccessSettingsPage.jsx';
+import AttributionPage from './pages/AttributionPage.jsx';
 import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 
@@ -77,6 +78,7 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute roles={['admin']} />}>
             <Route path="/pengaturan-akses" element={<AccessSettingsPage />} />
+            <Route path="/atribusi-channel" element={<AttributionPage />} />
           </Route>
         </Route>
       </Route>
