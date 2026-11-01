@@ -90,6 +90,7 @@ const REFERENCE_LABELS = [
   [/^ads_reports\.brand_library_files$/, 'File di Data Collection Hub'],
   [/^ads_reports\.report_runs$/, 'Laporan tersimpan (Riwayat Laporan)'],
   [/^ads_reports\.ai_summaries$/, 'AI Consultant Brief'],
+  [/^ads_reports\.presentation_reports$/, 'Draft Presentation Report'],
   [/^ads_reports\.product_master$/, 'Referensi kategori produk'],
   [/^ads_reports\./, 'Data laporan'],
   [/^public\.brand_minutes$/, 'Catatan meeting (MOM)'],
@@ -209,7 +210,9 @@ export async function deleteBrandWithData(brandId) {
        UNION ALL SELECT r.storage_key FROM ads_reports.raw_uploads r JOIN ads_reports.report_runs rr ON rr.id = r.report_run_id
                  WHERE rr.brand_id = $1 AND r.storage_key IS NOT NULL
        UNION ALL SELECT s.storage_key FROM ads_reports.report_run_rowsets s JOIN ads_reports.report_runs rr ON rr.id = s.report_run_id
-                 WHERE rr.brand_id = $1`,
+                 WHERE rr.brand_id = $1
+       UNION ALL SELECT a.storage_key FROM ads_reports.presentation_assets a JOIN ads_reports.presentation_reports p ON p.id = a.report_id
+                 WHERE p.brand_id = $1 AND a.storage_key IS NOT NULL`,
       [brandId],
     );
     const unordered = (await listReferenceTables(client))

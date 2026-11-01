@@ -50,6 +50,7 @@ function App({ platform }: { platform?: string }) {
     google: googleDone ? '✓' : '—',
     business: '—',
     summary: doneCount === PLATFORM_CONFIG.length ? '✓' : `${doneCount}/${PLATFORM_CONFIG.length}`,
+    presentation: '—',
     reports: '—',
   };
 

@@ -40,6 +40,9 @@ app.use(cors({ origin: config.corsOrigin, credentials: true }));
 // Before the global parser on purpose: it needs a bigger body limit (see the router).
 app.use('/api/meta-ads-insights/ingest', metaAdsInsightsIngestRoutes);
 app.use('/api/google-ads/ingest', googleAdsIngestRoutes);
+// A presentation draft (narrative + analytic snapshot) outgrows the default
+// 100 KB; kept under what the hosting platform accepts for one request.
+app.use('/api/report-generator/presentations', express.json({ limit: '4mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

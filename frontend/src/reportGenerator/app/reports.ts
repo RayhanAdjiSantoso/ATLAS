@@ -8,7 +8,7 @@
 // ATLAS's brands table is (brand_id, brand_name) only. Porting it is backend
 // work — a migration plus routes — not a UI move, so it waits for its own
 // change.
-export type ReportKey = 'meta' | 'shopee' | 'tiktok' | 'google' | 'business' | 'summary' | 'reports';
+export type ReportKey = 'meta' | 'shopee' | 'tiktok' | 'google' | 'business' | 'summary' | 'presentation' | 'reports';
 
 export interface ReportNavItem {
   key: ReportKey;
@@ -81,6 +81,16 @@ export const REPORT_NAV: ReportNavItem[] = [
     accent: 'var(--sum)',
     tint: 'var(--sum-100)',
     mark: 'Σ',
+  },
+  {
+    key: 'presentation',
+    label: 'Presentation Report',
+    short: 'Presentation',
+    tagline: 'Monthly Overview 16:9',
+    desc: 'Monthly Overview 16:9 untuk meeting klien: disusun dari laporan tersimpan, narasinya bisa disunting, lalu diekspor ke PDF.',
+    accent: 'var(--acc)',
+    tint: 'var(--acc-100)',
+    mark: 'P',
   },
   {
     key: 'reports',
