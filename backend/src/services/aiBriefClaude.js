@@ -214,18 +214,20 @@ export function normaliseBrief(raw) {
   };
 }
 
-export async function generateBrief(prompt) {
+// One JSON answer locked to `schema`, with the error handling every Claude call
+// here shares. Also used by the Presentation Report Builder's narrative drafts.
+export async function requestClaudeJson({ system, prompt, schema, maxTokens = 16000 }) {
   let res;
   try {
     // Refusal fallback on by default for this model: a safety decline is
     // re-run on a fallback model inside the same call instead of failing.
     res = await getClient().beta.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 16000,
+      max_tokens: maxTokens,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      output_config: { effort: EFFORT, format: { type: 'json_schema', schema: BRIEF_SCHEMA } },
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      output_config: { effort: EFFORT, format: { type: 'json_schema', schema } },
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: prompt }],
     });
   } catch (err) {
@@ -249,5 +251,10 @@ export async function generateBrief(prompt) {
   } catch {
     throw new AiSummaryError('Jawaban Claude bukan JSON yang valid.');
   }
-  return { summary: normaliseBrief(parsed), model: res.model, usage: res.usage };
+  return { parsed, model: res.model, usage: res.usage };
+}
+
+export async function generateBrief(prompt) {
+  const { parsed, model, usage } = await requestClaudeJson({ system: SYSTEM_PROMPT, prompt, schema: BRIEF_SCHEMA });
+  return { summary: normaliseBrief(parsed), model, usage };
 }

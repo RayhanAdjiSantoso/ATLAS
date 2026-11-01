@@ -23,6 +23,13 @@ const PATHS: Record<ReportKey, ReactNode> = {
       <path d="m13.4 13.4 4.6 4.6" />
     </>
   ),
+  presentation: (
+    <>
+      <rect x="3.5" y="4.5" width="15" height="10" rx="1.5" />
+      <path d="M11 14.5v3M7.5 17.5h7" />
+      <path d="m7 11.5 2.5-2.5 2 1.5L15 7.5" />
+    </>
+  ),
   business: (
     <>
       <path d="M4 17h14" />

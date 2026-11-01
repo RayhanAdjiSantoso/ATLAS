@@ -234,6 +234,9 @@ export interface MetaOverviewRow {
   delta: string;
   deltaNum: number | null;
   cls: DeltaClassName;
+  // The unrounded figures behind `old`/`cur`, for the Presentation Report.
+  oldNum: number | null;
+  curNum: number | null;
   // The file's own columns that hold this same metric (see Spec.from/same);
   // OverviewDetailedCard keeps them out of "+ Tambah metrik".
   sameCols: string[];
@@ -284,6 +287,7 @@ export function buildMetaOverviewRows(
       key: s.key,
       label: cols.length && !s.fixedLabel ? cols[0] : s.label,
       old: format(v1, s.fmt), cur: format(v2, s.fmt), delta: formatDeltaID(deltaNum, deltaStr), deltaNum,
+      oldNum: v1, curNum: v2,
       cls: deltaClassForSentiment(deltaNum, s.sentiment),
       // A computed row that came out empty does not stand in for the column:
       // the raw figure stays on offer then.

@@ -5,6 +5,7 @@ import { reportsRouter } from './reportGenerator/reports.js';
 import { productMasterRouter } from './reportGenerator/productMaster.js';
 import { savedPeriodsRouter } from './reportGenerator/savedPeriods.js';
 import { aiSummaryRouter } from './reportGenerator/aiSummary.js';
+import { presentationsRouter } from './reportGenerator/presentations.js';
 
 // Performance Report Generator (Meta/Shopee/TikTok ads reports), merged in
 // as a page under ATLAS — same pattern as metaAutomationRoutes.js: one
@@ -22,5 +23,6 @@ router.use('/reports', reportsRouter);
 router.use('/product-master', productMasterRouter);
 router.use('/saved-periods', savedPeriodsRouter);
 router.use('/ai-summary', aiSummaryRouter);
+router.use('/presentations', presentationsRouter);
 
 export default router;

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { clearLibraryCatalog } from '../features/reports/LibraryFileSlot';
 import { Navigate, NavLink, useParams } from 'react-router-dom';
 import { MetaTab } from '../features/meta/MetaTab';
@@ -17,7 +17,11 @@ import { BRAND_KEYS, BrandLogo, type BrandKey } from '../components/BrandLogo';
 import { DISABLED_REPORTS, ENABLED_NAV, REPORT_NAV, isReportKey, reportByKey, type ReportKey } from './reports';
 import type { BizState } from '../lib/business';
 import type { PlatformKey, PlatformResultData, PlatformStateMap } from '../lib/summary';
-import { Archive, History, Layers, LayoutGrid } from 'lucide-react';
+import { Archive, History, Layers, LayoutGrid, Presentation } from 'lucide-react';
+
+// Loaded the first time it is opened: the Performance Report tabs carry none of
+// its code until someone asks for a presentation.
+const PresentationTab = lazy(() => import('../features/presentation/PresentationTab'));
 
 export interface GeneratorShellProps {
   // The report type to show. Comes from the URL; passed in because the
@@ -50,13 +54,19 @@ export interface GeneratorShellProps {
 // Ported from MRG's app/GeneratorShell.tsx. Two things differ: the route base
 // is /report-generator rather than /generate, and there is no BrandSettingsPage
 // branch (that page is not ported — see reports.ts).
-// Report types shown as band tabs: every enabled one except Riwayat.
-const TAB_REPORTS = REPORT_NAV.filter((r) => !DISABLED_REPORTS.includes(r.key) && r.key !== 'reports');
+// Report types shown as band tabs: every enabled one except Riwayat and the
+// Presentation Report. Those two are not Performance Report types, so they sit in
+// the band's corner and the tabs stay as they were.
+const TAB_REPORTS = REPORT_NAV.filter((r) => !DISABLED_REPORTS.includes(r.key) && r.key !== 'reports' && r.key !== 'presentation');
 
 export function GeneratorShell(props: GeneratorShellProps) {
   const params = useParams();
   const platform = props.platform ?? params.platform;
   useEffect(() => () => clearLibraryCatalog(), []);
+  const [presentationOpened, setPresentationOpened] = useState(platform === 'presentation');
+  useEffect(() => {
+    if (platform === 'presentation') setPresentationOpened(true);
+  }, [platform]);
   if (!isReportKey(platform) || DISABLED_REPORTS.includes(platform)) return <Navigate to="/report-generator/meta" replace />;
   const activeTab: ReportKey = platform;
   const active = reportByKey(activeTab);
@@ -90,6 +100,9 @@ export function GeneratorShell(props: GeneratorShellProps) {
           }))}
           aside={(
             <div className="band-action-row">
+              <NavLink to="/report-generator/presentation" className={`band-action${activeTab === 'presentation' ? ' is-on' : ''}`}>
+                <Presentation size={15} aria-hidden="true" /> Presentation Report
+              </NavLink>
               <NavLink to="/report-generator/reports" className={`band-action${activeTab === 'reports' ? ' is-on' : ''}`}>
                 <History size={15} aria-hidden="true" /> Riwayat laporan
               </NavLink>
@@ -107,7 +120,7 @@ export function GeneratorShell(props: GeneratorShellProps) {
           <dl className="rgx-stats">
             <div>
               <dt><LayoutGrid size={14} aria-hidden="true" /> Bagian laporan</dt>
-              <dd>{ENABLED_NAV.length}</dd>
+              <dd>{ENABLED_NAV.filter((r) => r.key !== 'presentation').length}</dd>
             </div>
             <div>
               <dt><Layers size={14} aria-hidden="true" /> Platform utama</dt>
@@ -154,6 +167,11 @@ export function GeneratorShell(props: GeneratorShellProps) {
             clientId={props.clientId}
           />
         <SummaryTab isActive={activeTab === 'summary'} platformState={props.platformState} bizState={props.bizState} />
+        {presentationOpened && (
+          <Suspense fallback={null}>
+            <PresentationTab key={`${props.clientId}-PresentationTab`} isActive={activeTab === 'presentation'} clientId={props.clientId} />
+          </Suspense>
+        )}
       </div>
     </div>
   );
