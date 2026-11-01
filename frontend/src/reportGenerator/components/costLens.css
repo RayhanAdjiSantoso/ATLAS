@@ -1,0 +1,129 @@
+/* ── Cost lens: a result beside what it cost (components/CostLensChart) ────
+   No color-mix() or modern colour functions here: html2canvas (section PNG
+   and PDF export) cannot parse them. */
+.cl {
+  --cl-good: #15803d;
+  --cl-good-bg: #e7f6ec;
+  --cl-bad: #c2261c;
+  --cl-bad-bg: #fdecea;
+  --cl-line: var(--rs-line, #e4e9f3);
+  --cl-rule: var(--rs-rule, #eef1f7);
+  margin: .2rem 0 1.1rem;
+}
+
+/* Key: the two periods by name, then what the value colours mean. */
+.cl-key { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem 1.3rem; margin: 0 0 .75rem; padding: 0; list-style: none; color: var(--rs-muted, #57677e); font-size: .75rem; font-weight: 600; }
+.cl-key li { display: inline-flex; align-items: center; gap: .45rem; }
+.cl-key b { color: var(--rs-ink, #202e45); font-weight: 750; }
+.cl-key em { font-style: normal; font-weight: 750; }
+.cl-key em.is-good { color: var(--cl-good); }
+.cl-key em.is-bad { color: var(--cl-bad); }
+.cl-key-bar { width: 22px; height: 9px; border-radius: 0 3px 3px 0; background: #475569; }
+.cl-key-bar.is-old { background: #cbd5e1; }
+.cl-key-note { margin-left: .2rem; color: var(--rs-quiet, #7a889f); font-size: .7rem; }
+
+.cl-grid { display: grid; border: 1px solid var(--cl-line); border-radius: 14px; background: #fff; }
+.cl-row {
+  display: grid;
+  grid-template-columns: var(--cl-cols);
+  align-items: stretch;
+  border-top: 1px solid var(--cl-rule);
+}
+.cl-row:last-child > :first-child { border-bottom-left-radius: 13px; }
+.cl-row:last-child > :last-child { border-bottom-right-radius: 13px; }
+.cl-row > * { min-width: 0; padding: .55rem .9rem; transition: background-color .15s ease; }
+.cl-row > * + * { border-left: 1px solid var(--cl-rule); }
+.cl-row:not(.cl-head):hover > * { background-color: #f6f8fc; }
+
+.cl-head { border-top: 0; }
+.cl-head > * { padding-top: .6rem; padding-bottom: .6rem; background-color: var(--rs-canvas, #f3f6fb); }
+.cl-head > :first-child { border-top-left-radius: 13px; }
+.cl-head > :last-child { border-top-right-radius: 13px; }
+.cl-head .cl-name { align-self: end; color: var(--rs-muted, #57677e); font-size: .68rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.cl-h { display: grid; align-content: end; gap: .1rem; }
+.cl-h small { overflow: hidden; color: var(--rs-quiet, #7a889f); font-size: .62rem; font-weight: 750; letter-spacing: .05em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.cl-h b { overflow: hidden; color: var(--rs-ink, #202e45); font-size: .8rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.cl-head > .cl-h.is-lead { padding-bottom: calc(.6rem - 2px); border-bottom: 2px solid var(--cl-accent); }
+.cl-h.is-lead small, .cl-h.is-lead b { color: var(--cl-accent); }
+
+.cl-name { position: relative; display: flex; align-items: center; gap: .6rem; }
+.cl-name i { flex: 0 0 auto; min-width: 1.1rem; color: var(--rs-quiet, #7a889f); font-size: .7rem; font-style: normal; font-weight: 750; }
+.cl-name > span:not(.cl-name-tip), .cl-name button {
+  overflow: hidden;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--rs-ink, #202e45);
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 650;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-name button { cursor: copy; }
+.cl-name button:hover { color: var(--cl-accent); }
+
+/* Full name on hover — quick, but not on a pass of the pointer. */
+.cl-name-tip {
+  position: absolute;
+  bottom: calc(100% - .35rem);
+  left: .6rem;
+  z-index: 4;
+  display: grid;
+  gap: .15rem;
+  width: max-content;
+  max-width: 26rem;
+  padding: .45rem .65rem;
+  border-radius: 9px;
+  background: #1e293b;
+  box-shadow: 0 10px 24px -12px rgba(15, 23, 42, .6);
+  color: #fff;
+  font-size: .76rem;
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition: opacity .12s ease-out, transform .12s ease-out, visibility 0s linear .12s;
+}
+.cl-name-tip small { color: #94a3b8; font-size: .66rem; font-weight: 600; }
+.cl-name:hover .cl-name-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity .12s ease-out .12s, transform .12s ease-out .12s, visibility 0s linear .12s;
+}
+.pdf-export-mode .cl-name-tip { display: none; }
+
+/* A cell: last period over this period — each a bar on its own track and
+   its value in a right-aligned column, so values never clip and read down
+   the column. */
+.cl-cell { display: grid; align-items: center; }
+.cl-bars { display: grid; gap: 4px; min-width: 0; }
+.cl-line { display: grid; grid-template-columns: minmax(18px, 1fr) auto; align-items: center; gap: .5rem; height: 15px; }
+.cl-track { display: block; min-width: 0; }
+.cl-bar { display: block; height: 10px; min-width: 2px; border-radius: 0 4px 4px 0; transition: width .3s cubic-bezier(.23, 1, .32, 1); }
+.cl-line em { min-width: 4.2rem; color: var(--rs-ink, #202e45); font-size: .76rem; font-style: normal; font-weight: 780; text-align: right; white-space: nowrap; }
+/* Last period: the same bar, pale but solid — never a hairline. */
+.cl-line.is-old .cl-bar { opacity: .3; }
+.cl-line.is-old em { color: var(--rs-muted, #57677e); font-size: .7rem; font-weight: 650; }
+/* This period's value says whether it got better (a cost: lower). */
+.cl-line em.is-good { color: var(--cl-good); }
+.cl-line em.is-bad { color: var(--cl-bad); }
+
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-bar { transition: none; }
+}
+
+/* A table under a cost lens: this period, last period muted beneath. In the
+   Excel export the muted line gives way to its own column (.xl-only), see
+   utils/exportExcel. */
+.kpi-table .dt-was { display: inline-grid; justify-items: end; gap: .1rem; line-height: 1.2; }
+.kpi-table .dt-was b { font-weight: 750; }
+.kpi-table .dt-was small { color: var(--rs-quiet, #7a889f); font-size: .72em; font-weight: 600; }
+.kpi-table .xl-only { display: none; }

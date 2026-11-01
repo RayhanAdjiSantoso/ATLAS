@@ -114,7 +114,7 @@ export function ShopeeReportSections({
           <ShopPlusReadSection
             key={id} title={title} badge={`${a.label} · per campaign & per keyword`}
             rankings={r.rankings} hasOld={r.hasOld} keywords={kw?.hasData ? kw[id] : null}
-            campaigns={kw?.campaigns ?? []} campaignOf={kw?.campaignOf ?? {}} p1={p1} p2={p2} color={color}
+            campaigns={kw?.campaigns ?? []} campaignOf={kw?.campaignOf ?? {}} p1={p1} p2={p2} color={color} views={r.views}
             emptyText={`Belum ada data ${a.label} periode ini.`}
           />
         );
@@ -124,6 +124,7 @@ export function ShopeeReportSections({
           key={id} title={title} badge={`${a.label} · ${a.source}`} itemLabel={a.itemLabel}
           rankings={r.rankings} hasCur={r.rankings[0]?.rows.length > 0} hasOld={r.hasOld}
           emptyText={`Belum ada data ${a.label} periode ini.`} oldMissingText={oldMissing} p1={p1} p2={p2}
+          views={r.views} color={color}
           chart={<RankingChart rankings={r.rankings} hasOld={r.hasOld} p1={p1} p2={p2} itemLabel={a.itemLabel} color={color} />}
         />
       );

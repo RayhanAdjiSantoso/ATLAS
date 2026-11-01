@@ -82,14 +82,16 @@ export interface ItemSums {
   // otherwise read as 0% ATC and push Purchase Rate past 100%.
   atcClicks: number;
   atcOrders: number;
+  // Spend of those same rows — what the ATCs counted above cost.
+  atcSpend: number;
 }
-const ZERO: ItemSums = { impressions: 0, clicks: 0, atc: 0, orders: 0, sold: 0, gmv: 0, spend: 0, viewers: 0, ordersDirect: 0, gmvDirect: 0, productViews: 0, productClicks: 0, atcClicks: 0, atcOrders: 0 };
+const ZERO: ItemSums = { impressions: 0, clicks: 0, atc: 0, orders: 0, sold: 0, gmv: 0, spend: 0, viewers: 0, ordersDirect: 0, gmvDirect: 0, productViews: 0, productClicks: 0, atcClicks: 0, atcOrders: 0, atcSpend: 0 };
 export const addItemSums = (a: ItemSums, b: ItemSums): ItemSums => ({
   impressions: a.impressions + b.impressions, clicks: a.clicks + b.clicks, atc: a.atc + b.atc, orders: a.orders + b.orders,
   sold: a.sold + b.sold, gmv: a.gmv + b.gmv, spend: a.spend + b.spend, viewers: a.viewers + b.viewers,
   ordersDirect: a.ordersDirect + b.ordersDirect, gmvDirect: a.gmvDirect + b.gmvDirect,
   productViews: a.productViews + b.productViews, productClicks: a.productClicks + b.productClicks,
-  atcClicks: a.atcClicks + b.atcClicks, atcOrders: a.atcOrders + b.atcOrders,
+  atcClicks: a.atcClicks + b.atcClicks, atcOrders: a.atcOrders + b.atcOrders, atcSpend: a.atcSpend + b.atcSpend,
 });
 
 function rowSums(row: SheetRow, h: Map<string, string>): ItemSums {
@@ -102,6 +104,7 @@ function rowSums(row: SheetRow, h: Map<string, string>): ItemSums {
   const reportsAtc = atcRaw !== '' && atcRaw !== '-';
   const clicks = v('jumlah klik');
   const orders = h.has('konversi') ? v('konversi') : v('pesanan');
+  const spend = v('biaya');
   return {
     impressions: v('dilihat'),
     clicks,
@@ -109,7 +112,7 @@ function rowSums(row: SheetRow, h: Map<string, string>): ItemSums {
     orders,
     sold: v('produk terjual'),
     gmv: v('omzet penjualan'),
-    spend: v('biaya'),
+    spend,
     viewers: v('penonton'),
     ordersDirect: v('konversi langsung'),
     gmvDirect: v('penjualan langsung (gmv langsung)'),
@@ -117,6 +120,7 @@ function rowSums(row: SheetRow, h: Map<string, string>): ItemSums {
     productClicks: v('jumlah klik produk'),
     atcClicks: reportsAtc ? clicks : 0,
     atcOrders: reportsAtc ? orders : 0,
+    atcSpend: reportsAtc ? spend : 0,
   };
 }
 
@@ -183,6 +187,10 @@ export const derived = {
   purchaseRate: (s: ItemSums) => (s.atc > 0 ? (s.atcOrders / s.atc) * 100 : null),
   roas: (s: ItemSums) => ratio(s.gmv, s.spend),
   cpa: (s: ItemSums) => ratio(s.spend, s.orders),
+  cpc: (s: ItemSums) => ratio(s.spend, s.clicks),
+  cpm: (s: ItemSums) => (s.impressions > 0 ? (s.spend / s.impressions) * 1000 : null),
+  costPerAtc: (s: ItemSums) => ratio(s.atcSpend, s.atc),
+  costPerViewer: (s: ItemSums) => ratio(s.spend, s.viewers),
 };
 
 export interface ChannelMetricDef {
@@ -198,7 +206,22 @@ export interface ChannelMetricRanking {
   metric: string;
   label: string;
   fmt: PivotFmt;
+  sentiment?: Sentiment;
   rows: ProductRankRow[];
+}
+
+// One pick of an analysis' metric switch: the metric it ranks by, then what
+// that result cost — the chart and the table both read exactly these.
+export interface ChannelMetricView {
+  key: string;
+  label: string;
+  metrics: readonly string[];
+}
+
+export interface ChannelRead {
+  rankings: ChannelMetricRanking[];
+  hasOld: boolean;
+  views?: readonly ChannelMetricView[];
 }
 
 function rankItems(oldItems: Map<string, ItemAgg>, curItems: Map<string, ItemAgg>, defs: readonly ChannelMetricDef[]): { rankings: ChannelMetricRanking[]; hasOld: boolean } {
@@ -220,7 +243,7 @@ function rankItems(oldItems: Map<string, ItemAgg>, curItems: Map<string, ItemAgg
       };
     });
     rows.sort((a, b) => (b.cur ?? -Infinity) - (a.cur ?? -Infinity));
-    return { metric: def.key, label: def.label, fmt: def.fmt, rows };
+    return { metric: def.key, label: def.label, fmt: def.fmt, sentiment: def.sentiment, rows };
   });
   return { rankings, hasOld };
 }
@@ -351,10 +374,29 @@ function potentialSessions(items: Map<string, ItemAgg>, count = 10): PotentialIt
 
 // ── Channel report ───────────────────────────────────────────────────────
 
+// Every rate is read beside what it cost. The cost metrics are ranked like
+// any other, but the switch never offers them on their own: each view below
+// opens on its result, then the costs that explain it.
+const COST = {
+  cpc: { key: 'cpc', label: 'Cost per Click (CPC)', fmt: 'rp', sentiment: 'lower-better', get: derived.cpc },
+  cpm: { key: 'cpm', label: 'Cost per Mille (CPM)', fmt: 'rp', sentiment: 'lower-better', get: derived.cpm },
+  cpa: { key: 'cpa', label: 'Cost per Conversion', fmt: 'rp', sentiment: 'lower-better', get: derived.cpa },
+  costPerAtc: { key: 'costPerAtc', label: 'Cost per ATC', fmt: 'rp', sentiment: 'lower-better', get: derived.costPerAtc },
+  costPerViewer: { key: 'costPerViewer', label: 'Cost per Penonton', fmt: 'rp', sentiment: 'lower-better', get: derived.costPerViewer },
+  spend: { key: 'spend', label: 'Biaya', fmt: 'rp', sentiment: 'neutral', get: (s) => s.spend },
+} as const satisfies Record<string, ChannelMetricDef>;
+
 const AD_TRAFFIC: readonly ChannelMetricDef[] = [
   { key: 'clicks', label: 'Clicks', fmt: 'num', sentiment: 'higher-better', get: (s) => s.clicks },
   { key: 'impressions', label: 'Impressions', fmt: 'num', sentiment: 'higher-better', get: (s) => s.impressions },
   { key: 'ctr', label: 'CTR', fmt: 'pct', sentiment: 'higher-better', get: derived.ctr },
+  COST.cpc,
+  COST.cpm,
+];
+const AD_TRAFFIC_VIEWS: readonly ChannelMetricView[] = [
+  { key: 'clicks', label: 'Clicks', metrics: ['clicks', 'cpc'] },
+  { key: 'impressions', label: 'Impressions', metrics: ['impressions', 'ctr', 'cpm'] },
+  { key: 'ctr', label: 'CTR', metrics: ['ctr', 'cpc', 'cpm'] },
 ];
 // Conversion Rate = Purchases ÷ Clicks, split into its two steps: Clicks →
 // ATC (ATC Rate) and ATC → Purchase (Purchase Rate).
@@ -362,6 +404,16 @@ const AD_CONVERSION: readonly ChannelMetricDef[] = [
   { key: 'cr', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.cr },
   { key: 'atcRate', label: 'ATC Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.atcRate },
   { key: 'purchaseRate', label: 'Purchase Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.purchaseRate },
+  COST.cpa,
+  COST.costPerAtc,
+  COST.cpc,
+];
+// A Shopee purchase IS its conversion, so Purchase Rate reads Cost per
+// Conversion too — one number, one name.
+const AD_CONVERSION_VIEWS: readonly ChannelMetricView[] = [
+  { key: 'cr', label: 'Conversion Rate', metrics: ['cr', 'cpa', 'cpc'] },
+  { key: 'atcRate', label: 'ATC Rate', metrics: ['atcRate', 'costPerAtc', 'cpc'] },
+  { key: 'purchaseRate', label: 'Purchase Rate', metrics: ['purchaseRate', 'cpa', 'costPerAtc'] },
 ];
 // Shop+ exports carry no Add-to-Cart, so Shop+ reads conversion by count,
 // rate and return instead of the ATC steps.
@@ -369,15 +421,37 @@ const TOKO_CONVERSION: readonly ChannelMetricDef[] = [
   { key: 'orders', label: 'Conversion', fmt: 'num', sentiment: 'higher-better', get: (s) => s.orders },
   { key: 'cr', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.cr },
   { key: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better', get: derived.roas },
+  COST.cpa,
+  COST.cpc,
+  COST.spend,
+];
+const TOKO_CONVERSION_VIEWS: readonly ChannelMetricView[] = [
+  { key: 'orders', label: 'Conversion', metrics: ['orders', 'cpa'] },
+  { key: 'cr', label: 'Conversion Rate', metrics: ['cr', 'cpa', 'cpc'] },
+  { key: 'roas', label: 'ROAS', metrics: ['roas', 'spend'] },
 ];
 const LIVE_TRAFFIC: readonly ChannelMetricDef[] = [
   { key: 'viewers', label: 'Penonton', fmt: 'num', sentiment: 'higher-better', get: (s) => s.viewers },
+  COST.costPerViewer,
 ];
+const LIVE_TRAFFIC_VIEWS: readonly ChannelMetricView[] = [{ key: 'viewers', label: 'Penonton', metrics: ['viewers', 'costPerViewer'] }];
 const LIVE_CONVERSION: readonly ChannelMetricDef[] = [
   { key: 'orders', label: 'Pesanan', fmt: 'num', sentiment: 'higher-better', get: (s) => s.orders },
   { key: 'liveCr', label: 'Conversion Rate', fmt: 'pct', sentiment: 'higher-better', get: derived.liveCr },
   { key: 'roas', label: 'ROAS', fmt: 'roas', sentiment: 'higher-better', get: derived.roas },
+  { ...COST.cpa, label: 'Cost per Pesanan' },
+  COST.costPerViewer,
+  COST.spend,
 ];
+const LIVE_CONVERSION_VIEWS: readonly ChannelMetricView[] = [
+  { key: 'orders', label: 'Pesanan', metrics: ['orders', 'cpa'] },
+  { key: 'liveCr', label: 'Conversion Rate', metrics: ['liveCr', 'cpa', 'costPerViewer'] },
+  { key: 'roas', label: 'ROAS', metrics: ['roas', 'spend'] },
+];
+const read = (oldItems: Map<string, ItemAgg>, curItems: Map<string, ItemAgg>, defs: readonly ChannelMetricDef[], views: readonly ChannelMetricView[]): ChannelRead => ({
+  ...rankItems(oldItems, curItems, defs),
+  views,
+});
 
 export interface ChannelAnalysis {
   key: ShopeeChannelKey;
@@ -386,8 +460,8 @@ export interface ChannelAnalysis {
   source: string; // which hub dataset(s) the tab reads
   hasData: boolean;
   totals: { old: ItemSums; cur: ItemSums };
-  traffic: { rankings: ChannelMetricRanking[]; hasOld: boolean };
-  conversion: { rankings: ChannelMetricRanking[]; hasOld: boolean };
+  traffic: ChannelRead;
+  conversion: ChannelRead;
   pareto: ParetoRow[];
   potentialItems: PotentialItem[];
   // Shop+ only: every ad group of both periods, side by side, and its keywords.
@@ -402,6 +476,7 @@ export interface ShopPlusKeywordRankings {
   all: ChannelMetricRanking[];
   byCampaign: ChannelMetricRanking[];
   hasOld: boolean;
+  views?: readonly ChannelMetricView[];
 }
 export interface ShopPlusKeywords {
   hasData: boolean;
@@ -421,7 +496,7 @@ const campaignKeyword = (r: SheetRow, h: Map<string, string>) => {
   return campaign && kw ? { key: `${campaign.toLowerCase()}\u0000${kw.toLowerCase()}`, name: kw } : null;
 };
 
-function buildShopPlusKeywords(oldRows: SheetRow[], curRows: SheetRow[], defsTraffic: readonly ChannelMetricDef[], defsConversion: readonly ChannelMetricDef[]): ShopPlusKeywords {
+function buildShopPlusKeywords(oldRows: SheetRow[], curRows: SheetRow[]): ShopPlusKeywords {
   const allOld = aggregate(oldRows, keywordOnly);
   const allCur = aggregate(curRows, keywordOnly);
   const pairOld = aggregate(oldRows, campaignKeyword);
@@ -438,16 +513,16 @@ function buildShopPlusKeywords(oldRows: SheetRow[], curRows: SheetRow[], defsTra
     const c = campaignOf[it.key];
     spendBy.set(c, (spendBy.get(c) ?? 0) + it.sums.spend);
   }
-  const rank = (defs: readonly ChannelMetricDef[]): ShopPlusKeywordRankings => {
+  const rank = (defs: readonly ChannelMetricDef[], views: readonly ChannelMetricView[]): ShopPlusKeywordRankings => {
     const all = rankItems(allOld, allCur, defs);
-    return { all: all.rankings, byCampaign: rankItems(pairOld, pairCur, defs).rankings, hasOld: all.hasOld };
+    return { all: all.rankings, byCampaign: rankItems(pairOld, pairCur, defs).rankings, hasOld: all.hasOld, views };
   };
   return {
     hasData: allCur.size > 0,
     campaigns: [...spendBy.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c),
     campaignOf,
-    traffic: rank(defsTraffic),
-    conversion: rank(defsConversion),
+    traffic: rank(AD_TRAFFIC, AD_TRAFFIC_VIEWS),
+    conversion: rank(TOKO_CONVERSION, TOKO_CONVERSION_VIEWS),
   };
 }
 
@@ -484,8 +559,8 @@ export function buildChannelAnalyses(input: ShopeeChannelInput): ChannelAnalysis
       key: 'produk', label: 'Product Ads', itemLabel: 'Produk',
       source: 'Data Keseluruhan Iklan + Iklan Produk Otomatis',
       hasData: has(produkTotals), totals: produkTotals,
-      traffic: rankItems(produkOld, produkCur, AD_TRAFFIC),
-      conversion: rankItems(produkOld, produkCur, AD_CONVERSION),
+      traffic: read(produkOld, produkCur, AD_TRAFFIC, AD_TRAFFIC_VIEWS),
+      conversion: read(produkOld, produkCur, AD_CONVERSION, AD_CONVERSION_VIEWS),
       pareto: paretoOf(produkCur, (s) => s.gmv),
       potentialItems: [],
     },
@@ -493,20 +568,20 @@ export function buildChannelAnalyses(input: ShopeeChannelInput): ChannelAnalysis
       key: 'toko', label: 'Shop+ Ads', itemLabel: 'Grup Iklan',
       source: 'Shop+ Ads Overall Data',
       hasData: has(tokoTotals), totals: tokoTotals,
-      traffic: rankItems(tokoOldItems, tokoCurItems, AD_TRAFFIC),
-      conversion: rankItems(tokoOldItems, tokoCurItems, TOKO_CONVERSION),
+      traffic: read(tokoOldItems, tokoCurItems, AD_TRAFFIC, AD_TRAFFIC_VIEWS),
+      conversion: read(tokoOldItems, tokoCurItems, TOKO_CONVERSION, TOKO_CONVERSION_VIEWS),
       // Pareto reads keywords only — which search terms earn the revenue.
       pareto: paretoOf(aggregate(input.tokoKeywordCur, keywordOnly), (s) => s.gmv),
       potentialItems: [],
       groups,
-      keywords: buildShopPlusKeywords(input.tokoKeywordOld, input.tokoKeywordCur, AD_TRAFFIC, TOKO_CONVERSION),
+      keywords: buildShopPlusKeywords(input.tokoKeywordOld, input.tokoKeywordCur),
     },
     {
       key: 'live', label: 'Live Ads', itemLabel: 'Sesi Live',
       source: 'Data Semua Iklan Live',
       hasData: has(liveTotals), totals: liveTotals,
-      traffic: rankItems(liveOld, liveCur, LIVE_TRAFFIC),
-      conversion: rankItems(liveOld, liveCur, LIVE_CONVERSION),
+      traffic: read(liveOld, liveCur, LIVE_TRAFFIC, LIVE_TRAFFIC_VIEWS),
+      conversion: read(liveOld, liveCur, LIVE_CONVERSION, LIVE_CONVERSION_VIEWS),
       pareto: paretoOf(liveCur, (s) => s.gmv),
       potentialItems: potentialSessions(liveCur),
     },

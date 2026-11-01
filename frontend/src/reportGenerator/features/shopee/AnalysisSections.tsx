@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Megaphone, Search } from 'lucide-react';
+import { CostLensChart } from '../../components/CostLensChart';
 import { DeltaPill } from '../../components/DeltaPill';
 import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { ParetoChart } from '../../components/ParetoChart';
@@ -12,6 +13,7 @@ import { fmtPivotVal } from '../../lib/shopeeDeepDivePivot';
 import type { FunnelTreeRow, FunnelValueRow } from '../../lib/shopeeFunnel';
 import type { SymptomSummary } from '../../lib/shopeeFunnelSummary';
 import type { ParetoRangeSelection, ParetoRow, ProductMetricRanking, ProductRankRow } from '../../lib/shopeeProductAnalysis';
+import type { Sentiment } from '../../lib/types';
 import { formatMonth } from '../reports/LibraryFileSlot';
 import { ParetoRangeControl } from './ProductAnalysisCharts';
 
@@ -60,6 +62,9 @@ export interface DataColumn<T> {
   // Omit to make the column unsortable. `null` values always sort last.
   sortValue?: (row: T, index: number) => string | number | null;
   render: (row: T, displayIndex: number) => ReactNode;
+  // Hidden on screen, kept in the Excel export (utils/exportExcel) — a
+  // figure the screen shows stacked inside a neighbouring cell.
+  xlOnly?: boolean;
 }
 
 export function DataTable<T>({
@@ -119,6 +124,7 @@ export function DataTable<T>({
       <th
         key={col.id}
         rowSpan={rowSpan}
+        className={col.xlOnly ? 'xl-only' : undefined}
         style={{ ...col.thStyle, cursor: col.sortValue ? 'pointer' : 'default', userSelect: 'none' }}
         onClick={() => !isEditing && handleHeaderClick(col)}
       >
@@ -162,7 +168,7 @@ export function DataTable<T>({
   // Top header row: ungrouped columns span both rows, each run of a group gets
   // one cell.
   const grouped = columns.some((c) => c.group);
-  const headTop: ({ col: DataColumn<T> } | { label: string; span: number })[] = [];
+  const headTop: ({ col: DataColumn<T> } | { label: string; span: number; xlSpan: number })[] = [];
   for (let i = 0; i < columns.length; ) {
     const g = columns[i].group;
     if (!g) {
@@ -172,7 +178,8 @@ export function DataTable<T>({
     }
     let j = i;
     while (j < columns.length && columns[j].group === g) j += 1;
-    headTop.push({ label: g, span: j - i });
+    const run = columns.slice(i, j);
+    headTop.push({ label: g, span: run.filter((c) => !c.xlOnly).length, xlSpan: run.length });
     i = j;
   }
 
@@ -187,7 +194,7 @@ export function DataTable<T>({
                   'col' in cell ? (
                     headerCell(cell.col, 2)
                   ) : (
-                    <th key={`g:${cell.label}`} colSpan={cell.span} className="th-group">
+                    <th key={`g:${cell.label}`} colSpan={cell.span} data-xl-colspan={cell.xlSpan !== cell.span ? cell.xlSpan : undefined} className="th-group">
                       {cell.label}
                     </th>
                   ),
@@ -203,7 +210,7 @@ export function DataTable<T>({
           {indexed.map(({ row }, displayIndex) => (
             <tr key={rowKey(row, displayIndex)} style={rowStyle?.(row)}>
               {columns.map((col) => (
-                <td key={col.id} style={col.tdStyle}>
+                <td key={col.id} style={col.tdStyle} className={col.xlOnly ? 'xl-only' : undefined}>
                   {col.render(row, displayIndex)}
                 </td>
               ))}
@@ -632,10 +639,28 @@ function mergeRankings(rankings: ProductMetricRanking[]): MergedRankRow[] {
 }
 
 // Any ranking of items (products, keywords, live sessions) by a few metrics.
-type RankingLike = Pick<ProductMetricRanking, 'label' | 'fmt' | 'rows'> & { metric: string };
+type RankingLike = Pick<ProductMetricRanking, 'label' | 'fmt' | 'rows'> & { metric: string; sentiment?: Sentiment };
+
+// One pick of a metric switch: the result it ranks by, then what it cost
+// (lib/shopeeChannelAnalysis ChannelMetricView).
+type ViewLike = { key: string; label: string; metrics: readonly string[] };
+
+// The views a switch offers, each resolved to its rankings (result first).
+// Without views every metric is its own pick, as before.
+function resolveViews(rankings: RankingLike[], views?: readonly ViewLike[]): { key: string; label: string; rankings: RankingLike[] }[] {
+  if (!views?.length) return rankings.map((r) => ({ key: r.metric, label: r.label, rankings: [r] }));
+  return views
+    .map((v) => ({ key: v.key, label: v.label, lead: v.metrics[0], rankings: v.metrics.map((m) => rankings.find((r) => r.metric === m)).filter((r): r is RankingLike => !!r) }))
+    .filter((v) => v.rankings[0]?.metric === v.lead)
+    .map(({ key, label, rankings: rs }) => ({ key, label, rankings: rs }));
+}
 
 // The numbers behind a ranking: every item, each metric a sortable column.
-function RankingTable({ rankings, hasOld, p1, p2, itemLabel }: { rankings: RankingLike[]; hasOld: boolean; p1: string; p2: string; itemLabel: string }) {
+// `withOld` is a switch pick's table: last period's value written under this
+// one, muted (beside it, three metrics × three columns would not fit the
+// card; the Excel export gets it as its own column), and only the picked
+// metric's change judged green or red — its costs read neutral.
+function RankingTable({ rankings, hasOld, p1, p2, itemLabel, withOld = false }: { rankings: RankingLike[]; hasOld: boolean; p1: string; p2: string; itemLabel: string; withOld?: boolean }) {
   const rows = mergeRankings(rankings as ProductMetricRanking[]);
 
   const columns: DataColumn<MergedRankRow>[] = [
@@ -646,7 +671,20 @@ function RankingTable({ rankings, hasOld, p1, p2, itemLabel }: { rankings: Ranki
   // header. Four or more would not fit the card side by side, so each metric
   // becomes one column with its %Chg stacked under the value.
   const stacked = hasOld && rankings.length > 3;
-  for (const ranking of rankings) {
+  rankings.forEach((ranking, idx) => {
+    const cls = (row: ProductRankRow) => (withOld && idx > 0 ? 'delta-neutral' : row.cls);
+    if (hasOld && !stacked && withOld) {
+      columns.push({
+        id: `${ranking.metric}__old`,
+        label: p1,
+        group: ranking.label,
+        xlOnly: true,
+        render: (r) => {
+          const old = r.by[ranking.metric]?.old;
+          return old === null || old === undefined ? '—' : fmtPivotVal(old, ranking.fmt);
+        },
+      });
+    }
     columns.push({
       id: ranking.metric,
       label: hasOld && !stacked ? p2 : ranking.label,
@@ -659,11 +697,20 @@ function RankingTable({ rankings, hasOld, p1, p2, itemLabel }: { rankings: Ranki
         const row = r.by[ranking.metric];
         const cur = row?.cur;
         const value = cur === null || cur === undefined ? '—' : fmtPivotVal(cur, ranking.fmt);
+        if (!stacked && withOld && hasOld) {
+          const old = row?.old;
+          return (
+            <span className="dt-was">
+              <b>{value}</b>
+              <small className="xl-skip">{old === null || old === undefined ? '—' : fmtPivotVal(old, ranking.fmt)}</small>
+            </span>
+          );
+        }
         if (!stacked) return value;
         return (
           <span className="dt-stack">
             <b>{value}</b>
-            {row && <DeltaPill cls={row.cls}>{row.delta}</DeltaPill>}
+            {row && <DeltaPill cls={cls(row)}>{row.delta}</DeltaPill>}
           </span>
         );
       },
@@ -678,17 +725,18 @@ function RankingTable({ rankings, hasOld, p1, p2, itemLabel }: { rankings: Ranki
         sortValue: (r) => r.by[ranking.metric]?.deltaNum ?? null,
         render: (r) => {
           const row = r.by[ranking.metric];
-          return row ? <DeltaPill cls={row.cls}>{row.delta}</DeltaPill> : '—';
+          return row ? <DeltaPill cls={cls(row)}>{row.delta}</DeltaPill> : '—';
         },
       });
     }
-  }
+  });
 
   return (
     <>
       <p className="chart-caption">
         Klik judul kolom mana pun untuk mengurutkan — {rankings.map((r) => r.label).join(', ')} berbagi satu tabel agar satu {itemLabel.toLowerCase()} bisa dibaca sekaligus.
         {stacked && ` Angka = ${p2}; di bawahnya perubahan dari ${p1}.`}
+        {!stacked && withOld && hasOld && ` Angka tebal = ${p2}; angka abu-abu di bawahnya = ${p1}.`}
       </p>
       <DataTable columns={columns} rows={rows} rowKey={(r) => r.key} />
     </>
@@ -707,6 +755,8 @@ export function ProductRankingSection({
   emptyText = 'Upload file Product Performance periode ini untuk melihat analisis ini.',
   oldMissingText,
   chart,
+  views,
+  color = 'var(--shopee)',
 }: {
   title: string;
   badge: string;
@@ -723,8 +773,15 @@ export function ProductRankingSection({
   // The analysis' visual, drawn above its table — one section reads picture
   // first, then the numbers behind it.
   chart?: ReactNode;
+  // A channel's metric switch: each pick draws its result and costs, chart
+  // and table alike (replaces `chart`).
+  views?: readonly ViewLike[];
+  color?: string;
 }) {
   const rows = mergeRankings(rankings as ProductMetricRanking[]);
+  const picks = views ? resolveViews(rankings, views) : [];
+  const [pickKey, setPickKey] = useState(picks[0]?.key ?? '');
+  const pick = picks.find((v) => v.key === pickKey) ?? picks[0];
 
   return (
     <div className="sec-block">
@@ -750,8 +807,22 @@ export function ProductRankingSection({
                 )}
               </div>
             )}
-            {chart}
-            <RankingTable rankings={rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel={itemLabel} />
+            {pick ? (
+              <div className="ranking-chart" data-feature="shopee-cost-lens">
+                {picks.length > 1 && (
+                  <div className="chart-controls">
+                    <SegmentedToggle label="Metrik" options={picks.map((v) => ({ value: v.key, label: v.label }))} value={pick.key} onChange={setPickKey} accent="var(--shopee-700)" />
+                  </div>
+                )}
+                <RankingLens rankings={pick.rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel={itemLabel} color={color} />
+                <RankingTable rankings={pick.rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel={itemLabel} withOld />
+              </div>
+            ) : (
+              <>
+                {chart}
+                <RankingTable rankings={rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel={itemLabel} />
+              </>
+            )}
           </>
         )}
       </div>
@@ -804,6 +875,63 @@ function RankingBars({
         formatValue={(v) => fmtPivotVal(v, ranking.fmt)}
         height={height}
         ariaLabel={`${ranking.label} per ${itemLabel.toLowerCase()}`}
+      />
+    </>
+  );
+}
+
+// The cost lens shows the top few only — the table below holds every item.
+const LENS_COUNT = 5;
+
+// A view's picture: its top items by the result, each read across beside
+// what that result cost (components/CostLensChart). One metric alone (no
+// cost in the view) still draws, as bars.
+const fmtTone = (s?: Sentiment) => (s === 'lower-better' ? 'lower-better' : s === 'neutral' ? 'neutral' : 'higher-better');
+
+function RankingLens({
+  rankings,
+  hasOld,
+  p1,
+  p2,
+  itemLabel,
+  color,
+  count = LENS_COUNT,
+}: {
+  rankings: RankingLike[];
+  hasOld: boolean;
+  p1: string;
+  p2: string;
+  itemLabel: string;
+  color: string;
+  count?: number;
+}) {
+  const [lead] = rankings;
+  if (!lead) return null;
+  const shown = lead.rows.filter((r) => r.cur !== null).slice(0, count);
+  if (!shown.length) return <div className="empty-note">Tidak ada {itemLabel.toLowerCase()} dengan data {lead.label} pada periode ini.</div>;
+  const byKey = rankings.map((r) => new Map(r.rows.map((row) => [row.key, row] as const)));
+  return (
+    <>
+      <p className="chart-caption">
+        {shown.length} {itemLabel.toLowerCase()} dengan <strong>{lead.label}</strong> tertinggi {p2}
+        {rankings.length > 1 ? <>, dibaca bersama {rankings.slice(1).map((r) => r.label).join(' dan ')}</> : null}
+        {hasOld ? `, dibandingkan ${p1}` : ''}.
+      </p>
+      <CostLensChart
+        items={shown.map((r) => ({ key: r.key, label: r.produk }))}
+        metrics={rankings.map((r, i) => ({
+          key: r.metric,
+          label: r.label,
+          format: (v: number) => fmtPivotVal(v, r.fmt),
+          tone: fmtTone(r.sentiment),
+          cur: shown.map((row) => byKey[i].get(row.key)?.cur ?? null),
+          old: shown.map((row) => byKey[i].get(row.key)?.old ?? null),
+        }))}
+        hasOld={hasOld}
+        p1={p1}
+        p2={p2}
+        itemNoun={itemLabel}
+        color={color}
       />
     </>
   );
@@ -870,12 +998,15 @@ export function ShopPlusReadSection({
   p2,
   color,
   emptyText,
+  views,
 }: {
   title: string;
   badge: string;
   rankings: RankingLike[];
   hasOld: boolean;
   keywords?: { all: RankingLike[]; byCampaign: RankingLike[]; hasOld: boolean } | null;
+  // The metric switch's picks — a result and its costs (see resolveViews).
+  views?: readonly ViewLike[];
   campaigns: string[];
   campaignOf: Record<string, string>;
   p1: string;
@@ -883,10 +1014,12 @@ export function ShopPlusReadSection({
   color: string;
   emptyText: string;
 }) {
-  const [metric, setMetric] = useState(rankings[0]?.metric ?? '');
+  const picks = resolveViews(rankings, views);
+  const [pickKey, setPickKey] = useState(picks[0]?.key ?? '');
   const [campaign, setCampaign] = useState(ALL_CAMPAIGNS);
   const [count, setCount] = useState<'5' | '10'>('5');
-  const ranking = rankings.find((r) => r.metric === metric) ?? rankings[0];
+  const pick = picks.find((v) => v.key === pickKey) ?? picks[0];
+  const ranking = pick?.rankings[0];
   const hasCampaigns = rankings.some((r) => r.rows.length > 0);
   const activeCampaign = campaigns.includes(campaign) ? campaign : ALL_CAMPAIGNS;
   // Every metric's keyword ranking, narrowed to the chosen campaign.
@@ -895,7 +1028,9 @@ export function ShopPlusReadSection({
     : activeCampaign === ALL_CAMPAIGNS
       ? keywords.all
       : keywords.byCampaign.map((r) => ({ ...r, rows: r.rows.filter((row) => campaignOf[row.key] === activeCampaign) }));
-  const kwRanking = ranking ? kwRankings.find((r) => r.metric === ranking.metric) ?? null : null;
+  // The same pick over the keywords, metric for metric.
+  const kwPick = pick ? pick.rankings.map((r) => kwRankings.find((k) => k.metric === r.metric)).filter((r): r is RankingLike => !!r) : [];
+  const kwRanking = kwPick[0] ?? null;
   const oldNote = (label: string) => (
     <div className="empty-note" style={{ marginBottom: '.8rem' }}>
       Tidak ada {label} yang sama di periode lalu — ranking ditampilkan tanpa kolom %Perubahan.
@@ -914,13 +1049,13 @@ export function ShopPlusReadSection({
           <div className="empty-note">{emptyText}</div>
         ) : (
           <div className="ranking-chart">
-            {rankings.length > 1 && (
+            {picks.length > 1 && (
               <div className="chart-controls">
                 <SegmentedToggle
                   label="Metrik"
-                  options={rankings.map((r) => ({ value: r.metric, label: r.label }))}
-                  value={ranking.metric}
-                  onChange={setMetric}
+                  options={picks.map((v) => ({ value: v.key, label: v.label }))}
+                  value={pick.key}
+                  onChange={setPickKey}
                   accent="var(--shopee-700)"
                 />
               </div>
@@ -940,8 +1075,8 @@ export function ShopPlusReadSection({
                 </div>
                 <div className="rk-card-body">
                   {!hasOld && oldNote('campaign')}
-                  <RankingBars ranking={ranking} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" color={color} height={280} />
-                  <RankingTable rankings={rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" />
+                  <RankingLens rankings={pick.rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" color={color} />
+                  <RankingTable rankings={pick.rankings} hasOld={hasOld} p1={p1} p2={p2} itemLabel="Campaign" withOld />
                 </div>
               </section>
               <section className="rk-card" aria-label="Per Keyword" data-feature="shopee-keyword-charts">
@@ -979,8 +1114,8 @@ export function ShopPlusReadSection({
                   ) : (
                     <>
                       {!keywords.hasOld && oldNote('keyword')}
-                      <RankingBars ranking={kwRanking} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" color={color} height={280} count={Number(count)} />
-                      <RankingTable rankings={kwRankings} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" />
+                      <RankingLens rankings={kwPick} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" color={color} count={Number(count)} />
+                      <RankingTable rankings={kwPick} hasOld={keywords.hasOld} p1={p1} p2={p2} itemLabel="Keyword" withOld />
                     </>
                   )}
                 </div>
