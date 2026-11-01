@@ -71,7 +71,7 @@ export function SectionDownloadButton({ parts }: { parts?: SectionPart[] }) {
   }
 
   return (
-    <span className="sec-download-menu-wrap" ref={wrap}>
+    <span className="sec-download-menu-wrap" ref={wrap} data-feature="section-png-parts">
       <button
         type="button"
         className="sec-download-btn"

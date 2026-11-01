@@ -26,6 +26,22 @@ export const SHOW_FOR_DAYS = 60;
 
 export const WHATS_NEW = [
   {
+    id: 'restore-last-report',
+    released: '2026-11-01',
+    path: '/report-generator',
+    target: '.panel.active [data-feature="restore-last-report"]',
+    title: 'Laporan terakhir dibuka saat Anda minta',
+    body: 'Report Generator kini tidak lagi memuat laporan terakhir dengan sendirinya, supaya halaman lebih ringan. Klik Buka laporan terakhir untuk menampilkannya lagi.',
+  },
+  {
+    id: 'section-png-parts',
+    released: '2026-11-01',
+    path: '/report-generator/shopee',
+    target: '[data-feature="section-png-parts"]',
+    title: 'Unduh tabel atau Root Cause saja',
+    body: 'Tombol PNG di Fundamental Analysis kini punya pilihan: seluruh section, tabel saja, atau Root Cause saja. Gambarnya sama dengan tampilan di layar.',
+  },
+  {
     id: 'meta-cost-lens',
     released: '2026-11-01',
     path: '/report-generator/meta',

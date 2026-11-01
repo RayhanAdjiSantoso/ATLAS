@@ -5,7 +5,7 @@ import './restoreOffer.css';
 // (useRestoreLastReport): its files are fetched only once this is pressed.
 export function RestoreOffer({ onRestore, onDismiss }: { onRestore: () => void; onDismiss: () => void }) {
   return (
-    <div className="restore-offer" role="region" aria-label="Laporan terakhir">
+    <div className="restore-offer" role="region" aria-label="Laporan terakhir" data-feature="restore-last-report">
       <span className="restore-offer-ico" aria-hidden="true"><History size={17} /></span>
       <p>
         <strong>Laporan terakhir sesi ini bisa dibuka lagi</strong>
