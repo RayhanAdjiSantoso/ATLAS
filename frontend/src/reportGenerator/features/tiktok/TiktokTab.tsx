@@ -144,6 +144,17 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
     applySavedPeriod(targetRole, period);
   }
 
+  // A whole archived analysis: both sides refill, one after the other.
+  async function handlePickPeriodRun(old: SavedPeriod, cur: SavedPeriod) {
+    for (const [role, period] of [['old', old], ['cur', cur]] as const) {
+      (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+      (role === 'old' ? setOldPicked : setCurPicked)(period);
+      (role === 'old' ? setOldSource : setCurSource)('saved');
+    }
+    await applySavedPeriod('old', old);
+    await applySavedPeriod('cur', cur);
+  }
+
   // A month straight from Pengaturan Brand — usable before any report has
   // ever been generated for it, which the archive by definition cannot offer.
   async function applyLibraryMonth(targetRole: PeriodRole, month: LibraryMonth) {
@@ -459,6 +470,7 @@ export function TiktokTab({ isActive, clientId, onGenerated, onInvalidate }: Tik
           onClose={() => setPickerRole(null)}
           onPickLibrary={handlePickMonth}
           onPickArchive={handlePickPeriod}
+          onPickArchiveRun={handlePickPeriodRun}
           initialTab={pickerTab}
           bound={periodBound(pickerRole, pickedPeriod('old'), pickedPeriod('cur'))}
         />

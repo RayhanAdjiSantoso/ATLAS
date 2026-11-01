@@ -143,6 +143,7 @@ export interface SavedPeriod {
   end: string | null;
   savedAt: string; // report_runs.updated_at
   sourceComparison: string; // e.g. "Jul 2026 vs Jun 2026" — disambiguates instances
+  runName?: string | null; // the user's own name for the analysis ("Week 2 report")
   channels: Record<string, number>; // per-channel row count ({} shape for tiktok is { tiktok: n })
   totalRows: number;
 }

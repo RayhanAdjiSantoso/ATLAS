@@ -522,6 +522,17 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
     applyArchivePeriod(targetRole, period);
   }
 
+  // A whole archived analysis: both sides refill, one after the other.
+  async function handlePickArchiveRun(old: SavedPeriod, cur: SavedPeriod) {
+    for (const [role, period] of [['old', old], ['cur', cur]] as const) {
+      (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+      (role === 'old' ? setOldPickedRun : setCurPickedRun)(period);
+      (role === 'old' ? setOldSource : setCurSource)('saved');
+    }
+    await applyArchivePeriod('old', old);
+    await applyArchivePeriod('cur', cur);
+  }
+
   function clearPickedPeriod(role: PeriodRole) {
     (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
     (role === 'old' ? setOldPickedRun : setCurPickedRun)(null);
@@ -1208,6 +1219,7 @@ export function ShopeeTab({ isActive, clientId, omzetOld, omzetCur, onOmzetOldCh
               : null
           }
           onClose={() => setPickerRole(null)} onPickLibrary={handlePickMonth} onPickArchive={handlePickArchive}
+          onPickArchiveRun={handlePickArchiveRun}
           initialTab={pickerTab}
           bound={periodBound(pickerRole, pickedPeriod('old'), pickedPeriod('cur'))}
         />

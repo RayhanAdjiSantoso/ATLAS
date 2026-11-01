@@ -115,6 +115,16 @@ export async function getSavedPeriod(runId: number, role: PeriodRole): Promise<S
   }
 }
 
+// Names a saved analysis (its archive card); an empty name clears it.
+export async function renameReport(id: number, name: string): Promise<string | null> {
+  try {
+    const res = await api.patch(`/report-generator/reports/${id}/name`, { name });
+    return res.data.name;
+  } catch (err) {
+    unwrap(err);
+  }
+}
+
 export async function deleteReport(id: number): Promise<void> {
   try {
     await api.delete(`/report-generator/reports/${id}`);
