@@ -205,7 +205,11 @@ export async function loadSnapshot(config: PresentationConfig): Promise<Snapshot
       }
       Object.assign(blocks, built.blocks);
       businessRevenue = built.revenue;
-      sources.push({ source: 'business', label, status: 'ok', periodOld: labels.old, periodCur: labels.cur, periodMismatch: !samePeriod(own, period) });
+      // Data that stops before the period ends would read as a real collapse.
+      const curGrid = mergeGrids(curMonths.map((m) => byMonth.get(m) ?? {}));
+      const lastFilled = Object.values(curGrid).flatMap((days) => Object.entries(days).filter(([, v]) => v?.revenue != null).map(([d]) => d.slice(0, 10))).filter((d) => d <= own.curEnd).sort().pop();
+      const incomplete = lastFilled && lastFilled < own.curEnd ? `Revenue Data baru terisi sampai ${lastFilled}, belum mencakup seluruh periode, sehingga perubahannya belum sebanding.` : null;
+      sources.push({ source: 'business', label, status: 'ok', periodOld: labels.old, periodCur: labels.cur, periodMismatch: !samePeriod(own, period), periodWarning: incomplete });
     } catch (err) {
       const denied = (err as { response?: { status?: number } })?.response?.status === 403;
       const message = denied ? 'Akun ini tidak punya akses ke modul Brand Tracking.' : errText(err);

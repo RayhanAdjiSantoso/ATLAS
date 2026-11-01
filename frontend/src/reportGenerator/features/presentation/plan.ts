@@ -78,8 +78,12 @@ function tableSlides(snap: Snapshot, sectionId: string, layout: LayoutKey, title
 
 // More rows than half a slide holds once long metric names wrap.
 const KPI_ROWS_BESIDE_CHART = 9;
-// A KPI table alone on a slide holds this many, then continues on the next.
-export const KPI_ROWS_PER_SLIDE = 12;
+// A KPI table alone on a slide holds this many and leaves room for findings. A
+// longer one is split evenly, so no slide ends up holding a stray row or two.
+const KPI_ROWS_PER_SLIDE = 12;
+export function kpiRowsPerPage(total: number): number {
+  return Math.ceil(total / Math.max(1, Math.ceil(total / KPI_ROWS_PER_SLIDE)));
+}
 
 function channelSlides(snap: Snapshot, key: ChannelKey, sectionId: string, lang: PresentationConfig['lang']): SlideDoc[] {
   const has = (id: string | null | undefined) => Boolean(id && snap.blocks[id]);

@@ -1,6 +1,6 @@
 import { formatCell, formatDelta, type FormatContext } from '../format';
 import { chrome } from '../i18n';
-import { KPI_ROWS_PER_SLIDE } from '../plan';
+import { kpiRowsPerPage } from '../plan';
 import type { ChartBlock, DataBlock, DeltaCell, FunnelBlock, KpiBlock, RankedItem, TableBlock, TopBottomBlock } from '../types';
 import { ChartLegend, SlideChart } from './SlideChart';
 
@@ -22,7 +22,8 @@ function Delta({ delta, ctx }: { delta: DeltaCell | undefined; ctx: FormatContex
 
 function KpiView({ block, ctx, page }: { block: KpiBlock; ctx: RenderContext; page?: number }) {
   const { old, cur } = ctx.labelsFor(block);
-  const rows = page === undefined ? block.rows : block.rows.slice(page * KPI_ROWS_PER_SLIDE, (page + 1) * KPI_ROWS_PER_SLIDE);
+  const perPage = kpiRowsPerPage(block.rows.length);
+  const rows = page === undefined ? block.rows : block.rows.slice(page * perPage, (page + 1) * perPage);
   return (
     <table className="prs-table prs-kpi">
       <thead>

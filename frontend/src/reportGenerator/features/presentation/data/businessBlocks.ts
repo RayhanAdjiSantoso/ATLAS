@@ -111,7 +111,8 @@ export function buildBusinessBlocks(input: {
 
   const tableRows: TableRow[] = bySales.map((r) => ({
     name: r.label,
-    cells: { old: money(r.old.revenue), cur: money(r.cur.revenue), trx: count(r.cur.trx), aov: money(safeDiv(r.cur.revenue, r.cur.trx)) },
+    // Returns can leave a channel's month net negative, and an average over that means nothing.
+    cells: { old: money(r.old.revenue), cur: money(r.cur.revenue), trx: count(r.cur.trx), aov: money((r.cur.trx ?? 0) > 0 ? safeDiv(r.cur.revenue, r.cur.trx) : null) },
     delta: deltaOf(r.old.revenue, r.cur.revenue, 'higher-better'),
   }));
   const channelTable = addBlock(blocks, tableBlock('business.channels.table', 'business', L('Channel Revenue'), 'Channel', [

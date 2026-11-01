@@ -4,7 +4,7 @@ import { fromDisplayRow, shortMiddle, tableBlock, L } from './data/helpers';
 import { defaultFileName, formatCell, formatCompact, formatDelta, formatValue, parseCell, parseDelta, periodLabelFromDates } from './format';
 import { mergeDocuments } from './merge';
 import { differingPeriods, lastFinishedMonths, mostCommonPeriod, newestRun, runPeriod, samePeriod, validPeriod } from './periods';
-import { LAYOUTS, MAX_TABLE_PAGES, applyLanguage, planDocument, visibleSlides } from './plan';
+import { LAYOUTS, MAX_TABLE_PAGES, applyLanguage, kpiRowsPerPage, planDocument, visibleSlides } from './plan';
 import type { KpiBlock, PresentationConfig, Snapshot, TableBlock } from './types';
 import { exportableSlides, factsForSlide, isEmptySlide, reviewDocument } from './validate';
 
@@ -312,4 +312,12 @@ test('a default report is the newest, and the fullest of those', () => {
   assert.ok(samePeriod(SEP, { ...SEP }));
   assert.ok(!validPeriod({ ...SEP, curStart: '2026-12-01' }), 'start after end');
   assert.deepEqual(lastFinishedMonths(new Date(2026, 10, 1)), { curStart: '2026-10-01', curEnd: '2026-10-31', oldStart: '2026-09-01', oldEnd: '2026-09-30' });
+});
+
+test('a long KPI table splits evenly, without a stray row on its own slide', () => {
+  assert.equal(kpiRowsPerPage(12), 12);
+  assert.equal(kpiRowsPerPage(14), 7);
+  assert.equal(kpiRowsPerPage(18), 9);
+  assert.equal(kpiRowsPerPage(25), 9);
+  assert.equal(kpiRowsPerPage(0), 0);
 });
