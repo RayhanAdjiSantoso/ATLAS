@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { KpiTable, type KpiRowDisplay } from './KpiTable';
-import { SectionDownloadButton } from './SectionDownloadButton';
+import { SectionDownloadButton, TABLE_ROOT_PARTS } from './SectionDownloadButton';
 import { useFitSplitTable } from './fitTableType';
 
 // A row already resolved for display, plus the raw column key the metric
@@ -69,7 +69,7 @@ export function OverviewDetailedCard({ heading, badge, overviewRows, detailedRow
       <div className={`sec-heading${headingClassName ? ' ' + headingClassName : ''}`}>
         {heading}
         {badge && <span className="sec-badge">{badge}</span>}
-        <SectionDownloadButton />
+        <SectionDownloadButton parts={aside ? TABLE_ROOT_PARTS : undefined} />
       </div>
       {aside ? (
         // The wrapper is a size container: the table and its root cause sit

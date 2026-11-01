@@ -10,6 +10,12 @@ export interface SectionPart {
   selector: string;
 }
 
+// A table with its root cause beside it (.sec-split): either half alone.
+export const TABLE_ROOT_PARTS: SectionPart[] = [
+  { label: 'Tabel saja', name: 'Tabel', selector: '.sec-split-main' },
+  { label: 'Root Cause saja', name: 'Root Cause', selector: '.sympt-panel' },
+];
+
 // Ported from the original attachSectionDownloadButtons: a small "PNG"
 // button appended to every .sec-heading, downloading just that card as an
 // image. Finds its own .sec-block ancestor via the click event, same as the

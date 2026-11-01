@@ -36,10 +36,10 @@ export const WHATS_NEW = [
   {
     id: 'section-png-parts',
     released: '2026-11-01',
-    path: '/report-generator/shopee',
-    target: '[data-feature="section-png-parts"]',
+    path: '/report-generator',
+    target: '.panel.active [data-feature="section-png-parts"]',
     title: 'Unduh tabel atau Root Cause saja',
-    body: 'Tombol PNG di Fundamental Analysis kini punya pilihan: seluruh section, tabel saja, atau Root Cause saja. Gambarnya sama dengan tampilan di layar.',
+    body: 'Di section yang menampilkan tabel dan Root Cause berdampingan, tombol PNG kini punya pilihan: seluruh section, tabel saja, atau Root Cause saja. Gambarnya sama dengan tampilan di layar.',
   },
   {
     id: 'meta-cost-lens',

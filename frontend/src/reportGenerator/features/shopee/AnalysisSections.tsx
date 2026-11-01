@@ -6,7 +6,7 @@ import { GroupedBarChart } from '../../components/GroupedBarChart';
 import { ParetoChart } from '../../components/ParetoChart';
 import { SearchSelect } from '../../components/SearchSelect';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
-import { SectionDownloadButton, type SectionPart } from '../../components/SectionDownloadButton';
+import { SectionDownloadButton, TABLE_ROOT_PARTS } from '../../components/SectionDownloadButton';
 import { growTableType, resetTableType } from '../../components/fitTableType';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
 import { useInlineMetricEditor } from '../../hooks/useInlineMetricEditor';
@@ -343,12 +343,6 @@ function FundamentalValuesTable({ values: allValues, p1, p2 }: { values: FunnelV
   );
 }
 
-// The table and the Root Cause card can each be downloaded on their own.
-const FA_PNG_PARTS: SectionPart[] = [
-  { label: 'Tabel saja', name: 'Tabel', selector: '.fa-values' },
-  { label: 'Root Cause saja', name: 'Root Cause', selector: '.sympt-panel' },
-];
-
 export function FundamentalAnalysisSection({
   values,
   atcNote,
@@ -375,7 +369,7 @@ export function FundamentalAnalysisSection({
       <div className="sec-heading shopee-heading">
         Fundamental Analysis <span className="sec-badge">Semua Iklan · Product Ads + Shop+ Ads · funnel decomposition</span>
         <SectionExcelButton />
-        <SectionDownloadButton parts={FA_PNG_PARTS} />
+        <SectionDownloadButton parts={tree ? TABLE_ROOT_PARTS : undefined} />
       </div>
       <div style={{ padding: '1.1rem 1.4rem 0' }}>
         <EqualSplit>

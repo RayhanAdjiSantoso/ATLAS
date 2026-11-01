@@ -3,7 +3,7 @@ import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type R
 import { DeltaPill } from '../../components/DeltaPill';
 import { KpiTable, type KpiRowDisplay } from '../../components/KpiTable';
 import { MetricPicker } from '../../components/MetricPicker';
-import { SectionDownloadButton } from '../../components/SectionDownloadButton';
+import { SectionDownloadButton, TABLE_ROOT_PARTS } from '../../components/SectionDownloadButton';
 import { SectionExcelButton } from '../../components/SectionExcelButton';
 import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { reorderIds, useInlineMetricEditor } from '../../hooks/useInlineMetricEditor';
@@ -66,7 +66,7 @@ export function ChannelPivotSection({
     <div className="sec-block">
       <div className="sec-heading shopee-heading">
         {title} <span className="sec-badge">{badge}</span>
-        <SectionDownloadButton />
+        <SectionDownloadButton parts={tree ? TABLE_ROOT_PARTS : undefined} />
       </div>
       {tree ? (
         <>
