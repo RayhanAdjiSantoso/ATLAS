@@ -184,9 +184,9 @@
   padding: 5px;
   border: 1px solid var(--rs-line);
   border-radius: 16px;
-  background: rgba(255, 255, 255, .92);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  backdrop-filter: blur(14px) saturate(160%);
+  /* Near-opaque, no backdrop blur: blurring the report under a bar that
+     follows the scroll is repainted every frame, for a tint no one sees. */
+  background: rgba(255, 255, 255, .97);
   box-shadow: 0 8px 22px -16px rgba(15, 26, 58, .45);
 }
 .mil-ui.report-generator-app .report-tabs.is-stuck { background: #fff; box-shadow: 0 16px 34px -18px rgba(15, 26, 58, .5); }

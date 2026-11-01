@@ -222,24 +222,42 @@ export default function AnnotationLayer() {
 
   /* ── Where every pin is ─────────────────────────────────────────── */
 
-  const measure = useCallback(() => {
+  // Only the pins on screen are placed: unresolved ones while pins are shown,
+  // the open thread's, the one being sought — and every one while the list
+  // is open, for its "not in this view" flags. Pins hidden and nothing open:
+  // nothing is measured at all.
+  const tracked = useMemo(
+    () => (panel ? pageItems : pageItems.filter((a) => a.id === openId || a.id === seek || (showPins && a.status !== 'resolved'))),
+    [pageItems, panel, openId, seek, showPins],
+  );
+
+  // Finding a comment's element (resolve) queries the page and can compare
+  // the text of every element of a tag — far too slow for each frame of a
+  // scroll over a long report. So it runs only when the page may have
+  // changed (`full`); a scroll just re-reads where the found elements are.
+  const hits = useRef(new Map());
+  const measure = useCallback((full) => {
     const scale = getUIScale();
     const next = {};
     elements.current = new Map();
-    for (const a of pageItems) {
-      const found = resolve(a.anchor);
-      if (!found) continue;
-      const r = found.el.getBoundingClientRect();
+    for (const a of tracked) {
+      let hit = hits.current.get(a.id);
+      if (full || hit === undefined || (hit && !hit.el.isConnected)) {
+        hit = resolve(a.anchor);
+        hits.current.set(a.id, hit);
+      }
+      if (!hit) continue;
+      const r = hit.el.getBoundingClientRect();
       // On the nearest surviving section the original click point means
       // nothing, so the pin takes the section's corner.
-      const x = found.exact ? r.left + r.width * (a.anchor.x ?? 0.5) : r.left + 16;
-      const y = found.exact ? r.top + r.height * (a.anchor.y ?? 0.5) : r.top + 16;
-      elements.current.set(a.id, found.el);
+      const x = hit.exact ? r.left + r.width * (a.anchor.x ?? 0.5) : r.left + 16;
+      const y = hit.exact ? r.top + r.height * (a.anchor.y ?? 0.5) : r.top + 16;
+      elements.current.set(a.id, hit.el);
       next[a.id] = {
         x: Math.round(x / scale),
         y: Math.round(y / scale),
-        exact: found.exact,
-        seen: reachable(found.el, x, y),
+        exact: hit.exact,
+        seen: reachable(hit.el, x, y),
         box: [r.left, r.top, r.width, r.height].map((v) => Math.round(v / scale)),
       };
     }
@@ -257,37 +275,67 @@ export default function AnnotationLayer() {
     } else {
       setDraftSpot(null);
     }
-  }, [pageItems, draft]);
+  }, [tracked, draft]);
 
   // Re-measure whenever something could have moved an element: scrolling
   // (any container — hence capture), resizing, the page re-rendering, a
   // transition settling, an image arriving. Coalesced to one pass a frame,
   // and switched off entirely while there is nothing to place.
-  const tracking = pageItems.length > 0 || Boolean(draft);
+  // A change to the page or the window looks for the elements again
+  // (`full`); scrolling and a transition settling only move them.
+  const tracking = tracked.length > 0 || Boolean(draft);
   useLayoutEffect(() => {
     if (!tracking) {
       setSpots({});
       setDraftSpot(null);
       return undefined;
     }
+    // A full pass at most every FULL_GAP ms: on a long report sections keep
+    // changing class as they scroll into view, and each change would
+    // otherwise search the page again on that frame. In between, the pins
+    // still follow the scroll; the deferred search runs once things settle.
+    const FULL_GAP = 300;
     let frame = 0;
-    const schedule = () => {
+    let full = false;
+    let lastFull = 0;
+    let later = 0;
+    const schedule = (again) => {
+      full = full || again;
       if (frame) return;
-      frame = requestAnimationFrame(() => { frame = 0; measure(); });
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const now = performance.now();
+        const due = full && now - lastFull >= FULL_GAP;
+        if (full && !due && !later) {
+          later = window.setTimeout(() => { later = 0; schedule(true); }, FULL_GAP - (now - lastFull));
+        }
+        if (due) {
+          full = false;
+          lastFull = now;
+        }
+        measure(due);
+      });
     };
-    measure();
+    const move = () => schedule(false);
+    const change = () => schedule(true);
+    measure(true);
+    lastFull = performance.now();
     const observer = new MutationObserver((records) => {
-      if (records.some((m) => !(m.target instanceof Element ? m.target : m.target.parentElement)?.closest(UI_ROOT))) schedule();
+      if (records.some((m) => !(m.target instanceof Element ? m.target : m.target.parentElement)?.closest(UI_ROOT))) change();
     });
     observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open'] });
-    const events = ['scroll', 'resize', 'transitionend', 'animationend', 'load'];
-    events.forEach((e) => window.addEventListener(e, schedule, true));
+    const moves = ['scroll', 'transitionend', 'animationend'];
+    const changes = ['resize', 'load'];
+    moves.forEach((e) => window.addEventListener(e, move, true));
+    changes.forEach((e) => window.addEventListener(e, change, true));
     // Slow animations and canvases that grow without touching the DOM.
-    const timer = setInterval(schedule, 1000);
+    const timer = setInterval(change, 1000);
     return () => {
       cancelAnimationFrame(frame);
+      clearTimeout(later);
       observer.disconnect();
-      events.forEach((e) => window.removeEventListener(e, schedule, true));
+      moves.forEach((e) => window.removeEventListener(e, move, true));
+      changes.forEach((e) => window.removeEventListener(e, change, true));
       clearInterval(timer);
     };
   }, [tracking, measure]);

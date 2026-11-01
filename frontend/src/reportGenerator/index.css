@@ -82,8 +82,10 @@
   .num{font-variant-numeric:tabular-nums lining-nums;font-feature-settings:'tnum' 1,'lnum' 1}
   &{color:var(--text);font-family:var(--f);min-height:100vh;
     background:var(--bg);
-    background-image:radial-gradient(140% 70% at 50% -10%,#f3f6fc 0%,rgba(243,246,252,0) 55%),linear-gradient(180deg,#fcfdff 0%,#f7f9fd 100%);
-    background-attachment:fixed}
+    /* Scrolls with the page. `background-attachment:fixed` on an element this
+       tall made the browser repaint the whole window on every frame of a
+       scroll — most of what made a long report heavy to scroll. */
+    background-image:radial-gradient(140% 70% at 50% -10%,#f3f6fc 0%,rgba(243,246,252,0) 55%),linear-gradient(180deg,#fcfdff 0%,#f7f9fd 100%)}
   /* #app is now just the generator page's content column (see .gen-main in
      shell.css); the old fixed 1080px centered wrapper is gone. */
   #app{width:100%}
