@@ -371,6 +371,17 @@
   &.png-fit-content .sec-block table{width:auto!important}
   &.png-fit-content .sec-block .kpi-table th:first-child, &.png-fit-content .sec-block .kpi-table td:first-child{width:auto!important}
   &.png-fit-content .sec-block th, &.png-fit-content .sec-block td{white-space:nowrap!important}
+  /* html2canvas paints a header row's own background over the cells that
+     span into it from the row above, hiding a two-row header's "#" and
+     "Produk". In a capture the rows carry no background; their cells do. */
+  &.pdf-export-mode .sec-block .kpi-table thead tr{background:transparent!important}
+  &.pdf-export-mode .sec-block .kpi-table thead th{background-color:var(--s2)}
+  /* A ranking table's scroll cap would cut a row mid-way in the image (and
+     spill rows past the rounded box), while the whole list can run to a
+     hundred rows: the PNG carries its first 15 rows whole — the Excel export
+     has every row. */
+  &.png-fit-content .sec-block :is(.dt-wrap, .meta-changes > div){max-height:none!important}
+  &.png-fit-content .sec-block :is(.dt-wrap, .meta-changes > div) tbody tr:nth-child(n+16){display:none}
   /* ── Period input ── */
   .period-input-row{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem}
   .period-input-field{background:var(--surface);border-radius:10px;border:1.5px solid var(--border);padding:.7rem 1rem;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:4px}
