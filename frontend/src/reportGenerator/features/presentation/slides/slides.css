@@ -26,6 +26,9 @@
 }
 .prs-slide *, .prs-slide *::before, .prs-slide *::after { box-sizing: border-box; margin: 0; padding: 0; }
 .prs-slide ul, .prs-slide ol { list-style: none; }
+/* Report Generator's table styles set tabular digits on cells, and they inherit.
+   See the note at the top: this must win everywhere inside a slide. */
+.prs-slide, .prs-slide * { font-variant-numeric: normal !important; font-feature-settings: normal !important; }
 
 /* Header */
 .prs-head { flex: none; padding-bottom: 28px; }
