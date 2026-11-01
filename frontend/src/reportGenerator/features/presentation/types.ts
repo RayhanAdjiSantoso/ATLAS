@@ -155,17 +155,20 @@ export interface Snapshot {
 }
 
 // ── The document ──────────────────────────────────────────────────────
-export interface PeriodConfig {
+export interface PeriodRange {
   curStart: string;
   curEnd: string;
-  curLabel: string;
   oldStart: string;
   oldEnd: string;
+}
+export interface PeriodConfig extends PeriodRange {
+  curLabel: string;
   oldLabel: string;
 }
 export interface ChannelConfig {
   enabled: boolean;
   runId: number | null; // the saved report used; unused for Google (range based)
+  period?: PeriodRange; // Google only: its own dates; older drafts use the deck's
 }
 export interface PresentationConfig {
   brandId: number;
@@ -177,6 +180,7 @@ export interface PresentationConfig {
   period: PeriodConfig;
   channels: Record<ChannelKey, ChannelConfig>;
   includeBusiness: boolean;
+  businessPeriod?: PeriodRange; // its own dates; older drafts use the deck's
 }
 
 export type LayoutKey =

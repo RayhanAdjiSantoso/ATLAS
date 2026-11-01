@@ -111,6 +111,22 @@ Ad spend is totalled. Revenue is **not**: Purchase Value, GMV (Ads), Gross Reven
 Conversion Value and Brand Tracking revenue are different definitions, so each keeps
 its own row and label and they are never added together.
 
+## Periods
+
+Each channel has its own period and is included when it has data; there is no deck-wide
+period picker and no checkbox per channel.
+
+- **Meta, Shopee, TikTok** offer only reports already generated (reports saved without
+  dates are not listed). A new deck picks the newest report overall, then each channel's
+  report for those same dates, or that channel's newest. "Tidak dipakai" excludes one.
+- **Google Ads and Revenue Data** are live, so their dates are typed. They follow the
+  reports' period until edited. A section can still be turned off in Step 2.
+- **The deck's period** (cover, footer, file name) is the one most channels use.
+
+When channels disagree, Step 1 and Review warn, each channel's columns use its own period
+labels, and overview rows name their period. Total ad spend and spend share are left out,
+because adding different periods would mean nothing.
+
 ## Data not available
 
 | Situation | What happens |
@@ -149,6 +165,10 @@ Changes from others appear when this person's next save runs or the draft is
 reopened; there is no live view of what a teammate is typing.
 
 ## AI
+
+AI never runs on its own: only when someone presses a Generate button, and Generate All
+asks first, stating how many requests it will use. Building, editing and exporting a
+deck use none.
 
 Optional, and uses the existing setup: Claude when `ANTHROPIC_API_KEY` is set, Gemini
 otherwise. No key means the buttons are replaced by a note and everything else works.

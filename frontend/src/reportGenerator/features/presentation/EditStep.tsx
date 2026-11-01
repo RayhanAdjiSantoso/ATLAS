@@ -108,6 +108,7 @@ export function EditStep({ doc, snapshot, reportId, update, selectedId, onSelect
   const [aiError, setAiError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
   const stopRef = useRef(false);
   useEffect(() => { getAiStatus().then((s) => setAiAvailable(s.available)); }, []);
 
@@ -149,6 +150,7 @@ export function EditStep({ doc, snapshot, reportId, update, selectedId, onSelect
 
   // One slide per request, so a long deck never meets the function time limit.
   async function generateAll() {
+    setConfirmAll(false);
     const targets = visible.filter((s) => aiFieldsOf(s).length && factsForSlide(s, doc, snapshot).facts.length);
     stopRef.current = false;
     setAiError(null);
@@ -273,12 +275,16 @@ export function EditStep({ doc, snapshot, reportId, update, selectedId, onSelect
               )}
               {progress ? (
                 <button type="button" className="btn btn-ghost prb-btn-sm" onClick={() => { stopRef.current = true; }}><Square size={13} aria-hidden /> Hentikan ({progress.done}/{progress.total})</button>
+              ) : confirmAll ? (
+                <button type="button" className="btn btn-ghost prb-btn-sm prb-danger" onClick={() => void generateAll()}>
+                  <Sparkles size={14} aria-hidden /> Yakin? Memakai {visible.filter((s) => aiFieldsOf(s).length && factsForSlide(s, doc, snapshot).facts.length).length} permintaan AI
+                </button>
               ) : (
-                <button type="button" className="btn btn-ghost prb-btn-sm" disabled={Boolean(busyField)} onClick={() => void generateAll()}>
+                <button type="button" className="btn btn-ghost prb-btn-sm" disabled={Boolean(busyField)} onClick={() => setConfirmAll(true)}>
                   {busyField ? <Loader2 size={14} className="rg-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />} Generate All Drafts
                 </button>
               )}
-              <p className="prb-hint">Hasil AI muncul sebagai saran di tiap field dan tidak menimpa isi sampai Anda memilih.</p>
+              <p className="prb-hint">AI hanya berjalan saat tombol Generate ditekan, dan hasilnya tidak menimpa isi sampai Anda memilih.</p>
             </>
           )}
           {aiError && <p className="prb-error-text" role="alert">{aiError}</p>}
