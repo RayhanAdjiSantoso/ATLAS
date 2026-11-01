@@ -239,7 +239,13 @@ reportsRouter.post('/', upload.fields([{ name: 'files' }, { name: 'payloadGz', m
        DO UPDATE SET
          period_old_label = EXCLUDED.period_old_label,
          period_cur_label = EXCLUDED.period_cur_label,
-         report_config = EXCLUDED.report_config,
+         -- The name a user gave this analysis (PATCH /:id/name) is not part
+         -- of what a save sends, so a re-save keeps it.
+         report_config = CASE
+           WHEN report_runs.report_config ? 'runName'
+             THEN COALESCE(EXCLUDED.report_config, '{}'::jsonb) || jsonb_build_object('runName', report_runs.report_config->'runName')
+           ELSE EXCLUDED.report_config
+         END,
          updated_at = now()
        RETURNING id`,
       [
@@ -519,6 +525,44 @@ reportsRouter.get('/:id', async (req, res) => {
     overviewOld,
     overviewCur,
   });
+});
+
+// PATCH /api/report-generator/reports/:id/name { name } — the user's own
+// name for a saved analysis ("Week 2 report"), shown on its archive card.
+// Kept inside report_config (no column of its own); an empty name clears it.
+// updated_at is left alone so naming a card does not reorder the archive.
+reportsRouter.patch('/:id/name', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Invalid id' });
+    return;
+  }
+  const raw = typeof req.body?.name === 'string' ? req.body.name.trim() : null;
+  if (raw === null) {
+    res.status(400).json({ error: 'name is required' });
+    return;
+  }
+  if (raw.length > 80) {
+    res.status(400).json({ error: 'Nama maksimal 80 karakter.' });
+    return;
+  }
+  const runResult = await pool.query('SELECT brand_id FROM ads_reports.report_runs WHERE id = $1', [id]);
+  if (!runResult.rows[0]) {
+    res.status(404).json({ error: 'Report not found' });
+    return;
+  }
+  if (brandScope(req.user) && !canAccessBrand(req.user, runResult.rows[0].brand_id)) {
+    res.status(403).json({ error: 'Akses ditolak untuk brand ini.' });
+    return;
+  }
+  await pool.query(
+    `UPDATE ads_reports.report_runs
+     SET report_config = CASE WHEN $2::text = '' THEN COALESCE(report_config, '{}'::jsonb) - 'runName'
+                              ELSE COALESCE(report_config, '{}'::jsonb) || jsonb_build_object('runName', $2::text) END
+     WHERE id = $1`,
+    [id, raw],
+  );
+  res.json({ id, name: raw || null });
 });
 
 reportsRouter.delete('/:id', async (req, res) => {

@@ -422,6 +422,20 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
     applyArchivePeriod(targetRole, period, include, pickerRowOnly);
   }
 
+  // A whole archived analysis: both sides refill, one after the other.
+  async function handlePickArchiveRun(old: SavedPeriod, cur: SavedPeriod, include: string[]) {
+    if (!pickerRowOnly) {
+      for (const [role, period] of [['old', old], ['cur', cur]] as const) {
+        (role === 'old' ? setOldPickedMonth : setCurPickedMonth)(null);
+        (role === 'old' ? setOldPickedRange : setCurPickedRange)(null);
+        (role === 'old' ? setOldPickedRun : setCurPickedRun)({ ...period, include });
+        (role === 'old' ? setOldSource : setCurSource)('saved');
+      }
+    }
+    await applyArchivePeriod('old', old, include, pickerRowOnly);
+    await applyArchivePeriod('cur', cur, include, pickerRowOnly);
+  }
+
   async function applyAutoRange(targetRole: PeriodRole, range: AutoRange) {
     if (!clientId) return;
     setApplyingRole(targetRole);
@@ -1106,6 +1120,7 @@ export function MetaTab({ isActive, clientId, onGenerated, onInvalidate }: MetaT
           onClose={() => setPickerRole(null)}
           onPickLibrary={handlePickMonth}
           onPickArchive={handlePickArchive}
+          onPickArchiveRun={handlePickArchiveRun}
           initialTab={pickerTab === 'range' ? 'library' : pickerTab}
           bound={boundFor(pickerRole)}
         />

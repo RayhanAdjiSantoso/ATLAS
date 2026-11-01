@@ -40,7 +40,7 @@ savedPeriodsRouter.get('/', async (req, res) => {
     `SELECT id,
             period_old_start::text AS period_old_start, period_old_end::text AS period_old_end, period_old_label,
             period_cur_start::text AS period_cur_start, period_cur_end::text AS period_cur_end, period_cur_label,
-            updated_at
+            updated_at, report_config->>'runName' AS run_name
      FROM ads_reports.report_runs
      WHERE brand_id = $1 AND platform = $2::ads_reports.platform_enum
      ORDER BY updated_at DESC`,
@@ -78,6 +78,7 @@ savedPeriodsRouter.get('/', async (req, res) => {
         end: role === 'old' ? r.period_old_end : r.period_cur_end,
         savedAt: r.updated_at,
         sourceComparison: `${r.period_cur_label ?? '—'} vs ${r.period_old_label ?? '—'}`,
+        runName: r.run_name,
         channels,
         totalRows,
       });
